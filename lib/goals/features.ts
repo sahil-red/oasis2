@@ -1,6 +1,7 @@
 import { additiveGoalBurden, scoreIngredientSignals } from "@/lib/scoring/ingredient-signals";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { vegetarianLabelHint } from "@/lib/goals/vegetarian";
+import { proteinQualityInsight, type ProteinQualityInsight } from "@/lib/goals/protein-quality";
 import {
   packNutritionContext,
   parsePackGrams,
@@ -53,6 +54,7 @@ export type GoalFeatures = {
   isSugaryDrink: boolean;
   isFreshProduce: boolean;
   isVegLabel: boolean;
+  proteinQuality: ProteinQualityInsight | null;
   coreScore: number | null;
 };
 
@@ -154,6 +156,12 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     isSugaryDrink,
     isFreshProduce,
     isVegLabel: vegetarianLabelHint(input.attributes ?? null),
+    proteinQuality: proteinQualityInsight({
+      name: input.name,
+      category: input.category,
+      protein_g_100g: protein,
+      energy_kcal_100g: kcal,
+    }),
     coreScore: input.core_score ?? null,
   };
 }
@@ -226,6 +234,9 @@ function freshProduceCaption(goal: GoalId, f: GoalFeatures): string {
 }
 
 function balancedCaption(f: GoalFeatures): string {
+  if (f.proteinQuality?.tier === "grain" && f.protein >= 8) {
+    return "Staple carbs — grain protein";
+  }
   if (f.transFat > 0.1) return "Contains trans fat";
   if (f.isCocoaRich && f.addedSugar <= 2 && f.sugar <= 8) return "Clean dark chocolate";
   if (f.sodium >= 1200) return "Extremely salty snack";
@@ -248,6 +259,10 @@ function balancedCaption(f: GoalFeatures): string {
 }
 
 function gymCaption(f: GoalFeatures): string {
+  if (f.proteinQuality?.tier === "grain") return "Grain protein — low quality";
+  if (f.proteinQuality?.tier === "partial" && f.protein >= 12) {
+    return "Plant protein — combine grains";
+  }
   if (f.protein < 4) return "Too little protein";
   if (f.addedSugar >= 18 && f.protein < 15) return "Sugary, low protein";
   if (f.isProteinSnack && f.additiveBurden > 1.5) return "Protein, but processed";
@@ -322,6 +337,7 @@ function kidsCaption(f: GoalFeatures): string {
 }
 
 function proteinBudgetCaption(f: GoalFeatures): string {
+  if (f.proteinQuality?.tier === "grain") return "Not a protein buy";
   if (f.protein < 6) return "Too little protein";
   if (f.proteinPerRupee100 >= 25) return "Excellent protein value";
   if (f.proteinPerRupee100 >= 15) return "Good protein per rupee";

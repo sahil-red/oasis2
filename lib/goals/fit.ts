@@ -76,8 +76,15 @@ export function computeGoalFit(
         fit = opts.core_score ?? 50;
         break;
       }
+      const pq = f.proteinQuality;
+      const proteinEff =
+        pq?.tier === "grain"
+          ? f.protein * 0.8
+          : pq?.tier === "partial"
+            ? f.protein * 2.2
+            : f.protein * 3.2;
       fit =
-        f.protein * 3.2 +
+        proteinEff +
         Math.min(18, f.proteinPer100Kcal * 2.2) +
         Math.min(10, f.fiber * 1.2) -
         f.addedSugar * 1.2 -
@@ -85,6 +92,7 @@ export function computeGoalFit(
         Math.max(0, f.kcal - 420) * 0.04 -
         f.additiveBurden * 4 -
         Math.max(0, f.sodium - 400) * 0.012;
+      if (pq?.tier === "grain" && f.protein >= 8) fit = Math.min(fit, 52);
       if (f.isProteinSnack) fit = Math.min(fit, f.additiveBurden > 1.5 ? 76 : 82);
       if (f.protein < 5) fit = Math.min(fit, 30);
       break;
@@ -172,6 +180,10 @@ export function computeGoalFit(
     case "protein-budget": {
       if (!f.hasNutrition) {
         fit = Math.round((opts.core_score ?? 0) * 0.25);
+        break;
+      }
+      if (f.proteinQuality?.tier === "grain") {
+        fit = Math.min(28, Math.round(f.proteinPerRupee100 * 0.5));
         break;
       }
       const effectiveProtein = f.proteinInPack ?? f.protein;

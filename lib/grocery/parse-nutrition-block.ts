@@ -39,13 +39,27 @@ function parseLineValue(raw: string): { value: number; unit: string } | null {
 /**
  * Blinkit often puts the full FSSAI table in a "Nutrition Information" attribute
  * as multiline per-serving text, while headline rows only list protein/kcal per 100g.
+ *
+ * Formats seen in the wild:
+ * - `Protein: 11.52 g` (colon)
+ * - `Protein (g)\t1.38` (tab — masala packs)
+ * - `Energy( kcal)\t98.39`
+ *
+ * When no "per X g" header exists, pass `fallbackServingG` (e.g. pack net weight).
  */
-export function parseServingNutritionBlock(text: string): ProductNutrition | null {
+export function parseServingNutritionBlock(
+  text: string,
+  fallbackServingG?: number,
+): ProductNutrition | null {
   if (!text?.trim()) return null;
 
   const header = text.split(/\n/)[0] ?? "";
-  const serveMatch = /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(header) ?? /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(text);
-  const servingG = serveMatch ? Number.parseFloat(serveMatch[1]) : null;
+  const serveMatch =
+    /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(header) ?? /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(text);
+  let servingG = serveMatch ? Number.parseFloat(serveMatch[1]) : null;
+  if ((servingG == null || servingG <= 0) && fallbackServingG != null && fallbackServingG > 0) {
+    servingG = fallbackServingG;
+  }
   const toPer100 =
     servingG != null && servingG > 0 && servingG !== 100 ? 100 / servingG : 1;
 
@@ -56,17 +70,39 @@ export function parseServingNutritionBlock(text: string): ProductNutrition | nul
     const trimmed = line.trim();
     if (!trimmed || /^per\s*\d/i.test(trimmed)) continue;
 
-    const colon = trimmed.indexOf(":");
-    if (colon < 0) continue;
+    let label: string;
+    let valueRaw: string;
 
-    const label = trimmed.slice(0, colon).trim();
-    const valueRaw = trimmed.slice(colon + 1).trim();
+    const colon = trimmed.indexOf(":");
+    if (colon >= 0) {
+      label = trimmed.slice(0, colon).trim();
+      valueRaw = trimmed.slice(colon + 1).trim();
+    } else {
+      const tab = trimmed.split(/\t+/);
+      if (tab.length >= 2) {
+        label = tab[0].trim();
+        valueRaw = tab.slice(1).join(" ").trim();
+      } else {
+        const parts = trimmed.match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?(?:\s*(?:kcal|mg|g))?)\s*$/i);
+        if (!parts) continue;
+        label = parts[1].trim();
+        valueRaw = parts[2].trim();
+      }
+    }
+
     const parsed = parseLineValue(valueRaw);
     if (!parsed) continue;
+    const unitFromLabel = /\(\s*mg\s*\)/i.test(label)
+      ? "mg"
+      : /\(\s*g\s*\)/i.test(label) && !/kcal/i.test(label)
+        ? "g"
+        : /\(\s*kcal\s*\)/i.test(label)
+          ? "kcal"
+          : parsed.unit;
 
     for (const [re, key, transform] of LINE_PATTERNS) {
       if (!re.test(label)) continue;
-      let perServe = transform(parsed.value, parsed.unit);
+      let perServe = transform(parsed.value, unitFromLabel);
       if (key === "energy_kcal_100g") {
         perServe = parsed.value;
       }

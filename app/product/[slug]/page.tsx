@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { AnalysisGrid } from "@/components/analysis-grid";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
+import { ProteinQualityNote } from "@/components/protein-quality-note";
+import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
@@ -51,10 +53,19 @@ export default async function ProductPage({
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
+  const displayNutrition = reconcileNutrition({
+    nutrition: product.nutrition,
+    attributes: product.attributes,
+    name: product.name,
+    category: product.category,
+    net_weight: product.net_weight,
+  });
+  const productForGoals = displayNutrition ? { ...product, nutrition: displayNutrition } : product;
+
   const swapPool = await getProductsForSwaps(product, 200);
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
-  const goalRows = buildProductGoalRows(product);
-  const overallGoal = buildOverallGoalSummary(product);
+  const goalRows = buildProductGoalRows(productForGoals);
+  const overallGoal = buildOverallGoalSummary(productForGoals);
   const dietBadge = productDietBadge(product);
 
   const score = product.core_scores;
@@ -176,8 +187,15 @@ export default async function ProductPage({
             <h2 className="font-display text-2xl">Nutrition</h2>
             <p className="mt-2 text-sm text-(--color-fg-muted)">Per 100g from label or platform.</p>
             <div className="mt-5">
-              {product.nutrition ? (
-                <NutritionTable nutrition={product.nutrition} netWeight={product.net_weight} />
+              {displayNutrition ? (
+                <>
+                  <NutritionTable nutrition={displayNutrition} netWeight={product.net_weight} />
+                  <ProteinQualityNote
+                    nutrition={displayNutrition}
+                    name={product.name}
+                    category={product.category}
+                  />
+                </>
               ) : (
                 <p className="text-sm text-(--color-fg-muted)">Not available yet.</p>
               )}

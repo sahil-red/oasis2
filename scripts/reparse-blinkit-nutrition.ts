@@ -5,6 +5,7 @@
  */
 import { config as loadEnv } from "dotenv";
 import { parseBlinkitProductDetail } from "@/lib/grocery/blinkit";
+import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { adminClient } from "@/lib/supabase/admin";
 import { persistCoreScore, hasScoreableNutrition } from "@/lib/scoring/persist-core";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -22,7 +23,7 @@ async function main() {
   while (true) {
     let q = supabase
       .from("products")
-      .select("id, zepto_sku, name, category, subcategory, ingredients_raw, nutrition, attributes, raw_payload")
+      .select("id, zepto_sku, name, category, subcategory, net_weight, ingredients_raw, nutrition, attributes, raw_payload")
       .eq("platform", "blinkit")
       .not("raw_payload", "is", null);
 
@@ -34,16 +35,25 @@ async function main() {
     if (!data?.length) break;
 
     for (const row of data) {
-      const attrs = (row.attributes ?? {}) as Record<string, string>;
-      const hasBlock = Boolean(attrs["Nutrition Information"]?.trim());
-      if (!skuArg && !hasBlock) continue;
       const raw = row.raw_payload as Record<string, unknown> | null;
       if (!raw) continue;
 
       const parsed = parseBlinkitProductDetail(row.zepto_sku, raw);
-      const next = parsed.nutrition;
+      const attrs = {
+        ...((row.attributes ?? {}) as Record<string, string>),
+        ...(parsed.attributes ?? {}),
+      };
+      const hasBlock = Boolean(attrs["Nutrition Information"]?.trim());
+      if (!skuArg && !hasBlock) continue;
+      const next = reconcileNutrition({
+        nutrition: parsed.nutrition,
+        attributes: attrs,
+        name: parsed.name ?? row.name,
+        category: row.category,
+        net_weight: row.net_weight,
+      });
       const prev = row.nutrition as ProductNutrition | null;
-      if (JSON.stringify(prev) === JSON.stringify(next)) continue;
+      if (!next || JSON.stringify(prev) === JSON.stringify(next)) continue;
 
       const { error: upErr } = await supabase
         .from("products")

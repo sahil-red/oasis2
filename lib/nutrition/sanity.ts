@@ -1,0 +1,111 @@
+import { parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
+import type { ProductNutrition } from "@/lib/supabase/types";
+
+/** Upper bounds for protein per 100g by product class (catch OCR / parser garbage). */
+const PROTEIN_CEILING: Array<{ test: (name: string, cat: string) => boolean; max: number }> = [
+  {
+    test: (n, c) => /\b(whey|protein powder|isolate|mass gainer)\b/i.test(n + c),
+    max: 90,
+  },
+  {
+    test: (n, c) => /\b(high protein|protein atta|protein flour)\b/i.test(n + c),
+    max: 55,
+  },
+  {
+    test: (n, c) =>
+      /\b(masala|spice|seasoning|hing|turmeric|chilli powder|tea)\b/i.test(n) ||
+      /\bmasala|spice/i.test(c),
+    max: 25,
+  },
+  { test: () => true, max: 40 },
+];
+
+export function maxProteinPer100g(name: string, category: string | null): number {
+  const c = category ?? "";
+  for (const row of PROTEIN_CEILING) {
+    if (row.test(name, c)) return row.max;
+  }
+  return 40;
+}
+
+export function nutritionLooksImplausible(
+  nutrition: ProductNutrition,
+  name: string,
+  category: string | null,
+): boolean {
+  const protein = nutrition.protein_g_100g;
+  const kcal = nutrition.energy_kcal_100g;
+  const maxP = maxProteinPer100g(name, category);
+
+  if (typeof protein === "number" && protein > maxP) return true;
+  // Masala/spice OCR often swaps kcal ↔ protein columns.
+  if (
+    typeof protein === "number" &&
+    protein > 15 &&
+    typeof kcal === "number" &&
+    kcal > 0 &&
+    kcal < 30
+  ) {
+    return true;
+  }
+  if (typeof kcal === "number" && kcal > 900 && (protein ?? 0) < 5) return true;
+  return false;
+}
+
+/** Prefer Blinkit "Nutrition Information" attribute when platform/OCR rows are wrong. */
+export function nutritionFromAttributes(
+  attributes: Record<string, string> | null | undefined,
+  servingG?: number | null,
+): ProductNutrition | null {
+  const block = attributes?.["Nutrition Information"]?.trim();
+  if (!block) return null;
+  return parseServingNutritionBlock(block, servingG ?? undefined);
+}
+
+export function reconcileNutrition(opts: {
+  nutrition: ProductNutrition | null;
+  attributes?: Record<string, string> | null;
+  name: string;
+  category: string | null;
+  net_weight?: string | null;
+}): ProductNutrition | null {
+  const servingG = parsePackGramsFromWeight(opts.net_weight);
+  const fromAttrs = nutritionFromAttributes(opts.attributes, servingG);
+
+  const current = opts.nutrition;
+  if (!current && !fromAttrs) return null;
+  if (!fromAttrs) return current;
+  if (!current) return fromAttrs;
+
+  const currentBad = nutritionLooksImplausible(current, opts.name, opts.category);
+  const attrsBad = nutritionLooksImplausible(fromAttrs, opts.name, opts.category);
+
+  if (currentBad && !attrsBad) return { ...fromAttrs, source: "platform" };
+  if (!currentBad && attrsBad) return current;
+
+  // If OCR but attributes have sane protein, prefer attributes for protein/kcal.
+  if (current.source === "ocr" && fromAttrs.protein_g_100g != null) {
+    const p = current.protein_g_100g ?? 0;
+    const ap = fromAttrs.protein_g_100g ?? 0;
+    if (p > maxProteinPer100g(opts.name, opts.category) && ap <= maxProteinPer100g(opts.name, opts.category)) {
+      return {
+        ...current,
+        ...fromAttrs,
+        source: "platform",
+      };
+    }
+  }
+
+  return current;
+}
+
+function parsePackGramsFromWeight(netWeight: string | null | undefined): number | null {
+  if (!netWeight) return null;
+  const m = /(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b/i.exec(netWeight);
+  if (!m) return null;
+  const n = Number.parseFloat(m[1]);
+  const u = m[2].toLowerCase();
+  if (u === "kg") return n * 1000;
+  if (u === "g") return n;
+  return null;
+}
