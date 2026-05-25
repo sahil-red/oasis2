@@ -7,7 +7,7 @@ import { getCachedScoredCatalog } from "@/lib/products/catalog-cache";
 
 export const revalidate = 120;
 
-/** v0 auto-list: high-protein Blinkit picks under ₹200 */
+/** v0 auto-list: high-protein picks under ₹200 */
 export default async function StacksPage() {
   const products = await getCachedScoredCatalog();
 

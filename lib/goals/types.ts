@@ -63,7 +63,7 @@ export const GOAL_PROFILES: GoalProfile[] = [
     id: "protein-budget",
     label: "Protein / ₹",
     short: "Budget gains",
-    description: "Maximises grams of protein per rupee on Blinkit.",
+    description: "Maximises grams of protein per rupee in the catalog.",
   },
   {
     id: "kids",

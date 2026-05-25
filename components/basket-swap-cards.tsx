@@ -27,7 +27,7 @@ export function BasketSwapCards({
   const aisle = current.subcategory ?? current.category ?? "this aisle";
 
   return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/90 via-white to-violet-50/40 p-4 sm:p-5">
+    <div className="mt-3 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/90 via-white to-violet-50/40 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-800/90">

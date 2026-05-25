@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, ShoppingCart } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { addToBasket, decrementBasket, readBasket } from "@/lib/basket/storage";
 import { cn } from "@/lib/utils";
@@ -72,11 +72,7 @@ export function AddToBasketButton({
           }}
           className="grid h-7 w-7 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) hover:opacity-90"
         >
-          {qty > 0 ? (
-            <Plus className="h-3.5 w-3.5" />
-          ) : (
-            <ShoppingCart className="h-3.5 w-3.5" />
-          )}
+          <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
     );
@@ -91,7 +87,7 @@ export function AddToBasketButton({
         "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-white px-3 py-2 text-sm font-medium text-(--color-fg) hover:border-(--color-fg)"
       }
     >
-      <ShoppingCart className="h-4 w-4" />
+      <Plus className="h-4 w-4" />
       {qty > 0 ? `In cart (${qty})` : "Add to cart"}
     </button>
   );

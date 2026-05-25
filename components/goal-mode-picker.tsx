@@ -19,7 +19,7 @@ export function GoalModePicker({
           Pick what you&apos;re optimizing for — rankings and colors update across the catalog.
         </p>
       ) : null}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="-mx-1 flex gap-2 overflow-x-auto overflow-y-visible scroll-px-2 pb-2 pt-0.5 scrollbar-none">
         {GOAL_PROFILES.map((g) => (
           <button
             key={g.id}

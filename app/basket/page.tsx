@@ -12,8 +12,9 @@ export default function BasketPage() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-(--color-fg-dim)">Your basket</p>
           <h1 className="mt-2 font-display text-4xl leading-tight">Cart intelligence</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-(--color-fg-muted)">
-            A living snapshot of what you would throw in a Blinkit cart — macro balance, sugar
-            load, and Core scores. Add from the catalog; everything stays in your browser.
+            A living snapshot of your cart — macro balance, sugar load, and scores. Add from the
+            catalog with <span className="font-medium text-(--color-fg)">+</span>; everything stays
+            in your browser.
           </p>
         </header>
 

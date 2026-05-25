@@ -160,7 +160,7 @@ export function BasketView() {
       <div className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-8 py-20 text-center">
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-violet-400/15 blur-3xl" />
         <Sparkles className="mx-auto h-8 w-8 text-violet-600" strokeWidth={1.5} />
-        <p className="mt-4 text-lg font-medium text-(--color-fg)">Your mock cart is empty</p>
+        <p className="mt-4 text-lg font-medium text-(--color-fg)">Your cart is empty</p>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-(--color-fg-muted)">
           Add items from the catalog — we&apos;ll show same-aisle swaps and one-tap replacements
           here, like on Insights.
@@ -178,33 +178,42 @@ export function BasketView() {
 
   const scoreTone = headlineScore == null ? "text-(--color-fg-dim)" : "";
 
+  const summaryLines = [
+    ...analysis.summary,
+    ...(analysis.flaggedAdditiveSkus > 0
+      ? [
+          `${analysis.flaggedAdditiveSkus} item${analysis.flaggedAdditiveSkus === 1 ? "" : "s"} with flagged additives.`,
+        ]
+      : []),
+  ];
+
   return (
-    <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-6 py-8 sm:px-8">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
-        <div className="relative grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+    <div className="space-y-5">
+      <section className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-5 py-5 sm:px-6">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-800/80">
-              Mock Blinkit cart · {analysis.goalLabel}
+              Cart · {analysis.goalLabel}
             </p>
-            <p className="mt-2 font-display text-4xl tabular-nums sm:text-5xl">
+            <p className="mt-1 font-display text-3xl tabular-nums sm:text-4xl">
               {analysis.totalInr > 0 ? `₹${analysis.totalInr}` : "—"}
             </p>
-            <p className="mt-1 text-sm text-(--color-fg-muted)">
-              {analysis.itemCount} item{analysis.itemCount === 1 ? "" : "s"} ·{" "}
+            <p className="mt-0.5 text-sm text-(--color-fg-muted)">
+              {analysis.itemCount} item{analysis.itemCount === 1 ? "" : "s"}
               {swapsLoading
-                ? "finding swaps…"
+                ? " · finding swaps…"
                 : swapCount > 0
-                  ? `${swapCount} swap${swapCount === 1 ? "" : "s"} ready`
-                  : "local only"}
+                  ? ` · ${swapCount} swap${swapCount === 1 ? "" : "s"} ready`
+                  : ""}
             </p>
           </div>
-          <div className="text-left lg:text-right">
-            <p className="text-[11px] uppercase tracking-wider text-(--color-fg-dim)">
-              {goal !== "balanced" ? `Avg for ${analysis.goalLabel}` : "Avg score"}
+          <div className="text-left sm:text-right">
+            <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+              {goal !== "balanced" ? `Avg · ${analysis.goalLabel}` : "Avg score"}
             </p>
             <p
-              className={cn("font-display text-6xl leading-none tabular-nums", scoreTone)}
+              className={cn("font-display text-5xl leading-none tabular-nums", scoreTone)}
               style={
                 headlineScore != null ? { color: colorForScore(headlineScore) } : undefined
               }
@@ -213,65 +222,53 @@ export function BasketView() {
             </p>
           </div>
         </div>
+        {summaryLines.length > 0 ? (
+          <ul className="relative mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-violet-200/60 pt-3 text-[13px] leading-snug text-(--color-fg-muted)">
+            {summaryLines.map((s) => (
+              <li key={s} className="flex gap-1.5">
+                <span className="text-violet-500">·</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-5 rounded-2xl border border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-white p-6 shadow-sm">
-          <h2 className="font-display text-xl">Cart breakdown</h2>
+      <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-white px-4 py-4 sm:px-5">
+        <div className="grid gap-4 sm:grid-cols-3">
           <MetricBar
-            label="Protein share of macros"
+            label="Protein share"
             value={analysis.proteinPct}
             max={40}
             tone="good"
           />
           <MetricBar
-            label="Avg sugar (g / 100g)"
+            label="Avg sugar / 100g"
             value={analysis.avgSugarG}
             max={25}
             tone={analysis.avgSugarG != null && analysis.avgSugarG > 12 ? "warn" : "neutral"}
           />
           <MetricBar
-            label="Snack-style items"
+            label="Snack-style %"
             value={analysis.snackHeavyPct}
             max={100}
             tone={
               analysis.snackHeavyPct != null && analysis.snackHeavyPct > 30 ? "warn" : "good"
             }
           />
-          {analysis.avgFiberG != null ? (
-            <p className="text-xs text-(--color-fg-dim)">
-              Avg fibre ~{analysis.avgFiberG.toFixed(1)}g / 100g
-            </p>
-          ) : null}
         </div>
-
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/50 to-white p-6">
-          <h2 className="font-display text-xl">What this means</h2>
-          <ul className="mt-4 space-y-3 text-sm leading-relaxed text-(--color-fg-muted)">
-            {analysis.summary.map((s) => (
-              <li key={s} className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-                <span>{s}</span>
-              </li>
-            ))}
-            {analysis.flaggedAdditiveSkus > 0 ? (
-              <li className="flex gap-2 text-amber-800">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                <span>
-                  {analysis.flaggedAdditiveSkus} item
-                  {analysis.flaggedAdditiveSkus === 1 ? "" : "s"} with flagged additives.
-                </span>
-              </li>
-            ) : null}
-          </ul>
-        </div>
+        {analysis.avgFiberG != null ? (
+          <p className="mt-2 text-[11px] text-(--color-fg-dim)">
+            Avg fibre ~{analysis.avgFiberG.toFixed(1)}g / 100g
+          </p>
+        ) : null}
       </div>
 
-      <div className="space-y-10">
+      <div className="space-y-5">
         {lines.map(({ product, qty }) => (
           <article
             key={product.id}
-            className="rounded-2xl border border-(--color-line) bg-white p-4 shadow-sm sm:p-5"
+            className="rounded-xl border border-(--color-line) bg-white p-3 shadow-sm sm:p-4"
           >
             <div className="flex items-center gap-4">
               <Link
@@ -358,7 +355,7 @@ export function BasketView() {
           Clear cart
         </button>
         <p className="text-xs text-(--color-fg-dim)">
-          Not synced to Blinkit — swaps use Oasis catalog only.
+          Saved in your browser only — swaps use our catalog.
         </p>
       </div>
     </div>

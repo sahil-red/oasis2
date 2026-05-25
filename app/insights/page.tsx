@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { InsightProductCard } from "@/components/insight-product-card";
 import {
-  InsightFeaturedCard,
-  InsightProductCard,
-} from "@/components/insight-product-card";
+  InsightsCarouselSlide,
+  InsightsProductCarousel,
+} from "@/components/insights-product-carousel";
 import { InsightsBrandBoard } from "@/components/insights-brand-board";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
@@ -22,9 +23,6 @@ export default async function InsightsPage() {
   const products = await getCachedCatalog();
   const insights = buildInsights(products.filter((p) => p.core_scores));
 
-  const featured =
-    insights.featuredMisleading && marketingCallout(insights.featuredMisleading);
-
   return (
     <main className="min-h-screen bg-(--color-bg)">
       <SiteNav />
@@ -32,7 +30,7 @@ export default async function InsightsPage() {
       <div className="border-b border-(--color-line) bg-gradient-to-br from-violet-50 via-white to-amber-50">
         <div className="mx-auto max-w-6xl px-5 py-12 md:px-6 md:py-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-            Blinkit catalog · evidence-backed
+            Catalog intel · evidence-backed
           </p>
           <h1 className="mt-3 font-display text-4xl leading-tight md:text-5xl">
             Insider grocery intel
@@ -56,15 +54,6 @@ export default async function InsightsPage() {
       </div>
 
       <div className="mx-auto max-w-6xl px-5 pb-20 pt-10 md:px-6 md:pt-14">
-        {featured ? (
-          <section className="mb-14">
-            <InsightFeaturedCard
-              product={insights.featuredMisleading!}
-              callout={featured}
-            />
-          </section>
-        ) : null}
-
         <section className="mb-14">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -73,40 +62,34 @@ export default async function InsightsPage() {
               </h2>
               <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
                 Health/protein/zero cues on the front — but the label tells a different story.
-                Built to share, not to scare.
               </p>
             </div>
             <span className="rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white">
               {insights.misleading.length} flagged
             </span>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {insights.misleading.map(({ product }) => {
-              const c = marketingCallout(product);
-              return (
-                <InsightProductCard
-                  key={product.id}
-                  product={product}
-                  accent="warn"
-                  badge="Callout"
-                  headline={c.reality}
-                  subline={c.claim}
-                />
-              );
-            })}
+          <div className="mt-6 px-2 sm:px-6">
+            <InsightsProductCarousel ariaLabel="Marketing reality check products">
+              {insights.misleading.map(({ product }) => {
+                const c = marketingCallout(product);
+                return (
+                  <InsightsCarouselSlide key={product.id}>
+                    <InsightProductCard
+                      product={product}
+                      accent="warn"
+                      badge="Callout"
+                      headline={c.reality}
+                      subline={c.claim}
+                    />
+                  </InsightsCarouselSlide>
+                );
+              })}
+            </InsightsProductCarousel>
           </div>
         </section>
 
         <section className="mb-14">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-2xl md:text-3xl">Best protein per rupee</h2>
-              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
-                Ranked by protein per ₹100 <em>and</em> overall label score — so pure chip
-                hacks don&apos;t dominate the list.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl md:text-3xl">Best protein per rupee</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {insights.proteinPerRupee.map(({ product }) => (
               <InsightProductCard

@@ -157,12 +157,12 @@ export function CatalogView({
     <div className="space-y-8">
       <div className="space-y-5">
         {showGoalHint ? (
-          <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-4">
+          <div className="overflow-visible rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-4 pb-5">
             <p className="text-[15px] font-medium text-(--color-fg)">What are you shopping for?</p>
             <p className="mt-1 text-sm text-(--color-fg-muted)">
               We&apos;ll rank products and scores for your goal. You can change this anytime.
             </p>
-            <div className="mt-3">
+            <div className="mt-3 overflow-visible">
               <GoalModePicker value={goal} onChange={pickGoal} />
             </div>
           </div>
@@ -179,7 +179,7 @@ export function CatalogView({
           </p>
         ) : (
           <p className="text-sm text-(--color-fg-muted)">
-            Tap <span className="font-medium text-(--color-fg)">+</span> on a tile to build a mock
+            Tap <span className="font-medium text-(--color-fg)">+</span> on a tile to add to your
             cart, or pick a goal above to re-rank.
           </p>
         )}

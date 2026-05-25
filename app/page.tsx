@@ -14,7 +14,7 @@ import type { SubScores } from "@/lib/supabase/types";
 const FAQ = [
   {
     q: "Where does the data come from?",
-    a: "Mostly Blinkit product pages. When nutrition or ingredients are missing, we read the back label with OCR. Scores use clear rules — not a black-box AI rating.",
+    a: "Product pages and label images from our catalog. When nutrition or ingredients are missing, we read the back label with OCR. Scores use clear rules — not a black-box AI rating.",
   },
   {
     q: "What is the score?",
@@ -45,7 +45,7 @@ export default async function Home() {
         <div className="grid items-start gap-14 lg:grid-cols-2">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-              Blinkit groceries
+              Indian groceries
             </p>
             <h1 className="font-display mt-4 text-balance text-5xl leading-[0.95] md:text-6xl">
               Buy better in the{" "}
@@ -99,13 +99,13 @@ export default async function Home() {
       <section className="mx-auto max-w-6xl px-6 py-16">
         <h2 className="font-display text-2xl">Built for quick decisions</h2>
         <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
-          Less lecture, more &quot;here&apos;s a better option on Blinkit.&quot;
+          Less lecture, more &quot;here&apos;s a better option in the same aisle.&quot;
         </p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { href: "/search", title: "Pick your goal", desc: "Gym, bulk, diabetic, protein per ₹" },
             { href: "/search", title: "Same-aisle swaps", desc: "Better score without changing category" },
-            { href: "/basket", title: "Rate my cart", desc: "Mock cart with protein & sugar readout" },
+            { href: "/basket", title: "Rate my cart", desc: "Cart with protein, sugar & swaps" },
             { href: "/insights", title: "Decode marketing", desc: "“Healthy” labels that don’t add up" },
           ].map((f) => (
             <Link
@@ -124,7 +124,7 @@ export default async function Home() {
 
       <Section id="how-it-works">
         <Eyebrow>How it works</Eyebrow>
-        <H2>Three steps on Blinkit.</H2>
+        <H2>Three steps.</H2>
         <div className="mt-14 grid gap-10 md:grid-cols-3">
           <FeatureStep
             index={1}
@@ -144,7 +144,7 @@ export default async function Home() {
             index={3}
             icon="shield"
             title="Swap it"
-            body="Open a better pick in the same aisle, add to your mock cart."
+            body="Open a better pick in the same aisle, add to your cart with +."
             delay={160}
           />
         </div>

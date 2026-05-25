@@ -1,4 +1,4 @@
-import { proteinValueRankScore } from "@/lib/products/insight-copy";
+import { isChipStyleSnack, proteinValueRankScore } from "@/lib/products/insight-copy";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export type BrandStat = {
@@ -89,7 +89,7 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
       const s = sugar(p) ?? 0;
       return 100 - score + s * 2 + (HEALTHY_MARKETING.test(p.name) ? 10 : 0);
     },
-    16,
+    24,
   );
 
   const proteinPool = products.filter((p) => {
@@ -100,7 +100,8 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
       protein >= 10 &&
       p.price_inr != null &&
       p.price_inr > 0 &&
-      core >= 45
+      core >= 45 &&
+      !isChipStyleSnack(p)
     );
   });
 
