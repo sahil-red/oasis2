@@ -33,6 +33,17 @@ function sugar(p: ProductListItem): number | null {
   return typeof s === "number" ? s : null;
 }
 
+function marketingText(p: ProductListItem): string {
+  return [
+    p.name,
+    p.attributes?.["Key Features"] ?? "",
+    p.attributes?.Description ?? "",
+    p.attributes?.["Diet Preference"] ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
 function rankProducts(
   products: ProductListItem[],
   scoreFn: (p: ProductListItem) => number,
@@ -77,7 +88,7 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
   const misleadingPool = products.filter((p) => {
     const score = p.core_scores?.score;
     if (score == null) return false;
-    if (!HEALTHY_MARKETING.test(p.name)) return false;
+    if (!HEALTHY_MARKETING.test(marketingText(p))) return false;
     const s = sugar(p);
     return score < 50 || (s != null && s >= 10);
   });
@@ -87,7 +98,7 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
     (p) => {
       const score = p.core_scores?.score ?? 100;
       const s = sugar(p) ?? 0;
-      return 100 - score + s * 2 + (HEALTHY_MARKETING.test(p.name) ? 10 : 0);
+      return 100 - score + s * 2 + (HEALTHY_MARKETING.test(marketingText(p)) ? 10 : 0);
     },
     24,
   );

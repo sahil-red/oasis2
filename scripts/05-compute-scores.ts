@@ -38,7 +38,7 @@ async function main() {
   const args = parseArgs();
   const supabase = adminClient();
 
-  let query = supabase
+  let query: any = supabase
     .from("products")
     .select(
       "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )",

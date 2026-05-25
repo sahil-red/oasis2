@@ -180,6 +180,14 @@ function isDietSoftDrink(
   );
 }
 
+function isProteinSnackName(name: string): boolean {
+  return /\b(protein).*\b(chip|chips|crisp|crisps|puff|snack|bar)\b/i.test(name);
+}
+
+function isChipOrCrisp(name: string, category: string | null): boolean {
+  return /\b(chip|chips|crisp|crisps|wafer)\b/i.test(`${name} ${category ?? ""}`);
+}
+
 /** Map per-100g nutrition + category baseline → 0–60 nutrition subscore. */
 export function scoreNutrition(
   nutrition: ProductNutrition | null,
@@ -212,6 +220,9 @@ export function scoreNutrition(
   const sugar = nutrition.sugar_g_100g ?? nutrition.added_sugar_g_100g;
   const sodium = nutrition.sodium_mg_100g;
   const kcal = nutrition.energy_kcal_100g;
+  const saturatedFat = nutrition.saturated_fat_g_100g;
+  const protein = nutrition.protein_g_100g ?? 0;
+  const fiber = nutrition.fiber_g_100g ?? 0;
 
   // Absolute sugar caps (any category).
   if (typeof sugar === "number") {
@@ -219,13 +230,25 @@ export function scoreNutrition(
     else if (sugar >= 35) sub = Math.min(sub, 18);
     else if (sugar >= 22) sub = Math.min(sub, 28);
   }
-  if (typeof sodium === "number" && sodium >= 600) {
-    sub = Math.min(sub, sub - 4);
+  if (typeof sodium === "number") {
+    if (sodium >= 1000) sub = Math.min(sub, sub - 9);
+    else if (sodium >= 600) sub = Math.min(sub, sub - 6);
+  }
+  if (typeof saturatedFat === "number") {
+    if (saturatedFat >= 18) sub = Math.min(sub, 32);
+    else if (saturatedFat >= 10) sub = Math.min(sub, sub - 5);
   }
 
   // Fried snacks / chips — energy-dense; not the same cap as fresh milk.
   if (typeof kcal === "number" && kcal >= 450 && baselineKey !== "Dairy & Eggs::Milk") {
     sub = Math.min(sub, 32);
+  }
+
+  // Protein-fortified chips/snacks are better than ordinary chips, but not a
+  // clean staple. Fibre and real protein can lift them, but keep a ceiling.
+  if (isProteinSnackName(name) || isChipOrCrisp(name, category)) {
+    const proteinSnackCap = protein >= 25 && fiber >= 5 ? 40 : protein >= 15 ? 36 : 30;
+    sub = Math.min(sub, proteinSnackCap);
   }
 
   // Diet cola: zero sugar ≠ healthy; cap below fresh milk.

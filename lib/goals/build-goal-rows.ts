@@ -6,6 +6,8 @@ export type GoalFitRow = {
   label: string;
   fit: number;
   reasons: string[];
+  primaryMetric: string;
+  shortReason: string;
 };
 import type { ProductListItem } from "@/lib/products/queries";
 import { gradeFromScore, type Grade } from "@/lib/utils";
@@ -53,6 +55,8 @@ export function buildProductGoalRows(
       label: profile.label,
       fit: result.fit,
       reasons: result.reasons,
+      primaryMetric: result.primaryMetric,
+      shortReason: result.shortReason,
     };
   });
 }

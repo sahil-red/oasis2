@@ -5,8 +5,15 @@ import Link from "next/link";
 import { ArrowRight, Minus, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BasketSwapCards } from "@/components/basket-swap-cards";
-import { ScoreBadge } from "@/components/score-display";
-import { readStoredGoal, readVegAllowEggs } from "@/lib/goals/storage";
+import { GoalModePicker } from "@/components/goal-mode-picker";
+import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
+import {
+  readStoredGoal,
+  readVegAllowEggs,
+  writeStoredGoal,
+  writeVegAllowEggs,
+} from "@/lib/goals/storage";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
 import { analyzeBasket } from "@/lib/products/basket-analysis";
 import type { SwapSuggestion } from "@/lib/products/alternatives";
@@ -64,6 +71,7 @@ export function BasketView() {
   const [swapsLoading, setSwapsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [goal, setGoal] = useState<GoalId>("balanced");
+  const [vegAllowEggs, setVegAllowEggs] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,17 +101,32 @@ export function BasketView() {
       }
     };
 
-    const syncGoal = () => setGoal(readStoredGoal());
+    const syncGoal = () => {
+      setGoal(readStoredGoal());
+      setVegAllowEggs(readVegAllowEggs());
+    };
     syncGoal();
     sync();
     window.addEventListener("oasis-basket", sync);
     window.addEventListener("oasis-goal", syncGoal);
+    window.addEventListener("oasis-veg-eggs", syncGoal);
     return () => {
       cancelled = true;
       window.removeEventListener("oasis-basket", sync);
       window.removeEventListener("oasis-goal", syncGoal);
+      window.removeEventListener("oasis-veg-eggs", syncGoal);
     };
   }, []);
+
+  const pickGoal = (next: GoalId) => {
+    writeStoredGoal(next);
+    setGoal(next);
+  };
+
+  const pickVegAllowEggs = (allow: boolean) => {
+    writeVegAllowEggs(allow);
+    setVegAllowEggs(allow);
+  };
 
   const slugsKey = useMemo(
     () => [...new Set(entries.map((e) => e.slug))].sort().join(","),
@@ -117,8 +140,7 @@ export function BasketView() {
     }
     let cancelled = false;
     setSwapsLoading(true);
-    const allowQ =
-      goal === "veg" && readVegAllowEggs() ? "&allow_eggs=1" : "";
+    const allowQ = goal === "veg" && vegAllowEggs ? "&allow_eggs=1" : "";
     fetch(`/api/swaps?slugs=${encodeURIComponent(slugsKey)}&goal=${goal}${allowQ}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { swaps: Record<string, SwapSuggestion[]> }) => {
@@ -133,7 +155,7 @@ export function BasketView() {
     return () => {
       cancelled = true;
     };
-  }, [slugsKey, goal]);
+  }, [slugsKey, goal, vegAllowEggs]);
 
   const lines = useMemo(() => {
     const bySlug = new Map(catalog.map((p) => [p.slug, p]));
@@ -148,9 +170,9 @@ export function BasketView() {
   const analysis = useMemo(
     () =>
       analyzeBasket(lines, goal, {
-        veg_allow_eggs: goal === "veg" ? readVegAllowEggs() : undefined,
+        veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
       }),
-    [lines, goal],
+    [lines, goal, vegAllowEggs],
   );
   const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
   const swapCount = Object.values(swapsBySlug).reduce((n, s) => n + s.length, 0);
@@ -188,21 +210,38 @@ export function BasketView() {
 
   const summaryLines = [
     ...analysis.summary,
-    ...(analysis.flaggedAdditiveSkus > 0
+    ...(analysis.flaggedAdditiveSkus > 0 && !analysis.summary.some((s) => /flagged additives/i.test(s))
       ? [
           `${analysis.flaggedAdditiveSkus} item${analysis.flaggedAdditiveSkus === 1 ? "" : "s"} with flagged additives.`,
         ]
       : []),
   ];
 
+  const primarySummary = summaryLines[0] ?? "Cart analysis is ready.";
+  const watchSummary =
+    summaryLines.find((s) => /sugar|additive|below|swap|low side|snack/i.test(s)) ??
+    "No urgent red flags in this cart.";
+  const improveSummary =
+    swapCount > 0
+      ? `${swapCount} better pick${swapCount === 1 ? "" : "s"} ready to replace.`
+      : "Add a few more items and we’ll find stronger swaps.";
+
+  const itemFit = (product: ProductListItem) =>
+    goal === "balanced"
+      ? null
+      : computeGoalFit(goal, {
+          ...goalFitInputs(product),
+          veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
+        });
+
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-5 py-5 sm:px-6">
+      <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-5 py-5 sm:px-6">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-800/80">
-              Cart · {analysis.goalLabel}
+              Cart verdict · {analysis.goalLabel}
             </p>
             <p className="mt-1 font-display text-3xl tabular-nums sm:text-4xl">
               {analysis.totalInr > 0 ? `₹${analysis.totalInr}` : "—"}
@@ -215,6 +254,15 @@ export function BasketView() {
                   ? ` · ${swapCount} swap${swapCount === 1 ? "" : "s"} ready`
                   : ""}
             </p>
+            <div className="mt-4 max-w-xl">
+              <GoalModePicker
+                value={goal}
+                onChange={pickGoal}
+                compact
+                vegAllowEggs={vegAllowEggs}
+                onVegAllowEggsChange={pickVegAllowEggs}
+              />
+            </div>
           </div>
           <div className="text-left sm:text-right">
             <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
@@ -230,16 +278,20 @@ export function BasketView() {
             </p>
           </div>
         </div>
-        {summaryLines.length > 0 ? (
-          <ul className="relative mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-violet-200/60 pt-3 text-[13px] leading-snug text-(--color-fg-muted)">
-            {summaryLines.map((s) => (
-              <li key={s} className="flex gap-1.5">
-                <span className="text-violet-500">·</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <div className="relative mt-5 grid gap-2 border-t border-violet-200/60 pt-4 sm:grid-cols-3">
+          {[
+            ["Best move", primarySummary],
+            ["Watch", watchSummary],
+            ["Improve", improveSummary],
+          ].map(([label, body]) => (
+            <div key={label} className="rounded-xl bg-white/75 px-3 py-3 ring-1 ring-violet-100">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-violet-800/80">
+                {label}
+              </p>
+              <p className="mt-1 text-[13px] leading-snug text-(--color-fg-muted)">{body}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-white px-4 py-4 sm:px-5">
@@ -273,10 +325,12 @@ export function BasketView() {
       </div>
 
       <div className="space-y-5">
-        {lines.map(({ product, qty }) => (
+        {lines.map(({ product, qty }) => {
+          const fit = itemFit(product);
+          return (
           <article
             key={product.id}
-            className="rounded-xl border border-(--color-line) bg-white p-3 shadow-sm sm:p-4"
+            className="rounded-2xl border border-(--color-line) bg-white p-3 shadow-sm sm:p-4"
           >
             <div className="flex items-center gap-4">
               <Link
@@ -306,13 +360,20 @@ export function BasketView() {
                       ₹{product.price_inr * qty}
                     </span>
                   ) : null}
-                  {product.core_scores ? (
+                  {fit ? (
+                    <GoalFitBadge fit={fit.fit} size="sm" />
+                  ) : product.core_scores ? (
                     <ScoreBadge
                       score={product.core_scores.score}
                       grade={product.core_scores.grade}
+                      className="!text-2xl"
                     />
                   ) : null}
                 </div>
+                <p className="mt-1 line-clamp-1 text-[12px] text-(--color-fg-muted)">
+                  {fit?.shortReason ??
+                    (product.core_scores ? "Based on nutrition + ingredients" : "Score pending")}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-1 rounded-full border border-(--color-line) bg-(--color-bg-soft) p-1">
                 <button
@@ -351,7 +412,8 @@ export function BasketView() {
               goal={goal}
             />
           </article>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-(--color-line) pt-6">

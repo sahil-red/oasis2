@@ -89,7 +89,11 @@ export function analyzeBasket(
   if (goal !== "balanced" && goalFits.length) {
     const avgFit = avg(goalFits)!;
     const weak = items.filter(
-      (p) => computeGoalFit(goal, goalFitInputs(p)).fit < 45,
+      (p) =>
+        computeGoalFit(goal, {
+          ...goalFitInputs(p),
+          veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
+        }).fit < 45,
     ).length;
     summary.push(
       `For ${goalLabel}, this cart averages ${avgFit.toFixed(0)} / 100 across items.`,

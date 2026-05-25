@@ -28,8 +28,8 @@ export interface Product {
   /**
    * Free-form key/value attributes from the source platform's PDP — Diet Preference,
    * Country of Origin, Shelf Life, FSSAI License, Allergen Information, Type,
-   * Flavour, Description, Key Features, Seller, etc. Used for product detail UI;
-   * NOT used for scoring (scoring only looks at `nutrition` + `ingredients_raw`).
+   * Flavour, Description, Key Features, Seller, etc. Used for product detail UI
+   * and as soft scoring context for claims, diet labels, and processing signals.
    */
   attributes: Record<string, string> | null;
   raw_payload: Record<string, unknown> | null;

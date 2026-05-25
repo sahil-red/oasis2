@@ -35,8 +35,8 @@ export function BasketSwapCards({
             Better picks
           </p>
           <p className="mt-1 text-sm leading-relaxed text-(--color-fg-muted)">
-            Same-aisle swaps in <span className="font-medium text-(--color-fg)">{aisle}</span> —
-            one tap replaces this line.
+            Same-aisle swaps in <span className="font-medium text-(--color-fg)">{aisle}</span>.
+            Replace the weak line without rebuilding your cart.
           </p>
         </div>
       </div>
@@ -88,7 +88,9 @@ export function BasketSwapCards({
                 {product.name}
               </Link>
               <p className="mt-1.5 flex-1 text-[12px] leading-snug text-(--color-fg-muted)">
-                {deltas.join(" · ")}
+                {deltas.length > 0
+                  ? `Why: ${deltas.join(" · ")}`
+                  : "A stronger same-aisle pick for this goal."}
               </p>
               {product.price_inr != null ? (
                 <p className="mt-2 text-sm font-semibold tabular-nums">₹{product.price_inr}</p>

@@ -119,7 +119,7 @@ async function main() {
     ? "pending,failed,no_label_found"
     : "pending";
 
-  let query = supabase
+  let query: any = supabase
     .from("products")
     .select("id, name, image_urls, ocr_status, ingredients_raw, nutrition")
     .in("ocr_status", statusFilter.split(","))

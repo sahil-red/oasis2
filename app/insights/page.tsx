@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { InsightProductCard } from "@/components/insight-product-card";
+import { InsightFeaturedCard, InsightProductCard } from "@/components/insight-product-card";
 import {
   InsightsCarouselSlide,
   InsightsProductCarousel,
@@ -55,13 +55,38 @@ export default async function InsightsPage() {
 
       <div className="mx-auto max-w-6xl px-5 pb-20 pt-10 md:px-6 md:pt-14">
         <section className="mb-14">
+          {insights.featuredMisleading ? (
+            <div className="mb-8">
+              <InsightFeaturedCard
+                product={insights.featuredMisleading}
+                callout={marketingCallout(insights.featuredMisleading)}
+              />
+            </div>
+          ) : null}
+          <div className="mb-8 grid gap-3 md:grid-cols-3">
+            <InsightStatCard
+              label="Don’t fall for"
+              value={`${insights.misleading.length}`}
+              body="health-halo products where the back label deserves a second look"
+            />
+            <InsightStatCard
+              label="Best value shelf"
+              value={`${insights.proteinPerRupee.length}`}
+              body="protein picks ranked by real pack protein per rupee"
+            />
+            <InsightStatCard
+              label="Snack upgrades"
+              value={`${insights.highProteinSnacks.length}`}
+              body="packaged snacks that at least bring meaningful protein"
+            />
+          </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="font-display text-2xl md:text-3xl">
-                &quot;Healthy&quot; marketing, weak labels
+                Don’t fall for the front label
               </h2>
               <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
-                Health/protein/zero cues on the front — but the label tells a different story.
+                Health/protein/zero cues on the front, checked against actual nutrition and ingredients.
               </p>
             </div>
             <span className="rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white">
@@ -89,7 +114,17 @@ export default async function InsightsPage() {
         </section>
 
         <section className="mb-14">
-          <h2 className="font-display text-2xl md:text-3xl">Best protein per rupee</h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl md:text-3xl">Best protein value</h2>
+              <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
+                Ranked by grams of protein in the pack per ₹100, not just “high protein” wording.
+              </p>
+            </div>
+            <Link href="/search?goal=protein-budget" className="text-sm font-medium text-(--color-accent) hover:underline">
+              Shop protein value
+            </Link>
+          </div>
           <div className="mt-6 px-2 sm:px-6">
             <InsightsProductCarousel ariaLabel="Best protein per rupee">
               {insights.proteinPerRupee.map(({ product }) => (
@@ -108,10 +143,17 @@ export default async function InsightsPage() {
         </section>
 
         <section className="mb-14">
-          <h2 className="font-display text-2xl md:text-3xl">High-protein snacks</h2>
-          <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
-            Snacks &amp; munchies with real protein — not just marketing on the bag.
-          </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl md:text-3xl">Better snack shelf</h2>
+              <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
+                Snacks &amp; munchies with real protein — not just marketing on the bag.
+              </p>
+            </div>
+            <Link href="/basket" className="text-sm font-medium text-(--color-accent) hover:underline">
+              Rate my cart
+            </Link>
+          </div>
           <div className="mt-6 px-2 sm:px-6">
             <InsightsProductCarousel ariaLabel="High-protein snacks">
               {insights.highProteinSnacks.map(({ product }) => (
@@ -151,5 +193,25 @@ export default async function InsightsPage() {
 
       <SiteFooter />
     </main>
+  );
+}
+
+function InsightStatCard({
+  label,
+  value,
+  body,
+}: {
+  label: string;
+  value: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-(--color-line) bg-white px-4 py-4 shadow-sm">
+      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+        {label}
+      </p>
+      <p className="mt-2 font-display text-3xl leading-none tabular-nums">{value}</p>
+      <p className="mt-2 text-[13px] leading-snug text-(--color-fg-muted)">{body}</p>
+    </div>
   );
 }
