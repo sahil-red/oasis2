@@ -20,6 +20,7 @@
     "scrape:expand:detail": "tsx scripts/02-scrape-products.ts --detail-only",
     "scrape:detail:resume": "bash scripts/run-detail-resume.sh",
     "scrape:staples": "bash scripts/run-scrape-staples.sh",
+    "reparse:nutrition": "tsx scripts/reparse-blinkit-nutrition.ts",
     "scrape:food5k": "bash scripts/run-scrape-5k-food.sh",
     "pipeline:expand": "bash scripts/run-expand-pipeline.sh",
     "peek:blinkit": "tsx scripts/peek-blinkit.ts",

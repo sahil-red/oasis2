@@ -71,6 +71,10 @@
 import { fetchJson, makeThrottledFetch, type ThrottledFetch } from "./http";
 import { makeCurlFetch } from "./http-curl";
 import { makePlaywrightFetch } from "./http-playwright";
+import {
+  mergeNutrition,
+  parseServingNutritionBlock,
+} from "@/lib/grocery/parse-nutrition-block";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type {
   GroceryAdapter,
@@ -497,7 +501,13 @@ export function parseBlinkitProductDetail(
   ]);
   const description = pickAttr(detailRows, ["description", "marketing description"]);
   const allergen_info = pickAttr(detailRows, ["allergen information", "allergen info", "allergens"]);
-  const nutrition = parseNutrition(detailRows);
+  const nutrition = parseNutrition(detailRows, {
+    nutritionInformation: pickAttr(detailRows, [
+      "nutrition information",
+      "nutrition facts",
+      "nutritional information",
+    ]),
+  });
 
   // Everything in detailRows that ISN'T canonical (name/price/etc) flows
   // into `attributes` so the UI can render the full PDP table.
@@ -727,7 +737,10 @@ const CANONICAL_NUTRITION_KEYS = new Set([
   "caffeine_mg_100g",
 ]);
 
-function parseNutrition(rows: Record<string, string>): ProductNutrition | null {
+function parseNutrition(
+  rows: Record<string, string>,
+  opts?: { nutritionInformation?: string | null },
+): ProductNutrition | null {
   // Only consider rows whose title hints at a per-100g (or per-serve) figure.
   // FSSAI mandates per-100g, so that's our overwhelming-default basis.
   const PER_100_RE = /per ?100 ?(?:g|ml)|calories|energy/i;
@@ -736,6 +749,7 @@ function parseNutrition(rows: Record<string, string>): ProductNutrition | null {
   const extra: Record<string, number | string> = {};
 
   for (const [rawKey, rawValue] of Object.entries(rows)) {
+    if (rawKey === "nutrition information") continue;
     if (!PER_100_RE.test(rawKey)) continue;
     const value = parseNutritionValue(rawValue);
     if (value == null) continue;
@@ -756,13 +770,16 @@ function parseNutrition(rows: Record<string, string>): ProductNutrition | null {
   const servingSize = rows["serve size"] ?? rows["serving size"];
   if (servingSize) extra["serving_size"] = servingSize;
 
-  if (Object.keys(canonical).length === 0 && Object.keys(extra).length === 0) {
-    return null;
+  let fromRows: ProductNutrition | null = null;
+  if (Object.keys(canonical).length > 0 || Object.keys(extra).length > 0) {
+    fromRows = { source: "platform", ...canonical };
+    if (Object.keys(extra).length > 0) fromRows.extra = extra;
   }
 
-  const out: ProductNutrition = { source: "platform", ...canonical };
-  if (Object.keys(extra).length > 0) out.extra = extra;
-  return out;
+  const blockText = opts?.nutritionInformation?.trim();
+  const fromBlock = blockText ? parseServingNutritionBlock(blockText) : null;
+
+  return mergeNutrition(fromRows, fromBlock);
 }
 
 function matchNutritionKey(rawKey: string): string | null {
