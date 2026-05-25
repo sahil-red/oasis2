@@ -105,6 +105,47 @@ export function GoalFitChip({ fit, label }: { fit: number; label: string }) {
   );
 }
 
+/** Nutrition / additives / labels + A–F legend — no overall ring (goals list covers overall). */
+export function ScoreSubscoresBlock({
+  subscores,
+  className,
+}: {
+  subscores?: SubScores;
+  className?: string;
+}) {
+  const axes = subscores
+    ? [
+        { label: "Nutrition", value: subscores.nutrition, max: 60 },
+        { label: "Additives", value: subscores.additives, max: 30 },
+        { label: "Labels", value: subscores.labels, max: 10 },
+      ]
+    : [];
+
+  return (
+    <div className={cn("space-y-4", className)}>
+      {axes.length > 0 ? (
+        <dl className="grid grid-cols-3 gap-2">
+          {axes.map(({ label, value, max }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-(--color-line) bg-white px-3 py-2.5 text-center shadow-sm"
+            >
+              <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+                {label}
+              </dt>
+              <dd className="mt-1 font-display text-2xl tabular-nums text-(--color-fg)">
+                {value}
+                <span className="text-[10px] font-normal text-(--color-fg-dim)">/{max}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      <GradeLegend compact />
+    </div>
+  );
+}
+
 /** Full score block for PDP */
 export function ScorePanel({
   score,

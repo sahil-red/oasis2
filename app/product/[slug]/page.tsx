@@ -5,10 +5,9 @@ import { AnalysisGrid } from "@/components/analysis-grid";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
 import { ProductGallery } from "@/components/product-gallery";
-import { GradeLegend } from "@/components/grade-legend";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
-import { ScorePanel, ScorePending } from "@/components/score-display";
+import { ScorePending, ScoreSubscoresBlock } from "@/components/score-display";
 import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
@@ -88,8 +87,18 @@ export default async function ProductPage({
           ← Catalog
         </Link>
 
-        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
-          <ProductGallery images={product.image_urls} alt={product.name} />
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
+          <div className="space-y-6">
+            <ProductGallery images={product.image_urls} alt={product.name} />
+
+            {score ? (
+              <ScoreSubscoresBlock subscores={subscores} />
+            ) : (
+              <ScorePending compact />
+            )}
+
+            <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
+          </div>
 
           <div className="min-w-0">
             {product.brand ? (
@@ -121,32 +130,11 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:items-start">
-          {score ? (
-            <ScorePanel
-              score={score.score}
-              grade={score.grade}
-              band={score.band}
-              subscores={subscores}
-              ruleVersion={score.rule_version}
-              compact
-            />
-          ) : (
-            <ScorePending compact />
-          )}
-          <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
-        </div>
-
         {scoreWhy ? (
-          <div className="mt-6 space-y-4">
+          <div className="mt-8">
             <ScoreWhyPanel explanation={scoreWhy} />
-            <GradeLegend />
           </div>
-        ) : (
-          <div className="mt-6">
-            <GradeLegend />
-          </div>
-        )}
+        ) : null}
 
         <div className="mt-8 space-y-8">
           {highlights.length > 0 ? (
