@@ -3,7 +3,7 @@
  * Single source of truth: ~/Downloads/data.csv (~24k Zepto SKUs)
  *
  * 1. Parse CSV (product_variant_id), drop Zepto Cafe
- * 2. Images from CSV Image_Link column (optional BFF backfill via --fetch-bff-images)
+ * 2. Images from CSV image_links column (optional BFF backfill via --fetch-bff-images)
  * 3. Upsert all rows, purge everything not in CSV
  * 4. Produce seed → Gemini (produce/chicken gaps only) → score (no OCR)
  *
@@ -12,6 +12,9 @@
  *   pnpm catalog:sync -- --skip-images          # CSV images only (default when Image_Link present)
  *   pnpm catalog:sync -- --fetch-bff-images     # BFF backfill for rows missing CSV image
  *   pnpm catalog:sync -- --skip-gemini
+ *   pnpm catalog:sync -- --skip-gemini --skip-score   # upsert only; run gemini + score after
+ *   pnpm catalog:sync -- --skip-import --skip-score  # gemini only (after upsert)
+ *   pnpm catalog:sync -- --skip-import --skip-gemini # score only
  */
 import { homedir } from "node:os";
 import { access } from "node:fs/promises";
@@ -101,133 +104,164 @@ async function main() {
   const fetchBffImages = argv.includes("--fetch-bff-images");
   const skipGemini = argv.includes("--skip-gemini");
   const skipScore = argv.includes("--skip-score");
+  const skipImport = argv.includes("--skip-import");
   const pathArg = argv.find((a) => !a.startsWith("--") && a.endsWith(".csv"));
   const csvPath = pathArg ? resolve(pathArg) : await defaultCsvPath();
 
-  console.log(`[catalog:sync] CSV: ${csvPath}`);
-  const { headers, rows: rawRows } = await readCsvFile(csvPath);
-  const cols = resolveCsvColumns(headers);
-  const parsedRaw = rawRows
-    .map((r) => csvRecordToRow(r, cols))
-    .filter((r): r is NonNullable<typeof r> => r != null);
-
-  const parsed = dedupeCsvRows(parsedRaw);
-  const cafeSkipped = rawRows.length - parsedRaw.length;
-  console.log(
-    `[catalog:sync] parsed=${parsedRaw.length} unique=${parsed.length} skipped=${rawRows.length - parsedRaw.length} (invalid/cafe) cafe≈${cafeSkipped}`,
-  );
-
-  const allowedSkus = new Set(parsed.map((p) => p.zepto_sku));
   const supabase = adminClient();
   const schema = await detectCatalogDbSchema(supabase);
 
-  const withCsvImages = parsed.filter((p) => p.image_urls.length).length;
-  console.log(`[catalog:sync] csv images: ${withCsvImages}/${parsed.length}`);
+  let allowedSkus = new Set<string>();
 
-  const imageCache = await loadVariantImageCache();
-  const needBff = parsed.filter((p) => !p.image_urls.length).map((p) => p.zepto_sku);
-  let bffImages = imageCache;
-  if (fetchBffImages && needBff.length && !dryRun) {
-    console.log(`[catalog:sync] BFF backfill for ${needBff.length} rows without CSV image`);
-    bffImages = await resolveVariantImages({
-      variantIds: needBff,
-      cache: imageCache,
-      skipFetch: skipImages,
-    });
-  } else if (needBff.length) {
-    console.log(`[catalog:sync] ${needBff.length} rows missing CSV image (pass --fetch-bff-images to backfill)`);
-  }
+  if (!skipImport) {
+    console.log(`[catalog:sync] CSV: ${csvPath}`);
+    const { headers, rows: rawRows } = await readCsvFile(csvPath);
+    const cols = resolveCsvColumns(headers);
+    const parsedRaw = rawRows
+      .map((r) => csvRecordToRow(r, cols))
+      .filter((r): r is NonNullable<typeof r> => r != null);
 
-  const existingBySku = await loadExistingByVariant(supabase);
+    const parsed = dedupeCsvRows(parsedRaw);
+    const cafeSkipped = rawRows.length - parsedRaw.length;
+    console.log(
+      `[catalog:sync] parsed=${parsedRaw.length} unique=${parsed.length} skipped=${rawRows.length - parsedRaw.length} (invalid/cafe) cafe≈${cafeSkipped}`,
+    );
 
-  let completeAtImport = 0;
-  let withImages = 0;
-  const batchSize = 80;
-  for (let i = 0; i < parsed.length; i += batchSize) {
-    const batch = parsed.slice(i, i + batchSize);
-    const payloads = batch.map((row) => {
-      const existing = existingBySku.get(row.zepto_sku) ?? null;
-      const fallbackImages = bffImages.get(row.zepto_sku) ?? [];
-      const merged = mergeCsvWithExisting(row, existing, fallbackImages);
-      if (merged.image_urls.length) withImages++;
-      if (isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)) {
-        completeAtImport++;
+    allowedSkus = new Set(parsed.map((p) => p.zepto_sku));
+
+    const withCsvImages = parsed.filter((p) => p.image_urls.length).length;
+    const multiImages = parsed.filter((p) => p.image_urls.length > 1).length;
+    console.log(
+      `[catalog:sync] csv images: ${withCsvImages}/${parsed.length} multi=${multiImages}`,
+    );
+
+    const imageCache = await loadVariantImageCache();
+    const needBff = parsed.filter((p) => !p.image_urls.length).map((p) => p.zepto_sku);
+    let bffImages = imageCache;
+    if (fetchBffImages && needBff.length && !dryRun) {
+      console.log(`[catalog:sync] BFF backfill for ${needBff.length} rows without CSV image`);
+      bffImages = await resolveVariantImages({
+        variantIds: needBff,
+        cache: imageCache,
+        skipFetch: skipImages,
+      });
+    } else if (needBff.length) {
+      console.log(
+        `[catalog:sync] ${needBff.length} rows missing CSV image (pass --fetch-bff-images to backfill)`,
+      );
+    }
+
+    const existingBySku = await loadExistingByVariant(supabase);
+
+    let completeAtImport = 0;
+    let withImages = 0;
+    const batchSize = 80;
+    for (let i = 0; i < parsed.length; i += batchSize) {
+      const batch = parsed.slice(i, i + batchSize);
+      const payloads = batch.map((row) => {
+        const existing = existingBySku.get(row.zepto_sku) ?? null;
+        const fallbackImages = bffImages.get(row.zepto_sku) ?? [];
+        const merged = mergeCsvWithExisting(row, existing, fallbackImages);
+        if (merged.image_urls.length) withImages++;
+        if (isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)) {
+          completeAtImport++;
+        }
+
+        const payload: Record<string, unknown> = {
+          platform: "zepto",
+          zepto_sku: row.zepto_sku,
+          slug: row.slug,
+          name: row.name,
+          brand: row.brand,
+          super_category: row.super_category,
+          category: row.category,
+          subcategory: row.subcategory,
+          net_weight: row.pack_size,
+          mrp_inr: row.mrp_inr,
+          ingredients_raw: merged.ingredients_raw,
+          nutrition: merged.nutrition,
+          image_urls: merged.image_urls,
+          product_url: row.product_url,
+          raw_payload: null,
+          attributes: merged.attributes,
+          ocr_status: isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)
+            ? "success"
+            : "pending",
+          updated_at: new Date().toISOString(),
+        };
+        if (schema.hasProductKey) payload.product_key = row.product_key;
+        if (schema.hasL3Category) payload.l3_category = row.l3_category;
+        if (schema.hasDataSource) payload.data_source = "csv";
+        return payload;
+      });
+
+      if (dryRun) continue;
+
+      const onConflict = schema.hasProductKey ? "product_key" : "platform,zepto_sku";
+      const { error } = await supabase.from("products").upsert(payloads, { onConflict });
+      if (error) {
+        console.error("[catalog:sync] upsert failed:", error.message);
+        process.exit(1);
       }
-
-      const payload: Record<string, unknown> = {
-        platform: "zepto",
-        zepto_sku: row.zepto_sku,
-        slug: row.slug,
-        name: row.name,
-        brand: row.brand,
-        super_category: row.super_category,
-        category: row.category,
-        subcategory: row.subcategory,
-        net_weight: row.pack_size,
-        mrp_inr: row.mrp_inr,
-        ingredients_raw: merged.ingredients_raw,
-        nutrition: merged.nutrition,
-        image_urls: merged.image_urls,
-        product_url: row.product_url,
-        raw_payload: null,
-        attributes: merged.attributes,
-        ocr_status: isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)
-          ? "success"
-          : "pending",
-        updated_at: new Date().toISOString(),
-      };
-      if (schema.hasProductKey) payload.product_key = row.product_key;
-      if (schema.hasL3Category) payload.l3_category = row.l3_category;
-      if (schema.hasDataSource) payload.data_source = "csv";
-      return payload;
-    });
-
-    if (dryRun) continue;
-
-    const onConflict = schema.hasProductKey ? "product_key" : "platform,zepto_sku";
-    const { error } = await supabase.from("products").upsert(payloads, { onConflict });
-    if (error) {
-      console.error("[catalog:sync] upsert failed:", error.message);
-      process.exit(1);
+      if ((i + batch.length) % 800 === 0 || i + batch.length >= parsed.length) {
+        console.log(
+          `[catalog:sync] upserted ${Math.min(i + batch.length, parsed.length)}/${parsed.length}`,
+        );
+      }
     }
-    if ((i + batch.length) % 800 === 0 || i + batch.length >= parsed.length) {
-      console.log(`[catalog:sync] upserted ${Math.min(i + batch.length, parsed.length)}/${parsed.length}`);
+
+    console.log(
+      `[catalog:sync] import: complete=${completeAtImport} with_images=${withImages} dryRun=${dryRun}`,
+    );
+
+    if (!dryRun) {
+      let purged = 0;
+      let offset = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from("products")
+          .select("id, zepto_sku, platform")
+          .range(offset, offset + 499);
+        if (error) throw error;
+        if (!data?.length) break;
+        const toDelete = data.filter((r) => {
+          const sku = r.zepto_sku as string | null;
+          return r.platform !== "zepto" || !sku || !allowedSkus.has(sku);
+        });
+        if (toDelete.length) {
+          await supabase.from("products").delete().in("id", toDelete.map((r) => r.id));
+          purged += toDelete.length;
+          offset = 0;
+          continue;
+        }
+        if (data.length < 500) break;
+        offset += 500;
+      }
+      console.log(`[catalog:sync] purged ${purged} products not in CSV`);
     }
-  }
 
-  console.log(
-    `[catalog:sync] import: complete=${completeAtImport} with_images=${withImages} dryRun=${dryRun}`,
-  );
-
-  if (!dryRun) {
-    let purged = 0;
+    if (dryRun) {
+      console.log("[catalog:sync] dry-run complete.");
+      return;
+    }
+  } else {
+    console.log("[catalog:sync] skip-import: using existing zepto SKUs in DB");
     let offset = 0;
     for (;;) {
       const { data, error } = await supabase
         .from("products")
-        .select("id, zepto_sku, platform")
-        .range(offset, offset + 499);
+        .select("zepto_sku")
+        .eq("platform", "zepto")
+        .range(offset, offset + 999);
       if (error) throw error;
       if (!data?.length) break;
-      const toDelete = data.filter((r) => {
-        const sku = r.zepto_sku as string | null;
-        return r.platform !== "zepto" || !sku || !allowedSkus.has(sku);
-      });
-      if (toDelete.length) {
-        await supabase.from("products").delete().in("id", toDelete.map((r) => r.id));
-        purged += toDelete.length;
-        offset = 0;
-        continue;
+      for (const row of data) {
+        const sku = row.zepto_sku as string | null;
+        if (sku) allowedSkus.add(sku);
       }
-      if (data.length < 500) break;
-      offset += 500;
+      if (data.length < 1000) break;
+      offset += 1000;
     }
-    console.log(`[catalog:sync] purged ${purged} products not in CSV`);
-  }
-
-  if (dryRun) {
-    console.log("[catalog:sync] dry-run complete.");
-    return;
   }
 
   const skuList = [...allowedSkus];

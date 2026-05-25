@@ -1,5 +1,6 @@
 import { mergeNutrition, parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
+import { parsePackGrams } from "@/lib/products/pack-nutrition";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Upper bounds for protein per 100g by product class (catch OCR / parser garbage). */
@@ -82,7 +83,7 @@ export function reconcileNutrition(opts: {
   category: string | null;
   net_weight?: string | null;
 }): ProductNutrition | null {
-  const servingG = parsePackGramsFromWeight(opts.net_weight);
+  const servingG = parsePackGrams(opts.net_weight);
   const fromAttrs = nutritionFromAttributes(opts.attributes, servingG);
 
   const current = opts.nutrition;
@@ -114,15 +115,4 @@ export function reconcileNutrition(opts: {
   }
 
   return current;
-}
-
-function parsePackGramsFromWeight(netWeight: string | null | undefined): number | null {
-  if (!netWeight) return null;
-  const m = /(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b/i.exec(netWeight);
-  if (!m) return null;
-  const n = Number.parseFloat(m[1]);
-  const u = m[2].toLowerCase();
-  if (u === "kg") return n * 1000;
-  if (u === "g") return n;
-  return null;
 }

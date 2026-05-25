@@ -9,6 +9,7 @@ import {
   type ZeptoImportIdentity,
 } from "@/lib/zepto-import/product-key";
 import { parseCsvImageUrls } from "@/lib/zepto-import/parse-csv-image";
+import { normalizeFormattedPacksize } from "@/lib/zepto-import/parse-formatted-packsize";
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -69,6 +70,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "nutrition_facts",
   ],
   image_link: [
+    "image_links",
     "image_link",
     "image_url",
     "image",
@@ -143,10 +145,7 @@ export function csvRecordToRow(
 
   const subcategory = cell(record, cols.subcategory) || null;
   const l3_category = cell(record, cols.l3_category) || null;
-  let pack_size = cell(record, cols.pack_size) || null;
-  if (pack_size && /^\d+$/.test(pack_size)) {
-    pack_size = `${pack_size} g`;
-  }
+  const pack_size = normalizeFormattedPacksize(cell(record, cols.pack_size));
   let ingredients_raw = cell(record, cols.ingredients) || null;
   let nutrition = parseCsvNutritionCell(cell(record, cols.nutrition));
 
