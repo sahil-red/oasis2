@@ -1,6 +1,7 @@
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { hasAnimalDerived } from "@/lib/goals/vegan";
+import { diabeticGoalFit, pcosGoalFit } from "@/lib/goals/glucose-fit";
 import { packNutritionContext, proteinBudgetGoalFit } from "@/lib/products/pack-nutrition";
 import type { GoalId } from "./types";
 
@@ -27,6 +28,9 @@ export function computeGoalFit(
     net_weight?: string | null;
     core_score?: number | null;
     attributes?: Record<string, string> | null;
+    name?: string | null;
+    category?: string | null;
+    subcategory?: string | null;
   },
 ): GoalFitResult {
   if (goal === "balanced") {
@@ -43,6 +47,7 @@ export function computeGoalFit(
   const hasNutrition = n != null && Object.keys(n).length > 0;
   const protein = num(n?.protein_g_100g) ?? 0;
   const sugarG = sugar(n) ?? 0;
+  const addedSugarG = num(n?.added_sugar_g_100g) ?? sugarG;
   const fiber = num(n?.fiber_g_100g) ?? 0;
   const kcal = num(n?.energy_kcal_100g) ?? 0;
   const carbs = num(n?.carbs_g_100g) ?? 0;
@@ -88,10 +93,19 @@ export function computeGoalFit(
         reasons.push("Limited data — penalising flagged additives");
         break;
       }
-      fit = Math.min(100, 88 - sugarG * 3.2 - carbs * 0.35 + fiber * 2.2 - flagged * 8);
-      if (sugarG <= 5) reasons.push(`Low sugar (${sugarG}g / 100g)`);
-      else reasons.push(`${sugarG}g sugar / 100g`);
-      if (fiber >= 4) reasons.push(`${fiber}g fibre`);
+      const d = diabeticGoalFit({
+        nutrition: n!,
+        addedSugarG,
+        sugarG,
+        carbsG: carbs,
+        fiberG: fiber,
+        flagged,
+        name: opts.name ?? "",
+        category: opts.category ?? null,
+        subcategory: opts.subcategory ?? null,
+      });
+      fit = d.fit;
+      reasons.push(...d.reasons);
       break;
     }
     case "pcos": {
@@ -100,14 +114,19 @@ export function computeGoalFit(
         reasons.push("Limited data — penalising flagged additives");
         break;
       }
-      const carbPenalty = carbs > 45 ? 12 : carbs > 30 ? 6 : 0;
-      fit = Math.min(
-        100,
-        82 - sugarG * 3.5 - carbs * 0.5 + fiber * 2.5 - flagged * 10 - carbPenalty,
-      );
-      if (sugarG <= 5) reasons.push(`Low sugar (${sugarG}g / 100g)`);
-      else reasons.push(`${sugarG}g sugar / 100g`);
-      if (carbPenalty) reasons.push(`Higher carbs (${carbs}g / 100g)`);
+      const p = pcosGoalFit({
+        nutrition: n!,
+        addedSugarG,
+        sugarG,
+        carbsG: carbs,
+        fiberG: fiber,
+        flagged,
+        name: opts.name ?? "",
+        category: opts.category ?? null,
+        subcategory: opts.subcategory ?? null,
+      });
+      fit = p.fit;
+      reasons.push(...p.reasons);
       break;
     }
     case "fat-loss": {
@@ -210,6 +229,9 @@ export function goalFitInputs(p: {
   ingredients_raw: string | null;
   price_inr: number | null;
   net_weight?: string | null;
+  name?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
   core_scores?: { score: number } | null;
   attributes?: Record<string, string> | null;
 }) {
@@ -218,6 +240,9 @@ export function goalFitInputs(p: {
     ingredients_raw: p.ingredients_raw,
     price_inr: p.price_inr,
     net_weight: p.net_weight ?? null,
+    name: p.name ?? null,
+    category: p.category ?? null,
+    subcategory: p.subcategory ?? null,
     core_score: p.core_scores?.score ?? null,
     attributes: p.attributes ?? null,
   };

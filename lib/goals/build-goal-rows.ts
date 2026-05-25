@@ -24,7 +24,15 @@ const PDP_GOAL_ORDER: GoalId[] = [
 export function buildProductGoalRows(
   product: Pick<
     ProductListItem,
-    "nutrition" | "ingredients_raw" | "price_inr" | "net_weight" | "core_scores" | "attributes"
+    | "nutrition"
+    | "ingredients_raw"
+    | "price_inr"
+    | "net_weight"
+    | "name"
+    | "category"
+    | "subcategory"
+    | "core_scores"
+    | "attributes"
   >,
 ): GoalFitRow[] {
   const inputs = goalFitInputs(product);
