@@ -39,6 +39,27 @@ export function removeFromBasket(slug: string): BasketEntry[] {
   return list;
 }
 
+/** Replace one cart line with a swap — keeps quantity. */
+export function replaceInBasket(fromSlug: string, toSlug: string, toName: string): BasketEntry[] {
+  const list = readBasket();
+  const entry = list.find((e) => e.slug === fromSlug);
+  if (!entry) return list;
+  const existingTarget = list.find((e) => e.slug === toSlug);
+  if (existingTarget && existingTarget !== entry) {
+    existingTarget.qty += entry.qty;
+    const next = list.filter((e) => e.slug !== fromSlug);
+    writeBasket(next);
+    window.dispatchEvent(new Event("oasis-basket"));
+    return next;
+  }
+  entry.slug = toSlug;
+  entry.name = toName;
+  entry.addedAt = Date.now();
+  writeBasket(list);
+  window.dispatchEvent(new Event("oasis-basket"));
+  return list;
+}
+
 export function decrementBasket(slug: string): BasketEntry[] {
   const list = readBasket();
   const entry = list.find((e) => e.slug === slug);
