@@ -62,7 +62,9 @@ export function buildOverallGoalSummary(
   if (typeof sugar === "number") {
     reasons.push(sugar <= 8 ? `Low sugar (${sugar}g)` : `${sugar}g sugar per 100g`);
   }
-  if (reasons.length === 0) reasons.push("Based on label nutrition and additives");
+  if (reasons.length === 0) {
+    reasons.push("Based on label nutrition, ingredients, and additives");
+  }
   return {
     fit: score,
     grade: gradeFromScore(score),

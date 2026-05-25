@@ -129,6 +129,11 @@ export class BlinkitAdapter implements GroceryAdapter {
       : null;
   }
 
+  /** Drop cached Playwright fetcher so the next call launches a new browser. */
+  recycleBrowser(): void {
+    this.cachedHttp = null;
+  }
+
   /**
    * Resolve the HTTP backend for this session.
    *

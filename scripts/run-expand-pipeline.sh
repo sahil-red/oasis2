@@ -15,6 +15,11 @@ log "scrape: rps=$GROCERY_RPS burst=$GROCERY_BURST concurrency=$SCRAPE_CONCURREN
 pnpm tsx scripts/db-status.ts 2>/dev/null || true
 
 log "detail pass (parallel, all pending batches)…"
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/Library/Caches/ms-playwright}"
+export PLAYWRIGHT_USE_CHROME="${PLAYWRIGHT_USE_CHROME:-1}"
+export GROCERY_RPS="${GROCERY_RPS_DETAIL:-2}"
+export GROCERY_BURST="${GROCERY_BURST_DETAIL:-1}"
+export SCRAPE_CONCURRENCY="${SCRAPE_CONCURRENCY_DETAIL:-3}"
 pnpm scrape:expand:detail 2>&1 | tee /tmp/oasis-expand-detail.log
 
 log "score Blinkit nutrition from detail (no OCR wait)…"

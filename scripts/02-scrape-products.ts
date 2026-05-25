@@ -33,6 +33,8 @@ import {
   loadSession,
   platformFromEnv,
 } from "@/lib/grocery";
+import { BlinkitAdapter } from "@/lib/grocery/blinkit";
+import { closePlaywrightFetch } from "@/lib/grocery/http-playwright";
 import type {
   ScrapedCategory,
   ScrapedProductDetail,
@@ -424,14 +426,14 @@ async function main() {
         fail++;
         console.warn(`detail fail ${row.zepto_sku}: ${msg.slice(0, 120)}`);
 
-        if (consecutiveCf >= 8) {
-          console.error(
-            "\n[02-scrape-products] 8 Cloudflare blocks in a row — session is stale.\n" +
-              "  1. Ctrl+C to stop\n" +
-              "  2. Run: pnpm warm-session\n" +
-              "  3. Retry: GROCERY_RPS=2 SCRAPE_CONCURRENCY=3 pnpm scrape:expand:detail\n",
+        if (consecutiveCf >= 6) {
+          console.warn(
+            "[02-scrape-products] Cloudflare streak — recycling browser (run `pnpm warm-session` if this keeps happening)…",
           );
-          process.exit(1);
+          if (adapter instanceof BlinkitAdapter) adapter.recycleBrowser();
+          await closePlaywrightFetch();
+          consecutiveCf = 0;
+          await new Promise((r) => setTimeout(r, 12_000));
         }
       }
     });

@@ -1,17 +1,26 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
+import { ScoreRing } from "@/components/score-ring";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
-import type { GoalId } from "@/lib/goals/types";
+import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { fitVerdictLabel, scorePresentation, type FitVerdict } from "@/lib/goals/verdict";
 import { cn, colorForScore, type Grade } from "@/lib/utils";
 
 const VERDICT_STYLE: Record<FitVerdict, string> = {
-  strong: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  okay: "bg-amber-50 text-amber-900 ring-amber-200",
-  weak: "bg-red-50 text-red-800 ring-red-200",
+  strong: "bg-emerald-50/80 text-emerald-800 ring-emerald-200/80",
+  okay: "bg-amber-50/80 text-amber-900 ring-amber-200/80",
+  weak: "bg-red-50/80 text-red-800 ring-red-200/80",
 };
+
+function fitTileSurface(fit: number): { backgroundColor: string; borderColor: string } {
+  const c = colorForScore(fit);
+  return {
+    backgroundColor: `color-mix(in srgb, ${c} 16%, white)`,
+    borderColor: `color-mix(in srgb, ${c} 42%, #e8e4df)`,
+  };
+}
 
 export function ProductGoalFitList({
   rows,
@@ -33,59 +42,182 @@ export function ProductGoalFitList({
     window.location.href = q ? `${pathname}?${q}` : pathname;
   };
 
-  const sorted = [...rows].sort((a, b) => b.fit - a.fit);
+  const profileLabel = (id: GoalId) =>
+    GOAL_PROFILES.find((g) => g.id === id)?.label ?? id;
+
+  const activeRow =
+    active === "balanced"
+      ? overall
+        ? {
+            id: "balanced" as const,
+            label: profileLabel("balanced"),
+            fit: overall.fit,
+            grade: overall.grade,
+            reasons: overall.reasons,
+          }
+        : null
+      : (() => {
+          const row = rows.find((r) => r.id === active);
+          if (!row) return null;
+          const pres = scorePresentation(row.fit);
+          return {
+            id: row.id,
+            label: profileLabel(row.id),
+            fit: row.fit,
+            grade: pres.grade,
+            reasons: row.reasons,
+          };
+        })();
+
+  const gridGoals: { id: GoalId; label: string; fit: number; grade?: Grade }[] = [];
+  if (overall) {
+    gridGoals.push({
+      id: "balanced",
+      label: profileLabel("balanced"),
+      fit: overall.fit,
+      grade: overall.grade,
+    });
+  }
+  for (const row of [...rows].sort((a, b) => b.fit - a.fit)) {
+    gridGoals.push({
+      id: row.id,
+      label: profileLabel(row.id),
+      fit: row.fit,
+    });
+  }
+
+  const chipGoals = GOAL_PROFILES.filter(
+    (g) => g.id === "balanced" || rows.some((r) => r.id === g.id),
+  );
 
   return (
-    <section className="mt-6 rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4 sm:p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-lg text-(--color-fg)">How it fits your goals</h2>
-        <p className="text-[12px] text-(--color-fg-dim)">Tap to use for swaps</p>
+    <section className="mt-6">
+      {activeRow ? (
+        <ActiveGoalHero
+          label={activeRow.label}
+          fit={activeRow.fit}
+          grade={activeRow.grade}
+          reasons={activeRow.reasons}
+        />
+      ) : (
+        <p className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)">
+          Score pending — goal fit will appear once nutrition is available.
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {chipGoals.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => select(g.id)}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-[13px] font-medium transition",
+              active === g.id
+                ? "bg-(--color-fg) text-(--color-bg)"
+                : "bg-white text-(--color-fg-muted) ring-1 ring-(--color-line) hover:text-(--color-fg)",
+            )}
+          >
+            {g.label}
+          </button>
+        ))}
       </div>
 
-      <ul className="mt-4 space-y-2">
-        {overall ? (
-          <GoalRowButton
-            label="Overall"
-            fit={overall.fit}
-            reasons={overall.reasons}
-            active={active === "balanced"}
-            onSelect={() => select("balanced")}
-            gradeOverride={overall.grade}
-          />
-        ) : null}
-        {sorted.map((row) => (
-          <GoalRowButton
-            key={row.id}
-            label={row.label}
-            fit={row.fit}
-            reasons={row.reasons}
-            active={active === row.id}
-            onSelect={() => select(row.id)}
-          />
-        ))}
-      </ul>
+      {gridGoals.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+            All goals at a glance
+          </p>
+          <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {gridGoals.map((g) => (
+              <GoalFitTile
+                key={g.id}
+                label={g.label}
+                fit={g.fit}
+                grade={g.grade}
+                active={active === g.id}
+                onSelect={() => select(g.id)}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function GoalRowButton({
+function ActiveGoalHero({
   label,
   fit,
+  grade,
   reasons,
-  active,
-  onSelect,
-  gradeOverride,
 }: {
   label: string;
   fit: number;
+  grade: Grade;
   reasons: string[];
+}) {
+  const pres = scorePresentation(fit);
+  const topReasons = reasons.slice(0, 2);
+
+  return (
+    <div className="rounded-2xl border border-(--color-line) bg-linear-to-br from-white to-(--color-bg-soft) p-5 shadow-sm">
+      <div className="flex items-center gap-5">
+        <ScoreRing
+          score={fit}
+          size={96}
+          stroke={7}
+          showLabel
+          subtitle={`Grade ${grade}`}
+          className="shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
+            {label}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-1 text-[12px] font-medium ring-1 ring-inset",
+                VERDICT_STYLE[pres.verdict],
+              )}
+            >
+              {fitVerdictLabel(pres.verdict)}
+            </span>
+            <span className="text-[13px] text-(--color-fg-dim)">{pres.bandLabel}</span>
+          </div>
+          {topReasons.length > 0 ? (
+            <ul className="mt-3 space-y-1 text-[14px] leading-snug text-(--color-fg-muted)">
+              {topReasons.map((r) => (
+                <li key={r} className="flex gap-2">
+                  <span className="text-(--color-fg-dim)">·</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalFitTile({
+  label,
+  fit,
+  grade: gradeOverride,
+  active,
+  onSelect,
+}: {
+  label: string;
+  fit: number;
+  grade?: Grade;
   active: boolean;
   onSelect: () => void;
-  gradeOverride?: Grade;
 }) {
   const pres = scorePresentation(fit);
   const grade = gradeOverride ?? pres.grade;
-  const color = colorForScore(fit);
+  const surface = fitTileSurface(fit);
 
   return (
     <li>
@@ -93,44 +225,26 @@ function GoalRowButton({
         type="button"
         onClick={onSelect}
         className={cn(
-          "w-full rounded-lg border bg-white px-3.5 py-3 text-left transition",
-          active
-            ? "border-(--color-fg) ring-2 ring-(--color-fg)/10"
-            : "border-(--color-line) hover:border-(--color-fg-muted)",
+          "flex h-full w-full flex-col rounded-xl border px-3 py-2.5 text-left transition",
+          active && "ring-2 ring-(--color-fg)/15",
         )}
+        style={surface}
       >
-        <div className="flex items-start gap-3">
-          <div className="min-w-[3.5rem] shrink-0 text-center">
-            <span
-              className="font-display text-2xl font-semibold leading-none tabular-nums"
-              style={{ color }}
-            >
-              {fit}
-            </span>
-            <span
-              className="mt-1 block text-[13px] font-semibold tabular-nums"
-              style={{ color }}
-            >
-              {grade}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[15px] font-medium text-(--color-fg)">{label}</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
-                  VERDICT_STYLE[pres.verdict],
-                )}
-              >
-                {fitVerdictLabel(pres.verdict)}
-              </span>
-            </div>
-            <p className="mt-1.5 text-[14px] leading-snug text-(--color-fg-muted)">
-              {reasons.length ? reasons.join(" · ") : "See nutrition below for detail."}
-            </p>
-          </div>
-        </div>
+        <span className="text-[12px] font-medium leading-tight text-(--color-fg)">{label}</span>
+        <span
+          className="mt-2 font-display text-2xl font-semibold leading-none tabular-nums"
+          style={{ color: colorForScore(fit) }}
+        >
+          {grade}
+        </span>
+        <span
+          className={cn(
+            "mt-2 w-fit rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset",
+            VERDICT_STYLE[pres.verdict],
+          )}
+        >
+          {fitVerdictLabel(pres.verdict)}
+        </span>
       </button>
     </li>
   );

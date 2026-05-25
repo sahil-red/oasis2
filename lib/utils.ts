@@ -76,8 +76,8 @@ export type AdditiveTier = "risk-free" | "limited" | "moderate" | "hazardous";
 /** Numeric penalty deducted from the 30-point Additives subscore per occurrence. */
 export const ADDITIVE_TIER_PENALTY: Record<AdditiveTier, number> = {
   "risk-free": 0,
-  limited: 2,
-  moderate: 6,
+  limited: 3,
+  moderate: 5,
   hazardous: 30, // fully zeros out the Additives axis
 };
 

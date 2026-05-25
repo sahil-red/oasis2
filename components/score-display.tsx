@@ -122,21 +122,25 @@ export function ScoreSubscoresBlock({
   const additivePct = Math.round((subscores.additives / 30) * 100);
   const labelsPct = Math.round((subscores.labels / 10) * 100);
 
+  function pillarLabel(pct: number): string {
+    if (pct >= 80) return "Strong";
+    if (pct >= 55) return "Fair";
+    return "Low";
+  }
+
   const pillars = [
     {
       key: "nutrition",
       title: "Nutrition",
-      value: subscores.nutrition,
-      max: 60,
       pct: nutritionPct,
+      label: pillarLabel(nutritionPct),
       hint: "vs category baseline on the label",
     },
     {
       key: "additives",
       title: "Ingredient safety",
-      value: subscores.additives,
-      max: 30,
       pct: additivePct,
+      label: pillarLabel(additivePct),
       hint:
         flaggedAdditiveCount === 0
           ? "No flagged additives on list"
@@ -145,46 +149,47 @@ export function ScoreSubscoresBlock({
     {
       key: "labels",
       title: "Pack signals",
-      value: subscores.labels,
-      max: 10,
       pct: labelsPct,
+      label: pillarLabel(labelsPct),
       hint: "Organic, sugar claims, short list",
     },
   ];
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-        Score breakdown
-      </p>
-      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {pillars.map((p) => (
-          <div
-            key={p.key}
-            className="rounded-xl border border-(--color-line) bg-white px-3 py-2.5 shadow-sm"
-          >
-            <dt className="text-[11px] font-medium text-(--color-fg)">{p.title}</dt>
-            <dd className="mt-1 flex items-baseline gap-1.5">
-              <span
-                className="font-display text-2xl tabular-nums leading-none"
-                style={{ color: colorForScore(p.pct) }}
-              >
-                {p.value}
-              </span>
-              <span className="text-[12px] text-(--color-fg-dim)">/ {p.max} pts</span>
-            </dd>
-            <div className="mt-2 h-1 overflow-hidden rounded-full bg-(--color-bg-soft)">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${p.pct}%`, backgroundColor: colorForScore(p.pct) }}
-              />
+    <details className={cn("group rounded-xl border border-(--color-line) bg-white", className)}>
+      <summary className="cursor-pointer list-none px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-medium text-(--color-fg)">Label breakdown</span>
+          <span className="text-[12px] text-(--color-fg-dim) group-open:hidden">Nutrition · additives · pack</span>
+          <span className="hidden text-[12px] text-(--color-fg-dim) group-open:inline">Hide</span>
+        </span>
+      </summary>
+      <div className="space-y-3 border-t border-(--color-line) px-4 pb-4 pt-3">
+        <dl className="space-y-3">
+          {pillars.map((p) => (
+            <div key={p.key}>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-[13px] font-medium text-(--color-fg)">{p.title}</dt>
+                <dd
+                  className="text-[12px] font-medium"
+                  style={{ color: colorForScore(p.pct) }}
+                >
+                  {p.label}
+                </dd>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-(--color-bg-soft)">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${p.pct}%`, backgroundColor: colorForScore(p.pct) }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-(--color-fg-dim)">{p.hint}</p>
             </div>
-            <p className="mt-1.5 text-[11px] leading-snug text-(--color-fg-muted)">{p.hint}</p>
-          </div>
-        ))}
-      </dl>
-      <GradeLegend compact />
-    </div>
+          ))}
+        </dl>
+        <GradeLegend compact bare />
+      </div>
+    </details>
   );
 }
 

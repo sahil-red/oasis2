@@ -213,6 +213,69 @@
       "why": "Glycemic index higher than sugar; not harmful per se, but a marker of ultra-processed formulation.",
       "source": "BMJ Open 2021 review",
       "evidence_url": "https://bmjopen.bmj.com/content/11/9/e051335"
+    },
+    {
+      "match": "lecithin",
+      "aliases": ["e322", "soya lecithin", "sunflower lecithin"],
+      "category": "emulsifier",
+      "tier": "limited",
+      "why": "Common emulsifier; generally safe but marks processed foods.",
+      "source": "EFSA 2017",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "guar gum",
+      "aliases": ["e412"],
+      "category": "thickener",
+      "tier": "limited",
+      "why": "Thickener that can cause GI discomfort in large amounts.",
+      "source": "EFSA 2017",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "xanthan gum",
+      "aliases": ["e415"],
+      "category": "thickener",
+      "tier": "limited",
+      "why": "Processed thickener; fine in moderation, common in ultra-processed sauces.",
+      "source": "EFSA 2017",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "potassium sorbate",
+      "aliases": ["e202"],
+      "category": "preservative",
+      "tier": "limited",
+      "why": "Widely used preservative; occasional sensitivity reported.",
+      "source": "EFSA 2019",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "calcium propionate",
+      "aliases": ["e282"],
+      "category": "preservative",
+      "tier": "limited",
+      "why": "Bread preservative; linked to irritability in some children at high intake.",
+      "source": "EFSA 2014",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "mono and diglycerides",
+      "aliases": ["e471", "mono- and diglycerides", "mono and diglycerides of fatty acids"],
+      "category": "emulsifier",
+      "tier": "limited",
+      "why": "Processed emulsifier common in bakery and spreads.",
+      "source": "EFSA 2017",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "sodium metabisulphite",
+      "aliases": ["e223", "sodium metabisulfite"],
+      "category": "preservative",
+      "tier": "moderate",
+      "why": "Sulphite preservative — can trigger reactions in asthmatics.",
+      "source": "FDA sulphite labeling",
+      "evidence_url": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
     }
   ]
 }

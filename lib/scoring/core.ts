@@ -6,6 +6,7 @@ import {
   type Grade,
   type ScoreBand,
 } from "@/lib/utils";
+import { scoreIngredientSignals } from "./ingredient-signals";
 import { scoreNutrition } from "./baselines";
 import { scoreAdditives, type MatchedAdditive } from "./rules";
 
@@ -40,10 +41,11 @@ function scoreLabels(
     .join(" ")
     .toLowerCase();
 
-  if (/organic|jaivik|fssai organic/i.test(text)) score += 5;
-  if (ingredientsRaw && !/,/.test(ingredientsRaw) && ingredientsRaw.length < 80) score += 2;
+  if (/organic|jaivik|fssai organic/i.test(text)) score += 4;
   if (/no palm oil|palm oil free/i.test(text)) score += 2;
-  if (/no added sugar|unsweetened|zero sugar/i.test(text)) score += 1;
+  if (/no added sugar|unsweetened|zero sugar/i.test(text)) score += 2;
+  if (/no preserv|preservative[- ]?free|without preserv/i.test(text)) score += 2;
+  if (/jaggery|gud\b|raw honey|multigrain|whole wheat|whole grain/i.test(text)) score += 2;
 
   return Math.min(10, score);
 }
@@ -58,13 +60,21 @@ export function computeCoreScore(input: {
 }): CoreScoreResult {
   const nutrition = (input.nutrition ?? null) as ProductNutrition | null;
   const additives = scoreAdditives(input.ingredients_raw);
-  const nutritionScore = scoreNutrition(
+  const signals = scoreIngredientSignals(
+    input.ingredients_raw,
+    input.attributes ?? null,
+  );
+  let nutritionScore = scoreNutrition(
     nutrition,
     input.category,
     input.subcategory,
     input.product_name,
   );
-  const labelsScore = scoreLabels(input.ingredients_raw, input.attributes ?? null);
+  nutritionScore = Math.max(0, Math.min(60, nutritionScore + signals.nutritionDelta));
+  const labelsScore = Math.min(
+    10,
+    scoreLabels(input.ingredients_raw, input.attributes ?? null) + signals.labelsDelta,
+  );
 
   let total = nutritionScore + additives.score + labelsScore;
   if (additives.hazardous) total = Math.min(total, HAZARDOUS_HARD_CAP);

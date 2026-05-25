@@ -36,6 +36,26 @@
       "floor": 55, "ceiling": 90,
       "nutrients": { "protein_g_100g": 0.40, "added_sugar_g_100g": -0.45, "saturated_fat_g_100g": -0.15 }
     },
+    "Dairy & Eggs::Eggs": {
+      "floor": 68, "ceiling": 92,
+      "nutrients": { "protein_g_100g": 0.50, "saturated_fat_g_100g": -0.25, "sodium_mg_100g": -0.15 }
+    },
+    "Chicken, Meat & Fish::Chicken": {
+      "floor": 62, "ceiling": 90,
+      "nutrients": { "protein_g_100g": 0.50, "saturated_fat_g_100g": -0.30, "sodium_mg_100g": -0.20 }
+    },
+    "Chicken, Meat & Fish::Fish": {
+      "floor": 65, "ceiling": 92,
+      "nutrients": { "protein_g_100g": 0.45, "saturated_fat_g_100g": -0.25, "sodium_mg_100g": -0.20 }
+    },
+    "Atta, Flours & Sooji::Besan": {
+      "floor": 72, "ceiling": 94,
+      "nutrients": { "protein_g_100g": 0.45, "fiber_g_100g": 0.40, "sugar_g_100g": -0.15 }
+    },
+    "Health Supplements::Protein Powder": {
+      "floor": 48, "ceiling": 88,
+      "nutrients": { "protein_g_100g": 0.55, "added_sugar_g_100g": -0.40, "sodium_mg_100g": -0.15 }
+    },
     "Cheese & Butter::Cheese": {
       "floor": 45, "ceiling": 75,
       "nutrients": { "protein_g_100g": 0.40, "saturated_fat_g_100g": -0.40, "sodium_mg_100g": -0.20 }

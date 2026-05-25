@@ -1,4 +1,4 @@
-import { matchAdditives } from "@/lib/scoring/rules";
+import { additiveGoalBurden } from "@/lib/scoring/ingredient-signals";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { hasAnimalDerived } from "@/lib/goals/vegan";
 import { diabeticGoalFit, pcosGoalFit } from "@/lib/goals/glucose-fit";
@@ -52,9 +52,7 @@ export function computeGoalFit(
   const kcal = num(n?.energy_kcal_100g) ?? 0;
   const carbs = num(n?.carbs_g_100g) ?? 0;
   const price = opts.price_inr ?? 0;
-  const flagged = matchAdditives(opts.ingredients_raw).filter(
-    (m) => m.tier === "moderate" || m.tier === "hazardous",
-  ).length;
+  const additiveBurden = additiveGoalBurden(opts.ingredients_raw);
   const reasons: string[] = [];
   let fit = 50;
 
@@ -79,7 +77,7 @@ export function computeGoalFit(
       const calScore = Math.min(35, Math.max(0, (kcal - 200) * 0.12));
       fit = Math.min(
         100,
-        calScore + protein * 2.5 + (carbs > 40 ? 8 : carbs > 25 ? 4 : 0) - sugarG * 0.8 - flagged * 5,
+        calScore + protein * 2.5 + (carbs > 40 ? 8 : carbs > 25 ? 4 : 0) - sugarG * 0.8 - additiveBurden * 4,
       );
       if (kcal >= 350) reasons.push(`${kcal} kcal per 100g — calorie dense`);
       else if (kcal >= 250) reasons.push(`${kcal} kcal per 100g`);
@@ -89,7 +87,7 @@ export function computeGoalFit(
     }
     case "diabetic": {
       if (!hasNutrition) {
-        fit = Math.max(0, (opts.core_score ?? 50) - flagged * 10);
+        fit = Math.max(0, (opts.core_score ?? 50) - additiveBurden * 8);
         reasons.push("Limited data — penalising flagged additives");
         break;
       }
@@ -99,7 +97,7 @@ export function computeGoalFit(
         sugarG,
         carbsG: carbs,
         fiberG: fiber,
-        flagged,
+        flagged: Math.round(additiveBurden),
         name: opts.name ?? "",
         category: opts.category ?? null,
         subcategory: opts.subcategory ?? null,
@@ -110,8 +108,8 @@ export function computeGoalFit(
     }
     case "pcos": {
       if (!hasNutrition) {
-        fit = Math.max(0, (opts.core_score ?? 50) - flagged * 12);
-        reasons.push("Limited data — penalising flagged additives");
+        fit = Math.max(0, (opts.core_score ?? 50) - additiveBurden * 8);
+        reasons.push("Limited data — penalising processing additives");
         break;
       }
       const p = pcosGoalFit({
@@ -120,7 +118,7 @@ export function computeGoalFit(
         sugarG,
         carbsG: carbs,
         fiberG: fiber,
-        flagged,
+        flagged: Math.round(additiveBurden),
         name: opts.name ?? "",
         category: opts.category ?? null,
         subcategory: opts.subcategory ?? null,
@@ -137,7 +135,7 @@ export function computeGoalFit(
       }
       fit = Math.min(
         100,
-        80 - kcal * 0.08 + protein * 2 + fiber * 2 - sugarG * 2 - flagged * 6,
+        80 - kcal * 0.08 + protein * 2 + fiber * 2 - sugarG * 2 - additiveBurden * 5,
       );
       if (kcal) reasons.push(`${kcal} kcal / 100g`);
       if (protein >= 10) reasons.push(`${protein}g protein`);
@@ -161,7 +159,7 @@ export function computeGoalFit(
       }
       const vegLabel =
         /(^|\s)veg(etarian)?(\s|$)/i.test(diet) && !/non[- ]?veg/i.test(diet);
-      fit = Math.min(100, (vegLabel ? 88 : 78) + fiber * 1.5 - flagged * 10);
+      fit = Math.min(100, (vegLabel ? 88 : 78) + fiber * 1.5 - additiveBurden * 8);
       if (vegLabel) reasons.push("Marked vegetarian on pack");
       else reasons.push("No obvious animal ingredients on label");
       break;
@@ -209,9 +207,10 @@ export function computeGoalFit(
       break;
     }
     case "kids": {
-      fit = Math.min(100, (opts.core_score ?? 50) - flagged * 12);
-      if (flagged === 0) reasons.push("No flagged additives");
-      else reasons.push(`${flagged} flagged additive(s)`);
+      fit = Math.min(100, (opts.core_score ?? 50) - additiveBurden * 10);
+      if (additiveBurden < 0.5) reasons.push("Cleaner ingredient profile");
+      else if (additiveBurden >= 4) reasons.push("Several processing additives on label");
+      else reasons.push("Some processing additives on label");
       break;
     }
   }

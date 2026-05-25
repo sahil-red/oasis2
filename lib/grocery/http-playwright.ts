@@ -49,9 +49,23 @@ interface PlaywrightState {
 }
 
 let _state: Promise<PlaywrightState> | null = null;
+/** Debounce full homepage reloads — each one costs ~6s and triggers more blocks if spammed. */
+let _lastCfRefreshMs = 0;
+/** One in-flight page.evaluate at a time — CF reload navigates the page and kills parallel evals. */
+let _fetchChain: Promise<unknown> = Promise.resolve();
+
+function enqueueFetch<T>(fn: () => Promise<T>): Promise<T> {
+  const next = _fetchChain.then(fn, fn);
+  _fetchChain = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
 
 const ORIGIN = "https://blinkit.com";
 const SAVE_EVERY = 25;
+const CF_REFRESH_COOLDOWN_MS = Number(process.env.CF_REFRESH_COOLDOWN_MS) || 45_000;
 
 function isCloudflareChallenge(status: number, body: string): boolean {
   return (
@@ -61,20 +75,58 @@ function isCloudflareChallenge(status: number, body: string): boolean {
 }
 
 /** Re-hit the homepage so Chromium can refresh __cf_bm / solve a soft block. */
-async function refreshCfSession(state: PlaywrightState): Promise<void> {
+async function refreshCfSession(state: PlaywrightState, force = false): Promise<boolean> {
+  const now = Date.now();
+  if (!force && now - _lastCfRefreshMs < CF_REFRESH_COOLDOWN_MS) {
+    return false;
+  }
+  _lastCfRefreshMs = now;
   console.warn(
-    "[grocery/http-playwright] Cloudflare block detected — reloading blinkit.com to refresh cookies…",
+    "[grocery/http-playwright] Cloudflare block — reloading blinkit.com to refresh cookies…",
   );
   await state.page.goto(`${ORIGIN}/`, {
     waitUntil: "domcontentloaded",
     timeout: 45_000,
   });
-  // Give the challenge JS a moment to run inside the page context.
-  await state.page.waitForTimeout(4_000);
+  await state.page.waitForTimeout(2_500);
   try {
     await state.context.storageState({ path: state.storagePath });
   } catch {
     // Non-fatal.
+  }
+  return true;
+}
+
+function launchOptions(pw: PWModule): Parameters<PWModule["chromium"]["launch"]>[0] {
+  const headless = process.env.PLAYWRIGHT_HEADLESS !== "false";
+  const base: Parameters<PWModule["chromium"]["launch"]>[0] = {
+    headless,
+    args: ["--disable-blink-features=AutomationControlled"],
+  };
+  if (
+    process.env.PLAYWRIGHT_USE_CHROME === "1" ||
+    process.env.PLAYWRIGHT_CHANNEL === "chrome"
+  ) {
+    return { ...base, channel: "chrome" };
+  }
+  return base;
+}
+
+async function launchBrowser(pw: PWModule): Promise<Browser> {
+  try {
+    return await pw.chromium.launch(launchOptions(pw));
+  } catch (e) {
+    if (process.env.PLAYWRIGHT_USE_CHROME === "1") {
+      console.warn(
+        "[grocery/http-playwright] Chrome channel unavailable, falling back to bundled Chromium:",
+        (e as Error).message,
+      );
+      return pw.chromium.launch({
+        headless: process.env.PLAYWRIGHT_HEADLESS !== "false",
+        args: ["--disable-blink-features=AutomationControlled"],
+      });
+    }
+    throw e;
   }
 }
 
@@ -83,13 +135,7 @@ async function getState(storagePath: string): Promise<PlaywrightState> {
   _state = (async () => {
     const pw = await import("playwright");
 
-    const browser = await pw.chromium.launch({
-      // Headless=new is harder to fingerprint than the legacy headless mode.
-      // Cloudflare's bot manager can still detect headless but it lets
-      // through far more often when the JS challenge is solved.
-      headless: true,
-      args: ["--disable-blink-features=AutomationControlled"],
-    });
+    const browser = await launchBrowser(pw);
 
     const context = await browser.newContext({
       storageState: storagePath,
@@ -121,7 +167,9 @@ async function getState(storagePath: string): Promise<PlaywrightState> {
   return _state;
 }
 
+/** Force the next request to launch a fresh browser (e.g. after a CF streak). */
 export async function closePlaywrightFetch(): Promise<void> {
+  _lastCfRefreshMs = 0;
   if (!_state) return;
   const s = await _state.catch(() => null);
   _state = null;
@@ -182,7 +230,8 @@ export function makePlaywrightFetch(opts: {
   const burst = opts.burst ?? 1;
   const throttle = pThrottle({ limit: burst, interval: Math.floor(1000 / rps) });
 
-  const throttled = throttle(async (url: string, init: FetchOptions = {}) => {
+  const throttled = throttle(async (url: string, init: FetchOptions = {}) =>
+    enqueueFetch(async () => {
     const state = await getState(opts.storageStatePath);
 
     const retries = init.retries ?? 3;
@@ -226,9 +275,8 @@ export function makePlaywrightFetch(opts: {
         ) {
           const wait = baseBackoff * Math.pow(2, attempt);
           if (isCloudflareChallenge(result.status, result.body)) {
-            await refreshCfSession(state);
-            // Extra pause after a CF refresh — burst retries make it worse.
-            await sleep(wait + 2_000);
+            const refreshed = await refreshCfSession(state);
+            await sleep(refreshed ? wait + 1_000 : wait + 3_500);
           } else {
             console.warn(
               `[grocery/http-playwright] ${label} → ${result.status}, retry in ${wait}ms (attempt ${attempt + 1}/${retries + 1})`,
@@ -263,7 +311,8 @@ export function makePlaywrightFetch(opts: {
     throw new Error(
       `[grocery/http-playwright] ${label} failed after ${retries + 1} attempts: ${String(lastErr)}`,
     );
-  }) as unknown as ThrottledFetch;
+  }),
+  ) as unknown as ThrottledFetch;
 
   throttled.bucket = throttle;
   return throttled;

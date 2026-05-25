@@ -79,9 +79,31 @@ export function resolveBaselineKey(
   const map = FILE.baselines;
 
   if (cat === "Dairy, Bread & Eggs") {
+    if (/egg|anda|omelette/i.test(name) || /egg/i.test(sub)) return "Dairy & Eggs::Eggs";
     if (isFreshMilk(name) || /milk/i.test(sub)) return "Dairy & Eggs::Milk";
     if (/curd|yogurt|dahi/i.test(name) || /curd|yogurt/i.test(sub)) return "Dairy & Eggs::Curd & Yogurt";
     if (/bread|pav|bun/i.test(name)) return "Breads & Buns::Pav & White Bread";
+  }
+
+  if (cat === "Chicken, Meat & Fish" || /chicken|meat|fish|mutton|prawn/i.test(cat)) {
+    if (/chicken|drumstick|breast|thigh|wings/i.test(name) || /chicken/i.test(sub)) {
+      return "Chicken, Meat & Fish::Chicken";
+    }
+    if (/fish|rohu|pomfret|salmon/i.test(name) || /fish/i.test(sub)) {
+      return "Chicken, Meat & Fish::Fish";
+    }
+    if (/egg/i.test(name)) return "Dairy & Eggs::Eggs";
+  }
+
+  if (/atta|rice|dal|masala|flour|sooji/i.test(cat)) {
+    if (/besan|gram flour|chana flour|sattu/i.test(name)) return "Atta, Flours & Sooji::Besan";
+    if (/protein powder|whey|isolate|mass gainer|plant protein/i.test(name)) {
+      return "Health Supplements::Protein Powder";
+    }
+  }
+
+  if (/health|supplement|nutrition drink/i.test(cat) || /protein powder|whey/i.test(name)) {
+    return "Health Supplements::Protein Powder";
   }
 
   if (cat === "Cold Drinks & Juices") {
