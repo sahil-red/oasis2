@@ -139,6 +139,18 @@ export async function searchProducts(opts: {
   return items;
 }
 
+/** Full catalog for client-side instant filtering (search page). */
+export async function getAllCatalogProducts(opts?: {
+  onlyWithDetail?: boolean;
+  onlyScored?: boolean;
+}): Promise<ProductListItem[]> {
+  return searchProducts({
+    onlyWithDetail: opts?.onlyWithDetail ?? true,
+    onlyScored: opts?.onlyScored,
+    limit: 500,
+  });
+}
+
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {
   const supabase = db();
 

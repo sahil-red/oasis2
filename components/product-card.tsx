@@ -18,17 +18,14 @@ export function ProductCard({ product }: { product: ProductListItem }) {
   );
 
   return (
-    <Link
-      href={`/product/${product.slug}`}
-      className="panel group flex flex-col overflow-hidden rounded-xl transition hover:border-(--color-line-strong) hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
-    >
-      <div className="relative aspect-[4/5] bg-(--color-bg-soft)">
+    <Link href={`/product/${product.slug}`} className="group block">
+      <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#f5f5f7]">
         {thumb ? (
           <Image
             src={thumb}
             alt={product.name}
             fill
-            className="object-contain p-5 transition duration-300 group-hover:scale-[1.03]"
+            className="object-contain p-4 transition duration-500 ease-out group-hover:scale-[1.02]"
             sizes="(max-width: 768px) 50vw, 20vw"
             unoptimized
           />
@@ -37,38 +34,46 @@ export function ProductCard({ product }: { product: ProductListItem }) {
             No image
           </div>
         )}
-        <div className="absolute left-3 top-3">
+        <div className="absolute left-2.5 top-2.5">
           {core ? (
-            <ScoreBadge score={core.score} grade={core.grade} band={core.band} />
+            <ScoreBadge
+              score={core.score}
+              grade={core.grade}
+              band={core.band}
+              className="!bg-white/92 !shadow-sm !ring-black/5"
+            />
           ) : (
-            <span className="rounded-full bg-(--color-bg)/90 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-(--color-fg-muted) ring-1 ring-(--color-line) backdrop-blur">
-              Unscored
+            <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-(--color-fg-dim) shadow-sm">
+              —
             </span>
           )}
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      <div className="mt-3 space-y-1">
         {product.brand ? (
-          <p className="truncate text-[11px] font-medium uppercase tracking-[0.12em] text-(--color-fg-dim)">
+          <p className="truncate text-[11px] uppercase tracking-[0.14em] text-(--color-fg-dim)">
             {product.brand}
           </p>
         ) : null}
         <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-white">
           {product.name}
         </h3>
-        <p className="line-clamp-1 text-xs text-(--color-fg-dim)">
-          {[product.category, product.subcategory].filter(Boolean).join(" · ")}
-        </p>
-        {highlights.length > 0 ? <AnalysisGrid highlights={highlights} compact /> : null}
-        <div className="mt-auto flex items-baseline justify-between pt-2">
+        {highlights.length > 0 ? (
+          <AnalysisGrid highlights={highlights} compact />
+        ) : null}
+        <div className="flex items-baseline gap-2 pt-0.5">
           {product.price_inr != null ? (
-            <span className="text-base font-semibold tabular-nums">₹{product.price_inr}</span>
-          ) : (
-            <span />
-          )}
-          {product.mrp_inr != null && product.price_inr != null && product.mrp_inr > product.price_inr ? (
-            <span className="text-xs text-(--color-fg-dim) line-through">₹{product.mrp_inr}</span>
+            <span className="text-[15px] font-semibold tabular-nums tracking-tight">
+              ₹{product.price_inr}
+            </span>
+          ) : null}
+          {product.mrp_inr != null &&
+          product.price_inr != null &&
+          product.mrp_inr > product.price_inr ? (
+            <span className="text-xs text-(--color-fg-dim) line-through tabular-nums">
+              ₹{product.mrp_inr}
+            </span>
           ) : null}
         </div>
       </div>
