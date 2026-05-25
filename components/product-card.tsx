@@ -2,13 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
-import type { ProductListItem } from "@/lib/products/queries";
+import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
 
 export function ProductCard({
   product,
   goalFit,
 }: {
-  product: ProductListItem;
+  product: ProductListItem | CatalogGridItem;
   /** When set, show goal-fit instead of Core score */
   goalFit?: number;
 }) {

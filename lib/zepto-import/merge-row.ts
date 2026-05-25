@@ -21,6 +21,7 @@ export function mergeCsvWithExisting(
   attributes: Record<string, string>;
 } {
   const images =
+    (csv.image_urls.length ? csv.image_urls : null) ??
     (existing?.image_urls?.length ? existing.image_urls : null) ??
     (fallbackImages.length ? fallbackImages : []);
 

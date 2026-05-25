@@ -3,14 +3,14 @@ import { InsightProductList } from "@/components/insight-product-list";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
-import { getCachedScoredCatalog } from "@/lib/products/catalog-cache";
+import { getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 120;
 
 /** v0 auto-list: high-protein picks under ₹200 */
 export default async function StacksPage() {
-  const products = await getCachedScoredCatalog();
+  const products = await getCachedScoredCatalogForInsights();
 
   const budgetProtein = products
     .filter((p) => (p.price_inr ?? 999) <= 200 && (p.nutrition?.protein_g_100g ?? 0) >= 10)

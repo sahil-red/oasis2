@@ -17,7 +17,7 @@ export async function loadVariantImageCache(): Promise<VariantImageCache> {
       if (!line.trim()) continue;
       const row = JSON.parse(line) as { variant_id: string; image_urls: string[] };
       if (row.variant_id && row.image_urls?.length) {
-        map.set(row.variant_id, row.image_urls);
+        map.set(row.variant_id, row.image_urls.filter(Boolean));
       }
     }
   } catch {
@@ -30,9 +30,11 @@ export async function appendVariantImageCache(
   variantId: string,
   imageUrls: string[],
 ): Promise<void> {
+  const urls = imageUrls.filter(Boolean);
+  if (!urls.length) return;
   await mkdir(resolve(CACHE_PATH, ".."), { recursive: true });
   await appendFile(
     CACHE_PATH,
-    `${JSON.stringify({ variant_id: variantId, image_urls: imageUrls })}\n`,
+    `${JSON.stringify({ variant_id: variantId, image_urls: urls })}\n`,
   );
 }

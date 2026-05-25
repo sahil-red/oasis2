@@ -8,6 +8,7 @@ import {
   buildProductSlugFromVariant,
   type ZeptoImportIdentity,
 } from "@/lib/zepto-import/product-key";
+import { parseCsvImageUrls } from "@/lib/zepto-import/parse-csv-image";
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -27,6 +28,7 @@ export type ZeptoCsvRow = {
   /** Real Zepto product_variant_id (UUID in PDP URL). */
   zepto_sku: string;
   product_url: string;
+  image_urls: string[];
 };
 
 const OUT_OF_SCOPE_CATEGORIES = new Set(["zepto cafe"]);
@@ -65,6 +67,14 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "nutrition_information",
     "nutrition_info",
     "nutrition_facts",
+  ],
+  image_link: [
+    "image_link",
+    "image_url",
+    "image",
+    "product_image",
+    "thumbnail",
+    "primary_image",
   ],
 };
 
@@ -155,6 +165,7 @@ export function csvRecordToRow(
   const product_key = variantId;
   const slug = buildProductSlugFromVariant(identity, variantId);
   const product_url = `https://www.zepto.com/pn/${slugifyForUrl(name)}/pvid/${variantId}`;
+  const image_urls = parseCsvImageUrls(cell(record, cols.image_link));
 
   const canon = mapToCanonicalTaxonomy({
     platform: "zepto",
@@ -178,6 +189,7 @@ export function csvRecordToRow(
     slug,
     zepto_sku: variantId,
     product_url,
+    image_urls,
   };
 }
 
@@ -185,6 +197,7 @@ export function csvRecordToRow(
 export function dedupeCsvRows(rows: ZeptoCsvRow[]): ZeptoCsvRow[] {
   const score = (r: ZeptoCsvRow) => {
     let s = 0;
+    if (r.image_urls.length) s += 1;
     if (r.nutrition && Object.keys(r.nutrition).length > 2) s += 2;
     if (r.ingredients_raw?.trim()) s += 1;
     return s;

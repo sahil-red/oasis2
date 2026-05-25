@@ -3,13 +3,14 @@
  * Single source of truth: ~/Downloads/data.csv (~24k Zepto SKUs)
  *
  * 1. Parse CSV (product_variant_id), drop Zepto Cafe
- * 2. Resolve images via BFF product-detail (cached)
+ * 2. Images from CSV Image_Link column (optional BFF backfill via --fetch-bff-images)
  * 3. Upsert all rows, purge everything not in CSV
- * 4. Produce seed → Gemini text fill → score (no OCR)
+ * 4. Produce seed → Gemini (produce/chicken gaps only) → score (no OCR)
  *
  *   pnpm catalog:sync
  *   pnpm catalog:sync -- --dry-run
- *   pnpm catalog:sync -- --skip-images
+ *   pnpm catalog:sync -- --skip-images          # CSV images only (default when Image_Link present)
+ *   pnpm catalog:sync -- --fetch-bff-images     # BFF backfill for rows missing CSV image
  *   pnpm catalog:sync -- --skip-gemini
  */
 import { homedir } from "node:os";
@@ -46,7 +47,13 @@ const PRODUCE_RE =
   /fruit|vegetable|herb|leaf|onion|tomato|potato|banana|apple|mango|grape|berry|spinach|coriander|mint|broccoli|cauliflower|capsicum|carrot|beetroot|lemon|orange|papaya|guava|pear|pineapple|watermelon|pomegranate|drumstick|beans|peas|mushroom|cabbage|cucumber|ginger|garlic|chilli|chili|lettuce|avocado|kiwi|melon|sapota|cherry|plum|peach|apricot|fig|jackfruit|custard|beet|radish|turnip|sweet corn|baby corn/i;
 
 const PROTEIN_RE =
-  /chicken|fish|mutton|lamb|prawn|shrimp|crab|egg\b|eggs\b|paneer|tofu|whey|protein powder|protein\b|salmon|rohu|pomfret|keema|sausage|bacon|turkey|duck\b|meat\b|seafood|fillet|breast|drumstick|curry cut|boneless/i;
+  /chicken|broiler|poultry|egg\b|eggs\b|drumstick|breast|curry cut|boneless chicken|country chicken|hygienic eggs/i;
+
+/** Gemini text fill only for fresh produce + chicken/eggs — not all nutrition gaps. */
+function needsGeminiFill(name: string, category: string | null, subcategory: string | null): boolean {
+  const blob = `${name} ${category ?? ""} ${subcategory ?? ""}`;
+  return PRODUCE_RE.test(blob) || PROTEIN_RE.test(blob);
+}
 
 async function defaultCsvPath(): Promise<string> {
   const p = resolve(homedir(), "Downloads", "data.csv");
@@ -91,6 +98,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const dryRun = argv.includes("--dry-run");
   const skipImages = argv.includes("--skip-images");
+  const fetchBffImages = argv.includes("--fetch-bff-images");
   const skipGemini = argv.includes("--skip-gemini");
   const skipScore = argv.includes("--skip-score");
   const pathArg = argv.find((a) => !a.startsWith("--") && a.endsWith(".csv"));
@@ -113,13 +121,22 @@ async function main() {
   const supabase = adminClient();
   const schema = await detectCatalogDbSchema(supabase);
 
+  const withCsvImages = parsed.filter((p) => p.image_urls.length).length;
+  console.log(`[catalog:sync] csv images: ${withCsvImages}/${parsed.length}`);
+
   const imageCache = await loadVariantImageCache();
-  console.log(`[catalog:sync] image cache: ${imageCache.size} variants`);
-  const resolvedImages = await resolveVariantImages({
-    variantIds: parsed.map((p) => p.zepto_sku),
-    cache: imageCache,
-    skipFetch: skipImages || dryRun,
-  });
+  const needBff = parsed.filter((p) => !p.image_urls.length).map((p) => p.zepto_sku);
+  let bffImages = imageCache;
+  if (fetchBffImages && needBff.length && !dryRun) {
+    console.log(`[catalog:sync] BFF backfill for ${needBff.length} rows without CSV image`);
+    bffImages = await resolveVariantImages({
+      variantIds: needBff,
+      cache: imageCache,
+      skipFetch: skipImages,
+    });
+  } else if (needBff.length) {
+    console.log(`[catalog:sync] ${needBff.length} rows missing CSV image (pass --fetch-bff-images to backfill)`);
+  }
 
   const existingBySku = await loadExistingByVariant(supabase);
 
@@ -130,8 +147,8 @@ async function main() {
     const batch = parsed.slice(i, i + batchSize);
     const payloads = batch.map((row) => {
       const existing = existingBySku.get(row.zepto_sku) ?? null;
-      const bffImages = resolvedImages.get(row.zepto_sku) ?? [];
-      const merged = mergeCsvWithExisting(row, existing, bffImages);
+      const fallbackImages = bffImages.get(row.zepto_sku) ?? [];
+      const merged = mergeCsvWithExisting(row, existing, fallbackImages);
       if (merged.image_urls.length) withImages++;
       if (isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)) {
         completeAtImport++;
@@ -154,7 +171,9 @@ async function main() {
         product_url: row.product_url,
         raw_payload: null,
         attributes: merged.attributes,
-        ocr_status: "skipped",
+        ocr_status: isPlatformNutritionComplete(merged.ingredients_raw, merged.nutrition)
+          ? "success"
+          : "pending",
         updated_at: new Date().toISOString(),
       };
       if (schema.hasProductKey) payload.product_key = row.product_key;
@@ -244,7 +263,7 @@ async function main() {
   }
   console.log(`[catalog:sync] produce seed: ${produceOk}`);
 
-  // ── Gemini (protein + remaining gaps) ──
+  // ── Gemini (produce + chicken/eggs gaps only) ──
   if (!skipGemini) {
     const queue: TextFillInput[] = [];
     const rowBySlug = new Map<string, Record<string, unknown>>();
@@ -261,21 +280,28 @@ async function main() {
         if (isPlatformNutritionComplete(row.ingredients_raw, row.nutrition as ProductNutrition | null)) {
           continue;
         }
-        const blob = `${row.name} ${row.category} ${row.subcategory}`;
+        const name = row.name as string;
+        const category = row.category as string | null;
+        const subcategory = row.subcategory as string | null;
+        if (!needsGeminiFill(name, category, subcategory)) continue;
+
         const attrs = (row.attributes ?? {}) as Record<string, string>;
-        const contextParts = [
-          buildProductFillContext(attrs, null, "zepto"),
-          row.ingredients_raw ? `Partial ingredients: ${row.ingredients_raw}` : "",
-          PROTEIN_RE.test(blob) ? "Category hint: raw animal protein or protein supplement" : "",
-        ].filter(Boolean);
         queue.push({
           slug: row.slug as string,
-          name: row.name as string,
+          name,
           brand: row.brand as string | null,
-          category: row.category as string | null,
-          subcategory: row.subcategory as string | null,
+          category,
+          subcategory,
           net_weight: row.net_weight as string | null,
-          context: contextParts.join("\n"),
+          context: [
+            buildProductFillContext(attrs, null, "zepto"),
+            row.ingredients_raw ? `Partial ingredients: ${row.ingredients_raw}` : "",
+            PROTEIN_RE.test(`${name} ${category} ${subcategory}`)
+              ? "Category hint: raw chicken or eggs"
+              : "Category hint: fresh fruit or vegetable",
+          ]
+            .filter(Boolean)
+            .join("\n"),
           partial_nutrition: row.nutrition as ProductNutrition | null,
           partial_ingredients: row.ingredients_raw as string | null,
           attributes: attrs,
@@ -284,7 +310,7 @@ async function main() {
       }
     }
 
-    console.log(`[catalog:sync] Gemini queue: ${queue.length}`);
+    console.log(`[catalog:sync] Gemini queue (produce/chicken only): ${queue.length}`);
     const filled = await geminiTextFillBatch(queue);
     let geminiOk = 0;
     for (const item of filled) {

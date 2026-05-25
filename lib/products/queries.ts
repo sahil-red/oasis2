@@ -1,10 +1,18 @@
 import { isBlockedTaxonomy } from "@/lib/catalog/policy";
+import type { DietMode } from "@/lib/diet/types";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import type { GoalId } from "@/lib/goals/types";
 import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
 import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
 import type { CoreScore, Product, ProductNutrition } from "@/lib/supabase/types";
 
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
+import {
+  filterCatalogProducts,
+  type CatalogFilterState,
+} from "@/lib/products/catalog-filter";
+import { productAisle, productShelf } from "@/lib/products/catalog-meta";
 
 /** Rows eligible for public catalog (CSV import with real variant UUID). */
 export function isCatalogSourceRow(p: {
@@ -133,6 +141,73 @@ export type CatalogFilters = {
   brands: string[];
 };
 
+export type CatalogGridItem = Pick<
+  ProductListItem,
+  | "id"
+  | "slug"
+  | "name"
+  | "brand"
+  | "category"
+  | "subcategory"
+  | "net_weight"
+  | "price_inr"
+  | "mrp_inr"
+  | "image_urls"
+> & {
+  core_scores: Pick<CoreScore, "score" | "grade" | "band"> | null;
+};
+
+export type CatalogSearchResult = {
+  items: CatalogGridItem[];
+  goalFits: Record<string, number>;
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+};
+
+export type CatalogMeta = {
+  stats: { visible: number; scored: number; zepto: number };
+  filters: CatalogFilters;
+};
+
+function toGridItem(row: ProductListItem): CatalogGridItem {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    brand: row.brand,
+    category: row.category,
+    subcategory: row.subcategory,
+    net_weight: row.net_weight,
+    price_inr: row.price_inr,
+    mrp_inr: row.mrp_inr,
+    image_urls: row.image_urls?.length ? [row.image_urls[0]] : [],
+    core_scores: row.core_scores
+      ? {
+          score: row.core_scores.score,
+          grade: row.core_scores.grade,
+          band: row.core_scores.band,
+        }
+      : null,
+  };
+}
+
+function rowIsCatalogEligible(row: Record<string, unknown>): boolean {
+  const mapped = mapListRow(row);
+  return (
+    isCatalogVisible(mapped) &&
+    isCatalogSourceRow({
+      platform: row.platform as string,
+      zepto_sku: row.zepto_sku as string | null,
+    })
+  );
+}
+
+function mapVisibleBatch(rows: Record<string, unknown>[]): ProductListItem[] {
+  return rows.filter(rowIsCatalogEligible).map((row) => mapListRow(row));
+}
+
 function mapListRow(row: Record<string, unknown>): ProductListItem {
   const scores = row.core_scores;
   const core =
@@ -164,40 +239,54 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
   };
 }
 
-export async function getCatalogFilters(category?: string): Promise<CatalogFilters> {
+const FILTER_SCAN_FIELDS =
+  "name, super_category, category, subcategory, brand, ingredients_raw, nutrition, attributes, platform, zepto_sku, core_scores (score, grade, band)";
+
+async function scanVisibleZeptoRows(
+  opts?: { category?: string },
+): Promise<Record<string, unknown>[]> {
   const supabase = db();
-  let q = supabase
-    .from("products")
-    .select("name, super_category, category, subcategory, brand, ingredients_raw, nutrition, platform, zepto_sku")
-    .eq("platform", "zepto");
+  const pageSize = 1000;
+  const max = 30_000;
+  const all: Record<string, unknown>[] = [];
 
-  if (category) q = q.eq("category", category);
+  for (let offset = 0; offset < max; offset += pageSize) {
+    let q = supabase
+      .from("products")
+      .select(FILTER_SCAN_FIELDS)
+      .eq("platform", "zepto")
+      .order("name", { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-  const { data, error } = await q.limit(2000);
-  if (error) throw new Error(error.message);
+    if (opts?.category) q = q.eq("category", opts.category);
 
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    for (const row of rows) {
+      if (rowIsCatalogEligible(row)) all.push(row);
+    }
+    if (rows.length < pageSize) break;
+  }
+
+  return all;
+}
+
+export async function getCatalogFilters(category?: string): Promise<CatalogFilters> {
+  const rows = await scanVisibleZeptoRows({ category });
   const categories = new Set<string>();
   const subcategories = new Set<string>();
   const brands = new Set<string>();
 
-  for (const row of data ?? []) {
-    const visible = isCatalogVisible({
-      name: row.name as string,
-      super_category: (row.super_category as string | null) ?? null,
-      category: (row.category as string | null) ?? null,
-      subcategory: (row.subcategory as string | null) ?? null,
-      ingredients_raw: (row.ingredients_raw as string | null) ?? null,
-      nutrition: (row.nutrition as ProductNutrition | null) ?? null,
-    });
-    if (
-      !visible ||
-      !isCatalogSourceRow(row as { platform?: string; zepto_sku?: string | null })
-    ) {
-      continue;
+  for (const row of rows) {
+    const mapped = mapListRow(row);
+    const aisle = productAisle(mapped);
+    if (aisle) categories.add(aisle);
+    if (!category || aisle === category) {
+      const shelf = productShelf(mapped);
+      if (shelf) subcategories.add(shelf);
+      if (mapped.brand) brands.add(mapped.brand);
     }
-    if (row.category) categories.add(row.category as string);
-    if (row.subcategory) subcategories.add(row.subcategory as string);
-    if (row.brand) brands.add(row.brand as string);
   }
 
   const sort = (a: string, b: string) => a.localeCompare(b);
@@ -206,6 +295,259 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
     subcategories: [...subcategories].sort(sort),
     brands: [...brands].sort(sort),
   };
+}
+
+export async function countVisibleCatalog(): Promise<{
+  visible: number;
+  scored: number;
+  zepto: number;
+}> {
+  const supabase = db();
+  const zeptoRes = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("platform", "zepto");
+
+  const rows = await scanVisibleZeptoRows();
+  const scored = rows.filter((row) => {
+    const mapped = mapListRow(row);
+    return Boolean(mapped.core_scores);
+  }).length;
+
+  return {
+    visible: rows.length,
+    scored,
+    zepto: zeptoRes.count ?? 0,
+  };
+}
+
+export async function getCatalogMeta(category?: string): Promise<CatalogMeta> {
+  const [stats, filters] = await Promise.all([
+    countVisibleCatalog(),
+    getCatalogFilters(category),
+  ]);
+  return { stats, filters };
+}
+
+function buildCatalogDbQuery(
+  supabase: ReturnType<typeof db>,
+  opts: {
+    q?: string;
+    category?: string;
+    brand?: string;
+    onlyScored?: boolean;
+  },
+) {
+  let q = supabase
+    .from("products")
+    .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+    .eq("platform", "zepto");
+
+  if (opts.onlyScored) q = q.not("core_scores", "is", null);
+  if (opts.brand) q = q.eq("brand", opts.brand);
+  if (opts.category) q = q.eq("category", opts.category);
+  if (opts.q?.trim()) {
+    const term = opts.q.trim().replace(/[%_]/g, "");
+    if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
+  }
+  return q;
+}
+
+async function fetchFilteredCatalog(
+  state: CatalogFilterState,
+  diet: DietMode,
+  opts?: { maxRows?: number; orderByScore?: boolean },
+): Promise<ProductListItem[]> {
+  const supabase = db();
+  const pageSize = 1000;
+  const max = opts?.maxRows ?? 30_000;
+  const all: ProductListItem[] = [];
+
+  for (let offset = 0; offset < max; offset += pageSize) {
+    let q = buildCatalogDbQuery(supabase, {
+      q: state.q,
+      category: state.category || undefined,
+      brand: state.brand || undefined,
+      onlyScored: state.onlyScored,
+    });
+    if (opts?.orderByScore) {
+      q = q.order("score", {
+        referencedTable: "core_scores",
+        ascending: false,
+        nullsFirst: false,
+      });
+    } else {
+      q = q.order("name", { ascending: true });
+    }
+    const { data, error } = await q.range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const batch = mapVisibleBatch(rows);
+    all.push(...filterCatalogProducts(batch, state, diet));
+    if (rows.length < pageSize) break;
+  }
+
+  return all;
+}
+
+function hasHeavyFilters(state: CatalogFilterState, diet: DietMode): boolean {
+  return Boolean(
+    state.q.trim() ||
+      state.subcategory ||
+      state.category ||
+      state.brand ||
+      state.onlyScored ||
+      diet !== "any",
+  );
+}
+
+async function paginateBalancedCatalog(opts: {
+  page: number;
+  limit: number;
+  state: CatalogFilterState;
+  diet: DietMode;
+}): Promise<{ items: ProductListItem[]; total: number; hasMore: boolean }> {
+  const { page, limit, state, diet } = opts;
+  const start = (page - 1) * limit;
+  const need = start + limit;
+  const supabase = db();
+  const batchSize = 400;
+  const visible: ProductListItem[] = [];
+  let dbOffset = 0;
+  let dbExhausted = false;
+
+  while (visible.length < need && !dbExhausted) {
+    let q = buildCatalogDbQuery(supabase, {
+      q: state.q,
+      category: state.category || undefined,
+      brand: state.brand || undefined,
+      onlyScored: state.onlyScored,
+    })
+      .order("score", {
+        referencedTable: "core_scores",
+        ascending: false,
+        nullsFirst: false,
+      })
+      .range(dbOffset, dbOffset + batchSize - 1);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (rows.length < batchSize) dbExhausted = true;
+    dbOffset += batchSize;
+
+    visible.push(...filterCatalogProducts(mapVisibleBatch(rows), state, diet));
+  }
+
+  const total = dbExhausted ? visible.length : visible.length + 1;
+  const items = visible.slice(start, start + limit);
+  return {
+    items,
+    total: dbExhausted ? visible.length : Math.max(visible.length, start + limit + 1),
+    hasMore: dbExhausted ? start + limit < visible.length : items.length === limit,
+  };
+}
+
+export async function searchCatalogGrid(opts: {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  brand?: string;
+  page?: number;
+  limit?: number;
+  onlyScored?: boolean;
+  goal?: GoalId;
+  diet?: DietMode;
+}): Promise<CatalogSearchResult> {
+  const page = Math.max(1, opts.page ?? 1);
+  const limit = Math.min(120, Math.max(1, opts.limit ?? 96));
+  const goal = opts.goal ?? "balanced";
+  const diet = opts.diet ?? "any";
+  const state: CatalogFilterState = {
+    q: opts.q?.trim() ?? "",
+    category: opts.category ?? "",
+    subcategory: opts.subcategory ?? "",
+    brand: opts.brand ?? "",
+    onlyScored: opts.onlyScored ?? false,
+  };
+
+  const goalSort = goal !== "balanced";
+  const heavy = hasHeavyFilters(state, diet);
+
+  if (!goalSort && !heavy) {
+    const paged = await paginateBalancedCatalog({ page, limit, state, diet });
+    const meta = page === 1 ? await countVisibleCatalog() : null;
+    const total = meta?.visible ?? paged.total;
+    return {
+      items: paged.items.map(toGridItem),
+      goalFits: {},
+      page,
+      limit,
+      total,
+      hasMore: paged.hasMore,
+    };
+  }
+
+  const pool = await fetchFilteredCatalog(state, diet, {
+    maxRows: goalSort ? 8000 : 30_000,
+    orderByScore: !goalSort,
+  });
+
+  let goalFits: Record<string, number> = {};
+  let sorted: ProductListItem[];
+
+  if (goalSort) {
+    const ranked = pool
+      .map((p) => ({ p, fit: computeGoalFit(goal, goalFitInputs(p)).fit }))
+      .sort((a, b) => b.fit - a.fit);
+    goalFits = Object.fromEntries(ranked.map(({ p, fit }) => [p.id, fit]));
+    sorted = ranked.map((x) => x.p);
+  } else {
+    sorted = [...pool].sort(
+      (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
+    );
+  }
+
+  const total = sorted.length;
+  const start = (page - 1) * limit;
+  const items = sorted.slice(start, start + limit).map(toGridItem);
+
+  return {
+    items,
+    goalFits: goalSort
+      ? Object.fromEntries(items.map((i) => [i.id, goalFits[i.id] ?? 0]))
+      : {},
+    page,
+    limit,
+    total,
+    hasMore: start + limit < total,
+  };
+}
+
+/** Scored visible products for insights — server-side only, slim fields. */
+export async function getScoredProductsForInsights(): Promise<ProductListItem[]> {
+  const supabase = db();
+  const pageSize = 1000;
+  const max = 30_000;
+  const all: ProductListItem[] = [];
+
+  for (let offset = 0; offset < max; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("products")
+      .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+      .eq("platform", "zepto")
+      .not("core_scores", "is", null)
+      .order("name", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    all.push(...mapVisibleBatch(rows));
+    if (rows.length < pageSize) break;
+  }
+
+  return all.map(slimListItemForCatalog);
 }
 
 export async function searchProducts(opts: {

@@ -1,22 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
-import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
 import { readDietMode, writeDietMode } from "@/lib/diet/storage";
 import {
-  buildFilterOptions,
   catalogParamsToSearch,
-  filterCatalogProducts,
   parseCatalogParams,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
-import type { ProductListItem } from "@/lib/products/queries";
+import {
+  fetchCatalogMeta,
+  fetchCatalogSearch,
+  type CatalogGridItem,
+  type CatalogMetaResponse,
+} from "@/lib/products/catalog-api";
+import type { CatalogFilters } from "@/lib/products/queries";
 
 type Params = {
   q?: string;
@@ -34,9 +37,12 @@ const inputClass =
 const selectClass =
   "min-w-0 cursor-pointer appearance-none rounded-none border-0 border-b border-(--color-line) bg-transparent py-2 text-sm text-(--color-fg) outline-none transition focus:border-(--color-fg-muted)";
 
+const CATALOG_PAGE_SIZE = 96;
+const SEARCH_DEBOUNCE_MS = 280;
+
 function normalizeState(
   state: CatalogFilterState,
-  options: ReturnType<typeof buildFilterOptions>,
+  options: CatalogFilters,
 ): CatalogFilterState {
   const next = { ...state };
   if (next.category && !options.categories.includes(next.category)) {
@@ -53,17 +59,16 @@ function normalizeState(
   return next;
 }
 
-const CATALOG_PAGE_SIZE = 96;
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
 
-export function CatalogView({
-  products,
-  stats,
-  initialParams,
-}: {
-  products: ProductListItem[];
-  stats: { scored: number; withDetail: number };
-  initialParams: Params;
-}) {
+export function CatalogView({ initialParams }: { initialParams: Params }) {
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
   );
@@ -77,9 +82,19 @@ export function CatalogView({
     if (initialParams.diet) return dietFromParam(initialParams.diet);
     return readDietMode();
   });
+  const [meta, setMeta] = useState<CatalogMetaResponse | null>(null);
+  const [items, setItems] = useState<CatalogGridItem[]>([]);
+  const [goalFits, setGoalFits] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [showGoalHint, setShowGoalHint] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(CATALOG_PAGE_SIZE);
+  const [loading, setLoading] = useState(true);
+  const fetchGen = useRef(0);
+
+  const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
   useEffect(() => {
     if (!initialParams.goal) {
@@ -93,6 +108,114 @@ export function CatalogView({
     }
   }, [initialParams.goal, initialParams.diet]);
 
+  const filterOptions = meta?.filters ?? {
+    categories: [],
+    subcategories: [],
+    brands: [],
+  };
+
+  const activeState = useMemo(
+    () => normalizeState(state, filterOptions),
+    [state, filterOptions],
+  );
+
+  const searchKey = useMemo(
+    () =>
+      JSON.stringify({
+        q: debouncedQ.trim(),
+        category: activeState.category,
+        subcategory: activeState.subcategory,
+        brand: activeState.brand,
+        onlyScored: activeState.onlyScored,
+        goal,
+        diet,
+      }),
+    [debouncedQ, activeState, goal, diet],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchCatalogMeta(activeState.category || undefined);
+        if (!cancelled) setMeta(data);
+      } catch (e) {
+        if (!cancelled) setLoadError((e as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeState.category]);
+
+  useEffect(() => {
+    const gen = ++fetchGen.current;
+    setLoading(true);
+    setLoadError(null);
+    setPage(1);
+
+    (async () => {
+      try {
+        const result = await fetchCatalogSearch({
+          q: debouncedQ.trim() || undefined,
+          category: activeState.category || undefined,
+          subcategory: activeState.subcategory || undefined,
+          brand: activeState.brand || undefined,
+          scored: activeState.onlyScored ? "1" : undefined,
+          goal: goal !== "balanced" ? goal : undefined,
+          diet: diet !== "any" ? diet : undefined,
+          page: 1,
+          limit: CATALOG_PAGE_SIZE,
+        });
+        if (gen !== fetchGen.current) return;
+        setItems(result.items);
+        setGoalFits(result.goalFits);
+        setTotal(result.total);
+        setHasMore(result.hasMore);
+        setPage(1);
+      } catch (e) {
+        if (gen !== fetchGen.current) return;
+        setLoadError((e as Error).message);
+        setItems([]);
+        setTotal(0);
+        setHasMore(false);
+      } finally {
+        if (gen === fetchGen.current) setLoading(false);
+      }
+    })();
+  }, [searchKey, debouncedQ, activeState, goal, diet]);
+
+  const loadMore = useCallback(async () => {
+    const nextPage = page + 1;
+    try {
+      const result = await fetchCatalogSearch({
+        q: debouncedQ.trim() || undefined,
+        category: activeState.category || undefined,
+        subcategory: activeState.subcategory || undefined,
+        brand: activeState.brand || undefined,
+        scored: activeState.onlyScored ? "1" : undefined,
+        goal: goal !== "balanced" ? goal : undefined,
+        diet: diet !== "any" ? diet : undefined,
+        page: nextPage,
+        limit: CATALOG_PAGE_SIZE,
+      });
+      setItems((prev) => [...prev, ...result.items]);
+      setGoalFits((prev) => ({ ...prev, ...result.goalFits }));
+      setPage(nextPage);
+      setHasMore(result.hasMore);
+    } catch (e) {
+      setLoadError((e as Error).message);
+    }
+  }, [page, debouncedQ, activeState, goal, diet]);
+
+  useEffect(() => {
+    const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (current !== path) {
+      window.history.replaceState(null, "", path);
+    }
+  }, [activeState, goal, diet]);
+
   const pickGoal = useCallback((g: GoalId) => {
     writeStoredGoal(g);
     setShowGoalHint(false);
@@ -103,47 +226,6 @@ export function CatalogView({
     writeDietMode(d);
     startTransition(() => setDiet(d));
   }, []);
-
-  const filterOptions = useMemo(
-    () => buildFilterOptions(products, state.category || undefined),
-    [products, state.category],
-  );
-
-  const activeState = useMemo(
-    () => normalizeState(state, filterOptions),
-    [state, filterOptions],
-  );
-
-  const { filtered, goalFits } = useMemo(() => {
-    const list = filterCatalogProducts(products, activeState, diet);
-    if (goal === "balanced") {
-      const sorted = [...list].sort(
-        (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
-      );
-      return { filtered: sorted, goalFits: new Map<string, number>() };
-    }
-    const ranked = list
-      .map((p) => ({ p, fit: computeGoalFit(goal, goalFitInputs(p)).fit }))
-      .sort((a, b) => b.fit - a.fit);
-    return {
-      filtered: ranked.map((x) => x.p),
-      goalFits: new Map(ranked.map((x) => [x.p.id, x.fit])),
-    };
-  }, [products, activeState, goal, diet]);
-
-  useEffect(() => {
-    setVisibleCount(CATALOG_PAGE_SIZE);
-  }, [activeState, goal, diet]);
-
-  const visibleProducts = filtered.slice(0, visibleCount);
-
-  useEffect(() => {
-    const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
-    const current = `${window.location.pathname}${window.location.search}`;
-    if (current !== path) {
-      window.history.replaceState(null, "", path);
-    }
-  }, [activeState, goal, diet]);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
     startTransition(() => {
@@ -180,6 +262,17 @@ export function CatalogView({
       });
     });
   };
+
+  const catalogTotal = meta?.stats.visible ?? 0;
+  const stats = meta?.stats;
+
+  if (loadError && !items.length && !meta) {
+    return (
+      <p className="py-16 text-center text-sm text-(--color-bad)">
+        Could not load catalog ({loadError}). Refresh to try again.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -313,9 +406,9 @@ export function CatalogView({
           </label>
 
           <p className="ml-auto pb-2 text-sm tabular-nums text-(--color-fg-dim)">
-            <span className="text-(--color-fg)">{filtered.length}</span>
+            <span className="text-(--color-fg)">{loading ? "…" : total}</span>
             <span className="mx-1">/</span>
-            {products.length}
+            {catalogTotal || "…"}
           </p>
         </div>
 
@@ -330,41 +423,52 @@ export function CatalogView({
         ) : null}
       </div>
 
-      {filtered.length === 0 ? (
+      {loading && items.length === 0 ? (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="animate-pulse space-y-2">
+              <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
+              <div className="h-4 w-3/4 rounded bg-(--color-bg-soft)" />
+            </div>
+          ))}
+        </div>
+      ) : total === 0 ? (
         <p className="py-20 text-center text-sm text-(--color-fg-muted)">
           No products match.
         </p>
       ) : (
         <div
           className={`grid grid-cols-2 gap-x-4 gap-y-8 transition-opacity duration-150 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
-            isPending ? "opacity-80" : "opacity-100"
+            isPending || loading ? "opacity-80" : "opacity-100"
           }`}
         >
-          {visibleProducts.map((p) => (
+          {items.map((p) => (
             <ProductCard
               key={p.id}
               product={p}
-              goalFit={goal !== "balanced" ? goalFits.get(p.id) : undefined}
+              goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
             />
           ))}
         </div>
       )}
 
-      {filtered.length > visibleCount ? (
+      {hasMore ? (
         <div className="flex justify-center pt-2">
           <button
             type="button"
-            onClick={() => setVisibleCount((n) => n + CATALOG_PAGE_SIZE)}
+            onClick={loadMore}
             className="rounded-full border border-(--color-line) px-5 py-2 text-sm text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
           >
-            Show more ({filtered.length - visibleCount} left)
+            Show more ({total - items.length} left)
           </button>
         </div>
       ) : null}
 
-      <p className="text-center text-[11px] text-(--color-fg-dim)">
-        {stats.scored} scored · {stats.withDetail} with labels
-      </p>
+      {stats ? (
+        <p className="text-center text-[11px] text-(--color-fg-dim)">
+          {stats.scored} scored · {stats.visible} with labels
+        </p>
+      ) : null}
     </div>
   );
 }

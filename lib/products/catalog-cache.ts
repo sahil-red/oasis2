@@ -1,14 +1,23 @@
-import { getAllCatalogProducts } from "@/lib/products/queries";
+import { unstable_cache } from "next/cache";
+import {
+  getCatalogMeta,
+  getScoredProductsForInsights,
+  type CatalogMeta,
+} from "@/lib/products/queries";
 
-/**
- * Full catalog for client search + insights. Not wrapped in unstable_cache
- * because the payload exceeds Vercel's 2MB data cache limit (~2.2k products).
- * Rely on CDN / route cache headers instead.
- */
-export async function getCachedCatalog() {
-  return getAllCatalogProducts({ onlyWithDetail: true });
+export async function getCachedCatalogMeta(category?: string): Promise<CatalogMeta> {
+  if (category) {
+    return getCatalogMeta(category);
+  }
+  return unstable_cache(() => getCatalogMeta(), ["catalog-meta"], {
+    revalidate: 300,
+  })();
 }
 
-export async function getCachedScoredCatalog() {
-  return getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+export async function getCachedScoredCatalogForInsights() {
+  return unstable_cache(
+    () => getScoredProductsForInsights(),
+    ["catalog-insights-scored"],
+    { revalidate: 300 },
+  )();
 }

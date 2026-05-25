@@ -69,6 +69,9 @@ export async function resolveVariantImages(opts: {
 }): Promise<VariantImageCache> {
   const out = new Map(opts.cache);
   const missing = opts.variantIds.filter((id) => isZeptoVariantId(id) && !out.has(id));
+  console.log(
+    `[variant-images] cached=${out.size} missing=${missing.length} total=${opts.variantIds.length}`,
+  );
   if (opts.skipFetch || !missing.length) return out;
 
   let session: { storeId: string; headers: SessionHeaders };

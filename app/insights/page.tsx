@@ -8,7 +8,7 @@ import {
 import { InsightsBrandBoard } from "@/components/insights-brand-board";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getCachedCatalog } from "@/lib/products/catalog-cache";
+import { getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache";
 import {
   marketingCallout,
   proteinPerRupeeLine,
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 120;
 
 export default async function InsightsPage() {
-  const products = await getCachedCatalog();
+  const products = await getCachedScoredCatalogForInsights();
   const insights = buildInsights(products.filter((p) => p.core_scores));
 
   return (
