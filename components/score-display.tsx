@@ -58,36 +58,43 @@ export function ScorePanel({
 
   if (compact) {
     return (
-      <div className="h-full rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
+      <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
+        <h2 className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
           Core score
         </h2>
-        <div className="mt-3 flex items-center gap-4">
-          <ScoreRing score={score} size={96} stroke={8} />
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset",
-                  BAND_STYLES[band],
-                )}
-              >
-                {labelForBand(band)}
-              </span>
-              <span className="text-xs font-medium text-(--color-fg)">Grade {grade}</span>
-            </div>
+        <div className="mt-2 flex items-start gap-3">
+          <ScoreRing
+            score={score}
+            size={72}
+            stroke={6}
+            showLabel
+            subtitle={`Grade ${grade}`}
+            className="shrink-0"
+          />
+          <div className="min-w-0 flex-1 pt-0.5">
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset",
+                BAND_STYLES[band],
+              )}
+            >
+              {labelForBand(band)}
+            </span>
             {axes.length > 0 ? (
-              <div className="grid grid-cols-3 gap-1 text-center">
+              <dl className="mt-2 grid grid-cols-3 gap-1.5">
                 {axes.map(({ label, value, max }) => (
-                  <div key={label} className="rounded-lg border border-(--color-line) bg-white px-1.5 py-1">
-                    <div className="text-[9px] uppercase tracking-wider text-(--color-fg-dim)">
-                      {label.slice(0, 4)}
-                    </div>
-                    <div className="font-display text-sm tabular-nums">{value}</div>
-                    <div className="text-[9px] text-(--color-fg-dim)">/{max}</div>
+                  <div
+                    key={label}
+                    className="rounded-md border border-(--color-line) bg-white px-1 py-1 text-center"
+                  >
+                    <dt className="text-[9px] leading-tight text-(--color-fg-dim)">{label}</dt>
+                    <dd className="font-display text-sm leading-none tabular-nums text-(--color-fg)">
+                      {value}
+                      <span className="text-[9px] font-normal text-(--color-fg-dim)">/{max}</span>
+                    </dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             ) : null}
           </div>
         </div>

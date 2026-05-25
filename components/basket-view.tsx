@@ -52,14 +52,44 @@ function MetricBar({
   );
 }
 
-export function BasketView({ catalog }: { catalog: ProductListItem[] }) {
+export function BasketView() {
   const [entries, setEntries] = useState<ReturnType<typeof readBasket>>([]);
+  const [catalog, setCatalog] = useState<ProductListItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const sync = () => setEntries(readBasket());
+    let cancelled = false;
+
+    const sync = async () => {
+      const next = readBasket();
+      setEntries(next);
+      const slugs = [...new Set(next.map((e) => e.slug))];
+      if (!slugs.length) {
+        if (!cancelled) {
+          setCatalog([]);
+          setLoading(false);
+        }
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/products?slugs=${slugs.map(encodeURIComponent).join(",")}`);
+        if (!res.ok) throw new Error("fetch failed");
+        const data = (await res.json()) as ProductListItem[];
+        if (!cancelled) setCatalog(data);
+      } catch {
+        if (!cancelled) setCatalog([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     sync();
     window.addEventListener("oasis-basket", sync);
-    return () => window.removeEventListener("oasis-basket", sync);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("oasis-basket", sync);
+    };
   }, []);
 
   const lines = useMemo(() => {
@@ -73,6 +103,14 @@ export function BasketView({ catalog }: { catalog: ProductListItem[] }) {
   }, [entries, catalog]);
 
   const analysis = useMemo(() => analyzeBasket(lines), [lines]);
+
+  if (loading && entries.length > 0) {
+    return (
+      <div className="rounded-2xl border border-(--color-line) bg-(--color-bg-soft) px-6 py-12 text-center text-sm text-(--color-fg-muted)">
+        Loading cart…
+      </div>
+    );
+  }
 
   if (lines.length === 0) {
     return (

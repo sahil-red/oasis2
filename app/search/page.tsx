@@ -1,9 +1,6 @@
-import { CatalogView } from "@/components/catalog-view";
+import { CatalogLoader } from "@/components/catalog-loader";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { countCatalog, getAllCatalogProducts } from "@/lib/products/queries";
-
-export const dynamic = "force-dynamic";
 
 type SearchParams = {
   q?: string;
@@ -14,17 +11,13 @@ type SearchParams = {
   goal?: string;
 };
 
+/** Shell renders immediately; catalog JSON loads client-side from cached API. */
 export default async function CatalogPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-
-  const [products, stats] = await Promise.all([
-    getAllCatalogProducts({ onlyWithDetail: true }),
-    countCatalog().catch(() => ({ total: 0, withDetail: 0, scored: 0 })),
-  ]);
 
   return (
     <main className="min-h-screen">
@@ -36,15 +29,11 @@ export default async function CatalogPage({
             Catalog
           </h1>
           <p className="mt-2 text-[15px] leading-relaxed text-(--color-fg-muted)">
-            Instant search across scored groceries — filter by aisle or brand as you type.
+            Instant search — filter by aisle, brand, or goal mode as you type.
           </p>
         </header>
 
-        <CatalogView
-          products={products}
-          stats={{ scored: stats.scored, withDetail: stats.withDetail }}
-          initialParams={params}
-        />
+        <CatalogLoader initialParams={params} />
       </div>
 
       <SiteFooter />

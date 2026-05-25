@@ -10,7 +10,16 @@ interface ScoreRingProps {
   stroke?: number;
   className?: string;
   showLabel?: boolean;
+  /** When set, overrides grade line under the score (e.g. band label). */
+  subtitle?: string;
   delay?: number;
+}
+
+function labelClasses(size: number) {
+  if (size >= 160) return { score: "text-5xl", sub: "text-xs" };
+  if (size >= 120) return { score: "text-4xl", sub: "text-[11px]" };
+  if (size >= 88) return { score: "text-2xl", sub: "text-[10px]" };
+  return { score: "text-xl", sub: "text-[9px]" };
 }
 
 export function ScoreRing({
@@ -19,6 +28,7 @@ export function ScoreRing({
   stroke = 14,
   className,
   showLabel = true,
+  subtitle,
   delay = 0,
 }: ScoreRingProps) {
   const grade = gradeFromScore(score);
@@ -35,6 +45,7 @@ export function ScoreRing({
   }, [score, delay]);
 
   const dashOffset = circumference * (1 - animatedScore / 100);
+  const labels = labelClasses(size);
 
   return (
     <div
@@ -66,15 +77,20 @@ export function ScoreRing({
         />
       </svg>
       {showLabel ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-1 text-center">
           <div
-            className="font-display text-6xl leading-none"
+            className={cn("font-display leading-none tabular-nums", labels.score)}
             style={{ color }}
           >
             {animatedScore}
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.18em] text-(--color-fg-muted)">
-            Grade {grade}
+          <div
+            className={cn(
+              "mt-0.5 max-w-[85%] truncate uppercase tracking-[0.14em] text-(--color-fg-muted)",
+              labels.sub,
+            )}
+          >
+            {subtitle ?? `Grade ${grade}`}
           </div>
         </div>
       ) : null}

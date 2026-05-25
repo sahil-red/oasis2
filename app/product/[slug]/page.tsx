@@ -14,10 +14,10 @@ import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { goalFromParam } from "@/lib/goals/types";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { findAlternatives } from "@/lib/products/alternatives";
-import { getAllCatalogProducts, getProductBySlug } from "@/lib/products/queries";
+import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import type { SubScores } from "@/lib/supabase/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const DETAIL_SKIP = new Set([
   "Description",
@@ -43,8 +43,8 @@ export default async function ProductPage({
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const catalog = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
-  const swaps = findAlternatives(product, catalog, goal, 3);
+  const swapPool = await getProductsForSwaps(product, 200);
+  const swaps = findAlternatives(product, swapPool, goal, 3);
   const goalFit =
     goal !== "balanced"
       ? computeGoalFit(goal, goalFitInputs(product))
@@ -111,7 +111,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:items-start">
           {score ? (
             <ScorePanel
               score={score.score}

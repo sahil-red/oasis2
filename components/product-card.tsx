@@ -1,11 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
-import { AnalysisGrid } from "@/components/analysis-grid";
 import { ScoreBadge } from "@/components/score-display";
-import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import type { ProductListItem } from "@/lib/products/queries";
-import type { SubScores } from "@/lib/supabase/types";
 
 export function ProductCard({
   product,
@@ -17,13 +14,6 @@ export function ProductCard({
 }) {
   const thumb = product.image_urls[0];
   const core = product.core_scores;
-  const subscores = core?.subscores as SubScores | undefined;
-  const highlights = buildAnalysisHighlights(
-    product.nutrition,
-    product.ingredients_raw,
-    subscores,
-    3,
-  );
 
   return (
     <article className="group">
@@ -78,9 +68,6 @@ export function ProductCard({
         <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
           {product.name}
         </h3>
-        {highlights.length > 0 ? (
-          <AnalysisGrid highlights={highlights} compact />
-        ) : null}
         <div className="flex items-baseline gap-2 pt-0.5">
           {product.price_inr != null ? (
             <span className="text-[15px] font-semibold tabular-nums tracking-tight text-(--color-fg)">

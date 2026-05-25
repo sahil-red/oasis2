@@ -2,13 +2,13 @@ import Link from "next/link";
 import { InsightProductList } from "@/components/insight-product-list";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
+import { getCachedCatalog } from "@/lib/products/catalog-cache";
 import { buildInsights } from "@/lib/products/insights";
-import { getAllCatalogProducts } from "@/lib/products/queries";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 export default async function InsightsPage() {
-  const products = await getAllCatalogProducts({ onlyWithDetail: true });
+  const products = await getCachedCatalog();
   const insights = buildInsights(products.filter((p) => p.core_scores));
 
   return (

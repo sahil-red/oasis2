@@ -20,8 +20,8 @@ export function SwapPanel({
   return (
     <section
       className={cn(
-        "h-full rounded-xl border border-(--color-line) bg-(--color-bg-soft)",
-        compact ? "p-4" : "rounded-2xl p-6",
+        "rounded-xl border border-(--color-line) bg-(--color-bg-soft)",
+        compact ? "p-3" : "rounded-2xl p-6",
       )}
     >
       <h2
@@ -40,11 +40,18 @@ export function SwapPanel({
       >
         {curSugar != null ? (
           <>
-            <strong className="text-(--color-fg)">{curSugar}g sugar</strong>/100g — better picks in
-            this aisle.
+            Lower sugar & better macros in{" "}
+            <strong className="text-(--color-fg)">{current.subcategory ?? "this aisle"}</strong>
+            {current.brand ? (
+              <>
+                {" "}
+                — not just more <span className="text-(--color-fg)">{current.brand}</span>
+              </>
+            ) : null}
+            .
           </>
         ) : (
-          <>Same aisle, better Core or goal fit.</>
+          <>Alternatives with better nutrition or Core score — varied brands.</>
         )}
       </p>
 
@@ -80,24 +87,36 @@ export function SwapPanel({
                   ) : null}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm font-medium text-(--color-fg)">
+                  {product.brand ? (
+                    <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+                      {product.brand}
+                    </p>
+                  ) : null}
+                  <p className="line-clamp-2 text-[13px] font-medium leading-snug text-(--color-fg)">
                     {product.name}
                   </p>
-                  <p className="mt-1 text-xs text-(--color-fg-dim)">
+                  <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-dim)">
                     {deltas.join(" · ")}
                   </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                  {product.core_scores ? (
+                    <ScoreBadge
+                      score={product.core_scores.score}
+                      grade={product.core_scores.grade}
+                      className="!text-2xl"
+                    />
+                  ) : (
+                    <span className="text-xs font-medium text-(--color-accent) tabular-nums">
+                      {goalFit}
+                    </span>
+                  )}
                   {product.price_inr != null ? (
-                    <p className="mt-1 text-sm font-semibold tabular-nums">₹{product.price_inr}</p>
+                    <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">
+                      ₹{product.price_inr}
+                    </span>
                   ) : null}
                 </div>
-                {product.core_scores ? (
-                  <ScoreBadge
-                    score={product.core_scores.score}
-                    grade={product.core_scores.grade}
-                  />
-                ) : (
-                  <span className="text-xs text-(--color-fg-dim)">Fit {goalFit}</span>
-                )}
               </Link>
             </li>
           ))}

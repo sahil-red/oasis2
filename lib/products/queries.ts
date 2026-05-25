@@ -14,6 +14,9 @@ function db() {
 const LIST_FIELDS =
   "id, slug, name, brand, super_category, category, subcategory, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
 
+/** Lighter join for grids — omits heavy subscores/concerns JSON. */
+const LIST_SCORE_FIELDS = "score, grade, band";
+
 export type ProductListItem = Pick<
   Product,
   | "id"
@@ -117,7 +120,7 @@ export async function searchProducts(opts: {
 
   let query = supabase
     .from("products")
-    .select(`${LIST_FIELDS}, core_scores (score, grade, band, subscores, concerns, computed_at)`)
+    .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
     .order("name", { ascending: true })
     .limit(limit);
 
@@ -148,11 +151,56 @@ export async function getAllCatalogProducts(opts?: {
   onlyWithDetail?: boolean;
   onlyScored?: boolean;
 }): Promise<ProductListItem[]> {
-  return searchProducts({
-    onlyWithDetail: opts?.onlyWithDetail ?? true,
-    onlyScored: opts?.onlyScored,
-    limit: 1500,
-  });
+  const supabase = db();
+  const pageSize = 1000;
+  const max = 2500;
+  const all: ProductListItem[] = [];
+
+  for (let offset = 0; offset < max; offset += pageSize) {
+    let query = supabase
+      .from("products")
+      .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+      .order("name", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (opts?.onlyWithDetail ?? true) {
+      query = query.not("raw_payload", "is", null);
+    }
+    if (opts?.onlyScored) {
+      query = query.not("core_scores", "is", null);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+
+  all.sort((a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1));
+  return all;
+}
+
+/** Same-aisle pool for PDP swaps — avoids loading the full catalog. */
+export async function getProductsForSwaps(
+  current: Pick<ProductListItem, "id" | "category" | "super_category">,
+  limit = 200,
+): Promise<ProductListItem[]> {
+  const supabase = db();
+  const aisle = current.category ?? current.super_category;
+  let query = supabase
+    .from("products")
+    .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+    .not("raw_payload", "is", null)
+    .not("core_scores", "is", null)
+    .neq("id", current.id)
+    .limit(limit);
+
+  if (aisle) query = query.eq("category", aisle);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
 }
 
 export async function getProductsBySlugs(slugs: string[]): Promise<ProductListItem[]> {
@@ -160,7 +208,7 @@ export async function getProductsBySlugs(slugs: string[]): Promise<ProductListIt
   const supabase = db();
   const { data, error } = await supabase
     .from("products")
-    .select(`${LIST_FIELDS}, core_scores (score, grade, band, subscores, concerns, computed_at)`)
+    .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
     .in("slug", slugs);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));

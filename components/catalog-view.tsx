@@ -68,31 +68,25 @@ export function CatalogView({
     [state, filterOptions],
   );
 
-  const filtered = useMemo(() => {
+  const { filtered, goalFits } = useMemo(() => {
     const list = filterCatalogProducts(products, activeState);
     if (goal === "balanced") {
-      return [...list].sort(
+      const sorted = [...list].sort(
         (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
       );
+      return { filtered: sorted, goalFits: new Map<string, number>() };
     }
-    return [...list]
+    const ranked = list
       .map((p) => ({
         p,
         fit: computeGoalFit(goal, goalFitInputs(p)).fit,
       }))
-      .sort((a, b) => b.fit - a.fit)
-      .map((x) => x.p);
+      .sort((a, b) => b.fit - a.fit);
+    return {
+      filtered: ranked.map((x) => x.p),
+      goalFits: new Map(ranked.map((x) => [x.p.id, x.fit])),
+    };
   }, [products, activeState, goal]);
-
-  const goalFits = useMemo(() => {
-    if (goal === "balanced") return new Map<string, number>();
-    return new Map(
-      filtered.map((p) => [
-        p.id,
-        computeGoalFit(goal, goalFitInputs(p)).fit,
-      ]),
-    );
-  }, [filtered, goal]);
 
   useEffect(() => {
     const path = `/search${catalogParamsToSearch(activeState, goal)}`;

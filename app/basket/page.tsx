@@ -1,13 +1,8 @@
 import { BasketView } from "@/components/basket-view";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getAllCatalogProducts } from "@/lib/products/queries";
 
-export const dynamic = "force-dynamic";
-
-export default async function BasketPage() {
-  const catalog = await getAllCatalogProducts({ onlyWithDetail: true });
-
+export default function BasketPage() {
   return (
     <main className="min-h-screen">
       <SiteNav />
@@ -23,7 +18,7 @@ export default async function BasketPage() {
         </header>
 
         <div className="mt-10">
-          <BasketView catalog={catalog} />
+          <BasketView />
         </div>
       </div>
 

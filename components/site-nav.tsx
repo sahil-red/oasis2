@@ -16,13 +16,6 @@ export function SiteNav() {
           <Link href="/search" className="hover:text-(--color-fg)">
             Catalog
           </Link>
-          <Link
-            href="/search"
-            className="hover:text-(--color-fg)"
-            title="Pick a goal mode on the catalog — rankings and swaps adapt"
-          >
-            Goals
-          </Link>
           <NavCartLink className="inline-flex items-center hover:text-(--color-fg)" />
           <Link href="/insights" className="hover:text-(--color-fg)">
             Insights

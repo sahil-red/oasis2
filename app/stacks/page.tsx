@@ -2,25 +2,20 @@ import Link from "next/link";
 import { InsightProductList } from "@/components/insight-product-list";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { computeGoalFit } from "@/lib/goals/fit";
-import { getAllCatalogProducts } from "@/lib/products/queries";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import { getCachedScoredCatalog } from "@/lib/products/catalog-cache";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 /** v0 auto-list: high-protein Blinkit picks under ₹200 */
 export default async function StacksPage() {
-  const products = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+  const products = await getCachedScoredCatalog();
 
   const budgetProtein = products
     .filter((p) => (p.price_inr ?? 999) <= 200 && (p.nutrition?.protein_g_100g ?? 0) >= 10)
     .map((p) => ({
       p,
-      fit: computeGoalFit("protein-budget", {
-        nutrition: p.nutrition,
-        ingredients_raw: p.ingredients_raw,
-        price_inr: p.price_inr,
-        core_score: p.core_scores?.score ?? null,
-      }).fit,
+      fit: computeGoalFit("protein-budget", goalFitInputs(p)).fit,
     }))
     .sort((a, b) => b.fit - a.fit)
     .slice(0, 12)
@@ -30,12 +25,7 @@ export default async function StacksPage() {
     .filter((p) => /snack|munch|biscuit/i.test(p.category ?? ""))
     .map((p) => ({
       p,
-      fit: computeGoalFit("kids", {
-        nutrition: p.nutrition,
-        ingredients_raw: p.ingredients_raw,
-        price_inr: p.price_inr,
-        core_score: p.core_scores?.score ?? null,
-      }).fit,
+      fit: computeGoalFit("kids", goalFitInputs(p)).fit,
     }))
     .sort((a, b) => b.fit - a.fit)
     .slice(0, 10)
