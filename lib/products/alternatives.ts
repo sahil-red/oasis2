@@ -171,12 +171,16 @@ export function findAlternatives(
   catalog: ProductListItem[],
   goal: GoalId,
   limit = 3,
+  opts?: { veg_allow_eggs?: boolean },
 ): SwapSuggestion[] {
   const aisle = productAisle(current);
   const curRank =
     goal === "balanced"
       ? (current.core_scores?.score ?? -1)
-      : computeGoalFit(goal, goalFitInputs(current)).fit;
+      : computeGoalFit(goal, {
+          ...goalFitInputs(current),
+          veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
+        }).fit;
   const minImprovement = goal === "balanced" ? 5 : 4;
   const band = priceBand(current.price_inr);
   const curBrand = brandKey(current);
@@ -193,10 +197,14 @@ export function findAlternatives(
 
   const candidates = pool
     .map((p) => {
-      const goalFit = computeGoalFit(goal, goalFitInputs(p)).fit;
+      const goalFit = computeGoalFit(goal, {
+        ...goalFitInputs(p),
+        veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
+      }).fit;
       const rank = goal === "balanced" ? (p.core_scores?.score ?? -1) : goalFit;
       return { p, goalFit, rank, pick: candidateScore(current, p, goal, rank, curRank) };
     })
+    .filter(({ goalFit }) => (goal !== "vegan" && goal !== "veg") || goalFit > 0)
     .filter(({ rank }) => rank >= curRank + minImprovement)
     .filter(({ p }) => {
       if (band == null || priceBand(p.price_inr) == null) return true;

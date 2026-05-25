@@ -27,14 +27,23 @@ function avg(nums: number[]): number | null {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-export function analyzeBasket(lines: BasketLine[], goal: GoalId = "balanced"): BasketAnalysis {
+export function analyzeBasket(
+  lines: BasketLine[],
+  goal: GoalId = "balanced",
+  opts?: { veg_allow_eggs?: boolean },
+): BasketAnalysis {
   const items = lines.flatMap((l) => Array(l.qty).fill(l.product) as ProductListItem[]);
   const withNutrition = items.filter((p) => p.nutrition);
   const scores = items.map((p) => p.core_scores?.score).filter((s): s is number => s != null);
   const goalFits =
     goal === "balanced"
       ? []
-      : items.map((p) => computeGoalFit(goal, goalFitInputs(p)).fit);
+      : items.map((p) =>
+          computeGoalFit(goal, {
+            ...goalFitInputs(p),
+            veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
+          }).fit,
+        );
   const totalInr = lines.reduce((s, l) => s + (l.product.price_inr ?? 0) * l.qty, 0);
 
   let proteinPct: number | null = null;

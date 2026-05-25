@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
-import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
+import {
+  readStoredGoal,
+  readVegAllowEggs,
+  writeStoredGoal,
+  writeVegAllowEggs,
+} from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import {
   buildFilterOptions,
   catalogParamsToSearch,
   filterCatalogProducts,
   parseCatalogParams,
+  parseVegAllowEggs,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
 import type { ProductListItem } from "@/lib/products/queries";
@@ -22,6 +28,7 @@ type Params = {
   brand?: string;
   scored?: string;
   goal?: string;
+  allow_eggs?: string;
 };
 
 const inputClass =
@@ -62,6 +69,12 @@ export function CatalogView({
       ? fromUrl
       : readStoredGoal();
   });
+  const [vegAllowEggs, setVegAllowEggs] = useState(() => {
+    if (initialParams.allow_eggs != null) {
+      return parseVegAllowEggs(initialParams.allow_eggs);
+    }
+    return readVegAllowEggs();
+  });
   const [isPending, startTransition] = useTransition();
   const [showGoalHint, setShowGoalHint] = useState(false);
 
@@ -77,6 +90,11 @@ export function CatalogView({
     writeStoredGoal(g);
     setShowGoalHint(false);
     startTransition(() => setGoal(g));
+  }, []);
+
+  const pickVegAllowEggs = useCallback((allow: boolean) => {
+    writeVegAllowEggs(allow);
+    startTransition(() => setVegAllowEggs(allow));
   }, []);
 
   const filterOptions = useMemo(
@@ -100,23 +118,28 @@ export function CatalogView({
     const ranked = list
       .map((p) => ({
         p,
-        fit: computeGoalFit(goal, goalFitInputs(p)).fit,
+        fit: computeGoalFit(goal, {
+          ...goalFitInputs(p),
+          veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
+        }).fit,
       }))
-      .filter((x) => goal !== "vegan" || x.fit > 0)
+      .filter((x) => (goal !== "vegan" && goal !== "veg") || x.fit > 0)
       .sort((a, b) => b.fit - a.fit);
     return {
       filtered: ranked.map((x) => x.p),
       goalFits: new Map(ranked.map((x) => [x.p.id, x.fit])),
     };
-  }, [products, activeState, goal]);
+  }, [products, activeState, goal, vegAllowEggs]);
 
   useEffect(() => {
-    const path = `/search${catalogParamsToSearch(activeState, goal)}`;
+    const path = `/search${catalogParamsToSearch(activeState, goal, {
+      vegAllowEggs: goal === "veg" ? vegAllowEggs : false,
+    })}`;
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== path) {
       window.history.replaceState(null, "", path);
     }
-  }, [activeState, goal]);
+  }, [activeState, goal, vegAllowEggs]);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
     startTransition(() => {
@@ -164,11 +187,22 @@ export function CatalogView({
               Tap a goal — rankings and colors update.
             </p>
             <div className="mt-2">
-              <GoalModePicker value={goal} onChange={pickGoal} />
+              <GoalModePicker
+                value={goal}
+                onChange={pickGoal}
+                vegAllowEggs={vegAllowEggs}
+                onVegAllowEggsChange={pickVegAllowEggs}
+              />
             </div>
           </div>
         ) : (
-          <GoalModePicker value={goal} onChange={pickGoal} compact />
+          <GoalModePicker
+            value={goal}
+            onChange={pickGoal}
+            compact
+            vegAllowEggs={vegAllowEggs}
+            onVegAllowEggsChange={pickVegAllowEggs}
+          />
         )}
         {goal !== "balanced" ? (
           <p className="text-sm text-(--color-fg-muted)">

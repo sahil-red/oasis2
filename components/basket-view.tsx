@@ -6,7 +6,7 @@ import { ArrowRight, Minus, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BasketSwapCards } from "@/components/basket-swap-cards";
 import { ScoreBadge } from "@/components/score-display";
-import { readStoredGoal } from "@/lib/goals/storage";
+import { readStoredGoal, readVegAllowEggs } from "@/lib/goals/storage";
 import type { GoalId } from "@/lib/goals/types";
 import { analyzeBasket } from "@/lib/products/basket-analysis";
 import type { SwapSuggestion } from "@/lib/products/alternatives";
@@ -117,7 +117,9 @@ export function BasketView() {
     }
     let cancelled = false;
     setSwapsLoading(true);
-    fetch(`/api/swaps?slugs=${encodeURIComponent(slugsKey)}&goal=${goal}`)
+    const allowQ =
+      goal === "veg" && readVegAllowEggs() ? "&allow_eggs=1" : "";
+    fetch(`/api/swaps?slugs=${encodeURIComponent(slugsKey)}&goal=${goal}${allowQ}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { swaps: Record<string, SwapSuggestion[]> }) => {
         if (!cancelled) setSwapsBySlug(data.swaps ?? {});
@@ -143,7 +145,13 @@ export function BasketView() {
       .filter(Boolean) as { product: ProductListItem; qty: number }[];
   }, [entries, catalog]);
 
-  const analysis = useMemo(() => analyzeBasket(lines, goal), [lines, goal]);
+  const analysis = useMemo(
+    () =>
+      analyzeBasket(lines, goal, {
+        veg_allow_eggs: goal === "veg" ? readVegAllowEggs() : undefined,
+      }),
+    [lines, goal],
+  );
   const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
   const swapCount = Object.values(swapsBySlug).reduce((n, s) => n + s.length, 0);
 

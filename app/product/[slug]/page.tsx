@@ -12,6 +12,7 @@ import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
+import { parseVegAllowEggs } from "@/lib/products/catalog-filter";
 import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
@@ -39,17 +40,22 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ goal?: string }>;
+  searchParams: Promise<{ goal?: string; allow_eggs?: string }>;
 }) {
   const { slug } = await params;
-  const { goal: goalParam } = await searchParams;
+  const { goal: goalParam, allow_eggs: allowEggsParam } = await searchParams;
   const goal = goalFromParam(goalParam);
+  const vegAllowEggs = parseVegAllowEggs(allowEggsParam);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
   const swapPool = await getProductsForSwaps(product, 200);
-  const swaps = findAlternatives(product, swapPool, goal, 3);
-  const goalRows = buildProductGoalRows(product);
+  const swaps = findAlternatives(product, swapPool, goal, 3, {
+    veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
+  });
+  const goalRows = buildProductGoalRows(product, {
+    veg_allow_eggs: vegAllowEggs,
+  });
   const overallGoal = buildOverallGoalSummary(product);
 
   const score = product.core_scores;

@@ -17,9 +17,14 @@ const PDP_GOAL_ORDER: GoalId[] = [
   "fat-loss",
   "diabetic",
   "pcos",
+  "veg",
   "vegan",
   "kids",
 ];
+
+export type BuildGoalRowsOptions = {
+  veg_allow_eggs?: boolean;
+};
 
 export function buildProductGoalRows(
   product: Pick<
@@ -34,8 +39,12 @@ export function buildProductGoalRows(
     | "core_scores"
     | "attributes"
   >,
+  options?: BuildGoalRowsOptions,
 ): GoalFitRow[] {
-  const inputs = goalFitInputs(product);
+  const inputs = goalFitInputs({
+    ...product,
+    veg_allow_eggs: options?.veg_allow_eggs,
+  });
   return PDP_GOAL_ORDER.map((id) => {
     const profile = GOAL_PROFILES.find((g) => g.id === id)!;
     const result = computeGoalFit(id, inputs);

@@ -1,5 +1,10 @@
 import { additiveGoalBurden } from "@/lib/scoring/ingredient-signals";
 import type { ProductNutrition } from "@/lib/supabase/types";
+import {
+  hasEggs,
+  isVegetarianCompatible,
+  vegetarianLabelHint,
+} from "@/lib/goals/vegetarian";
 import { hasAnimalDerived } from "@/lib/goals/vegan";
 import { diabeticGoalFit, pcosGoalFit } from "@/lib/goals/glucose-fit";
 import { packNutritionContext, proteinBudgetGoalFit } from "@/lib/products/pack-nutrition";
@@ -31,6 +36,8 @@ export function computeGoalFit(
     name?: string | null;
     category?: string | null;
     subcategory?: string | null;
+    /** When goal is `veg`: if true, products with egg are allowed. */
+    veg_allow_eggs?: boolean;
   },
 ): GoalFitResult {
   if (goal === "balanced") {
@@ -141,6 +148,35 @@ export function computeGoalFit(
       if (protein >= 10) reasons.push(`${protein}g protein`);
       break;
     }
+    case "veg": {
+      const allowEggs = opts.veg_allow_eggs === true;
+      const compat = isVegetarianCompatible(
+        {
+          ingredients_raw: opts.ingredients_raw,
+          attributes: attrs,
+          product_name: opts.name ?? null,
+        },
+        allowEggs,
+      );
+      if (!compat.ok) {
+        fit = 0;
+        if (compat.reason) reasons.push(compat.reason);
+        break;
+      }
+      const vegLabel = vegetarianLabelHint(attrs);
+      fit = Math.min(
+        100,
+        (opts.core_score ?? 55) + (vegLabel ? 10 : 0) + fiber * 1.2 - additiveBurden * 6,
+      );
+      if (vegLabel) reasons.push("Marked vegetarian on pack");
+      else reasons.push("No meat or fish on label");
+      if (allowEggs && hasEggs({ ingredients_raw: opts.ingredients_raw, attributes: attrs })) {
+        reasons.push("Eggs allowed in your veg mode");
+      } else if (!allowEggs) {
+        reasons.push("Egg-free filter on");
+      }
+      break;
+    }
     case "vegan": {
       const diet =
         attrs?.["Diet Preference"] ??
@@ -233,6 +269,7 @@ export function goalFitInputs(p: {
   subcategory?: string | null;
   core_scores?: { score: number } | null;
   attributes?: Record<string, string> | null;
+  veg_allow_eggs?: boolean;
 }) {
   return {
     nutrition: p.nutrition,
@@ -244,5 +281,6 @@ export function goalFitInputs(p: {
     subcategory: p.subcategory ?? null,
     core_score: p.core_scores?.score ?? null,
     attributes: p.attributes ?? null,
+    veg_allow_eggs: p.veg_allow_eggs,
   };
 }

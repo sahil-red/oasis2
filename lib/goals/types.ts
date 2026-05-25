@@ -5,6 +5,7 @@ export type GoalId =
   | "diabetic"
   | "fat-loss"
   | "pcos"
+  | "veg"
   | "vegan"
   | "protein-budget"
   | "kids";
@@ -54,10 +55,17 @@ export const GOAL_PROFILES: GoalProfile[] = [
     description: "Low added sugar, moderate carbs, minimal ultra-processed signals.",
   },
   {
+    id: "veg",
+    label: "Vegetarian",
+    short: "Veg",
+    description:
+      "No meat or fish. Dairy is fine; optionally allow or exclude eggs.",
+  },
+  {
     id: "vegan",
     label: "Vegan",
     short: "Plant-based",
-    description: "Flags common animal-derived ingredients on Indian labels.",
+    description: "No animal-derived ingredients (including dairy and eggs).",
   },
   {
     id: "protein-budget",

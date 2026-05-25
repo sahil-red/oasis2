@@ -9,6 +9,7 @@ type SearchParams = {
   brand?: string;
   scored?: string;
   goal?: string;
+  allow_eggs?: string;
 };
 
 /** Shell renders immediately; catalog JSON loads client-side from cached API. */

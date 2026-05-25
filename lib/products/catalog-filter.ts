@@ -83,6 +83,7 @@ export function parseCatalogParams(params: {
 export function catalogParamsToSearch(
   state: CatalogFilterState,
   goal?: string,
+  opts?: { vegAllowEggs?: boolean },
 ): string {
   const p = new URLSearchParams();
   if (state.q.trim()) p.set("q", state.q.trim());
@@ -91,6 +92,13 @@ export function catalogParamsToSearch(
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
   if (goal && goal !== "balanced") p.set("goal", goal);
+  if (goal === "veg" && opts?.vegAllowEggs) p.set("allow_eggs", "1");
   const s = p.toString();
   return s ? `?${s}` : "";
+}
+
+export function parseVegAllowEggs(
+  raw: string | null | undefined,
+): boolean {
+  return raw === "1" || raw === "true";
 }
