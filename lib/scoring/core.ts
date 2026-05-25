@@ -53,11 +53,17 @@ export function computeCoreScore(input: {
   nutrition: ProductNutrition | Record<string, unknown> | null;
   category: string | null;
   subcategory: string | null;
+  product_name?: string | null;
   attributes?: Record<string, string> | null;
 }): CoreScoreResult {
   const nutrition = (input.nutrition ?? null) as ProductNutrition | null;
   const additives = scoreAdditives(input.ingredients_raw);
-  const nutritionScore = scoreNutrition(nutrition, input.category, input.subcategory);
+  const nutritionScore = scoreNutrition(
+    nutrition,
+    input.category,
+    input.subcategory,
+    input.product_name,
+  );
   const labelsScore = scoreLabels(input.ingredients_raw, input.attributes ?? null);
 
   let total = nutritionScore + additives.score + labelsScore;

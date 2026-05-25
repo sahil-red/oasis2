@@ -51,15 +51,37 @@ interface Args {
   dryRun: boolean;
   limitCats: number | null;
   pagesPerCat: number;
+  onlyCategories: string[] | null;
+  skipCategories: string[] | null;
+  ignoreProgress: boolean;
+  maxProducts: number | null;
 }
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
   let limitCats: number | null = null;
   let pagesPerCat = 100; // safety ceiling — most categories <= 30 pages
+  let onlyCategories: string[] | null = null;
+  let skipCategories: string[] | null = null;
+  let maxProducts: number | null = null;
   for (const a of argv) {
     if (a.startsWith("--limit-cats=")) limitCats = Number(a.split("=")[1]);
     if (a.startsWith("--pages-per-cat=")) pagesPerCat = Number(a.split("=")[1]);
+    if (a.startsWith("--only-categories=")) {
+      onlyCategories = a
+        .split("=")[1]
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    if (a.startsWith("--skip-categories=")) {
+      skipCategories = a
+        .split("=")[1]
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    if (a.startsWith("--max-products=")) maxProducts = Number(a.split("=")[1]);
   }
   const detailOnly = argv.includes("--detail-only");
   return {
@@ -68,7 +90,33 @@ function parseArgs(): Args {
     dryRun: argv.includes("--dry-run"),
     limitCats,
     pagesPerCat,
+    onlyCategories,
+    skipCategories,
+    ignoreProgress: argv.includes("--ignore-progress"),
+    maxProducts,
   };
+}
+
+function categoryLabel(cat: ScrapedCategory): string {
+  return `${cat.super_category_name ?? ""} ${cat.name}`.toLowerCase();
+}
+
+function matchesAny(label: string, needles: string[]): boolean {
+  return needles.some((n) => label.includes(n));
+}
+
+function filterCategories(
+  categories: ScrapedCategory[],
+  args: Args,
+): ScrapedCategory[] {
+  let list = categories;
+  if (args.onlyCategories?.length) {
+    list = list.filter((c) => matchesAny(categoryLabel(c), args.onlyCategories!));
+  }
+  if (args.skipCategories?.length) {
+    list = list.filter((c) => !matchesAny(categoryLabel(c), args.skipCategories!));
+  }
+  return list;
 }
 
 function slugify(s: string): string {
@@ -122,7 +170,8 @@ async function loadDiscoveredCategories(
 }
 
 async function main() {
-  const { detail, detailOnly, dryRun, limitCats, pagesPerCat } = parseArgs();
+  const args = parseArgs();
+  const { detail, detailOnly, dryRun, limitCats, pagesPerCat } = args;
   const platform = platformFromEnv();
 
   const session = await loadSession(platform);
@@ -150,12 +199,29 @@ async function main() {
     rps: Number(process.env.GROCERY_RPS) || 2,
   });
 
-  const categories = await loadDiscoveredCategories(platform);
+  let categories = filterCategories(await loadDiscoveredCategories(platform), args);
+  if (!categories.length) {
+    console.error(
+      "[02-scrape-products] no categories after filters. Check --only-categories / --skip-categories.",
+    );
+    process.exit(1);
+  }
   const totalCats = limitCats ?? categories.length;
+  categories = categories.slice(0, totalCats);
   console.log(
     `[02-scrape-products] platform=${platform}, ` +
-      `categories=${totalCats}, detail=${detail}, dryRun=${dryRun}`,
+      `categories=${categories.length}, pagesPerCat=${pagesPerCat}, detail=${detail}, ` +
+      `ignoreProgress=${args.ignoreProgress}, dryRun=${dryRun}`,
   );
+  if (args.onlyCategories?.length) {
+    console.log(`[02-scrape-products] only: ${args.onlyCategories.join(", ")}`);
+  }
+  if (args.skipCategories?.length) {
+    console.log(`[02-scrape-products] skip: ${args.skipCategories.join(", ")}`);
+  }
+  for (const c of categories) {
+    console.log(`  · ${c.super_category_name}`);
+  }
 
   const supabase = dryRun ? null : adminClient();
 
@@ -169,11 +235,15 @@ async function main() {
   if (detailOnly) {
     console.log("[02-scrape-products] --detail-only: skipping listing phase.");
   }
-  for (let ci = 0; detailOnly ? false : ci < totalCats; ci++) {
+  for (let ci = 0; detailOnly ? false : ci < categories.length; ci++) {
     const cat = categories[ci];
-    if (progress.done.includes(cat.id)) {
-      console.log(`[${ci + 1}/${totalCats}] skip "${cat.name}" (already done)`);
+    if (!args.ignoreProgress && progress.done.includes(cat.id)) {
+      console.log(`[${ci + 1}/${categories.length}] skip "${cat.name}" (already done)`);
       continue;
+    }
+    if (args.maxProducts != null && scrapedTotal >= args.maxProducts) {
+      console.log(`[02-scrape-products] reached --max-products=${args.maxProducts}, stopping.`);
+      break;
     }
 
     let cursor: string | undefined =
@@ -182,13 +252,14 @@ async function main() {
     let inCategory = 0;
 
     while (page < pagesPerCat) {
+      if (args.maxProducts != null && scrapedTotal >= args.maxProducts) break;
       page++;
       let resp;
       try {
         resp = await adapter.listProducts(session, cat, cursor);
       } catch (err) {
         console.warn(
-          `[${ci + 1}/${totalCats}] "${cat.name}" page ${page} failed:`,
+          `[${ci + 1}/${categories.length}] "${cat.name}" page ${page} failed:`,
           (err as Error).message,
         );
         break;
@@ -197,6 +268,9 @@ async function main() {
       for (const p of resp.products) {
         await appendFile(summariesPath, JSON.stringify(p) + "\n");
         inCategory++;
+        if (args.maxProducts != null && scrapedTotal + inCategory >= args.maxProducts) {
+          break;
+        }
       }
 
       // Persist summaries in chunks to the DB.
@@ -219,9 +293,11 @@ async function main() {
 
     scrapedTotal += inCategory;
     console.log(
-      `[${ci + 1}/${totalCats}] "${cat.name}" → +${inCategory} (total ${scrapedTotal})`,
+      `[${ci + 1}/${categories.length}] "${cat.name}" → +${inCategory} (total ${scrapedTotal})`,
     );
-    progress.done.push(cat.id);
+    if (!args.ignoreProgress && !progress.done.includes(cat.id)) {
+      progress.done.push(cat.id);
+    }
     progress.cursors[cat.id] = null;
     await saveProgress(platform, progress);
   }

@@ -15,7 +15,7 @@ import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
 
-const RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 1);
+const RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 2);
 
 function parseArgs() {
   const argv = process.argv.slice(2);
@@ -72,6 +72,7 @@ async function main() {
       nutrition,
       category: row.category,
       subcategory: row.subcategory,
+      product_name: row.name,
       attributes,
     });
 

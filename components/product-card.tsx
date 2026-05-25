@@ -1,63 +1,76 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ScoreRing } from "@/components/score-ring";
-import { labelForBand } from "@/lib/utils";
+import { AnalysisGrid } from "@/components/analysis-grid";
+import { ScoreBadge } from "@/components/score-display";
+import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import type { ProductListItem } from "@/lib/products/queries";
+import type { SubScores } from "@/lib/supabase/types";
 
 export function ProductCard({ product }: { product: ProductListItem }) {
   const thumb = product.image_urls[0];
-  const score = product.core_scores?.score;
-  const band = product.core_scores?.band;
+  const core = product.core_scores;
+  const subscores = core?.subscores as SubScores | undefined;
+  const highlights = buildAnalysisHighlights(
+    product.nutrition,
+    product.ingredients_raw,
+    subscores,
+    3,
+  );
 
   return (
     <Link
       href={`/product/${product.slug}`}
-      className="group glass flex flex-col overflow-hidden rounded-2xl transition hover:border-(--color-line-strong)"
+      className="panel group flex flex-col overflow-hidden rounded-xl transition hover:border-(--color-line-strong) hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
     >
-      <div className="relative aspect-square bg-(--color-panel)">
+      <div className="relative aspect-[4/5] bg-(--color-bg-soft)">
         {thumb ? (
           <Image
             src={thumb}
             alt={product.name}
             fill
-            className="object-contain p-4 transition group-hover:scale-[1.02]"
-            sizes="(max-width: 768px) 50vw, 25vw"
+            className="object-contain p-5 transition duration-300 group-hover:scale-[1.03]"
+            sizes="(max-width: 768px) 50vw, 20vw"
             unoptimized
           />
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-sm text-(--color-fg-dim)">
+          <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">
             No image
           </div>
         )}
-        {score != null ? (
-          <div className="absolute right-3 top-3 rounded-full bg-(--color-bg)/80 p-1 backdrop-blur-sm">
-            <ScoreRing score={score} size={52} stroke={5} showLabel={false} delay={0} />
-            <span className="absolute inset-0 grid place-items-center font-display text-sm">
-              {score}
+        <div className="absolute left-3 top-3">
+          {core ? (
+            <ScoreBadge score={core.score} grade={core.grade} band={core.band} />
+          ) : (
+            <span className="rounded-full bg-(--color-bg)/90 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-(--color-fg-muted) ring-1 ring-(--color-line) backdrop-blur">
+              Unscored
             </span>
-          </div>
-        ) : (
-          <span className="absolute right-3 top-3 rounded-full border border-(--color-line) bg-(--color-bg)/80 px-2 py-1 text-[10px] uppercase tracking-wider text-(--color-fg-muted)">
-            Pending
-          </span>
-        )}
+          )}
+        </div>
       </div>
-      <div className="flex flex-1 flex-col gap-1 p-4">
+
+      <div className="flex flex-1 flex-col gap-2 p-4">
         {product.brand ? (
-          <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-fg-dim)">
+          <p className="truncate text-[11px] font-medium uppercase tracking-[0.12em] text-(--color-fg-dim)">
             {product.brand}
           </p>
         ) : null}
-        <h3 className="line-clamp-2 text-sm leading-snug text-(--color-fg) group-hover:text-white">
+        <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-white">
           {product.name}
         </h3>
-        <div className="mt-auto flex items-center justify-between pt-2 text-xs text-(--color-fg-muted)">
-          <span className="line-clamp-1">{product.category ?? "Grocery"}</span>
-          {band ? <span>{labelForBand(band)}</span> : null}
+        <p className="line-clamp-1 text-xs text-(--color-fg-dim)">
+          {[product.category, product.subcategory].filter(Boolean).join(" · ")}
+        </p>
+        {highlights.length > 0 ? <AnalysisGrid highlights={highlights} compact /> : null}
+        <div className="mt-auto flex items-baseline justify-between pt-2">
+          {product.price_inr != null ? (
+            <span className="text-base font-semibold tabular-nums">₹{product.price_inr}</span>
+          ) : (
+            <span />
+          )}
+          {product.mrp_inr != null && product.price_inr != null && product.mrp_inr > product.price_inr ? (
+            <span className="text-xs text-(--color-fg-dim) line-through">₹{product.mrp_inr}</span>
+          ) : null}
         </div>
-        {product.price_inr != null ? (
-          <p className="text-sm font-medium text-(--color-fg)">₹{product.price_inr}</p>
-        ) : null}
       </div>
     </Link>
   );

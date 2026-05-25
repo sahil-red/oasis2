@@ -1,14 +1,14 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SiteNav } from "@/components/site-nav";
-import { ScoreRing } from "@/components/score-ring";
-import { SubscoreBars } from "@/components/subscore-bars";
-import { NutritionTable } from "@/components/nutrition-table";
+import { AnalysisGrid } from "@/components/analysis-grid";
 import { IngredientPanel } from "@/components/ingredient-panel";
-import { Section } from "@/components/section";
+import { NutritionTable } from "@/components/nutrition-table";
+import { ProductGallery } from "@/components/product-gallery";
+import { ScorePanel, ScorePending } from "@/components/score-display";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteNav } from "@/components/site-nav";
+import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { getProductBySlug } from "@/lib/products/queries";
-import { labelForBand } from "@/lib/utils";
 import type { SubScores } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -34,57 +34,38 @@ export default async function ProductPage({
   if (!product) notFound();
 
   const score = product.core_scores;
+  const subscores = score?.subscores as SubScores | undefined;
   const attrs = product.attributes ?? {};
   const attrEntries = Object.entries(attrs).filter(([k]) => !DETAIL_SKIP.has(k));
-  const subscores = score?.subscores as SubScores | undefined;
+  const highlights = buildAnalysisHighlights(
+    product.nutrition,
+    product.ingredients_raw,
+    subscores,
+    4,
+  );
 
   return (
-    <main>
+    <main className="min-h-screen">
       <SiteNav />
-      <Section className="pb-24 pt-10">
+
+      <div className="mx-auto max-w-6xl px-6 pb-20 pt-8">
         <Link
           href="/search"
           className="text-sm text-(--color-fg-muted) hover:text-(--color-fg)"
         >
-          ← Back to catalog
+          ← Catalog
         </Link>
 
-        <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <div>
-            <div className="relative aspect-square overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-panel)">
-              {product.image_urls[0] ? (
-                <Image
-                  src={product.image_urls[0]}
-                  alt={product.name}
-                  fill
-                  className="object-contain p-8"
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  priority
-                  unoptimized
-                />
-              ) : null}
-            </div>
-            {product.image_urls.length > 1 ? (
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-                {product.image_urls.slice(0, 6).map((url, i) => (
-                  <div
-                    key={url}
-                    className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)"
-                  >
-                    <Image src={url} alt="" fill className="object-contain p-1" unoptimized />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
+          <ProductGallery images={product.image_urls} alt={product.name} />
 
-          <div>
+          <div className="min-w-0">
             {product.brand ? (
-              <p className="text-xs uppercase tracking-[0.2em] text-(--color-fg-dim)">
+              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">
                 {product.brand}
               </p>
             ) : null}
-            <h1 className="font-display mt-2 text-balance text-4xl leading-tight md:text-5xl">
+            <h1 className="font-display mt-2 text-balance text-3xl leading-tight md:text-4xl">
               {product.name}
             </h1>
             <p className="mt-2 text-sm text-(--color-fg-muted)">
@@ -92,88 +73,88 @@ export default async function ProductPage({
               {product.net_weight ? ` · ${product.net_weight}` : ""}
             </p>
             {product.price_inr != null ? (
-              <p className="mt-4 text-2xl font-medium">
+              <p className="mt-4 text-2xl font-semibold tabular-nums">
                 ₹{product.price_inr}
                 {product.mrp_inr != null && product.mrp_inr > product.price_inr ? (
-                  <span className="ml-2 text-base text-(--color-fg-dim) line-through">
+                  <span className="ml-2 text-base font-normal text-(--color-fg-dim) line-through">
                     ₹{product.mrp_inr}
                   </span>
                 ) : null}
               </p>
             ) : null}
-
-            {score ? (
-              <div className="mt-10 flex flex-col items-start gap-6 sm:flex-row sm:items-center">
-                <ScoreRing score={score.score} size={200} stroke={12} />
-                <div>
-                  <p className="text-lg text-(--color-fg)">
-                    Core score · Grade {score.grade}
-                  </p>
-                  <p className="mt-1 text-(--color-fg-muted)">
-                    {labelForBand(score.band)} · Rule v{score.rule_version}
-                  </p>
-                  {subscores ? (
-                    <div className="mt-6 w-full max-w-sm">
-                      <SubscoreBars subscores={subscores} />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <p className="mt-10 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3 text-sm text-(--color-fg-muted)">
-                Core score pending — needs nutrition data from the platform or OCR.
-              </p>
-            )}
           </div>
         </div>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-2 lg:items-start">
-          <div>
-            <h2 className="font-display text-3xl">Ingredients</h2>
+        <div className="mt-10 space-y-8">
+          {score ? (
+            <ScorePanel
+              score={score.score}
+              grade={score.grade}
+              band={score.band}
+              subscores={subscores}
+              ruleVersion={score.rule_version}
+            />
+          ) : (
+            <ScorePending />
+          )}
+
+          {highlights.length > 0 ? (
+            <section>
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">
+                Quick analysis
+              </h2>
+              <div className="mt-4">
+                <AnalysisGrid highlights={highlights} />
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <div className="mt-12 grid gap-10 lg:grid-cols-2 lg:items-start">
+          <section>
+            <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-2 text-sm text-(--color-fg-muted)">
-              Each ingredient is checked against our additive rules (Yuka-style risk tiers).
-              Flagged items reduce the Additives subscore.
+              Risk tier per ingredient · tap flagged rows for detail.
             </p>
-            <div className="mt-6">
+            <div className="mt-5">
               <IngredientPanel ingredientsRaw={product.ingredients_raw} />
             </div>
-          </div>
+          </section>
 
-          <div>
-            <h2 className="font-display text-3xl">Nutrition</h2>
-            <p className="mt-2 text-sm text-(--color-fg-muted)">Per 100g values from the product label.</p>
-            <div className="mt-6">
+          <section>
+            <h2 className="font-display text-2xl">Nutrition</h2>
+            <p className="mt-2 text-sm text-(--color-fg-muted)">Per 100g from label or platform.</p>
+            <div className="mt-5">
               {product.nutrition ? (
                 <NutritionTable nutrition={product.nutrition} />
               ) : (
-                <p className="text-sm text-(--color-fg-muted)">
-                  Nutrition data not available yet.
-                </p>
+                <p className="text-sm text-(--color-fg-muted)">Not available yet.</p>
               )}
             </div>
-          </div>
+          </section>
         </div>
 
         {attrEntries.length > 0 ? (
-          <div className="mt-12">
-            <h2 className="font-display text-3xl">Product details</h2>
-            <dl className="mt-6 grid gap-3 sm:grid-cols-2">
+          <section className="mt-12">
+            <h2 className="font-display text-2xl">Details</h2>
+            <dl className="mt-5 grid gap-2 sm:grid-cols-2">
               {attrEntries.map(([key, value]) => (
                 <div
                   key={key}
-                  className="rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3"
+                  className="rounded-xl bg-(--color-bg-soft) px-4 py-3 ring-1 ring-(--color-line)"
                 >
-                  <dt className="text-xs uppercase tracking-wider text-(--color-fg-dim)">
+                  <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
                     {key}
                   </dt>
                   <dd className="mt-1 text-sm text-(--color-fg)">{value}</dd>
                 </div>
               ))}
             </dl>
-          </div>
+          </section>
         ) : null}
+      </div>
 
-      </Section>
+      <SiteFooter />
     </main>
   );
 }

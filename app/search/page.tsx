@@ -1,29 +1,41 @@
-import Link from "next/link";
-import { SiteNav } from "@/components/site-nav";
+import { CatalogFiltersBar } from "@/components/catalog-filters";
 import { ProductCard } from "@/components/product-card";
-import { Section, Eyebrow, H2 } from "@/components/section";
-import { countCatalog, searchProducts } from "@/lib/products/queries";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteNav } from "@/components/site-nav";
+import {
+  countCatalog,
+  getCatalogFilters,
+  searchProducts,
+} from "@/lib/products/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function SearchPage({
+type SearchParams = {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  brand?: string;
+  scored?: string;
+};
+
+export default async function CatalogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; scored?: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const q = params.q?.trim() ?? "";
   const onlyScored = params.scored === "1";
 
+  const filterOptions = await getCatalogFilters(params.category);
   let products = await searchProducts({
-    q: q || undefined,
-    limit: 96,
+    q: params.q?.trim() || undefined,
+    category: params.category || undefined,
+    subcategory: params.subcategory || undefined,
+    brand: params.brand || undefined,
+    limit: 120,
     onlyWithDetail: true,
+    onlyScored,
   });
-
-  if (onlyScored) {
-    products = products.filter((p) => p.core_scores != null);
-  }
 
   const stats = await countCatalog().catch(() => ({
     total: 0,
@@ -32,61 +44,41 @@ export default async function SearchPage({
   }));
 
   return (
-    <main>
+    <main className="min-h-screen">
       <SiteNav />
-      <Section className="pb-16 pt-12">
-        <Eyebrow>Catalog</Eyebrow>
-        <H2>Browse scored products.</H2>
-        <p className="mt-4 max-w-2xl text-(--color-fg-muted)">
-          {stats.scored} products with Core scores · {stats.withDetail} with full PDP data ·{" "}
-          {stats.total} total in database. Scraping continues in the background.
-        </p>
 
-        <form className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center" action="/search">
-          <input
-            type="search"
-            name="q"
-            defaultValue={q}
-            placeholder="Search by product name…"
-            className="w-full max-w-xl rounded-full border border-(--color-line) bg-(--color-panel) px-5 py-3 text-sm text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-line-strong)"
+      <div className="mx-auto max-w-6xl px-6 pb-20 pt-10">
+        <div className="max-w-2xl">
+          <h1 className="font-display text-4xl leading-tight md:text-5xl">Catalog</h1>
+          <p className="mt-3 text-(--color-fg-muted)">
+            {stats.scored} scored · {stats.withDetail} with full labels · filter by aisle,
+            brand, or name. Each card shows the same quick analysis tags as the homepage
+            sample.
+          </p>
+        </div>
+
+        <div className="mt-8">
+          <CatalogFiltersBar
+            filters={filterOptions}
+            params={params}
+            resultCount={products.length}
           />
-          <label className="flex items-center gap-2 text-sm text-(--color-fg-muted)">
-            <input
-              type="checkbox"
-              name="scored"
-              value="1"
-              defaultChecked={onlyScored}
-              className="rounded border-(--color-line)"
-            />
-            Scored only
-          </label>
-          <button
-            type="submit"
-            className="rounded-full bg-(--color-fg) px-6 py-3 text-sm font-medium text-(--color-bg) hover:opacity-90"
-          >
-            Search
-          </button>
-        </form>
+        </div>
 
         {products.length === 0 ? (
-          <p className="mt-16 text-(--color-fg-muted)">
-            No products match. Try clearing filters or run scoring after OCR completes.
-          </p>
+          <div className="panel mt-12 rounded-2xl px-6 py-16 text-center">
+            <p className="text-(--color-fg-muted)">No products match these filters.</p>
+          </div>
         ) : (
-          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 lg:gap-5">
             {products.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>
         )}
+      </div>
 
-        <Link
-          href="/"
-          className="mt-16 inline-flex items-center gap-2 text-sm text-(--color-fg-muted) hover:text-(--color-fg)"
-        >
-          ← Back home
-        </Link>
-      </Section>
+      <SiteFooter />
     </main>
   );
 }
