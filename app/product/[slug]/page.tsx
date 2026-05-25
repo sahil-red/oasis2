@@ -5,16 +5,17 @@ import { AnalysisGrid } from "@/components/analysis-grid";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
 import { ProductGallery } from "@/components/product-gallery";
+import { GradeLegend } from "@/components/grade-legend";
+import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
-import { GoalFitChip, ScorePanel, ScorePending } from "@/components/score-display";
+import { ScorePanel, ScorePending } from "@/components/score-display";
 import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
+import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
+import { goalFromParam } from "@/lib/goals/types";
 import { explainScore } from "@/lib/products/score-explain";
-import { GOAL_PROFILES } from "@/lib/goals/types";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
-import { goalFromParam } from "@/lib/goals/types";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
@@ -48,10 +49,8 @@ export default async function ProductPage({
 
   const swapPool = await getProductsForSwaps(product, 200);
   const swaps = findAlternatives(product, swapPool, goal, 3);
-  const goalFit =
-    goal !== "balanced"
-      ? computeGoalFit(goal, goalFitInputs(product))
-      : null;
+  const goalRows = buildProductGoalRows(product);
+  const overallGoal = buildOverallGoalSummary(product);
 
   const score = product.core_scores;
   const subscores = score?.subscores as SubScores | undefined;
@@ -76,8 +75,6 @@ export default async function ProductPage({
         productName: product.name,
       })
     : null;
-
-  const goalProfile = GOAL_PROFILES.find((g) => g.id === goal);
 
   return (
     <main className="min-h-screen">
@@ -117,17 +114,10 @@ export default async function ProductPage({
                 ) : null}
               </p>
             ) : null}
+            <ProductGoalToolbar slug={product.slug} name={product.name} />
             <Suspense fallback={null}>
-              <ProductGoalToolbar slug={product.slug} name={product.name} />
+              <ProductGoalFitList rows={goalRows} overall={overallGoal} />
             </Suspense>
-            {goalFit && goal !== "balanced" ? (
-              <div className="mt-4 space-y-2">
-                <GoalFitChip fit={goalFit.fit} label={goalProfile?.short ?? "Your goal"} />
-                <p className="text-[15px] leading-relaxed text-(--color-fg-muted)">
-                  {goalFit.reasons.join(" · ")}
-                </p>
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -148,10 +138,15 @@ export default async function ProductPage({
         </div>
 
         {scoreWhy ? (
-          <div className="mt-6">
+          <div className="mt-6 space-y-4">
             <ScoreWhyPanel explanation={scoreWhy} />
+            <GradeLegend />
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-6">
+            <GradeLegend />
+          </div>
+        )}
 
         <div className="mt-8 space-y-8">
           {highlights.length > 0 ? (

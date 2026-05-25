@@ -1,5 +1,6 @@
 "use client";
 
+import { GradeLegend } from "@/components/grade-legend";
 import { ScoreRing } from "@/components/score-ring";
 import {
   bandFromScore,
@@ -161,6 +162,9 @@ export function ScorePanel({
                 ))}
               </dl>
             ) : null}
+            <div className="mt-3">
+              <GradeLegend compact />
+            </div>
           </div>
         </div>
       </div>
@@ -208,6 +212,9 @@ export function ScorePanel({
               ))}
             </div>
           ) : null}
+          <div className="mt-6 max-w-md">
+            <GradeLegend compact />
+          </div>
         </div>
       </div>
     </div>

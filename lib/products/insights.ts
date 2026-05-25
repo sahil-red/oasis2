@@ -1,3 +1,4 @@
+import { proteinValueRankScore } from "@/lib/products/insight-copy";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export type BrandStat = {
@@ -8,22 +9,40 @@ export type BrandStat = {
   avgProtein: number | null;
 };
 
+export type RankedProduct = {
+  product: ProductListItem;
+  rankScore: number;
+};
+
 export type InsightLists = {
   cleanestBrands: BrandStat[];
   weakestBrands: BrandStat[];
-  misleading: ProductListItem[];
-  proteinPerRupee: ProductListItem[];
-  highProteinSnacks: ProductListItem[];
+  misleading: RankedProduct[];
+  proteinPerRupee: RankedProduct[];
+  highProteinSnacks: RankedProduct[];
+  featuredMisleading: ProductListItem | null;
 };
 
 const HEALTHY_MARKETING =
-  /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive)\b/i;
+  /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive|sugar free|no added sugar)\b/i;
 
 function sugar(p: ProductListItem): number | null {
   const n = p.nutrition;
   if (!n) return null;
   const s = n.sugar_g_100g ?? n.added_sugar_g_100g;
   return typeof s === "number" ? s : null;
+}
+
+function rankProducts(
+  products: ProductListItem[],
+  scoreFn: (p: ProductListItem) => number,
+  limit: number,
+): RankedProduct[] {
+  return products
+    .map((product) => ({ product, rankScore: scoreFn(product) }))
+    .filter((x) => x.rankScore > 0)
+    .sort((a, b) => b.rankScore - a.rankScore)
+    .slice(0, limit);
 }
 
 export function buildInsights(products: ProductListItem[]): InsightLists {
@@ -55,45 +74,49 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
     })
     .sort((a, b) => b.avgScore - a.avgScore);
 
-  const misleading = products
-    .filter((p) => {
-      const score = p.core_scores?.score;
-      if (score == null) return false;
-      if (!HEALTHY_MARKETING.test(p.name)) return false;
-      const s = sugar(p);
-      return score < 45 || (s != null && s >= 12);
-    })
-    .sort((a, b) => (a.core_scores?.score ?? 100) - (b.core_scores?.score ?? 100))
-    .slice(0, 12);
+  const misleadingPool = products.filter((p) => {
+    const score = p.core_scores?.score;
+    if (score == null) return false;
+    if (!HEALTHY_MARKETING.test(p.name)) return false;
+    const s = sugar(p);
+    return score < 50 || (s != null && s >= 10);
+  });
 
-  const proteinPerRupee = products
-    .filter((p) => {
-      const protein = p.nutrition?.protein_g_100g;
-      return (
-        typeof protein === "number" &&
-        protein >= 8 &&
-        p.price_inr != null &&
-        p.price_inr > 0
-      );
-    })
-    .sort((a, b) => {
-      const aPpr = (a.nutrition!.protein_g_100g! / a.price_inr!) * 100;
-      const bPpr = (b.nutrition!.protein_g_100g! / b.price_inr!) * 100;
-      return bPpr - aPpr;
-    })
-    .slice(0, 12);
+  const misleading = rankProducts(
+    misleadingPool,
+    (p) => {
+      const score = p.core_scores?.score ?? 100;
+      const s = sugar(p) ?? 0;
+      return 100 - score + s * 2 + (HEALTHY_MARKETING.test(p.name) ? 10 : 0);
+    },
+    16,
+  );
 
-  const highProteinSnacks = products
-    .filter((p) => {
-      const aisle = p.category ?? "";
-      if (!/snack|munch|biscuit|bakery/i.test(aisle)) return false;
-      return (p.nutrition?.protein_g_100g ?? 0) >= 12 && (p.core_scores?.score ?? 0) >= 50;
-    })
-    .sort(
-      (a, b) =>
-        (b.nutrition?.protein_g_100g ?? 0) - (a.nutrition?.protein_g_100g ?? 0),
-    )
-    .slice(0, 12);
+  const proteinPool = products.filter((p) => {
+    const protein = p.nutrition?.protein_g_100g;
+    const core = p.core_scores?.score ?? 0;
+    return (
+      typeof protein === "number" &&
+      protein >= 10 &&
+      p.price_inr != null &&
+      p.price_inr > 0 &&
+      core >= 45
+    );
+  });
+
+  const proteinPerRupee = rankProducts(proteinPool, proteinValueRankScore, 16);
+
+  const snackPool = products.filter((p) => {
+    const aisle = p.category ?? "";
+    if (!/snack|munch|biscuit|bakery/i.test(aisle)) return false;
+    return (p.nutrition?.protein_g_100g ?? 0) >= 12 && (p.core_scores?.score ?? 0) >= 50;
+  });
+
+  const highProteinSnacks = rankProducts(
+    snackPool,
+    (p) => (p.nutrition?.protein_g_100g ?? 0) * 2 + (p.core_scores?.score ?? 0) * 0.3,
+    12,
+  );
 
   return {
     cleanestBrands: brandStats.slice(0, 8),
@@ -101,5 +124,6 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
     misleading,
     proteinPerRupee,
     highProteinSnacks,
+    featuredMisleading: misleading[0]?.product ?? null,
   };
 }

@@ -1,8 +1,19 @@
 import Link from "next/link";
-import { InsightProductList } from "@/components/insight-product-list";
+import { ArrowRight } from "lucide-react";
+import {
+  InsightFeaturedCard,
+  InsightProductCard,
+} from "@/components/insight-product-card";
+import { InsightsBrandBoard } from "@/components/insights-brand-board";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { getCachedCatalog } from "@/lib/products/catalog-cache";
+import {
+  marketingCallout,
+  proteinPerRupeeLine,
+  proteinValueBlurb,
+  snackBlurb,
+} from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
 
 export const revalidate = 120;
@@ -11,118 +22,142 @@ export default async function InsightsPage() {
   const products = await getCachedCatalog();
   const insights = buildInsights(products.filter((p) => p.core_scores));
 
+  const featured =
+    insights.featuredMisleading && marketingCallout(insights.featuredMisleading);
+
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-(--color-bg)">
       <SiteNav />
 
-      <div className="mx-auto max-w-6xl px-6 pb-20 pt-10">
-        <header className="max-w-2xl">
-          <h1 className="font-display text-4xl leading-tight">Insights</h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-(--color-fg-muted)">
-            Brand patterns and Indian grocery rankings from our Blinkit catalog — built to
-            expose misleading “healthy” marketing, not to judge what you eat.
+      <div className="border-b border-(--color-line) bg-gradient-to-br from-violet-50 via-white to-amber-50">
+        <div className="mx-auto max-w-6xl px-5 py-12 md:px-6 md:py-16">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
+            Blinkit catalog · evidence-backed
           </p>
-        </header>
-
-        <div className="mt-12 grid gap-12 lg:grid-cols-2">
-          <section>
-            <h2 className="font-display text-2xl">Cleanest brands</h2>
-            <p className="mt-2 text-sm text-(--color-fg-muted)">
-              Avg Core score · 3+ scored SKUs in catalog.
-            </p>
-            <ol className="mt-4 space-y-2">
-              {insights.cleanestBrands.map((b, i) => (
-                <li
-                  key={b.brand}
-                  className="flex items-baseline justify-between rounded-lg border border-(--color-line) bg-white px-4 py-3"
-                >
-                  <span className="text-sm font-medium">
-                    {i + 1}. {b.brand}
-                  </span>
-                  <span className="text-sm tabular-nums text-(--color-fg-muted)">
-                    {b.avgScore.toFixed(0)} · {b.count} items
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section>
-            <h2 className="font-display text-2xl">Weakest averages</h2>
-            <p className="mt-2 text-sm text-(--color-fg-muted)">
-              Brands with the lowest typical scores in our data.
-            </p>
-            <ol className="mt-4 space-y-2">
-              {insights.weakestBrands.map((b, i) => (
-                <li
-                  key={b.brand}
-                  className="flex items-baseline justify-between rounded-lg border border-(--color-line) bg-white px-4 py-3"
-                >
-                  <span className="text-sm font-medium">
-                    {i + 1}. {b.brand}
-                  </span>
-                  <span className="text-sm tabular-nums text-(--color-fg-muted)">
-                    {b.avgScore.toFixed(0)} avg
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <h1 className="mt-3 font-display text-4xl leading-tight md:text-5xl">
+            Insider grocery intel
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-(--color-fg-muted)">
+            Skim in 30 seconds: which &quot;healthy&quot; labels disappoint, where protein
+            money actually goes, and which brands consistently deliver on the pack.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3 text-sm">
+            <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-900">
+              Marketing callouts
+            </span>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-900">
+              Protein value
+            </span>
+            <span className="rounded-full bg-violet-100 px-3 py-1 font-medium text-violet-900">
+              Snack winners
+            </span>
+          </div>
         </div>
+      </div>
 
-        <section className="mt-14">
-          <h2 className="font-display text-2xl">“Healthy” marketing, weak labels</h2>
-          <p className="mt-2 max-w-2xl text-sm text-(--color-fg-muted)">
-            Products with health/protein/zero cues in the name but low scores or high sugar —
-            shareable, evidence-backed callouts.
-          </p>
-          <div className="mt-5">
-            <InsightProductList
-              products={insights.misleading}
-              meta={(p) => {
-                const s = p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g;
-                return s != null ? `${s}g sugar / 100g` : p.brand;
-              }}
+      <div className="mx-auto max-w-6xl px-5 pb-20 pt-10 md:px-6 md:pt-14">
+        {featured ? (
+          <section className="mb-14">
+            <InsightFeaturedCard
+              product={insights.featuredMisleading!}
+              callout={featured}
             />
+          </section>
+        ) : null}
+
+        <section className="mb-14">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl md:text-3xl">
+                &quot;Healthy&quot; marketing, weak labels
+              </h2>
+              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
+                Health/protein/zero cues on the front — but the label tells a different story.
+                Built to share, not to scare.
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white">
+              {insights.misleading.length} flagged
+            </span>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {insights.misleading.map(({ product }) => {
+              const c = marketingCallout(product);
+              return (
+                <InsightProductCard
+                  key={product.id}
+                  product={product}
+                  accent="warn"
+                  badge="Callout"
+                  headline={c.reality}
+                  subline={c.claim}
+                />
+              );
+            })}
           </div>
         </section>
 
-        <section className="mt-14">
-          <h2 className="font-display text-2xl">Protein per rupee</h2>
-          <p className="mt-2 text-sm text-(--color-fg-muted)">
-            Indian-first value metric — grams of protein per ₹100 spent (label-based).
-          </p>
-          <div className="mt-5">
-            <InsightProductList
-              products={insights.proteinPerRupee}
-              meta={(p) => {
-                const protein = p.nutrition?.protein_g_100g ?? 0;
-                const price = p.price_inr ?? 0;
-                const ppr = price > 0 ? ((protein / price) * 100).toFixed(1) : "—";
-                return `~${ppr}g protein / ₹100 · ₹${price}`;
-              }}
-            />
+        <section className="mb-14">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl md:text-3xl">Best protein per rupee</h2>
+              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
+                Ranked by protein per ₹100 <em>and</em> overall label score — so pure chip
+                hacks don&apos;t dominate the list.
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {insights.proteinPerRupee.map(({ product }) => (
+              <InsightProductCard
+                key={product.id}
+                product={product}
+                accent="value"
+                badge="Value"
+                headline={proteinValueBlurb(product)}
+                subline={proteinPerRupeeLine(product)}
+              />
+            ))}
           </div>
         </section>
 
-        <section className="mt-14">
-          <h2 className="font-display text-2xl">High-protein snacks</h2>
-          <p className="mt-2 text-sm text-(--color-fg-muted)">
-            Snacks & munchies aisle with ≥12g protein / 100g and decent Core score.
+        <section className="mb-14">
+          <h2 className="font-display text-2xl md:text-3xl">High-protein snacks</h2>
+          <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
+            Snacks &amp; munchies with real protein — not just marketing on the bag.
           </p>
-          <div className="mt-5">
-            <InsightProductList
-              products={insights.highProteinSnacks}
-              meta={(p) => `${p.nutrition?.protein_g_100g ?? "—"}g protein / 100g`}
-            />
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {insights.highProteinSnacks.map(({ product }) => (
+              <InsightProductCard
+                key={product.id}
+                product={product}
+                accent="snack"
+                headline={snackBlurb(product)}
+                subline={`${product.nutrition?.protein_g_100g ?? "—"}g protein / 100g`}
+              />
+            ))}
           </div>
         </section>
 
-        <p className="mt-12 text-center text-sm text-(--color-fg-dim)">
-          <Link href="/search" className="text-(--color-accent) hover:underline">
-            Browse full catalog →
+        <section className="mb-14">
+          <InsightsBrandBoard
+            cleanest={insights.cleanestBrands}
+            weakest={insights.weakestBrands}
+          />
+        </section>
+
+        <div className="rounded-2xl border border-(--color-line) bg-(--color-bg-soft) px-6 py-10 text-center">
+          <p className="text-[15px] text-(--color-fg-muted)">
+            Want the full picture on one product?
+          </p>
+          <Link
+            href="/search"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) hover:opacity-90"
+          >
+            Browse catalog
+            <ArrowRight className="h-4 w-4" />
           </Link>
-        </p>
+        </div>
       </div>
 
       <SiteFooter />
