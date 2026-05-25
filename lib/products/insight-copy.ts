@@ -1,4 +1,5 @@
 import { matchAdditives } from "@/lib/scoring/rules";
+import { packNutritionContext } from "@/lib/products/pack-nutrition";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export type MarketingCallout = {
@@ -51,9 +52,17 @@ export function marketingCallout(p: ProductListItem): MarketingCallout {
 export function proteinPerRupeeLine(p: ProductListItem): string {
   const protein = p.nutrition?.protein_g_100g ?? 0;
   const price = p.price_inr ?? 0;
-  if (price <= 0) return `${protein}g protein per 100g`;
-  const ppr = ((protein / price) * 100).toFixed(1);
+  const ctx = packNutritionContext({
+    nutrition: p.nutrition,
+    price_inr: price,
+    net_weight: p.net_weight,
+  });
   const core = p.core_scores?.score ?? 0;
+  if (price <= 0) return `${protein}g protein per 100g`;
+  const ppr = (ctx.proteinPerRupee100 ?? 0).toFixed(1);
+  if (ctx.usesPack && ctx.proteinInPack != null) {
+    return `~${ppr}g protein per ₹100 (${ctx.proteinInPack.toFixed(1)}g in pack) · score ${core}`;
+  }
   return `~${ppr}g protein per ₹100 · overall score ${core}`;
 }
 
@@ -80,8 +89,13 @@ export function proteinValueRankScore(p: ProductListItem): number {
   const protein = p.nutrition?.protein_g_100g ?? 0;
   const price = p.price_inr ?? 0;
   const core = p.core_scores?.score ?? 0;
+  const ctx = packNutritionContext({
+    nutrition: p.nutrition,
+    price_inr: price,
+    net_weight: p.net_weight,
+  });
   if (price <= 0 || protein < 6) return 0;
-  const ppr = (protein / price) * 100;
+  const ppr = ctx.proteinPerRupee100 ?? 0;
   const valueScore = Math.min(52, ppr * 2.8);
   const densityScore = Math.min(38, (protein - 6) * 2);
   let blended = valueScore + densityScore + core * 0.12;

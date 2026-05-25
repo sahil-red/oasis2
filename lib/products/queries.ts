@@ -12,7 +12,7 @@ function db() {
 }
 
 const LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
+  "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
 
 /** Lighter join for grids — omits heavy subscores/concerns JSON. */
 const LIST_SCORE_FIELDS = "score, grade, band";
@@ -26,6 +26,7 @@ export type ProductListItem = Pick<
   | "super_category"
   | "category"
   | "subcategory"
+  | "net_weight"
   | "attributes"
   | "price_inr"
   | "mrp_inr"
@@ -66,6 +67,7 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     super_category: (row.super_category as string | null) ?? null,
     category: (row.category as string | null) ?? null,
     subcategory: (row.subcategory as string | null) ?? null,
+    net_weight: (row.net_weight as string | null) ?? null,
     attributes: (row.attributes as Record<string, string> | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,

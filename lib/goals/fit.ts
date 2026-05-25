@@ -1,6 +1,7 @@
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { hasAnimalDerived } from "@/lib/goals/vegan";
+import { packNutritionContext } from "@/lib/products/pack-nutrition";
 import type { GoalId } from "./types";
 
 export type GoalFitResult = {
@@ -23,6 +24,7 @@ export function computeGoalFit(
     nutrition: ProductNutrition | null;
     ingredients_raw: string | null;
     price_inr: number | null;
+    net_weight?: string | null;
     core_score?: number | null;
     attributes?: Record<string, string> | null;
   },
@@ -151,23 +153,38 @@ export function computeGoalFit(
         reasons.push("No nutrition table — weak for protein value");
         break;
       }
-      if (protein < 6) {
+      const packCtx = packNutritionContext({
+        nutrition: n,
+        price_inr: price,
+        net_weight: opts.net_weight,
+      });
+      const proteinInPack = packCtx.proteinInPack;
+      const effectiveProtein = proteinInPack ?? protein;
+
+      if (protein < 6 && effectiveProtein < 6) {
         fit = Math.min(20, Math.round(protein * 2 + (opts.core_score ?? 0) * 0.08));
         reasons.push(`${protein}g protein per 100g — too low for this goal`);
         break;
       }
-      const ppr = price > 0 ? (protein / price) * 100 : 0;
+      const ppr = packCtx.proteinPerRupee100 ?? 0;
       const valueScore = price > 0 ? Math.min(52, ppr * 2.8) : 0;
       const densityScore = Math.min(38, (protein - 6) * 2);
       const qualityBonus = Math.min(12, (opts.core_score ?? 0) * 0.12);
       fit = Math.min(100, Math.round(valueScore + densityScore + qualityBonus));
-      reasons.push(
-        price > 0
-          ? `${protein}g protein · ₹${price} (~${ppr.toFixed(1)}g per ₹100)`
-          : `${protein}g protein / 100g`,
-      );
-      if (fit >= 70 && protein < 10) {
-        reasons.push("Value is mostly price — protein density is still modest");
+      if (packCtx.usesPack && proteinInPack != null) {
+        reasons.push(
+          `${proteinInPack.toFixed(1)}g protein in pack (${protein}g / 100g) · ₹${price}`,
+        );
+        if (ppr > 0) reasons.push(`~${ppr.toFixed(1)}g protein per ₹100 spent`);
+      } else {
+        reasons.push(
+          price > 0
+            ? `${protein}g protein / 100g · ₹${price} (~${ppr.toFixed(1)}g per ₹100)`
+            : `${protein}g protein / 100g`,
+        );
+      }
+      if (fit >= 70 && protein < 10 && (proteinInPack ?? 0) < 12) {
+        reasons.push("Label density is modest — value may be mostly price");
       }
       break;
     }
@@ -191,6 +208,7 @@ export function goalFitInputs(p: {
   nutrition: ProductNutrition | null;
   ingredients_raw: string | null;
   price_inr: number | null;
+  net_weight?: string | null;
   core_scores?: { score: number } | null;
   attributes?: Record<string, string> | null;
 }) {
@@ -198,6 +216,7 @@ export function goalFitInputs(p: {
     nutrition: p.nutrition,
     ingredients_raw: p.ingredients_raw,
     price_inr: p.price_inr,
+    net_weight: p.net_weight ?? null,
     core_score: p.core_scores?.score ?? null,
     attributes: p.attributes ?? null,
   };

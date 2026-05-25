@@ -171,7 +171,7 @@ export default async function ProductPage({
             <p className="mt-2 text-sm text-(--color-fg-muted)">Per 100g from label or platform.</p>
             <div className="mt-5">
               {product.nutrition ? (
-                <NutritionTable nutrition={product.nutrition} />
+                <NutritionTable nutrition={product.nutrition} netWeight={product.net_weight} />
               ) : (
                 <p className="text-sm text-(--color-fg-muted)">Not available yet.</p>
               )}

@@ -1,3 +1,9 @@
+import {
+  formatPackLabel,
+  parsePackGrams,
+  roundNutrient,
+  scaleFromPer100g,
+} from "@/lib/products/pack-nutrition";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 const ROWS: { key: keyof ProductNutrition; label: string; unit: string }[] = [
@@ -13,8 +19,17 @@ const ROWS: { key: keyof ProductNutrition; label: string; unit: string }[] = [
   { key: "sodium_mg_100g", label: "Sodium", unit: "mg" },
 ];
 
-export function NutritionTable({ nutrition }: { nutrition: ProductNutrition }) {
+export function NutritionTable({
+  nutrition,
+  netWeight,
+}: {
+  nutrition: ProductNutrition;
+  netWeight?: string | null;
+}) {
   const rows = ROWS.filter((r) => nutrition[r.key] != null);
+  const packGrams = parsePackGrams(netWeight);
+  const showPack = packGrams != null && packGrams > 0;
+  const packLabel = formatPackLabel(netWeight, packGrams);
 
   if (!rows.length) {
     return (
@@ -27,21 +42,39 @@ export function NutritionTable({ nutrition }: { nutrition: ProductNutrition }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-(--color-line) bg-(--color-panel) text-left text-xs uppercase tracking-wider text-(--color-fg-dim)">
-            <th className="px-4 py-3 font-normal">Per 100g</th>
-            <th className="px-4 py-3 font-normal text-right">Amount</th>
+            <th className="px-4 py-3 font-normal">Nutrient</th>
+            <th className="px-4 py-3 font-normal text-right">Per 100g</th>
+            {showPack ? (
+              <th className="px-4 py-3 font-normal text-right">Per pack ({packLabel})</th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ key, label, unit }) => (
-            <tr key={key} className="border-b border-(--color-line) last:border-0">
-              <td className="px-4 py-2.5 text-(--color-fg-muted)">{label}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg)">
-                {nutrition[key] as number} {unit}
-              </td>
-            </tr>
-          ))}
+          {rows.map(({ key, label, unit }) => {
+            const per100 = nutrition[key] as number;
+            const perPack =
+              showPack && packGrams ? roundNutrient(scaleFromPer100g(per100, packGrams), unit) : null;
+            return (
+              <tr key={key} className="border-b border-(--color-line) last:border-0">
+                <td className="px-4 py-2.5 text-(--color-fg-muted)">{label}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg)">
+                  {per100} {unit}
+                </td>
+                {showPack ? (
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium text-(--color-fg)">
+                    {perPack} {unit}
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      {showPack ? (
+        <p className="border-t border-(--color-line) px-4 py-2 text-xs text-(--color-fg-dim)">
+          Pack column scales label values for {packLabel} — what you get in one unit you buy.
+        </p>
+      ) : null}
       {nutrition.source ? (
         <p className="border-t border-(--color-line) px-4 py-2 text-xs text-(--color-fg-dim)">
           Source: {nutrition.source}
