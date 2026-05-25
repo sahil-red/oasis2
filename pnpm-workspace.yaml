@@ -1,0 +1,11 @@
+overrides:
+  "nanoid@3.3.12": "3.3.11"
+
+allowBuilds:
+  sharp: true
+  esbuild: true
+  "@google/genai": true
+  protobufjs: true
+  tesseract.js: true
+
+verifyDepsBeforeRun: false

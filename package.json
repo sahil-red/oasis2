@@ -1,0 +1,52 @@
+{
+  "name": "oasis-clone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack --hostname localhost",
+    "build": "next build",
+    "start": "next start --hostname localhost",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "warm-session": "tsx scripts/00-warm-session.ts",
+    "pw:install": "playwright install chromium",
+    "scrape:categories": "tsx scripts/01-scrape-categories.ts",
+    "scrape:products": "tsx scripts/02-scrape-products.ts",
+    "scrape:details": "tsx scripts/02-scrape-products.ts --detail",
+    "peek:blinkit": "tsx scripts/peek-blinkit.ts",
+    "diag:blinkit": "tsx scripts/diag-blinkit.ts",
+    "diag:supabase": "tsx scripts/diag-supabase.ts",
+    "spy:blinkit": "tsx scripts/spy-blinkit.ts",
+    "ocr": "tsx scripts/03-ocr-labels.ts",
+    "score": "tsx scripts/05-compute-scores.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.6.0",
+    "@supabase/supabase-js": "^2.106.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
+    "framer-motion": "^12.40.0",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "p-throttle": "^8.1.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "sharp": "^0.34.5",
+    "tailwind-merge": "^3.6.0",
+    "tesseract.js": "^7.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "playwright": "^1.60.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,43 @@
+# dependencies
+node_modules
+.pnpm-store
+.pnp.*
+
+# next.js
+.next/
+out/
+build/
+dist/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# OCR local model (downloaded by tesseract.js; not needed for web deploy)
+eng.traineddata
+
+# scraper artifacts
+.cache/
+.tmp/
+data/raw/
+data/images/
+scripts/.session/
+
+# OS
+Thumbs.db

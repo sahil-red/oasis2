@@ -1,0 +1,218 @@
+{
+  "$schema": "./ingredient-rules.schema.json",
+  "version": 1,
+  "notes": [
+    "Yuka-inspired 4-tier system. Each ingredient is matched case-insensitively against `match` (the canonical lowercase name) or any entry in `aliases`. Tier drives the numeric penalty via ADDITIVE_TIER_PENALTY in lib/utils.ts. A single 'hazardous' tier hit caps the total Core score at 49 — see HAZARDOUS_HARD_CAP.",
+    "`evidence_url` should point to a primary or authoritative review source (EWG, EFSA, IARC, FSSAI, peer-reviewed meta-analysis). Avoid news articles.",
+    "Wildly common additives stay 'risk-free' to keep the noise floor honest. Only ingredients with at least *limited* concern in mainstream regulator guidance get flagged."
+  ],
+  "rules": [
+    {
+      "match": "monosodium glutamate",
+      "aliases": ["msg", "e621", "ajinomoto", "flavour enhancer (e621)", "flavor enhancer (e621)"],
+      "category": "flavor-enhancer",
+      "tier": "limited",
+      "why": "Generally safe for the population but linked to short-term headache and tachycardia reactions in sensitive individuals.",
+      "source": "EFSA 2017 re-evaluation",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4910"
+    },
+    {
+      "match": "tertiary butylhydroquinone",
+      "aliases": ["tbhq", "e319"],
+      "category": "antioxidant",
+      "tier": "moderate",
+      "why": "Synthetic antioxidant; high doses linked to immune effects in animal models; some regulators restrict daily intake.",
+      "source": "EFSA 2016 review",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/4523"
+    },
+    {
+      "match": "butylated hydroxyanisole",
+      "aliases": ["bha", "e320"],
+      "category": "antioxidant",
+      "tier": "hazardous",
+      "why": "Classified as 'reasonably anticipated to be a human carcinogen' by the US NTP.",
+      "source": "US NTP Report on Carcinogens, 15th Edition",
+      "evidence_url": "https://ntp.niehs.nih.gov/ntp/roc/content/profiles/butylatedhydroxyanisole.pdf"
+    },
+    {
+      "match": "butylated hydroxytoluene",
+      "aliases": ["bht", "e321"],
+      "category": "antioxidant",
+      "tier": "moderate",
+      "why": "Possible endocrine disruptor; banned in some food applications in Japan and parts of the EU.",
+      "source": "EWG Food Scores",
+      "evidence_url": "https://www.ewg.org/foodscores/content/our-criteria"
+    },
+    {
+      "match": "sodium benzoate",
+      "aliases": ["e211"],
+      "category": "preservative",
+      "tier": "moderate",
+      "why": "Can react with ascorbic acid (vitamin C) to form benzene, a known carcinogen; intake should be limited in soft drinks and juices.",
+      "source": "FDA / WHO guidance",
+      "evidence_url": "https://www.fda.gov/food/chemicals/questions-and-answers-occurrence-benzene-soft-drinks-and-other-beverages"
+    },
+    {
+      "match": "potassium bromate",
+      "aliases": ["e924"],
+      "category": "flour-improver",
+      "tier": "hazardous",
+      "why": "IARC Group 2B (possibly carcinogenic). Banned in food in the EU, UK, India (since 2016), Canada and Brazil.",
+      "source": "IARC Monograph Vol. 73",
+      "evidence_url": "https://monographs.iarc.who.int/wp-content/uploads/2018/06/mono73-19.pdf"
+    },
+    {
+      "match": "sodium nitrite",
+      "aliases": ["e250"],
+      "category": "preservative",
+      "tier": "hazardous",
+      "why": "Forms N-nitrosamines in processed meats; IARC has classified processed meat as Group 1 carcinogen.",
+      "source": "IARC Volume 114 (2015)",
+      "evidence_url": "https://www.iarc.who.int/wp-content/uploads/2018/07/pr240_E.pdf"
+    },
+    {
+      "match": "sodium nitrate",
+      "aliases": ["e251"],
+      "category": "preservative",
+      "tier": "moderate",
+      "why": "Converts to nitrite in the body and can form nitrosamines under high heat.",
+      "source": "WHO/FAO JECFA",
+      "evidence_url": "https://www.who.int/groups/joint-fao-who-expert-committee-on-food-additives-(jecfa)"
+    },
+    {
+      "match": "tartrazine",
+      "aliases": ["e102", "yellow 5", "fd&c yellow no. 5"],
+      "category": "colour",
+      "tier": "moderate",
+      "why": "Southampton study link to hyperactivity in susceptible children; EU mandates a warning label.",
+      "source": "Southampton Study, McCann et al. 2007",
+      "evidence_url": "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(07)61306-3/fulltext"
+    },
+    {
+      "match": "sunset yellow",
+      "aliases": ["e110", "yellow 6", "fd&c yellow no. 6"],
+      "category": "colour",
+      "tier": "moderate",
+      "why": "Same Southampton-study category as tartrazine; EU requires a warning.",
+      "source": "Southampton Study, McCann et al. 2007",
+      "evidence_url": "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(07)61306-3/fulltext"
+    },
+    {
+      "match": "carmoisine",
+      "aliases": ["e122", "azorubine"],
+      "category": "colour",
+      "tier": "moderate",
+      "why": "Banned in the US and several Asian countries; possible hyperactivity link.",
+      "source": "EU Regulation 1333/2008 Annex V",
+      "evidence_url": "https://eur-lex.europa.eu/eli/reg/2008/1333/oj"
+    },
+    {
+      "match": "allura red",
+      "aliases": ["e129", "red 40", "fd&c red no. 40"],
+      "category": "colour",
+      "tier": "moderate",
+      "why": "Linked to hyperactivity in children; banned in several European countries.",
+      "source": "California OEHHA 2021 report",
+      "evidence_url": "https://oehha.ca.gov/risk-assessment/report/health-effects-assessment-potential-neurobehavioral-effects-synthetic"
+    },
+    {
+      "match": "aspartame",
+      "aliases": ["e951"],
+      "category": "sweetener",
+      "tier": "moderate",
+      "why": "Classified by IARC in 2023 as 'possibly carcinogenic to humans' (Group 2B); ADI maintained by JECFA.",
+      "source": "IARC/JECFA Joint Press Release, July 2023",
+      "evidence_url": "https://www.iarc.who.int/news-events/aspartame-hazard-and-risk-assessment-results-released/"
+    },
+    {
+      "match": "acesulfame potassium",
+      "aliases": ["e950", "ace-k", "acesulfame-k"],
+      "category": "sweetener",
+      "tier": "limited",
+      "why": "Approved as safe but emerging research on gut microbiome impact at habitual intake.",
+      "source": "EFSA 2000 review (re-evaluation in progress)",
+      "evidence_url": "https://www.efsa.europa.eu/en/topics/topic/food-additives-re-evaluation"
+    },
+    {
+      "match": "sucralose",
+      "aliases": ["e955"],
+      "category": "sweetener",
+      "tier": "moderate",
+      "why": "Heat-decomposes into chloropropanols; 2023 research suggests sucralose-6-acetate damages DNA in vitro.",
+      "source": "Schiffman et al. 2023, Journal of Toxicology and Environmental Health",
+      "evidence_url": "https://www.tandfonline.com/doi/full/10.1080/10937404.2023.2213903"
+    },
+    {
+      "match": "high fructose corn syrup",
+      "aliases": ["hfcs", "fructose corn syrup"],
+      "category": "sweetener",
+      "tier": "moderate",
+      "why": "Strongly associated with metabolic syndrome and fatty liver disease when habitually consumed in beverages.",
+      "source": "Stanhope et al. 2009, JCI",
+      "evidence_url": "https://www.jci.org/articles/view/37385"
+    },
+    {
+      "match": "palm oil",
+      "aliases": ["palmolein", "palm olein", "interesterified palm oil"],
+      "category": "fat",
+      "tier": "limited",
+      "why": "High in saturated fat (palmitic acid); environmental and health profile worse than alternatives like sunflower or rice bran.",
+      "source": "WHO Fat Intake Guideline 2018",
+      "evidence_url": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+    },
+    {
+      "match": "hydrogenated vegetable oil",
+      "aliases": ["partially hydrogenated", "trans fat", "vanaspati"],
+      "category": "fat",
+      "tier": "hazardous",
+      "why": "Industrial trans fats — WHO target for elimination; raise LDL and lower HDL cholesterol.",
+      "source": "WHO REPLACE programme",
+      "evidence_url": "https://www.who.int/teams/nutrition-and-food-safety/replace-trans-fat"
+    },
+    {
+      "match": "polysorbate 80",
+      "aliases": ["e433", "tween 80"],
+      "category": "emulsifier",
+      "tier": "moderate",
+      "why": "Mouse studies suggest gut barrier disruption and low-grade inflammation; human data limited.",
+      "source": "Chassaing et al. 2015, Nature",
+      "evidence_url": "https://www.nature.com/articles/nature14232"
+    },
+    {
+      "match": "carboxymethyl cellulose",
+      "aliases": ["e466", "cmc", "sodium cmc"],
+      "category": "emulsifier",
+      "tier": "moderate",
+      "why": "Same gut-microbiome concern as polysorbate 80 in recent randomised trials.",
+      "source": "Chassaing et al. 2022, Gastroenterology",
+      "evidence_url": "https://www.gastrojournal.org/article/S0016-5085(21)03615-9/fulltext"
+    },
+    {
+      "match": "titanium dioxide",
+      "aliases": ["e171"],
+      "category": "colour",
+      "tier": "hazardous",
+      "why": "EFSA 2021: 'no longer considered safe' as a food additive due to genotoxicity concerns. Banned in the EU since 2022.",
+      "source": "EFSA Opinion, May 2021",
+      "evidence_url": "https://www.efsa.europa.eu/en/efsajournal/pub/6585"
+    },
+    {
+      "match": "carrageenan",
+      "aliases": ["e407"],
+      "category": "thickener",
+      "tier": "limited",
+      "why": "Debated; degraded carrageenan is pro-inflammatory but food-grade is considered safe by JECFA.",
+      "source": "JECFA Monograph 2014",
+      "evidence_url": "https://www.fao.org/3/i4232e/i4232e.pdf"
+    },
+    {
+      "match": "maltodextrin",
+      "aliases": [],
+      "category": "filler",
+      "tier": "limited",
+      "why": "Glycemic index higher than sugar; not harmful per se, but a marker of ultra-processed formulation.",
+      "source": "BMJ Open 2021 review",
+      "evidence_url": "https://bmjopen.bmj.com/content/11/9/e051335"
+    }
+  ]
+}

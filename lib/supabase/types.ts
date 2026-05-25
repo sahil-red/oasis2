@@ -1,0 +1,152 @@
+export type ConcernSeverity = "none" | "low" | "medium" | "high";
+
+/** Yuka-style additive tier. Sets the per-ingredient penalty. */
+export type AdditiveTier = "risk-free" | "limited" | "moderate" | "hazardous";
+
+export type Grade = "A" | "B" | "C" | "D" | "F";
+
+/** Yuka-style 4-tier presentation band, derived from the 0–100 score. */
+export type ScoreBand = "bad" | "poor" | "good" | "excellent";
+
+export interface Product {
+  id: string;
+  zepto_sku: string;
+  slug: string;
+  name: string;
+  brand: string | null;
+  super_category: string | null;
+  category: string | null;
+  subcategory: string | null;
+  net_weight: string | null;
+  price_inr: number | null;
+  mrp_inr: number | null;
+  image_urls: string[];
+  product_url: string | null;
+  barcode: string | null;
+  ingredients_raw: string | null;
+  nutrition: ProductNutrition | null;
+  /**
+   * Free-form key/value attributes from the source platform's PDP — Diet Preference,
+   * Country of Origin, Shelf Life, FSSAI License, Allergen Information, Type,
+   * Flavour, Description, Key Features, Seller, etc. Used for product detail UI;
+   * NOT used for scoring (scoring only looks at `nutrition` + `ingredients_raw`).
+   */
+  attributes: Record<string, string> | null;
+  raw_payload: Record<string, unknown> | null;
+  scraped_at: string;
+  updated_at: string;
+}
+
+/** Normalized per-100g nutrition. All fields optional — some products only report a subset. */
+export interface ProductNutrition {
+  energy_kcal_100g?: number;
+  protein_g_100g?: number;
+  fat_g_100g?: number;
+  saturated_fat_g_100g?: number;
+  trans_fat_g_100g?: number;
+  carbs_g_100g?: number;
+  sugar_g_100g?: number;
+  added_sugar_g_100g?: number;
+  fiber_g_100g?: number;
+  sodium_mg_100g?: number;
+  calcium_mg_100g?: number;
+  iron_mg_100g?: number;
+  caffeine_mg_100g?: number;
+  /** Free-form, e.g. when a value didn't fit the schema. */
+  extra?: Record<string, number | string>;
+  /** Where the values came from.
+   *  - "platform" → from the grocery platform's structured API (e.g. Blinkit's PDP fields)
+   *  - "label"    → from the printed back-label text (after OCR + light cleanup)
+   *  - "ocr"      → from raw OCR text (no human/LLM cleanup)
+   *  - "off"      → from Open Food Facts
+   */
+  source?: "platform" | "label" | "ocr" | "off";
+}
+
+export interface ZeptoTaxonomy {
+  id: string;
+  super_category: string | null;
+  category: string | null;
+  subcategory: string | null;
+  product_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface CategoryBaseline {
+  id: string;
+  category: string;
+  subcategory: string | null;
+  floor_score: number;
+  ceiling_score: number;
+  /** Map of nutrient key (e.g. "protein_g_100g") → signed weight in [-1, 1].
+   *  Positive = higher value is better, negative = higher value is worse.
+   *  Weights inside one baseline don't need to sum to 1 — they're rescaled at scoring time. */
+  nutrients: Record<string, number>;
+  priority: number;
+  source: "curated" | "llm" | "default";
+  notes: string | null;
+}
+
+export interface Ingredient {
+  id: string;
+  name_normalized: string;
+  name_display: string;
+  name_raw_variants: string[];
+  e_number: string | null;
+  category: string | null;
+  off_id: string | null;
+  created_at: string;
+}
+
+export interface IngredientConcern {
+  id: string;
+  ingredient_id: string;
+  concern_type: string;
+  severity: ConcernSeverity;
+  why: string | null;
+  evidence_url: string | null;
+  source: string | null;
+  created_at: string;
+}
+
+export interface CoreScore {
+  product_id: string;
+  score: number;
+  grade: Grade;
+  band: ScoreBand;
+  subscores: SubScores;
+  concerns: ConcernEntry[];
+  breakdown: ScoreBreakdown;
+  rule_version: number;
+  computed_at: string;
+}
+
+/** Yuka-style decomposition. Each value is on its own scale and summed to 100. */
+export interface SubScores {
+  /** Nutrition: 0–60. Category-anchored, then rank-normalized inside the subcategory. */
+  nutrition: number;
+  /** Additives: 0–30. Starts at 30, additive penalties subtract. */
+  additives: number;
+  /** Labels: 0–10. Bonus for verified labels (India Organic, Jaivik Bharat, no palm oil, etc.). */
+  labels: number;
+}
+
+export interface ConcernEntry {
+  ingredient: string;
+  tier: AdditiveTier;
+  severity: ConcernSeverity;
+  why: string;
+  source: string;
+  evidence_url?: string;
+}
+
+export interface ScoreBreakdown {
+  category: string | null;
+  subcategory: string | null;
+  category_band: [number, number] | null;
+  nutrition_rank: number | null;
+  /** True if a hazardous-tier additive forced the global hard cap. */
+  hard_capped: boolean;
+  notes: string[];
+}
