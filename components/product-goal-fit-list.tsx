@@ -5,14 +5,8 @@ import { ScoreRing } from "@/components/score-ring";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
-import { fitVerdictLabel, scorePresentation, type FitVerdict } from "@/lib/goals/verdict";
+import { scorePresentation } from "@/lib/goals/verdict";
 import { cn, colorForScore, type Grade } from "@/lib/utils";
-
-const HERO_VERDICT_STYLE: Record<FitVerdict, string> = {
-  strong: "bg-emerald-50/80 text-emerald-800 ring-emerald-200/80",
-  okay: "bg-amber-50/80 text-amber-900 ring-amber-200/80",
-  weak: "bg-red-50/80 text-red-800 ring-red-200/80",
-};
 
 function fitTileSurface(fit: number): { backgroundColor: string; borderColor: string } {
   const c = colorForScore(fit);
@@ -25,9 +19,12 @@ function fitTileSurface(fit: number): { backgroundColor: string; borderColor: st
 export function ProductGoalFitList({
   rows,
   overall,
+  scoreReasons,
 }: {
   rows: GoalFitRow[];
   overall: { fit: number; grade: Grade; reasons: string[] } | null;
+  /** Full "Why this score?" bullets — shown in the default (overall) hero only. */
+  scoreReasons?: string[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -50,11 +47,13 @@ export function ProductGoalFitList({
     active === "balanced"
       ? overall
         ? {
-            id: "balanced" as const,
-            label: profileLabel("balanced"),
+            variant: "overall" as const,
             fit: overall.fit,
             grade: overall.grade,
-            reasons: overall.reasons,
+            reasons:
+              scoreReasons && scoreReasons.length > 0
+                ? scoreReasons.slice(0, 3)
+                : overall.reasons.slice(0, 3),
           }
         : null
       : (() => {
@@ -62,11 +61,12 @@ export function ProductGoalFitList({
           if (!row) return null;
           const pres = scorePresentation(row.fit);
           return {
-            id: row.id,
+            variant: "goal" as const,
             label: profileLabel(row.id),
             fit: row.fit,
             grade: pres.grade,
             reasons: row.reasons,
+            caption: row.primaryMetric,
           };
         })();
 
@@ -83,10 +83,10 @@ export function ProductGoalFitList({
   if (overall) {
     gridGoals.push({
       id: "balanced",
-      label: profileShort("balanced"),
+      label: "Overall",
       fit: overall.fit,
       grade: overall.grade,
-      caption: overall.reasons[0] ?? "Overall nutrition + ingredients",
+      caption: scoreReasons?.[0] ?? overall.reasons[0] ?? "Nutrition + ingredients",
     });
   }
   // Keep tile order stable instead of resorting by fit — humans read tiles
@@ -115,7 +115,9 @@ export function ProductGoalFitList({
     <section className="mt-6">
       {activeRow ? (
         <ActiveGoalHero
-          label={activeRow.label}
+          variant={activeRow.variant}
+          label={"label" in activeRow ? activeRow.label : undefined}
+          caption={"caption" in activeRow ? activeRow.caption : undefined}
           fit={activeRow.fit}
           grade={activeRow.grade}
           reasons={activeRow.reasons}
@@ -151,48 +153,52 @@ export function ProductGoalFitList({
 }
 
 function ActiveGoalHero({
+  variant,
   label,
+  caption,
   fit,
   grade,
   reasons,
 }: {
-  label: string;
+  variant: "overall" | "goal";
+  label?: string;
+  caption?: string;
   fit: number;
   grade: Grade;
   reasons: string[];
 }) {
-  const pres = scorePresentation(fit);
-  const topReasons = reasons.slice(0, 2);
+  const bullets = reasons.filter(Boolean).slice(0, variant === "overall" ? 3 : 2);
 
   return (
     <div className="rounded-2xl border border-(--color-line) bg-linear-to-br from-white to-(--color-bg-soft) p-5 shadow-sm">
-      <div className="flex items-center gap-5">
+      <div className="flex items-start gap-5">
         <ScoreRing
           score={fit}
-          size={96}
-          stroke={7}
+          size={88}
+          stroke={6}
           showLabel
-          subtitle={`Grade ${grade}`}
+          subtitle={grade}
           className="shrink-0"
         />
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
-            {label}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span
+        <div className="min-w-0 flex-1 pt-1">
+          {variant === "goal" && label ? (
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
+              {label}
+            </p>
+          ) : null}
+          {variant === "goal" && caption ? (
+            <p className={cn("text-[15px] font-medium text-(--color-fg)", label ? "mt-1" : "")}>
+              {caption}
+            </p>
+          ) : null}
+          {bullets.length > 0 ? (
+            <ul
               className={cn(
-                "rounded-full px-2.5 py-1 text-[12px] font-medium ring-1 ring-inset",
-                HERO_VERDICT_STYLE[pres.verdict],
+                "space-y-1.5 text-[14px] leading-snug text-(--color-fg-muted)",
+                variant === "goal" && (label || caption) ? "mt-2.5" : "mt-0",
               )}
             >
-              {fitVerdictLabel(pres.verdict)}
-            </span>
-            <span className="text-[13px] text-(--color-fg-dim)">{pres.bandLabel}</span>
-          </div>
-          {topReasons.length > 0 ? (
-            <ul className="mt-3 space-y-1 text-[14px] leading-snug text-(--color-fg-muted)">
-              {topReasons.map((r) => (
+              {bullets.map((r) => (
                 <li key={r} className="flex gap-2">
                   <span className="text-(--color-fg-dim)">·</span>
                   <span>{r}</span>

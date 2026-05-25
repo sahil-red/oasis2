@@ -21,6 +21,8 @@
     "scrape:detail:resume": "bash scripts/run-detail-resume.sh",
     "scrape:staples": "bash scripts/run-scrape-staples.sh",
     "reparse:nutrition": "tsx scripts/reparse-blinkit-nutrition.ts",
+    "export:nutrition:priority": "tsx scripts/export-priority-nutrition.ts",
+    "fill:nutrition:priority": "tsx scripts/fill-priority-nutrition.ts",
     "fix:nutrition": "tsx scripts/fix-nutrition-outliers.ts",
     "pipeline:vercel": "bash scripts/run-vercel-pipeline.sh",
     "scrape:food5k": "bash scripts/run-scrape-5k-food.sh",

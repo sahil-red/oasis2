@@ -35,14 +35,16 @@
 
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
+import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
+import { mergeOcrIntoProductNutrition } from "@/lib/nutrition/from-ocr";
 import {
   OcrOrchestrator,
   RemoteBudgetExhausted,
   shutdownTesseract,
   type OcrBackend,
-  type OcrNutrition,
 } from "@/lib/ocr";
 import { geminiPoolSummary } from "@/lib/ocr/gemini-pool";
+import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
 
@@ -78,24 +80,12 @@ function parseArgs(): Args {
   };
 }
 
-/**
- * True when Blinkit already gave us both ingredients AND at least one
- * per-100g nutrition value. Such products don't need OCR — the platform
- * data is canonical and ready for scoring.
- */
+/** Blinkit PDP has full ingredients + a usable per-100g table — skip label OCR. */
 function isPlatformComplete(
   ingredients_raw: string | null,
   nutrition: Record<string, unknown> | null,
 ): boolean {
-  if (!ingredients_raw || !ingredients_raw.trim()) return false;
-  if (!nutrition || typeof nutrition !== "object") return false;
-  // Need at least one numeric per-100g field outside of metadata keys.
-  const META_KEYS = new Set(["source", "extra"]);
-  for (const [k, v] of Object.entries(nutrition)) {
-    if (META_KEYS.has(k)) continue;
-    if (typeof v === "number" && Number.isFinite(v)) return true;
-  }
-  return false;
+  return isPlatformNutritionComplete(ingredients_raw, nutrition);
 }
 
 async function main() {
@@ -230,16 +220,19 @@ async function main() {
       // Backfill structured fields from the OCR payload where the platform
       // didn't already give us one.
       if (!r.ingredients_raw && result.payload.ingredients?.length) {
-        // Reconstitute a comma-separated ingredients_raw from the OCR list.
         update.ingredients_raw = result.payload.ingredients
           .map((ing) => (ing.percent != null ? `${ing.name} (${ing.percent}%)` : ing.name))
           .join(", ");
       }
-      if (!r.nutrition && result.payload.nutrition_per_100g) {
-        update.nutrition = {
-          ...ocrNutritionToProduct(result.payload.nutrition_per_100g),
-          source: "ocr",
-        };
+      const mergedNutrition = mergeOcrIntoProductNutrition(
+        r.nutrition as ProductNutrition | null,
+        result.payload.nutrition_per_100g,
+      );
+      if (
+        mergedNutrition &&
+        JSON.stringify(mergedNutrition) !== JSON.stringify(r.nutrition)
+      ) {
+        update.nutrition = mergedNutrition;
       }
       if (result.payload.net_weight) update.net_weight = result.payload.net_weight;
 
@@ -302,21 +295,6 @@ function progressBar(done: number, total: number, width = 24): string {
 function elapsed(startMs: number): string {
   const s = (Date.now() - startMs) / 1000;
   return s < 60 ? `${s.toFixed(1)}s` : `${(s / 60).toFixed(1)}m`;
-}
-
-function ocrNutritionToProduct(n: OcrNutrition): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (n.energy_kcal != null) out.energy_kcal_100g = n.energy_kcal;
-  if (n.protein_g != null) out.protein_g_100g = n.protein_g;
-  if (n.fat_g != null) out.fat_g_100g = n.fat_g;
-  if (n.saturated_fat_g != null) out.saturated_fat_g_100g = n.saturated_fat_g;
-  if (n.trans_fat_g != null) out.trans_fat_g_100g = n.trans_fat_g;
-  if (n.carbs_g != null) out.carbs_g_100g = n.carbs_g;
-  if (n.sugar_g != null) out.sugar_g_100g = n.sugar_g;
-  if (n.added_sugar_g != null) out.added_sugar_g_100g = n.added_sugar_g;
-  if (n.fiber_g != null) out.fiber_g_100g = n.fiber_g;
-  if (n.sodium_mg != null) out.sodium_mg_100g = n.sodium_mg;
-  return out;
 }
 
 async function updateProduct(

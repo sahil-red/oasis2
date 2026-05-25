@@ -1,4 +1,5 @@
-import { parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
+import { mergeNutrition, parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
+import { nutritionIsSparse } from "@/lib/nutrition/completeness";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Upper bounds for protein per 100g by product class (catch OCR / parser garbage). */
@@ -76,6 +77,10 @@ export function reconcileNutrition(opts: {
   if (!current && !fromAttrs) return null;
   if (!fromAttrs) return current;
   if (!current) return fromAttrs;
+  if (nutritionIsSparse(current) && fromAttrs) {
+    const merged = mergeNutrition(fromAttrs, current);
+    if (merged && !nutritionIsSparse(merged)) return { ...merged, source: "platform" };
+  }
 
   const currentBad = nutritionLooksImplausible(current, opts.name, opts.category);
   const attrsBad = nutritionLooksImplausible(fromAttrs, opts.name, opts.category);

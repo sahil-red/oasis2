@@ -148,7 +148,11 @@ export default async function ProductPage({
             ) : null}
             <ProductGoalToolbar slug={product.slug} name={product.name} />
             <Suspense fallback={null}>
-              <ProductGoalFitList rows={goalRows} overall={overallGoal} />
+              <ProductGoalFitList
+                rows={goalRows}
+                overall={overallGoal}
+                scoreReasons={scoreWhy?.reasons}
+              />
             </Suspense>
           </div>
         </div>
