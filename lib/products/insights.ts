@@ -94,13 +94,11 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
 
   const proteinPool = products.filter((p) => {
     const protein = p.nutrition?.protein_g_100g;
-    const core = p.core_scores?.score ?? 0;
     return (
       typeof protein === "number" &&
       protein >= 6 &&
       p.price_inr != null &&
       p.price_inr > 0 &&
-      core >= 45 &&
       !isChipStyleSnack(p)
     );
   });

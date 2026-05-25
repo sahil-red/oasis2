@@ -97,3 +97,33 @@ export function packNutritionContext(opts: {
     proteinPerRupee100: (protein100 / price) * 100,
   };
 }
+
+/**
+ * 0–100 goal fit for Protein / ₹ — dominated by grams protein per ₹100 spent.
+ * (20 vs 40 g/₹100 should not both land at 99.)
+ */
+export function proteinBudgetGoalFit(opts: {
+  proteinPerRupee100: number;
+  protein_g_100g: number;
+  core_score?: number | null;
+}): number {
+  const ppr = opts.proteinPerRupee100;
+  const protein = opts.protein_g_100g;
+  const core = opts.core_score ?? 50;
+
+  const value = Math.min(82, ppr * 2.05);
+  const density = Math.min(12, Math.max(0, (protein - 8) * 0.8));
+  const quality = Math.min(6, Math.max(0, (core - 50) * 0.08));
+
+  return Math.max(0, Math.min(100, Math.round(value + density + quality)));
+}
+
+/** Insights / catalog sort key — monotonic in protein per ₹100, then fit. */
+export function proteinValueRankScore(opts: {
+  proteinPerRupee100: number;
+  protein_g_100g: number;
+  core_score?: number | null;
+}): number {
+  const fit = proteinBudgetGoalFit(opts);
+  return opts.proteinPerRupee100 * 100 + fit;
+}

@@ -1,7 +1,7 @@
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { hasAnimalDerived } from "@/lib/goals/vegan";
-import { packNutritionContext } from "@/lib/products/pack-nutrition";
+import { packNutritionContext, proteinBudgetGoalFit } from "@/lib/products/pack-nutrition";
 import type { GoalId } from "./types";
 
 export type GoalFitResult = {
@@ -167,10 +167,11 @@ export function computeGoalFit(
         break;
       }
       const ppr = packCtx.proteinPerRupee100 ?? 0;
-      const valueScore = price > 0 ? Math.min(52, ppr * 2.8) : 0;
-      const densityScore = Math.min(38, (protein - 6) * 2);
-      const qualityBonus = Math.min(12, (opts.core_score ?? 0) * 0.12);
-      fit = Math.min(100, Math.round(valueScore + densityScore + qualityBonus));
+      fit = proteinBudgetGoalFit({
+        proteinPerRupee100: ppr,
+        protein_g_100g: protein,
+        core_score: opts.core_score,
+      });
       if (packCtx.usesPack && proteinInPack != null) {
         reasons.push(
           `${proteinInPack.toFixed(1)}g protein in pack (${protein}g / 100g) · ₹${price}`,

@@ -1,5 +1,9 @@
 import { matchAdditives } from "@/lib/scoring/rules";
-import { packNutritionContext } from "@/lib/products/pack-nutrition";
+import {
+  packNutritionContext,
+  proteinBudgetGoalFit,
+  proteinValueRankScore as proteinRankKey,
+} from "@/lib/products/pack-nutrition";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export type MarketingCallout = {
@@ -67,10 +71,22 @@ export function proteinPerRupeeLine(p: ProductListItem): string {
 }
 
 export function proteinValueBlurb(p: ProductListItem): string {
-  const core = p.core_scores?.score ?? 0;
-  if (core >= 65) return "Strong value if the label quality matches your goals.";
-  if (core >= 50) return "Good protein per rupee — check ingredients before making it a daily buy.";
-  return "Cheap protein on paper — weaker overall label score.";
+  const protein = p.nutrition?.protein_g_100g ?? 0;
+  const ctx = packNutritionContext({
+    nutrition: p.nutrition,
+    price_inr: p.price_inr,
+    net_weight: p.net_weight,
+  });
+  const ppr = ctx.proteinPerRupee100 ?? 0;
+  const fit = proteinBudgetGoalFit({
+    proteinPerRupee100: ppr,
+    protein_g_100g: protein,
+    core_score: p.core_scores?.score,
+  });
+  if (ppr >= 25) return `Top-tier protein per ₹100 (~${ppr.toFixed(0)}g) · goal fit ${fit}.`;
+  if (ppr >= 15) return `Solid protein per ₹100 (~${ppr.toFixed(0)}g) · goal fit ${fit}.`;
+  if (ppr >= 8) return `Moderate value (~${ppr.toFixed(0)}g protein per ₹100).`;
+  return "Weak protein value for the price.";
 }
 
 export function snackBlurb(p: ProductListItem): string {
@@ -96,11 +112,14 @@ export function proteinValueRankScore(p: ProductListItem): number {
   });
   if (price <= 0 || protein < 6) return 0;
   const ppr = ctx.proteinPerRupee100 ?? 0;
-  const valueScore = Math.min(52, ppr * 2.8);
-  const densityScore = Math.min(38, (protein - 6) * 2);
-  let blended = valueScore + densityScore + core * 0.12;
-  if (isChipStyleSnack(p)) blended *= 0.88;
-  return blended;
+  if (ppr < 6) return 0;
+  let score = proteinRankKey({
+    proteinPerRupee100: ppr,
+    protein_g_100g: protein,
+    core_score: core,
+  });
+  if (isChipStyleSnack(p)) score *= 0.88;
+  return score;
 }
 
 export function additiveFlagCount(p: ProductListItem): number {
