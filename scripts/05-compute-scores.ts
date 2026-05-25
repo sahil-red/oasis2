@@ -50,57 +50,66 @@ async function main() {
     console.log("[05-compute-scores] --with-detail: PDP-scraped products only.");
   }
 
-  if (args.limit) query = query.limit(args.limit);
-  else query = query.limit(5_000);
-
-  const { data: rows, error } = await query;
-  if (error) {
-    console.error("[05-compute-scores] fetch failed:", error);
-    process.exit(1);
-  }
-  if (!rows?.length) {
-    console.log("[05-compute-scores] no products with nutrition to score.");
-    return;
-  }
-
+  const pageSize = args.limit ?? 500;
   let scored = 0;
   let skipped = 0;
+  let offset = 0;
+  let totalFetched = 0;
 
-  for (const row of rows) {
-    const rel = row.core_scores as
-      | { rule_version: number }
-      | { rule_version: number }[]
-      | null;
-    const existing = Array.isArray(rel) ? rel[0] : rel;
-    if (
-      args.onlyUnscored &&
-      existing?.rule_version === SCORING_RULE_VERSION &&
-      !args.force
-    ) {
-      skipped++;
-      continue;
+  while (true) {
+    const pageQuery = query.range(offset, offset + pageSize - 1);
+    const { data: rows, error } = await pageQuery;
+    if (error) {
+      console.error("[05-compute-scores] fetch failed:", error);
+      process.exit(1);
+    }
+    if (!rows?.length) {
+      if (offset === 0) {
+        console.log("[05-compute-scores] no products with nutrition to score.");
+      }
+      break;
+    }
+    totalFetched += rows.length;
+
+    for (const row of rows) {
+      const rel = row.core_scores as
+        | { rule_version: number }
+        | { rule_version: number }[]
+        | null;
+      const existing = Array.isArray(rel) ? rel[0] : rel;
+      if (
+        args.onlyUnscored &&
+        existing?.rule_version === SCORING_RULE_VERSION &&
+        !args.force
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const scoreRow: ScoreableProduct = {
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        subcategory: row.subcategory,
+        ingredients_raw: row.ingredients_raw,
+        nutrition: row.nutrition as ProductNutrition | null,
+        attributes: (row.attributes ?? null) as Record<string, string> | null,
+      };
+
+      const outcome = await persistCoreScore(supabase, scoreRow, {
+        force: args.force,
+        dryRun: args.dryRun,
+      });
+      if (outcome === "scored") scored++;
+      else if (outcome === "skipped") skipped++;
     }
 
-    const scoreRow: ScoreableProduct = {
-      id: row.id,
-      name: row.name,
-      category: row.category,
-      subcategory: row.subcategory,
-      ingredients_raw: row.ingredients_raw,
-      nutrition: row.nutrition as ProductNutrition | null,
-      attributes: (row.attributes ?? null) as Record<string, string> | null,
-    };
-
-    const outcome = await persistCoreScore(supabase, scoreRow, {
-      force: args.force,
-      dryRun: args.dryRun,
-    });
-    if (outcome === "scored") scored++;
-    else if (outcome === "skipped") skipped++;
+    if (args.limit || rows.length < pageSize) break;
+    offset += pageSize;
   }
 
   console.log(
-    `[05-compute-scores] done. scored=${scored} skipped=${skipped} (rule_version=${SCORING_RULE_VERSION})`,
+    `[05-compute-scores] done. fetched=${totalFetched} scored=${scored} skipped=${skipped} (rule_version=${SCORING_RULE_VERSION})`,
   );
 }
 
