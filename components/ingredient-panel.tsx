@@ -117,7 +117,7 @@ export function IngredientPanel({ ingredientsRaw }: { ingredientsRaw: string | n
           <div className="flex gap-2 text-sm text-(--color-fg-muted)">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-(--color-warn)" />
             <p>
-              Tap a flagged ingredient to read why it affects your score. Yuka-style tiers:
+              Tap a flagged ingredient to read why it affects your score. Risk tiers:
               limited → moderate → high risk.
             </p>
           </div>

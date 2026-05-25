@@ -40,7 +40,7 @@ export function StatCard({
       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       transition={{ duration: 0.7, delay: delay / 1000, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "glass relative overflow-hidden rounded-2xl p-5",
+        "relative overflow-hidden rounded-2xl border border-(--color-line) bg-white p-5",
         "transition-colors duration-300 hover:border-(--color-line-strong)",
         className
       )}

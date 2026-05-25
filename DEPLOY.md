@@ -66,6 +66,8 @@ Paste the same env vars when prompted, or add them in the Vercel dashboard → P
 
 - `pnpm scrape:packaged` → new rows in `products`
 - `pnpm scrape:packaged:detail` → ingredients, nutrition, scores
+- `pnpm scrape:expand` → up to 4000 SKUs across snacks, breakfast, sweet tooth, bakery, sauces, organic, dairy (full pagination)
+- `pnpm scrape:expand:detail` → PDP pass for rows missing `raw_payload`
 - `pnpm score` → `core_scores` updated
 
 Anyone refreshing [your deployment](https://oasis-j25rlgyrn-sahil27gunwal-9351s-projects.vercel.app/search) sees new products within seconds.

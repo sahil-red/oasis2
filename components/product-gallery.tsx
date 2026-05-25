@@ -36,7 +36,7 @@ export function ProductGallery({
 
   if (!n) {
     return (
-      <div className="panel flex aspect-square items-center justify-center rounded-2xl text-sm text-(--color-fg-dim)">
+      <div className="flex aspect-square items-center justify-center rounded-2xl bg-(--color-bg-soft) text-sm text-(--color-fg-dim)">
         No image
       </div>
     );
@@ -46,7 +46,7 @@ export function ProductGallery({
 
   return (
     <div className="space-y-3">
-      <div className="panel group relative aspect-square overflow-hidden rounded-2xl">
+      <div className="group relative aspect-square overflow-hidden rounded-2xl bg-(--color-bg-soft)">
         <button
           type="button"
           onClick={() => setIndex((i) => i)}
@@ -57,7 +57,7 @@ export function ProductGallery({
             src={current}
             alt={alt}
             fill
-            className="object-contain p-6 transition duration-300 group-hover:scale-[1.02]"
+            className="object-contain p-3 transition duration-300 group-hover:scale-[1.01]"
             sizes="(max-width: 1024px) 100vw, 45vw"
             priority={index === 0}
             unoptimized
@@ -69,7 +69,7 @@ export function ProductGallery({
             <button
               type="button"
               onClick={prev}
-              className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-(--color-bg)/85 text-(--color-fg) ring-1 ring-(--color-line) backdrop-blur transition hover:bg-(--color-panel) md:opacity-0 md:group-hover:opacity-100"
+              className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-white/95 text-(--color-fg) shadow-sm transition hover:bg-white md:opacity-0 md:group-hover:opacity-100"
               aria-label="Previous image"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -77,12 +77,12 @@ export function ProductGallery({
             <button
               type="button"
               onClick={next}
-              className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-(--color-bg)/85 text-(--color-fg) ring-1 ring-(--color-line) backdrop-blur transition hover:bg-(--color-panel) md:opacity-0 md:group-hover:opacity-100"
+              className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-white/95 text-(--color-fg) shadow-sm transition hover:bg-white md:opacity-0 md:group-hover:opacity-100"
               aria-label="Next image"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-(--color-bg)/75 px-3 py-1 text-xs tabular-nums text-(--color-fg-muted) backdrop-blur">
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-(--color-line) bg-white/95 px-2.5 py-0.5 text-xs tabular-nums text-(--color-fg-muted) shadow-sm">
               {index + 1} / {n}
             </div>
           </>
@@ -90,17 +90,17 @@ export function ProductGallery({
       </div>
 
       {n > 1 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {urls.map((url, i) => (
             <button
               key={`${url}-${i}`}
               type="button"
               onClick={() => setIndex(i)}
               className={cn(
-                "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-2 transition",
+                "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 bg-(--color-bg-soft) transition",
                 i === index
-                  ? "ring-(--color-accent)"
-                  : "ring-transparent opacity-60 hover:opacity-100",
+                  ? "border-(--color-accent)"
+                  : "border-transparent opacity-70 hover:opacity-100",
               )}
             >
               <Image src={url} alt="" fill className="object-contain p-0.5" unoptimized />

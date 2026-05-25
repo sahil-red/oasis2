@@ -30,10 +30,7 @@ function normalizeState(
   options: ReturnType<typeof buildFilterOptions>,
 ): CatalogFilterState {
   const next = { ...state };
-  if (
-    next.subcategory &&
-    !options.subcategories.includes(next.subcategory)
-  ) {
+  if (next.subcategory && !options.subcategories.includes(next.subcategory)) {
     next.subcategory = "";
   }
   if (next.brand && !options.brands.includes(next.brand)) {
@@ -171,7 +168,7 @@ export function CatalogView({
 
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[12rem]">
-            <span className="text-[11px] text-(--color-fg-dim)">Subcategory</span>
+            <span className="text-[11px] text-(--color-fg-dim)">Type</span>
             <select
               value={activeState.subcategory}
               onChange={(e) => patch({ subcategory: e.target.value })}

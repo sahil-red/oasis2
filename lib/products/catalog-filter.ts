@@ -1,3 +1,9 @@
+import {
+  productAisle,
+  productMatchesAisle,
+  productMatchesShelf,
+  productShelf,
+} from "@/lib/products/catalog-meta";
 import type { CatalogFilters, ProductListItem } from "@/lib/products/queries";
 
 export type CatalogFilterState = {
@@ -16,11 +22,12 @@ export function filterCatalogProducts(
 
   return products.filter((p) => {
     if (state.onlyScored && !p.core_scores) return false;
-    if (state.category && p.category !== state.category) return false;
-    if (state.subcategory && p.subcategory !== state.subcategory) return false;
+    if (!productMatchesAisle(p, state.category)) return false;
+    if (!productMatchesShelf(p, state.subcategory)) return false;
     if (state.brand && p.brand !== state.brand) return false;
     if (!q) return true;
-    const hay = [p.name, p.brand, p.category, p.subcategory]
+    const shelf = productShelf(p);
+    const hay = [p.name, p.brand, productAisle(p), shelf]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -32,16 +39,20 @@ export function buildFilterOptions(
   products: ProductListItem[],
   category?: string,
 ): CatalogFilters {
-  const pool = category ? products.filter((p) => p.category === category) : products;
+  const pool = category
+    ? products.filter((p) => productMatchesAisle(p, category))
+    : products;
   const categories = new Set<string>();
   const subcategories = new Set<string>();
   const brands = new Set<string>();
 
   for (const p of products) {
-    if (p.category) categories.add(p.category);
+    const aisle = productAisle(p);
+    if (aisle) categories.add(aisle);
   }
   for (const p of pool) {
-    if (p.subcategory) subcategories.add(p.subcategory);
+    const shelf = productShelf(p);
+    if (shelf) subcategories.add(shelf);
     if (p.brand) brands.add(p.brand);
   }
 

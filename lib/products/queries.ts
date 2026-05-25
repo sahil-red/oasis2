@@ -12,7 +12,7 @@ function db() {
 }
 
 const LIST_FIELDS =
-  "id, slug, name, brand, category, subcategory, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
+  "id, slug, name, brand, super_category, category, subcategory, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
 
 export type ProductListItem = Pick<
   Product,
@@ -20,8 +20,10 @@ export type ProductListItem = Pick<
   | "slug"
   | "name"
   | "brand"
+  | "super_category"
   | "category"
   | "subcategory"
+  | "attributes"
   | "price_inr"
   | "mrp_inr"
   | "image_urls"
@@ -58,8 +60,10 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     slug: row.slug as string,
     name: row.name as string,
     brand: (row.brand as string | null) ?? null,
+    super_category: (row.super_category as string | null) ?? null,
     category: (row.category as string | null) ?? null,
     subcategory: (row.subcategory as string | null) ?? null,
+    attributes: (row.attributes as Record<string, string> | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
     image_urls: (row.image_urls as string[]) ?? [],

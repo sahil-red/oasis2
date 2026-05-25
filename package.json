@@ -16,6 +16,8 @@
     "scrape:details": "tsx scripts/02-scrape-products.ts --detail",
     "scrape:packaged": "tsx scripts/02-scrape-products.ts --only-categories=snacks,cold drinks,sweet tooth,bakery,breakfast,sauces,masala --skip-categories=fruits,vegetable,atta,rice,dal,tea,coffee,dairy,paan,pharma,personal,cleaning,home,pet,baby,meat --pages-per-cat=6 --ignore-progress --max-products=500",
     "scrape:packaged:detail": "tsx scripts/02-scrape-products.ts --detail-only",
+    "scrape:expand": "tsx scripts/02-scrape-products.ts --only-categories=snacks__munchies__breakfast__sweet_tooth__bakery__biscuit__sauce__spread__organic__healthy__dairy --pages-per-cat=100 --ignore-progress --max-products=4000",
+    "scrape:expand:detail": "tsx scripts/02-scrape-products.ts --detail-only",
     "peek:blinkit": "tsx scripts/peek-blinkit.ts",
     "diag:blinkit": "tsx scripts/diag-blinkit.ts",
     "diag:supabase": "tsx scripts/diag-supabase.ts",

@@ -1,11 +1,19 @@
 import { StatCard } from "@/components/stat-card";
 import type { AnalysisHighlight } from "@/lib/products/analysis";
+import { cn } from "@/lib/utils";
 
 const TONE_DOT: Record<AnalysisHighlight["tone"], string> = {
   bad: "bg-(--color-bad)",
   warn: "bg-(--color-warn)",
   good: "bg-(--color-good)",
   neutral: "bg-(--color-fg-dim)",
+};
+
+const TONE_VALUE: Record<AnalysisHighlight["tone"], string> = {
+  bad: "text-(--color-bad)",
+  warn: "text-(--color-warn)",
+  good: "text-(--color-good)",
+  neutral: "text-(--color-fg)",
 };
 
 export function AnalysisGrid({
@@ -18,13 +26,25 @@ export function AnalysisGrid({
   if (!highlights.length) return null;
 
   if (compact) {
+    const items = highlights.slice(0, 3);
     return (
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-relaxed text-(--color-fg-dim)">
-        {highlights.slice(0, 3).map((h, i) => (
-          <span key={h.label} className="inline-flex items-center gap-1.5">
-            {i > 0 ? <span aria-hidden>·</span> : null}
-            <span className={`h-1 w-1 shrink-0 rounded-full ${TONE_DOT[h.tone]}`} />
-            {h.label} {h.value}
+      <p className="text-[13px] leading-normal text-(--color-fg)">
+        {items.map((h, i) => (
+          <span key={h.label}>
+            {i > 0 ? (
+              <span className="mx-1.5 text-(--color-line-strong)" aria-hidden>
+                ·
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1 align-middle whitespace-nowrap">
+              <span
+                className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[h.tone]}`}
+              />
+              <span className="font-medium">{h.label}</span>{" "}
+              <span className={cn("font-semibold tabular-nums", TONE_VALUE[h.tone])}>
+                {h.value}
+              </span>
+            </span>
           </span>
         ))}
       </p>

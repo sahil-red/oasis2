@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 
 export function SiteNav() {
   return (
-    <header className="sticky top-0 z-50 border-b border-(--color-line) bg-(--color-bg)/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-(--color-line) bg-white/90 backdrop-blur-md">
       <nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-(--color-fg) font-display text-base text-(--color-bg)">

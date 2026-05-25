@@ -68,17 +68,31 @@ function parseArgs(): Args {
     if (a.startsWith("--limit-cats=")) limitCats = Number(a.split("=")[1]);
     if (a.startsWith("--pages-per-cat=")) pagesPerCat = Number(a.split("=")[1]);
     if (a.startsWith("--only-categories=")) {
-      onlyCategories = a
-        .split("=")[1]
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
+      const raw = a.split("=")[1];
+      const sep = raw.includes("__")
+        ? "__"
+        : raw.includes(";")
+          ? ";"
+          : raw.includes("|")
+            ? "|"
+            : ",";
+      onlyCategories = raw
+        .split(sep)
+        .map((s) => s.trim().toLowerCase().replace(/_/g, " "))
         .filter(Boolean);
     }
     if (a.startsWith("--skip-categories=")) {
-      skipCategories = a
-        .split("=")[1]
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
+      const raw = a.split("=")[1];
+      const sep = raw.includes("__")
+        ? "__"
+        : raw.includes(";")
+          ? ";"
+          : raw.includes("|")
+            ? "|"
+            : ",";
+      skipCategories = raw
+        .split(sep)
+        .map((s) => s.trim().toLowerCase().replace(/_/g, " "))
         .filter(Boolean);
     }
     if (a.startsWith("--max-products=")) maxProducts = Number(a.split("=")[1]);

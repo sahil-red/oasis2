@@ -19,13 +19,13 @@ export function ProductCard({ product }: { product: ProductListItem }) {
 
   return (
     <Link href={`/product/${product.slug}`} className="group block">
-      <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#f5f5f7]">
+      <div className="relative aspect-square overflow-hidden rounded-xl bg-(--color-bg-soft)">
         {thumb ? (
           <Image
             src={thumb}
             alt={product.name}
             fill
-            className="object-contain p-4 transition duration-500 ease-out group-hover:scale-[1.02]"
+            className="object-contain p-1.5 transition duration-300 ease-out group-hover:scale-[1.01]"
             sizes="(max-width: 768px) 50vw, 20vw"
             unoptimized
           />
@@ -34,29 +34,20 @@ export function ProductCard({ product }: { product: ProductListItem }) {
             No image
           </div>
         )}
-        <div className="absolute left-2.5 top-2.5">
-          {core ? (
-            <ScoreBadge
-              score={core.score}
-              grade={core.grade}
-              band={core.band}
-              className="!bg-white/92 !shadow-sm !ring-black/5"
-            />
-          ) : (
-            <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-(--color-fg-dim) shadow-sm">
-              —
-            </span>
-          )}
-        </div>
+        {core ? (
+          <div className="absolute right-1.5 top-1.5">
+            <ScoreBadge score={core.score} grade={core.grade} />
+          </div>
+        ) : null}
       </div>
 
-      <div className="mt-3 space-y-1">
+      <div className="mt-2.5 space-y-1">
         {product.brand ? (
-          <p className="truncate text-[11px] uppercase tracking-[0.14em] text-(--color-fg-dim)">
+          <p className="truncate text-[11px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
             {product.brand}
           </p>
         ) : null}
-        <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-white">
+        <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
           {product.name}
         </h3>
         {highlights.length > 0 ? (
@@ -64,7 +55,7 @@ export function ProductCard({ product }: { product: ProductListItem }) {
         ) : null}
         <div className="flex items-baseline gap-2 pt-0.5">
           {product.price_inr != null ? (
-            <span className="text-[15px] font-semibold tabular-nums tracking-tight">
+            <span className="text-[15px] font-semibold tabular-nums tracking-tight text-(--color-fg)">
               ₹{product.price_inr}
             </span>
           ) : null}
