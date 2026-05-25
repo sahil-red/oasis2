@@ -2,12 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { ScoreRing } from "@/components/score-ring";
-import {
-  readVegAllowEggs,
-  writeStoredGoal,
-  writeVegAllowEggs,
-} from "@/lib/goals/storage";
-import { parseVegAllowEggs } from "@/lib/products/catalog-filter";
+import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { fitVerdictLabel, scorePresentation, type FitVerdict } from "@/lib/goals/verdict";
@@ -38,30 +33,14 @@ export function ProductGoalFitList({
   const searchParams = useSearchParams();
   const active = (searchParams.get("goal") ?? "balanced") as GoalId;
 
-  const vegAllowEggs =
-    searchParams.get("allow_eggs") != null
-      ? parseVegAllowEggs(searchParams.get("allow_eggs"))
-      : readVegAllowEggs();
-
   const select = (id: GoalId) => {
     writeStoredGoal(id);
     const p = new URLSearchParams(searchParams.toString());
     if (id === "balanced") p.delete("goal");
     else p.set("goal", id);
-    if (id !== "veg") p.delete("allow_eggs");
-    else if (vegAllowEggs) p.set("allow_eggs", "1");
-    else p.delete("allow_eggs");
+    p.delete("allow_eggs");
     const q = p.toString();
     window.location.href = q ? `${pathname}?${q}` : pathname;
-  };
-
-  const setVegAllowEggs = (allow: boolean) => {
-    writeVegAllowEggs(allow);
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("goal", "veg");
-    if (allow) p.set("allow_eggs", "1");
-    else p.delete("allow_eggs");
-    window.location.href = `${pathname}?${p.toString()}`;
   };
 
   const profileLabel = (id: GoalId) =>
@@ -119,8 +98,6 @@ export function ProductGoalFitList({
     "diabetic",
     "pcos",
     "protein-budget",
-    "veg",
-    "vegan",
     "kids",
   ];
   for (const id of tileOrder) {
@@ -148,23 +125,6 @@ export function ProductGoalFitList({
           Score pending — goal fit will appear once nutrition is available.
         </p>
       )}
-
-      {active === "veg" ? (
-        <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-white px-3 py-2.5 text-[13px]">
-          <input
-            type="checkbox"
-            checked={vegAllowEggs}
-            onChange={(e) => setVegAllowEggs(e.target.checked)}
-            className="h-4 w-4 rounded border-(--color-line) accent-(--color-fg)"
-          />
-          <span>
-            <span className="font-medium text-(--color-fg)">Allow eggs</span>
-            <span className="block text-[12px] text-(--color-fg-muted)">
-              Uncheck for pure veg (no egg in ingredients).
-            </span>
-          </span>
-        </label>
-      ) : null}
 
       {gridGoals.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-(--color-line) bg-white p-3 shadow-sm">

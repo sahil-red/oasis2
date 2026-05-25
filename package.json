@@ -29,6 +29,7 @@
     "spy:blinkit": "tsx scripts/spy-blinkit.ts",
     "ocr": "tsx scripts/03-ocr-labels.ts",
     "score": "tsx scripts/05-compute-scores.ts",
+    "seed:produce": "tsx scripts/seed-fresh-produce.ts",
     "funnel": "tsx scripts/db-funnel.ts",
     "db:status": "tsx scripts/db-status.ts"
   },

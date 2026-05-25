@@ -12,7 +12,9 @@ import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
-import { parseVegAllowEggs } from "@/lib/products/catalog-filter";
+import { dietFromParam } from "@/lib/diet/types";
+import { productDietBadge } from "@/lib/diet/match";
+import { DietBadgeRow } from "@/components/diet-badge";
 import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
@@ -40,23 +42,20 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ goal?: string; allow_eggs?: string }>;
+  searchParams: Promise<{ goal?: string; diet?: string }>;
 }) {
   const { slug } = await params;
-  const { goal: goalParam, allow_eggs: allowEggsParam } = await searchParams;
+  const { goal: goalParam, diet: dietParam } = await searchParams;
   const goal = goalFromParam(goalParam);
-  const vegAllowEggs = parseVegAllowEggs(allowEggsParam);
+  const diet = dietFromParam(dietParam);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
   const swapPool = await getProductsForSwaps(product, 200);
-  const swaps = findAlternatives(product, swapPool, goal, 3, {
-    veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
-  });
-  const goalRows = buildProductGoalRows(product, {
-    veg_allow_eggs: vegAllowEggs,
-  });
+  const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
+  const goalRows = buildProductGoalRows(product);
   const overallGoal = buildOverallGoalSummary(product);
+  const dietBadge = productDietBadge(product);
 
   const score = product.core_scores;
   const subscores = score?.subscores as SubScores | undefined;
@@ -125,6 +124,7 @@ export default async function ProductPage({
               {[product.category, product.subcategory].filter(Boolean).join(" · ")}
               {product.net_weight ? ` · ${product.net_weight}` : ""}
             </p>
+            <DietBadgeRow badge={dietBadge} selected={diet} />
             {product.price_inr != null ? (
               <p className="mt-4 text-2xl font-semibold tabular-nums">
                 ₹{product.price_inr}

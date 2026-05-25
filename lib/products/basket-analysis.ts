@@ -30,7 +30,6 @@ function avg(nums: number[]): number | null {
 export function analyzeBasket(
   lines: BasketLine[],
   goal: GoalId = "balanced",
-  opts?: { veg_allow_eggs?: boolean },
 ): BasketAnalysis {
   const items = lines.flatMap((l) => Array(l.qty).fill(l.product) as ProductListItem[]);
   const withNutrition = items.filter((p) => p.nutrition);
@@ -38,12 +37,7 @@ export function analyzeBasket(
   const goalFits =
     goal === "balanced"
       ? []
-      : items.map((p) =>
-          computeGoalFit(goal, {
-            ...goalFitInputs(p),
-            veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
-          }).fit,
-        );
+      : items.map((p) => computeGoalFit(goal, goalFitInputs(p)).fit);
   const totalInr = lines.reduce((s, l) => s + (l.product.price_inr ?? 0) * l.qty, 0);
 
   let proteinPct: number | null = null;
@@ -89,11 +83,7 @@ export function analyzeBasket(
   if (goal !== "balanced" && goalFits.length) {
     const avgFit = avg(goalFits)!;
     const weak = items.filter(
-      (p) =>
-        computeGoalFit(goal, {
-          ...goalFitInputs(p),
-          veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
-        }).fit < 45,
+      (p) => computeGoalFit(goal, goalFitInputs(p)).fit < 45,
     ).length;
     summary.push(
       `For ${goalLabel}, this cart averages ${avgFit.toFixed(0)} / 100 across items.`,

@@ -1,39 +1,39 @@
 "use client";
 
-import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
+import { DIET_PROFILES, type DietMode } from "@/lib/diet/types";
 import { cn } from "@/lib/utils";
 
-export function GoalModePicker({
+export function DietPicker({
   value,
   onChange,
   compact,
 }: {
-  value: GoalId;
-  onChange: (g: GoalId) => void;
+  value: DietMode;
+  onChange: (d: DietMode) => void;
   compact?: boolean;
 }) {
   return (
     <div className={cn(compact ? "" : "space-y-2")}>
       {!compact ? (
-        <p className="text-[13px] leading-snug text-(--color-fg-muted)">
-          Rankings update across the catalog.
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+          Diet
         </p>
       ) : null}
       <div className="flex flex-wrap gap-1.5">
-        {GOAL_PROFILES.map((g) => (
+        {DIET_PROFILES.map((d) => (
           <button
-            key={g.id}
+            key={d.id}
             type="button"
-            onClick={() => onChange(g.id)}
-            title={g.description}
+            onClick={() => onChange(d.id)}
+            title={d.description}
             className={cn(
-              "rounded-full px-2.5 py-1.5 text-[12px] transition",
-              value === g.id
+              "rounded-full px-2.5 py-1 text-[12px] transition",
+              value === d.id
                 ? "bg-(--color-fg) text-(--color-bg)"
                 : "bg-(--color-bg-soft) text-(--color-fg-muted) hover:text-(--color-fg)",
             )}
           >
-            <span className="font-medium">{g.label}</span>
+            <span className="font-medium">{d.short}</span>
           </button>
         ))}
       </div>

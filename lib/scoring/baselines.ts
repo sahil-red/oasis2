@@ -1,4 +1,5 @@
 import baselinesJson from "@/data/category-baselines.json";
+import { matchProduce } from "@/lib/produce/seed";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 interface BaselineEntry {
@@ -111,6 +112,17 @@ export function resolveBaselineKey(
       return "Soft Drinks & Juices::Packaged Fruit Juices";
     }
     return "Soft Drinks & Juices::Carbonated Drinks";
+  }
+
+  // Fresh produce — match by name to decide fruit vs vegetable baseline.
+  if (/Fruits?\s*&\s*Vegetables|Fresh\s+Fruits|Fresh\s+Vegetables|Vegetables/i.test(cat)) {
+    const entry = matchProduce(productName);
+    if (entry) {
+      return entry.kind === "fruit"
+        ? "Fresh Fruits::All"
+        : "Fresh Vegetables::All";
+    }
+    return "Fresh Vegetables::All";
   }
 
   // Map Blinkit snack/sweet categories onto our curated baselines so they

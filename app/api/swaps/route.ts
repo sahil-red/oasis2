@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { findAlternatives, type SwapSuggestion } from "@/lib/products/alternatives";
 import type { GoalId } from "@/lib/goals/types";
 import { GOAL_PROFILES } from "@/lib/goals/types";
+import { dietFromParam } from "@/lib/diet/types";
 import { getProductsBySlugs, getProductsForSwaps } from "@/lib/products/queries";
 
 export const revalidate = 60;
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   const slugs = [...new Set((params.get("slugs")?.split(",").filter(Boolean) ?? []))].slice(0, 12);
   const goalParam = params.get("goal") ?? "balanced";
   const goal = (GOAL_IDS.has(goalParam as GoalId) ? goalParam : "balanced") as GoalId;
-  const vegAllowEggs = params.get("allow_eggs") === "1";
+  const diet = dietFromParam(params.get("diet"));
 
   if (!slugs.length) {
     return NextResponse.json({ goal, swaps: {} as Record<string, SwapSuggestion[]> });
@@ -26,9 +27,7 @@ export async function GET(request: Request) {
   await Promise.all(
     products.map(async (current) => {
       const pool = await getProductsForSwaps(current, 200);
-      swaps[current.slug] = findAlternatives(current, pool, goal, 3, {
-        veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
-      });
+      swaps[current.slug] = findAlternatives(current, pool, goal, 3, { diet });
     }),
   );
 

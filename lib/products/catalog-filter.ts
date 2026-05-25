@@ -1,3 +1,5 @@
+import { isDietCompatible } from "@/lib/diet/match";
+import type { DietMode } from "@/lib/diet/types";
 import {
   productAisle,
   productMatchesAisle,
@@ -17,6 +19,7 @@ export type CatalogFilterState = {
 export function filterCatalogProducts(
   products: ProductListItem[],
   state: CatalogFilterState,
+  diet: DietMode = "any",
 ): ProductListItem[] {
   const q = state.q.trim().toLowerCase();
 
@@ -25,6 +28,7 @@ export function filterCatalogProducts(
     if (!productMatchesAisle(p, state.category)) return false;
     if (!productMatchesShelf(p, state.subcategory)) return false;
     if (state.brand && p.brand !== state.brand) return false;
+    if (diet !== "any" && !isDietCompatible(diet, p).ok) return false;
     if (!q) return true;
     const shelf = productShelf(p);
     const hay = [p.name, p.brand, productAisle(p), shelf]
@@ -83,7 +87,7 @@ export function parseCatalogParams(params: {
 export function catalogParamsToSearch(
   state: CatalogFilterState,
   goal?: string,
-  opts?: { vegAllowEggs?: boolean },
+  opts?: { diet?: DietMode },
 ): string {
   const p = new URLSearchParams();
   if (state.q.trim()) p.set("q", state.q.trim());
@@ -92,13 +96,7 @@ export function catalogParamsToSearch(
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
   if (goal && goal !== "balanced") p.set("goal", goal);
-  if (goal === "veg" && opts?.vegAllowEggs) p.set("allow_eggs", "1");
+  if (opts?.diet && opts.diet !== "any") p.set("diet", opts.diet);
   const s = p.toString();
   return s ? `?${s}` : "";
-}
-
-export function parseVegAllowEggs(
-  raw: string | null | undefined,
-): boolean {
-  return raw === "1" || raw === "true";
 }

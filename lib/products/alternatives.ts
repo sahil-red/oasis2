@@ -1,5 +1,7 @@
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
+import { isDietCompatible } from "@/lib/diet/match";
+import type { DietMode } from "@/lib/diet/types";
 import { productAisle, productShelf } from "@/lib/products/catalog-meta";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -171,16 +173,14 @@ export function findAlternatives(
   catalog: ProductListItem[],
   goal: GoalId,
   limit = 3,
-  opts?: { veg_allow_eggs?: boolean },
+  opts?: { diet?: DietMode },
 ): SwapSuggestion[] {
   const aisle = productAisle(current);
+  const diet: DietMode = opts?.diet ?? "any";
   const curRank =
     goal === "balanced"
       ? (current.core_scores?.score ?? -1)
-      : computeGoalFit(goal, {
-          ...goalFitInputs(current),
-          veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
-        }).fit;
+      : computeGoalFit(goal, goalFitInputs(current)).fit;
   const minImprovement = goal === "balanced" ? 5 : 4;
   const band = priceBand(current.price_inr);
   const curBrand = brandKey(current);
@@ -192,19 +192,16 @@ export function findAlternatives(
     if (!shelfRelated(current, p)) return false;
     if (nutritionTooSimilar(current.nutrition, p.nutrition)) return false;
     if (brandKey(p) === curBrand && nameOverlap(current.name, p.name) > 0.4) return false;
+    if (!isDietCompatible(diet, p).ok) return false;
     return true;
   });
 
   const candidates = pool
     .map((p) => {
-      const goalFit = computeGoalFit(goal, {
-        ...goalFitInputs(p),
-        veg_allow_eggs: goal === "veg" ? opts?.veg_allow_eggs : undefined,
-      }).fit;
+      const goalFit = computeGoalFit(goal, goalFitInputs(p)).fit;
       const rank = goal === "balanced" ? (p.core_scores?.score ?? -1) : goalFit;
       return { p, goalFit, rank, pick: candidateScore(current, p, goal, rank, curRank) };
     })
-    .filter(({ goalFit }) => (goal !== "vegan" && goal !== "veg") || goalFit > 0)
     .filter(({ rank }) => rank >= curRank + minImprovement)
     .filter(({ p }) => {
       if (band == null || priceBand(p.price_inr) == null) return true;

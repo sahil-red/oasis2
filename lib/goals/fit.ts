@@ -3,8 +3,7 @@ import { diabeticGoalFit, pcosGoalFit } from "@/lib/goals/glucose-fit";
 import { proteinBudgetGoalFit } from "@/lib/products/pack-nutrition";
 import {
   buildGoalFeatures,
-  compactReason,
-  goalPrimaryMetric,
+  goalCaption,
   type GoalFeatureInput,
 } from "./features";
 import type { GoalId } from "./types";
@@ -43,7 +42,7 @@ function buildHeroReasons(goal: GoalId, f: ReturnType<typeof buildGoalFeatures>,
 }
 
 function result(goal: GoalId, fit: number, _reasons: string[], f: ReturnType<typeof buildGoalFeatures>): GoalFitResult {
-  const caption = goalPrimaryMetric(goal, f);
+  const caption = goalCaption(goal, f);
   return {
     fit: clamp(fit),
     label: goal === "balanced" ? "Overall" : "Goal fit",
@@ -60,6 +59,12 @@ export function computeGoalFit(
   const f = buildGoalFeatures(opts);
   if (goal === "balanced") {
     return result(goal, opts.core_score ?? 50, ["Overall label quality"], f);
+  }
+
+  // Fresh produce: always answer with a goal-aware estimate from the basic
+  // nutrition (no label, so we don't have to wait on additives etc.).
+  if (f.isFreshProduce && f.hasNutrition) {
+    return result(goal, freshProduceFit(goal, f, opts.core_score ?? 90), [], f);
   }
 
   const reasons: string[] = [];
@@ -164,22 +169,6 @@ export function computeGoalFit(
       if (f.isProteinSnack && f.kcal > 360) fit = Math.min(fit, 68);
       break;
     }
-    case "veg": {
-      if (f.hasMeatOrFish || (!f.allowEggs && f.hasEggs)) {
-        fit = 0;
-        break;
-      }
-      fit = (opts.core_score ?? 55) + (f.isVegLabel ? 8 : 0) + f.fiber * 1.1 - f.additiveBurden * 5;
-      break;
-    }
-    case "vegan": {
-      if (f.hasAnimalDerived) {
-        fit = 0;
-        break;
-      }
-      fit = (opts.core_score ?? 55) + (f.isVegLabel ? 4 : 0) + f.fiber * 1.2 - f.additiveBurden * 7;
-      break;
-    }
     case "protein-budget": {
       if (!f.hasNutrition) {
         fit = Math.round((opts.core_score ?? 0) * 0.25);
@@ -212,6 +201,64 @@ export function computeGoalFit(
   return result(goal, fit, reasons, f);
 }
 
+/**
+ * Goal-aware scoring for fresh fruits / vegetables. The catalog has no labels
+ * here, so we lean on per-100g USDA values seeded into the nutrition column
+ * (see `lib/produce/seed.ts`). Subjective by goal — a banana isn't the same
+ * pick for "bulk" as it is for "diabetic".
+ */
+function freshProduceFit(
+  goal: GoalId,
+  f: ReturnType<typeof buildGoalFeatures>,
+  coreFloor: number,
+): number {
+  switch (goal) {
+    case "gym": {
+      let fit = 70 + f.protein * 1.8 - Math.max(0, f.kcal - 80) * 0.04;
+      if (f.protein >= 6) fit += 6;
+      if (f.protein < 1) fit -= 12;
+      return fit;
+    }
+    case "bulk": {
+      let fit = 60 + Math.min(20, Math.max(0, (f.kcal - 50) * 0.18)) + f.protein * 1.2;
+      if (f.kcal < 35) fit -= 14;
+      if (f.kcal >= 150) fit += 6;
+      return fit;
+    }
+    case "fat-loss": {
+      let fit = 80 - Math.max(0, f.kcal - 70) * 0.18 + Math.min(8, f.fiber) * 1.2;
+      if (f.sugar >= 15) fit -= 10;
+      if (f.kcal < 40) fit += 8;
+      return fit;
+    }
+    case "diabetic": {
+      let fit = 78 - Math.max(0, f.sugar - 4) * 1.7 + Math.min(10, f.fiber) * 1.4;
+      if (f.netCarbs >= 18) fit -= 12;
+      if (f.sugar >= 14) fit -= 10;
+      if (f.fiber >= 5 && f.sugar <= 5) fit += 6;
+      return fit;
+    }
+    case "pcos": {
+      let fit = 80 - Math.max(0, f.sugar - 5) * 1.4 + Math.min(10, f.fiber) * 1.2;
+      if (f.netCarbs >= 18) fit -= 8;
+      return fit;
+    }
+    case "kids": {
+      // Fresh produce is the canonical clean kid-friendly option.
+      let fit = 88 + Math.min(8, f.fiber);
+      if (f.sugar >= 14) fit -= 4;
+      return fit;
+    }
+    case "protein-budget": {
+      // Most produce is cheap but low protein. Reward the few high-protein ones.
+      const score = 28 + Math.min(40, f.proteinPerRupee100 * 1.4) + f.protein * 2;
+      return score;
+    }
+    default:
+      return coreFloor;
+  }
+}
+
 /** Shared inputs for catalog sorting and PDP goal fit. */
 export function goalFitInputs(p: {
   nutrition: ProductNutrition | null;
@@ -223,7 +270,6 @@ export function goalFitInputs(p: {
   subcategory?: string | null;
   core_scores?: { score: number } | null;
   attributes?: Record<string, string> | null;
-  veg_allow_eggs?: boolean;
 }) {
   return {
     nutrition: p.nutrition,
@@ -235,6 +281,5 @@ export function goalFitInputs(p: {
     subcategory: p.subcategory ?? null,
     core_score: p.core_scores?.score ?? null,
     attributes: p.attributes ?? null,
-    veg_allow_eggs: p.veg_allow_eggs,
   };
 }

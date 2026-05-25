@@ -1,11 +1,6 @@
 import { additiveGoalBurden, scoreIngredientSignals } from "@/lib/scoring/ingredient-signals";
 import type { ProductNutrition } from "@/lib/supabase/types";
-import { hasAnimalDerived } from "@/lib/goals/vegan";
-import {
-  hasEggs,
-  hasMeatOrFish,
-  vegetarianLabelHint,
-} from "@/lib/goals/vegetarian";
+import { vegetarianLabelHint } from "@/lib/goals/vegetarian";
 import {
   packNutritionContext,
   parsePackGrams,
@@ -23,7 +18,6 @@ export type GoalFeatureInput = {
   name?: string | null;
   category?: string | null;
   subcategory?: string | null;
-  veg_allow_eggs?: boolean;
 };
 
 export type GoalFeatures = {
@@ -59,10 +53,6 @@ export type GoalFeatures = {
   isSugaryDrink: boolean;
   isFreshProduce: boolean;
   isVegLabel: boolean;
-  hasMeatOrFish: boolean;
-  hasEggs: boolean;
-  hasAnimalDerived: boolean;
-  allowEggs: boolean;
   coreScore: number | null;
 };
 
@@ -125,7 +115,9 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     sugar >= 6;
   const isFreshProduce =
     /\b(fresh fruit|fresh vegetable|vegetables)\b/i.test(t) ||
-    /(Fresh Fruits|Fresh Vegetables)/i.test(`${input.category ?? ""} ${input.subcategory ?? ""}`);
+    /(Fresh Fruits|Fresh Vegetables|Fruits\s*&\s*Vegetables)/i.test(
+      `${input.category ?? ""} ${input.subcategory ?? ""}`,
+    );
   const hasIngredientData = ((input.ingredients_raw ?? "").trim().length > 0) || ((input.attributes?.["Ingredients"] ?? "").trim().length > 0);
 
   return {
@@ -162,21 +154,6 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     isSugaryDrink,
     isFreshProduce,
     isVegLabel: vegetarianLabelHint(input.attributes ?? null),
-    hasMeatOrFish: hasMeatOrFish({
-      ingredients_raw: input.ingredients_raw,
-      attributes: input.attributes ?? null,
-      product_name: input.name ?? null,
-    }),
-    hasEggs: hasEggs({
-      ingredients_raw: input.ingredients_raw,
-      attributes: input.attributes ?? null,
-    }),
-    hasAnimalDerived: hasAnimalDerived({
-      ingredients_raw: input.ingredients_raw,
-      attributes: input.attributes ?? null,
-      product_name: input.name ?? null,
-    }),
-    allowEggs: input.veg_allow_eggs === true,
     coreScore: input.core_score ?? null,
   };
 }
@@ -186,15 +163,10 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
  * No raw numbers — words first. Used for tile copy, cart rows, and swap cards.
  */
 export function goalCaption(goal: GoalId, f: GoalFeatures): string {
-  // Hard exclusions first.
-  if (goal === "veg" && f.hasMeatOrFish) return "Has meat or fish";
-  if (goal === "veg" && !f.allowEggs && f.hasEggs) return "Contains egg";
-  if (goal === "vegan" && f.hasAnimalDerived) return "Animal ingredients on label";
-
-  if (!f.hasNutrition && goal !== "veg" && goal !== "vegan") {
-    return "No nutrition data";
+  if (f.isFreshProduce && f.hasNutrition) {
+    return freshProduceCaption(goal, f);
   }
-
+  if (!f.hasNutrition) return "No nutrition data";
   switch (goal) {
     case "balanced":
       return balancedCaption(f);
@@ -212,14 +184,44 @@ export function goalCaption(goal: GoalId, f: GoalFeatures): string {
       return kidsCaption(f);
     case "protein-budget":
       return proteinBudgetCaption(f);
-    case "veg":
-      return f.isVegLabel ? "Vegetarian on pack" : "No meat or fish";
-    case "vegan":
-      return f.isVegLabel && !f.hasAnimalDerived
-        ? "Plant-only label"
-        : "Looks plant-based";
     default:
       return "Average packaged food";
+  }
+}
+
+function freshProduceCaption(goal: GoalId, f: GoalFeatures): string {
+  switch (goal) {
+    case "balanced":
+      return f.protein >= 4 ? "Whole food, decent protein" : "Whole-food, nutrient dense";
+    case "gym":
+      if (f.protein >= 6) return "Plant protein for muscle";
+      if (f.protein >= 3) return "Light protein from greens";
+      return "Low-protein whole food";
+    case "bulk":
+      if (f.kcal >= 150) return "Calorie-dense whole food";
+      if (f.kcal >= 80) return "Moderate calories, clean";
+      return "Too light for bulking";
+    case "fat-loss":
+      if (f.kcal < 40) return "Very low cal, fibre rich";
+      if (f.kcal < 80) return "Low cal, high fibre";
+      if (f.sugar >= 14) return "Sweet — moderate portions";
+      return "Reasonable for fat loss";
+    case "diabetic":
+      if (f.fiber >= 5 && f.sugar <= 5) return "Fibre-rich, low sugar";
+      if (f.sugar >= 14) return "Sweet — pair with protein";
+      if (f.netCarbs >= 18) return "Carb-heavy whole food";
+      return "Whole food, easy on glucose";
+    case "pcos":
+      if (f.fiber >= 5 && f.sugar <= 6) return "Fibre supports insulin";
+      if (f.sugar >= 12) return "Sweet — limit large portions";
+      return "Whole food for PCOS";
+    case "kids":
+      return "Whole food — kid-friendly";
+    case "protein-budget":
+      if (f.protein >= 5) return "Cheap plant protein";
+      return "Low protein per rupee";
+    default:
+      return "Whole, unprocessed food";
   }
 }
 

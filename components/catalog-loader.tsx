@@ -11,7 +11,7 @@ type Params = {
   brand?: string;
   scored?: string;
   goal?: string;
-  allow_eggs?: string;
+  diet?: string;
 };
 
 export function CatalogLoader({ initialParams }: { initialParams: Params }) {

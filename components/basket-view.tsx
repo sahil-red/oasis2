@@ -5,16 +5,14 @@ import Link from "next/link";
 import { ArrowRight, Minus, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BasketSwapCards } from "@/components/basket-swap-cards";
+import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
-import {
-  readStoredGoal,
-  readVegAllowEggs,
-  writeStoredGoal,
-  writeVegAllowEggs,
-} from "@/lib/goals/storage";
+import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
+import { readDietMode, writeDietMode } from "@/lib/diet/storage";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
+import type { DietMode } from "@/lib/diet/types";
 import { analyzeBasket } from "@/lib/products/basket-analysis";
 import type { SwapSuggestion } from "@/lib/products/alternatives";
 import { colorForScore } from "@/lib/utils";
@@ -71,7 +69,7 @@ export function BasketView() {
   const [swapsLoading, setSwapsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [goal, setGoal] = useState<GoalId>("balanced");
-  const [vegAllowEggs, setVegAllowEggs] = useState(false);
+  const [diet, setDiet] = useState<DietMode>("any");
 
   useEffect(() => {
     let cancelled = false;
@@ -103,18 +101,18 @@ export function BasketView() {
 
     const syncGoal = () => {
       setGoal(readStoredGoal());
-      setVegAllowEggs(readVegAllowEggs());
+      setDiet(readDietMode());
     };
     syncGoal();
     sync();
     window.addEventListener("oasis-basket", sync);
     window.addEventListener("oasis-goal", syncGoal);
-    window.addEventListener("oasis-veg-eggs", syncGoal);
+    window.addEventListener("oasis-diet", syncGoal);
     return () => {
       cancelled = true;
       window.removeEventListener("oasis-basket", sync);
       window.removeEventListener("oasis-goal", syncGoal);
-      window.removeEventListener("oasis-veg-eggs", syncGoal);
+      window.removeEventListener("oasis-diet", syncGoal);
     };
   }, []);
 
@@ -123,9 +121,9 @@ export function BasketView() {
     setGoal(next);
   };
 
-  const pickVegAllowEggs = (allow: boolean) => {
-    writeVegAllowEggs(allow);
-    setVegAllowEggs(allow);
+  const pickDiet = (next: DietMode) => {
+    writeDietMode(next);
+    setDiet(next);
   };
 
   const slugsKey = useMemo(
@@ -140,8 +138,8 @@ export function BasketView() {
     }
     let cancelled = false;
     setSwapsLoading(true);
-    const allowQ = goal === "veg" && vegAllowEggs ? "&allow_eggs=1" : "";
-    fetch(`/api/swaps?slugs=${encodeURIComponent(slugsKey)}&goal=${goal}${allowQ}`)
+    const dietQ = diet !== "any" ? `&diet=${diet}` : "";
+    fetch(`/api/swaps?slugs=${encodeURIComponent(slugsKey)}&goal=${goal}${dietQ}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { swaps: Record<string, SwapSuggestion[]> }) => {
         if (!cancelled) setSwapsBySlug(data.swaps ?? {});
@@ -155,7 +153,7 @@ export function BasketView() {
     return () => {
       cancelled = true;
     };
-  }, [slugsKey, goal, vegAllowEggs]);
+  }, [slugsKey, goal, diet]);
 
   const lines = useMemo(() => {
     const bySlug = new Map(catalog.map((p) => [p.slug, p]));
@@ -167,13 +165,7 @@ export function BasketView() {
       .filter(Boolean) as { product: ProductListItem; qty: number }[];
   }, [entries, catalog]);
 
-  const analysis = useMemo(
-    () =>
-      analyzeBasket(lines, goal, {
-        veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
-      }),
-    [lines, goal, vegAllowEggs],
-  );
+  const analysis = useMemo(() => analyzeBasket(lines, goal), [lines, goal]);
   const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
   const swapCount = Object.values(swapsBySlug).reduce((n, s) => n + s.length, 0);
 
@@ -227,12 +219,7 @@ export function BasketView() {
       : "Add a few more items and we’ll find stronger swaps.";
 
   const itemFit = (product: ProductListItem) =>
-    goal === "balanced"
-      ? null
-      : computeGoalFit(goal, {
-          ...goalFitInputs(product),
-          veg_allow_eggs: goal === "veg" ? vegAllowEggs : undefined,
-        });
+    goal === "balanced" ? null : computeGoalFit(goal, goalFitInputs(product));
 
   return (
     <div className="space-y-5">
@@ -254,14 +241,9 @@ export function BasketView() {
                   ? ` · ${swapCount} swap${swapCount === 1 ? "" : "s"} ready`
                   : ""}
             </p>
-            <div className="mt-4 max-w-xl">
-              <GoalModePicker
-                value={goal}
-                onChange={pickGoal}
-                compact
-                vegAllowEggs={vegAllowEggs}
-                onVegAllowEggsChange={pickVegAllowEggs}
-              />
+            <div className="mt-4 max-w-xl space-y-2">
+              <GoalModePicker value={goal} onChange={pickGoal} compact />
+              <DietPicker value={diet} onChange={pickDiet} compact />
             </div>
           </div>
           <div className="text-left sm:text-right">

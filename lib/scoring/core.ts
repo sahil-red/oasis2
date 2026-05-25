@@ -52,7 +52,9 @@ function scoreLabels(
 
 function isWholeFoodCategory(category: string | null): boolean {
   if (!category) return false;
-  return /\b(Fresh Fruits|Fresh Vegetables|Chicken, Meat & Fish|Eggs|Paneer)\b/i.test(category);
+  return /\b(Fresh Fruits|Fresh Vegetables|Fruits\s*&\s*Vegetables|Vegetables|Chicken, Meat & Fish|Eggs|Paneer)\b/i.test(
+    category,
+  );
 }
 
 export function computeCoreScore(input: {
