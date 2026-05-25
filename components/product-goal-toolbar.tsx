@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
+import { writeStoredGoal } from "@/lib/goals/storage";
 import { goalFromParam, type GoalId } from "@/lib/goals/types";
 
 export function ProductGoalToolbar({
@@ -18,6 +19,7 @@ export function ProductGoalToolbar({
   const goal = goalFromParam(searchParams.get("goal"));
 
   const setGoal = (g: GoalId) => {
+    writeStoredGoal(g);
     const p = new URLSearchParams(searchParams.toString());
     if (g === "balanced") p.delete("goal");
     else p.set("goal", g);

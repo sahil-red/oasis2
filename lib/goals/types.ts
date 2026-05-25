@@ -1,6 +1,7 @@
 export type GoalId =
   | "balanced"
   | "gym"
+  | "bulk"
   | "diabetic"
   | "fat-loss"
   | "pcos"
@@ -24,9 +25,15 @@ export const GOAL_PROFILES: GoalProfile[] = [
   },
   {
     id: "gym",
-    label: "Gym mode",
+    label: "Gym",
     short: "High protein",
-    description: "Prioritises protein density and sensible calories per 100g.",
+    description: "More protein per 100g, without crazy sugar.",
+  },
+  {
+    id: "bulk",
+    label: "Bulk",
+    short: "Weight gain",
+    description: "Calorie-dense picks with solid protein for gaining weight.",
   },
   {
     id: "diabetic",

@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
-import { ScoreBadge } from "@/components/score-display";
+import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export function ProductCard({
@@ -45,12 +45,7 @@ export function ProductCard({
         </div>
         {goalFit != null ? (
           <div className="absolute right-1.5 top-1.5 z-10">
-            <span
-              className="font-display text-[32px] font-semibold leading-none tabular-nums text-(--color-accent)"
-              title="Goal fit"
-            >
-              {goalFit}
-            </span>
+            <GoalFitBadge fit={goalFit} />
           </div>
         ) : core ? (
           <div className="absolute right-1.5 top-1.5 z-10">

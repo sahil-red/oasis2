@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import {
   buildFilterOptions,
@@ -55,8 +56,28 @@ export function CatalogView({
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
   );
-  const [goal, setGoal] = useState<GoalId>(() => goalFromParam(initialParams.goal));
+  const [goal, setGoal] = useState<GoalId>(() => {
+    const fromUrl = goalFromParam(initialParams.goal);
+    return fromUrl !== "balanced" || initialParams.goal
+      ? fromUrl
+      : readStoredGoal();
+  });
   const [isPending, startTransition] = useTransition();
+  const [showGoalHint, setShowGoalHint] = useState(false);
+
+  useEffect(() => {
+    if (!initialParams.goal) {
+      const stored = readStoredGoal();
+      if (stored !== "balanced") setGoal(stored);
+      setShowGoalHint(!localStorage.getItem("oasis-goal-v1"));
+    }
+  }, [initialParams.goal]);
+
+  const pickGoal = useCallback((g: GoalId) => {
+    writeStoredGoal(g);
+    setShowGoalHint(false);
+    startTransition(() => setGoal(g));
+  }, []);
 
   const filterOptions = useMemo(
     () => buildFilterOptions(products, state.category || undefined),
@@ -135,20 +156,31 @@ export function CatalogView({
   return (
     <div className="space-y-8">
       <div className="space-y-5">
-        <GoalModePicker value={goal} onChange={(g) => startTransition(() => setGoal(g))} compact />
+        {showGoalHint ? (
+          <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-4">
+            <p className="text-[15px] font-medium text-(--color-fg)">What are you shopping for?</p>
+            <p className="mt-1 text-sm text-(--color-fg-muted)">
+              We&apos;ll rank products and scores for your goal. You can change this anytime.
+            </p>
+            <div className="mt-3">
+              <GoalModePicker value={goal} onChange={pickGoal} />
+            </div>
+          </div>
+        ) : (
+          <GoalModePicker value={goal} onChange={pickGoal} compact />
+        )}
         {goal !== "balanced" ? (
-          <p className="text-[12px] leading-relaxed text-(--color-fg-dim)">
-            Ranked for{" "}
-            <span className="text-(--color-fg-muted)">
+          <p className="text-sm text-(--color-fg-muted)">
+            Showing best picks for{" "}
+            <span className="font-medium text-(--color-fg)">
               {GOAL_PROFILES.find((g) => g.id === goal)?.label ?? goal}
             </span>
-            . Open a product for{" "}
-            <span className="text-(--color-fg-muted)">swap suggestions</span> in the same aisle.
+            . Numbers use the same green→red scale as overall scores.
           </p>
         ) : (
-          <p className="text-[12px] text-(--color-fg-dim)">
-            Tap <span className="text-(--color-fg-muted)">+</span> on a tile to add to your mock
-            cart · pick a goal mode to re-rank the catalog.
+          <p className="text-sm text-(--color-fg-muted)">
+            Tap <span className="font-medium text-(--color-fg)">+</span> on a tile to build a mock
+            cart, or pick a goal above to re-rank.
           </p>
         )}
 

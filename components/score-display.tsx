@@ -1,7 +1,13 @@
 "use client";
 
 import { ScoreRing } from "@/components/score-ring";
-import { cn, colorForGrade, labelForBand } from "@/lib/utils";
+import {
+  bandFromScore,
+  cn,
+  colorForGrade,
+  colorForScore,
+  labelForBand,
+} from "@/lib/utils";
 import type { Grade, ScoreBand, SubScores } from "@/lib/supabase/types";
 
 const BAND_STYLES: Record<ScoreBand, string> = {
@@ -18,7 +24,7 @@ interface ScoreCore {
   subscores?: SubScores;
 }
 
-/** Score on catalog cards — large number, grade color */
+/** Score on catalog cards — large number, green→red by value */
 export function ScoreBadge({
   score,
   grade,
@@ -36,6 +42,65 @@ export function ScoreBadge({
     >
       {score}
     </span>
+  );
+}
+
+/** Goal-mode fit (0–100) — same green→red scale as Core score */
+export function GoalFitBadge({
+  fit,
+  className,
+  size = "card",
+}: {
+  fit: number;
+  className?: string;
+  size?: "card" | "inline" | "sm";
+}) {
+  const color = colorForScore(fit);
+  const band = bandFromScore(fit);
+  const sizeClass =
+    size === "card"
+      ? "text-[32px]"
+      : size === "sm"
+        ? "text-xl"
+        : "text-2xl";
+  return (
+    <span
+      className={cn(
+        "font-display font-semibold leading-none tabular-nums",
+        "drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)]",
+        sizeClass,
+        className,
+      )}
+      style={{ color }}
+      title={labelForBand(band)}
+    >
+      {fit}
+    </span>
+  );
+}
+
+/** Compact goal fit with band chip (PDP header) */
+export function GoalFitChip({ fit, label }: { fit: number; label: string }) {
+  const band = bandFromScore(fit);
+  const color = colorForScore(fit);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span
+        className="font-display text-3xl font-semibold tabular-nums"
+        style={{ color }}
+      >
+        {fit}
+      </span>
+      <span
+        className={cn(
+          "rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+          BAND_STYLES[band],
+        )}
+      >
+        {label}
+      </span>
+      <span className="text-sm text-(--color-fg-dim)">for your goal</span>
+    </div>
   );
 }
 
@@ -60,7 +125,7 @@ export function ScorePanel({
     return (
       <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
         <h2 className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-          Core score
+          Overall score
         </h2>
         <div className="mt-2 flex items-start gap-3">
           <ScoreRing
@@ -121,9 +186,9 @@ export function ScorePanel({
               <span className="text-xs text-(--color-fg-dim)">v{ruleVersion}</span>
             ) : null}
           </div>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-(--color-fg-muted)">
-            Core score combines nutrition (60%), additive concerns (30%), and label
-            signals (10%). Tap ingredients below for flagged additives.
+          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-(--color-fg-muted)">
+            Based on the label: nutrition, flagged additives, and a few pack claims. See
+            &quot;Why this score?&quot; below for the short version.
           </p>
           {axes.length > 0 ? (
             <div className="mt-6 grid grid-cols-3 gap-2">

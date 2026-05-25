@@ -1,6 +1,7 @@
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductListItem } from "@/lib/products/queries";
-import type { ProductNutrition } from "@/lib/supabase/types";
 
 export type BasketLine = {
   product: ProductListItem;
@@ -11,12 +12,14 @@ export type BasketAnalysis = {
   itemCount: number;
   totalInr: number;
   avgCoreScore: number | null;
+  avgGoalFit: number | null;
   proteinPct: number | null;
   avgSugarG: number | null;
   avgFiberG: number | null;
-  ultraProcessedPct: number | null;
+  snackHeavyPct: number | null;
   flaggedAdditiveSkus: number;
   summary: string[];
+  goalLabel: string;
 };
 
 function avg(nums: number[]): number | null {
@@ -24,19 +27,20 @@ function avg(nums: number[]): number | null {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-export function analyzeBasket(lines: BasketLine[]): BasketAnalysis {
+export function analyzeBasket(lines: BasketLine[], goal: GoalId = "balanced"): BasketAnalysis {
   const items = lines.flatMap((l) => Array(l.qty).fill(l.product) as ProductListItem[]);
   const withNutrition = items.filter((p) => p.nutrition);
   const scores = items.map((p) => p.core_scores?.score).filter((s): s is number => s != null);
-  const totalInr = lines.reduce(
-    (s, l) => s + (l.product.price_inr ?? 0) * l.qty,
-    0,
-  );
+  const goalFits =
+    goal === "balanced"
+      ? []
+      : items.map((p) => computeGoalFit(goal, goalFitInputs(p)).fit);
+  const totalInr = lines.reduce((s, l) => s + (l.product.price_inr ?? 0) * l.qty, 0);
 
   let proteinPct: number | null = null;
   let avgSugarG: number | null = null;
   let avgFiberG: number | null = null;
-  let ultraProcessedPct: number | null = null;
+  let snackHeavyPct: number | null = null;
 
   if (withNutrition.length) {
     const macros = withNutrition.map((p) => {
@@ -56,47 +60,79 @@ export function analyzeBasket(lines: BasketLine[]): BasketAnalysis {
     const fibers = macros.map((m) => m.fiber).filter((f): f is number => typeof f === "number");
     avgSugarG = sugars.length ? avg(sugars) : null;
     avgFiberG = fibers.length ? avg(fibers) : null;
-    const ultra = withNutrition.filter(
+    const heavy = withNutrition.filter(
       (p) =>
         (p.nutrition?.sugar_g_100g ?? 0) > 15 &&
         (p.nutrition?.protein_g_100g ?? 0) < 8 &&
         matchAdditives(p.ingredients_raw).length > 0,
     ).length;
-    ultraProcessedPct = (ultra / withNutrition.length) * 100;
+    snackHeavyPct = (heavy / withNutrition.length) * 100;
   }
 
   const flaggedAdditiveSkus = items.filter((p) =>
     matchAdditives(p.ingredients_raw).some((m) => m.tier === "moderate" || m.tier === "hazardous"),
   ).length;
 
+  const goalProfile = GOAL_PROFILES.find((g) => g.id === goal);
+  const goalLabel = goalProfile?.label ?? "Balanced";
   const summary: string[] = [];
-  if (scores.length) {
-    const avgScore = avg(scores)!;
-    summary.push(`Average Core score ${avgScore.toFixed(0)} across ${scores.length} scored items.`);
-  }
-  if (proteinPct != null) {
-    summary.push(`~${proteinPct.toFixed(0)}% of macros from protein (by 100g label averages).`);
-  }
-  if (avgSugarG != null) {
-    summary.push(`~${avgSugarG.toFixed(1)}g sugar per 100g on average.`);
-  }
-  if (ultraProcessedPct != null && ultraProcessedPct > 25) {
+
+  if (goal !== "balanced" && goalFits.length) {
+    const avgFit = avg(goalFits)!;
+    const weak = items.filter(
+      (p) => computeGoalFit(goal, goalFitInputs(p)).fit < 45,
+    ).length;
     summary.push(
-      `${ultraProcessedPct.toFixed(0)}% of items look ultra-processed (high sugar + additives, low protein).`,
+      `For ${goalLabel}, this cart averages ${avgFit.toFixed(0)} / 100 across items.`,
     );
-  } else if (ultraProcessedPct != null) {
-    summary.push(`Ultra-processed share ~${ultraProcessedPct.toFixed(0)}% — moderate cart.`);
+    if (weak > 0) {
+      summary.push(
+        `${weak} item${weak === 1 ? "" : "s"} score below 45 for that goal — worth a swap.`,
+      );
+    } else {
+      summary.push("Nothing here looks like a bad fit for your goal.");
+    }
+  } else if (scores.length) {
+    summary.push(`Overall scores average ${avg(scores)!.toFixed(0)} across the cart.`);
+  }
+
+  if (goal === "gym" || goal === "bulk" || goal === "protein-budget") {
+    if (proteinPct != null && proteinPct < 18) {
+      summary.push("Protein is on the low side for this cart — add a higher-protein staple.");
+    } else if (proteinPct != null) {
+      summary.push(`Roughly ${proteinPct.toFixed(0)}% of macros from protein (label averages).`);
+    }
+  }
+
+  if (goal === "diabetic" || goal === "pcos" || goal === "fat-loss") {
+    if (avgSugarG != null && avgSugarG > 10) {
+      summary.push(`Average sugar is ~${avgSugarG.toFixed(1)}g per 100g — consider lower-sugar swaps.`);
+    } else if (avgSugarG != null) {
+      summary.push(`Sugar stays around ${avgSugarG.toFixed(1)}g per 100g on average.`);
+    }
+  }
+
+  if (flaggedAdditiveSkus > 0) {
+    summary.push(
+      `${flaggedAdditiveSkus} item${flaggedAdditiveSkus === 1 ? "" : "s"} with flagged additives.`,
+    );
+  }
+
+  if (summary.length === 0 && scores.length) {
+    summary.push(`Looks like a mixed cart — overall score ~${avg(scores)!.toFixed(0)}.`);
   }
 
   return {
     itemCount: items.length,
     totalInr,
     avgCoreScore: scores.length ? avg(scores) : null,
+    avgGoalFit: goalFits.length ? avg(goalFits) : null,
     proteinPct,
     avgSugarG,
     avgFiberG,
-    ultraProcessedPct,
+    snackHeavyPct,
     flaggedAdditiveSkus,
-    summary,
+    summary: summary.slice(0, 4),
+    goalLabel,
   };
 }

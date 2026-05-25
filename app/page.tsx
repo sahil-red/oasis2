@@ -14,19 +14,19 @@ import type { SubScores } from "@/lib/supabase/types";
 const FAQ = [
   {
     q: "Where does the data come from?",
-    a: "Blinkit product pages supply most nutrition and ingredients. When the platform omits them, we OCR the back label. Additive rules are hand-curated with citations — not a black-box model score.",
+    a: "Mostly Blinkit product pages. When nutrition or ingredients are missing, we read the back label with OCR. Scores use clear rules — not a black-box AI rating.",
   },
   {
-    q: "What is the Core score?",
-    a: "A 0–100 score built from three visible parts: nutrition (60%), additives (30%), and label signals (10%). Every product page shows the breakdown and the same quick-analysis tags you see on cards in the catalog.",
+    q: "What is the score?",
+    a: "A 0–100 read on the label: nutrition, flagged additives, and a few label signals. Each product page explains why, plus swaps in the same aisle.",
   },
   {
     q: "Is this lab testing?",
-    a: "No. We interpret published labels and regulatory guidance (FSSAI, EFSA, WHO). We do not test products in a lab.",
+    a: "No. We read what’s printed on the pack and map it to published guidance. We don’t test food in a lab.",
   },
   {
     q: "Why do scores change?",
-    a: "Ingredients and our rule set evolve. We version rules and recompute so you can see what shifted.",
+    a: "When labels or our rules update, we re-score so you can see what moved.",
   },
 ];
 
@@ -45,29 +45,29 @@ export default async function Home() {
         <div className="grid items-start gap-14 lg:grid-cols-2">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-              Indian groceries · open data
+              Blinkit groceries
             </p>
             <h1 className="font-display mt-4 text-balance text-5xl leading-[0.95] md:text-6xl">
-              What&apos;s actually in the{" "}
-              <span className="italic text-(--color-accent)">packaging</span>?
+              Buy better in the{" "}
+              <span className="italic text-(--color-accent)">same aisle</span>
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-(--color-fg-muted)">
-              Search packaged foods, see additive flags and nutrition at a glance, and
-              compare Core scores — the same analysis chips on every catalog card.
+              See what&apos;s in the pack, get a plain score, and find a swap — ranked for gym,
+              bulk, low sugar, or whatever you&apos;re optimizing for.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href="/search"
                 className="inline-flex items-center gap-2 rounded-lg bg-(--color-fg) px-6 py-3 text-sm font-medium text-(--color-bg) hover:opacity-90"
               >
-                Open catalog
+                Browse catalog
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/search?goal=gym"
+                href="/insights"
                 className="inline-flex items-center gap-2 rounded-lg border border-(--color-line) bg-white px-5 py-3 text-sm font-medium hover:border-(--color-fg)"
               >
-                Gym mode
+                Fake &quot;healthy&quot; picks
               </Link>
             </div>
           </div>
@@ -97,59 +97,54 @@ export default async function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-16">
-        <h2 className="font-display text-2xl">More than a score</h2>
-        <p className="mt-2 max-w-xl text-sm text-(--color-fg-muted)">
-          Make grocery decisions easier — swaps, goals, and cart context, not fear.
+        <h2 className="font-display text-2xl">Built for quick decisions</h2>
+        <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
+          Less lecture, more &quot;here&apos;s a better option on Blinkit.&quot;
         </p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { href: "/search?goal=diabetic", title: "Goal modes", desc: "Gym, diabetic, PCOS, vegan, protein/₹" },
-            { href: "/product", title: "Swap engine", desc: "Better picks in the same aisle" },
-            { href: "/basket", title: "Cart analysis", desc: "Protein % and sugar averages" },
-            { href: "/insights", title: "Brand insights", desc: "Misleading “healthy” labels" },
+            { href: "/search", title: "Pick your goal", desc: "Gym, bulk, diabetic, protein per ₹" },
+            { href: "/search", title: "Same-aisle swaps", desc: "Better score without changing category" },
+            { href: "/basket", title: "Rate my cart", desc: "Mock cart with protein & sugar readout" },
+            { href: "/insights", title: "Decode marketing", desc: "“Healthy” labels that don’t add up" },
           ].map((f) => (
             <Link
               key={f.title}
-              href={f.href === "/product" ? "/search" : f.href}
-              className="rounded-xl border border-(--color-line) bg-white p-4 transition hover:border-(--color-accent)"
+              href={f.href}
+              className="rounded-xl border border-(--color-line) bg-white p-5 transition hover:border-(--color-accent)"
             >
-              <p className="font-medium">{f.title}</p>
-              <p className="mt-1 text-sm text-(--color-fg-muted)">{f.desc}</p>
+              <p className="font-medium text-(--color-fg)">{f.title}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-(--color-fg-muted)">{f.desc}</p>
             </Link>
           ))}
         </div>
-        <p className="mt-6 text-sm">
-          <Link href="/stacks" className="text-(--color-accent) hover:underline">
-            Suggested shopping stacks →
-          </Link>
-        </p>
       </section>
 
       <div className="hairline mx-auto max-w-6xl" />
 
       <Section id="how-it-works">
-        <Eyebrow>Method</Eyebrow>
-        <H2>Label in → facts out.</H2>
+        <Eyebrow>How it works</Eyebrow>
+        <H2>Three steps on Blinkit.</H2>
         <div className="mt-14 grid gap-10 md:grid-cols-3">
           <FeatureStep
             index={1}
             icon="scan"
-            title="Find a product"
-            body="Filter by category, brand, or name in the catalog."
+            title="Find it"
+            body="Search by name, aisle, or brand."
             delay={0}
           />
           <FeatureStep
             index={2}
             icon="sparkles"
-            title="Read the analysis"
-            body="Sugar, sodium, additive flags, and Core subscores on one page."
+            title="Read why"
+            body="Short reasons — sugar, protein, additives — no jargon wall."
             delay={80}
           />
           <FeatureStep
             index={3}
             icon="shield"
-            title="Compare"
-            body="Sort by score and pick a better swap in the same aisle."
+            title="Swap it"
+            body="Open a better pick in the same aisle, add to your mock cart."
             delay={160}
           />
         </div>

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ScoreBadge } from "@/components/score-display";
+import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
+import type { GoalId } from "@/lib/goals/types";
 import { cn } from "@/lib/utils";
 import type { SwapSuggestion } from "@/lib/products/alternatives";
 import type { ProductListItem } from "@/lib/products/queries";
@@ -9,10 +10,12 @@ export function SwapPanel({
   current,
   suggestions,
   compact,
+  goal = "balanced",
 }: {
   current: ProductListItem;
   suggestions: SwapSuggestion[];
   compact?: boolean;
+  goal?: GoalId;
 }) {
   const curSugar =
     current.nutrition?.sugar_g_100g ?? current.nutrition?.added_sugar_g_100g;
@@ -100,16 +103,16 @@ export function SwapPanel({
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-0.5">
-                  {product.core_scores ? (
+                  {goal !== "balanced" ? (
+                    <GoalFitBadge fit={goalFit} size="sm" />
+                  ) : product.core_scores ? (
                     <ScoreBadge
                       score={product.core_scores.score}
                       grade={product.core_scores.grade}
                       className="!text-2xl"
                     />
                   ) : (
-                    <span className="text-xs font-medium text-(--color-accent) tabular-nums">
-                      {goalFit}
-                    </span>
+                    <GoalFitBadge fit={goalFit} size="sm" />
                   )}
                   {product.price_inr != null ? (
                     <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">

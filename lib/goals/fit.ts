@@ -33,8 +33,8 @@ export function computeGoalFit(
     const s = opts.core_score ?? 50;
     return {
       fit: s,
-      label: "Core score",
-      reasons: ["Using the standard Core score for this product."],
+      label: "Overall",
+      reasons: ["Sorted by overall label score."],
     };
   }
 
@@ -57,12 +57,29 @@ export function computeGoalFit(
     case "gym": {
       if (!hasNutrition) {
         fit = opts.core_score ?? 50;
-        reasons.push("No nutrition table — using Core score");
+        reasons.push("Limited label data — using overall score");
         break;
       }
       fit = Math.min(100, protein * 4 + fiber * 2 - sugarG * 1.5 - Math.max(0, kcal - 350) * 0.05);
-      if (protein >= 15) reasons.push(`${protein}g protein / 100g`);
-      if (sugarG > 12) reasons.push(`${sugarG}g sugar — moderate for gym`);
+      if (protein >= 15) reasons.push(`${protein}g protein per 100g`);
+      if (sugarG > 12) reasons.push(`${sugarG}g sugar — a bit high for training`);
+      break;
+    }
+    case "bulk": {
+      if (!hasNutrition) {
+        fit = opts.core_score ?? 50;
+        reasons.push("Limited label data — using overall score");
+        break;
+      }
+      const calScore = Math.min(35, Math.max(0, (kcal - 200) * 0.12));
+      fit = Math.min(
+        100,
+        calScore + protein * 2.5 + (carbs > 40 ? 8 : carbs > 25 ? 4 : 0) - sugarG * 0.8 - flagged * 5,
+      );
+      if (kcal >= 350) reasons.push(`${kcal} kcal per 100g — calorie dense`);
+      else if (kcal >= 250) reasons.push(`${kcal} kcal per 100g`);
+      if (protein >= 12) reasons.push(`${protein}g protein`);
+      if (sugarG > 15) reasons.push(`High sugar for a bulk staple`);
       break;
     }
     case "diabetic": {

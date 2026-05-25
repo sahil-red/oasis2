@@ -5,7 +5,10 @@ import Link from "next/link";
 import { ArrowRight, Minus, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ScoreBadge } from "@/components/score-display";
+import { readStoredGoal } from "@/lib/goals/storage";
+import type { GoalId } from "@/lib/goals/types";
 import { analyzeBasket } from "@/lib/products/basket-analysis";
+import { colorForScore } from "@/lib/utils";
 import {
   addToBasket,
   clearBasket,
@@ -56,6 +59,7 @@ export function BasketView() {
   const [entries, setEntries] = useState<ReturnType<typeof readBasket>>([]);
   const [catalog, setCatalog] = useState<ProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [goal, setGoal] = useState<GoalId>("balanced");
 
   useEffect(() => {
     let cancelled = false;
@@ -84,11 +88,15 @@ export function BasketView() {
       }
     };
 
+    const syncGoal = () => setGoal(readStoredGoal());
+    syncGoal();
     sync();
     window.addEventListener("oasis-basket", sync);
+    window.addEventListener("oasis-goal", syncGoal);
     return () => {
       cancelled = true;
       window.removeEventListener("oasis-basket", sync);
+      window.removeEventListener("oasis-goal", syncGoal);
     };
   }, []);
 
@@ -102,7 +110,8 @@ export function BasketView() {
       .filter(Boolean) as { product: ProductListItem; qty: number }[];
   }, [entries, catalog]);
 
-  const analysis = useMemo(() => analyzeBasket(lines), [lines]);
+  const analysis = useMemo(() => analyzeBasket(lines, goal), [lines, goal]);
+  const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
 
   if (loading && entries.length > 0) {
     return (
@@ -133,14 +142,7 @@ export function BasketView() {
     );
   }
 
-  const scoreTone =
-    analysis.avgCoreScore != null
-      ? analysis.avgCoreScore >= 70
-        ? "text-emerald-600"
-        : analysis.avgCoreScore >= 50
-          ? "text-amber-600"
-          : "text-(--color-bad)"
-      : "text-(--color-fg-dim)";
+  const scoreTone = headlineScore == null ? "text-(--color-fg-dim)" : "";
 
   return (
     <div className="space-y-8">
@@ -157,9 +159,16 @@ export function BasketView() {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[11px] uppercase tracking-wider text-white/60">Avg Core</p>
-            <p className={cn("font-display text-6xl leading-none tabular-nums", scoreTone)}>
-              {analysis.avgCoreScore?.toFixed(0) ?? "—"}
+            <p className="text-[11px] uppercase tracking-wider text-white/60">
+              {goal !== "balanced" ? `Avg for ${analysis.goalLabel}` : "Avg score"}
+            </p>
+            <p
+              className={cn("font-display text-6xl leading-none tabular-nums", scoreTone)}
+              style={
+                headlineScore != null ? { color: colorForScore(headlineScore) } : undefined
+              }
+            >
+              {headlineScore?.toFixed(0) ?? "—"}
             </p>
           </div>
         </div>
@@ -181,13 +190,11 @@ export function BasketView() {
             tone={analysis.avgSugarG != null && analysis.avgSugarG > 12 ? "warn" : "neutral"}
           />
           <MetricBar
-            label="Ultra-processed share"
-            value={analysis.ultraProcessedPct}
+            label="Snack-style items"
+            value={analysis.snackHeavyPct}
             max={100}
             tone={
-              analysis.ultraProcessedPct != null && analysis.ultraProcessedPct > 30
-                ? "warn"
-                : "good"
+              analysis.snackHeavyPct != null && analysis.snackHeavyPct > 30 ? "warn" : "good"
             }
           />
           {analysis.avgFiberG != null ? (

@@ -6,8 +6,11 @@ import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
-import { ScorePanel, ScorePending } from "@/components/score-display";
+import { GoalFitChip, ScorePanel, ScorePending } from "@/components/score-display";
+import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
+import { explainScore } from "@/lib/products/score-explain";
+import { GOAL_PROFILES } from "@/lib/goals/types";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
@@ -61,6 +64,21 @@ export default async function ProductPage({
     4,
   );
 
+  const scoreWhy = score
+    ? explainScore({
+        score: score.score,
+        band: score.band,
+        subscores,
+        concerns: score.concerns,
+        breakdown: score.breakdown,
+        nutrition: product.nutrition,
+        ingredients_raw: product.ingredients_raw,
+        productName: product.name,
+      })
+    : null;
+
+  const goalProfile = GOAL_PROFILES.find((g) => g.id === goal);
+
   return (
     <main className="min-h-screen">
       <SiteNav />
@@ -102,11 +120,13 @@ export default async function ProductPage({
             <Suspense fallback={null}>
               <ProductGoalToolbar slug={product.slug} name={product.name} />
             </Suspense>
-            {goalFit ? (
-              <p className="mt-3 text-sm text-(--color-fg-muted)">
-                Goal fit <span className="font-semibold text-(--color-accent)">{goalFit.fit}</span>
-                — {goalFit.reasons.join(" · ")}
-              </p>
+            {goalFit && goal !== "balanced" ? (
+              <div className="mt-4 space-y-2">
+                <GoalFitChip fit={goalFit.fit} label={goalProfile?.short ?? "Your goal"} />
+                <p className="text-[15px] leading-relaxed text-(--color-fg-muted)">
+                  {goalFit.reasons.join(" · ")}
+                </p>
+              </div>
             ) : null}
           </div>
         </div>
@@ -124,8 +144,14 @@ export default async function ProductPage({
           ) : (
             <ScorePending compact />
           )}
-          <SwapPanel current={product} suggestions={swaps} compact />
+          <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
         </div>
+
+        {scoreWhy ? (
+          <div className="mt-6">
+            <ScoreWhyPanel explanation={scoreWhy} />
+          </div>
+        ) : null}
 
         <div className="mt-8 space-y-8">
           {highlights.length > 0 ? (
@@ -143,8 +169,8 @@ export default async function ProductPage({
         <div className="mt-12 grid gap-10 lg:grid-cols-2 lg:items-start">
           <section>
             <h2 className="font-display text-2xl">Ingredients</h2>
-            <p className="mt-2 text-sm text-(--color-fg-muted)">
-              Risk tier per ingredient · tap flagged rows for detail.
+            <p className="mt-2 text-[15px] text-(--color-fg-muted)">
+              Flagged additives highlighted — tap a row for detail.
             </p>
             <div className="mt-5">
               <IngredientPanel ingredientsRaw={product.ingredients_raw} />
