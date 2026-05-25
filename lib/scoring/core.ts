@@ -50,6 +50,11 @@ function scoreLabels(
   return Math.min(10, score);
 }
 
+function isWholeFoodCategory(category: string | null): boolean {
+  if (!category) return false;
+  return /\b(Fresh Fruits|Fresh Vegetables|Chicken, Meat & Fish|Eggs|Paneer)\b/i.test(category);
+}
+
 export function computeCoreScore(input: {
   ingredients_raw: string | null;
   nutrition: ProductNutrition | Record<string, unknown> | null;
@@ -76,7 +81,18 @@ export function computeCoreScore(input: {
     scoreLabels(input.ingredients_raw, input.attributes ?? null) + signals.labelsDelta,
   );
 
-  let total = nutritionScore + additives.score + labelsScore;
+  // Penalise unknown ingredient lists — full 30/30 additives only when we
+  // can actually read the label. Whole-food categories (fresh produce,
+  // meat, eggs) genuinely have no ingredient list and keep the benefit.
+  const hasIngredientText =
+    ((input.ingredients_raw ?? "").trim().length > 0) ||
+    ((input.attributes?.["Ingredients"] ?? "").trim().length > 0);
+  let additiveScore = additives.score;
+  if (!hasIngredientText && !isWholeFoodCategory(input.category)) {
+    additiveScore = Math.min(additiveScore, 20);
+  }
+
+  let total = nutritionScore + additiveScore + labelsScore;
   if (additives.hazardous) total = Math.min(total, HAZARDOUS_HARD_CAP);
   total = Math.max(0, Math.min(100, Math.round(total)));
 
@@ -92,7 +108,7 @@ export function computeCoreScore(input: {
     band: bandFromScore(total),
     subscores: {
       nutrition: nutritionScore,
-      additives: additives.score,
+      additives: additiveScore,
       labels: labelsScore,
     },
     concerns,

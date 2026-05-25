@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeCoreScore } from "@/lib/scoring/core";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
-export const SCORING_RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 4);
+export const SCORING_RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 5);
 
 export type ScoreableProduct = {
   id: string;

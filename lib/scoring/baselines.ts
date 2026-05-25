@@ -113,6 +113,33 @@ export function resolveBaselineKey(
     return "Soft Drinks & Juices::Carbonated Drinks";
   }
 
+  // Map Blinkit snack/sweet categories onto our curated baselines so they
+  // don't fall back to the lenient _default band.
+  if (isSnacksCategory(category)) {
+    if (/\b(multigrain|baked|roasted)\b/i.test(name)) {
+      return "Chips & Crisps::Baked & Multigrain Chips";
+    }
+    if (/\b(chip|chips|crisp|crisps|wafer)\b/i.test(name)) {
+      return "Chips & Crisps::Potato Chips";
+    }
+    return "Namkeen & Snacks::Bhujia & Mixtures";
+  }
+
+  if (isSweetCategory(category)) {
+    if (isHighCacaoChocolate(name)) return "Chocolates & Candies::Dark Chocolate";
+    if (/\b(biscuit|cookie|marie|glucose)\b/i.test(name)) {
+      return /\b(cream)\b/i.test(name)
+        ? "Biscuits & Cookies::Cream Biscuits"
+        : "Biscuits & Cookies::Marie & Glucose Biscuits";
+    }
+    if (/\b(chocolate|kitkat|dairy milk|kinder|munch|milkybar|cadbury)\b/i.test(name)) {
+      return "Chocolates & Candies::Milk Chocolate";
+    }
+    if (/\b(jam|marmalade|preserve)\b/i.test(name)) {
+      return "Honey, Spreads & Sauces::Jams & Marmalades";
+    }
+  }
+
   if (cat && sub) {
     const exact = `${cat}::${sub}`;
     if (map[exact]) return exact;
@@ -185,7 +212,27 @@ function isProteinSnackName(name: string): boolean {
 }
 
 function isChipOrCrisp(name: string, category: string | null): boolean {
-  return /\b(chip|chips|crisp|crisps|wafer)\b/i.test(`${name} ${category ?? ""}`);
+  return /\b(chip|chips|crisp|crisps|wafer|puff|puffs|kurkure|pipes|namkeen|bhujia|cracker)\b/i.test(
+    `${name} ${category ?? ""}`,
+  );
+}
+
+function isHighCacaoChocolate(name: string): boolean {
+  if (!name) return false;
+  const t = name.toLowerCase();
+  if (/\b(cacao|cocoa solids|cocoa mass|dark chocolate)\b/.test(t)) return true;
+  if (/\bchocolate\b/.test(t) && /\b(7[0-9]|8[0-9]|9[0-9])\s*%/.test(t)) return true;
+  return false;
+}
+
+function isSnacksCategory(category: string | null): boolean {
+  if (!category) return false;
+  return /\b(Snacks|Munchies|Chips|Namkeen|Bhujia|Crackers)\b/i.test(category);
+}
+
+function isSweetCategory(category: string | null): boolean {
+  if (!category) return false;
+  return /\b(Sweet Tooth|Chocolates|Candies|Sweets|Bakery|Dessert)\b/i.test(category);
 }
 
 /** Map per-100g nutrition + category baseline → 0–60 nutrition subscore. */
@@ -221,8 +268,10 @@ export function scoreNutrition(
   const sodium = nutrition.sodium_mg_100g;
   const kcal = nutrition.energy_kcal_100g;
   const saturatedFat = nutrition.saturated_fat_g_100g;
+  const transFat = nutrition.trans_fat_g_100g;
   const protein = nutrition.protein_g_100g ?? 0;
   const fiber = nutrition.fiber_g_100g ?? 0;
+  const cocoaRich = isHighCacaoChocolate(name);
 
   // Absolute sugar caps (any category).
   if (typeof sugar === "number") {
@@ -230,13 +279,27 @@ export function scoreNutrition(
     else if (sugar >= 35) sub = Math.min(sub, 18);
     else if (sugar >= 22) sub = Math.min(sub, 28);
   }
+
+  // Sodium — these hold across all categories; processed snacks pile on too much
+  // salt and we want that to be visible.
   if (typeof sodium === "number") {
-    if (sodium >= 1000) sub = Math.min(sub, sub - 9);
-    else if (sodium >= 600) sub = Math.min(sub, sub - 6);
+    if (sodium >= 1500) sub = Math.min(sub, 10);
+    else if (sodium >= 1000) sub = Math.min(sub, 18);
+    else if (sodium >= 700) sub = Math.min(sub, 26);
+    else if (sodium >= 500) sub = sub - 5;
   }
-  if (typeof saturatedFat === "number") {
+
+  // Saturated fat is a real penalty for ordinary processed foods, but cocoa
+  // butter is mostly stearic acid with neutral effect on blood lipids — don't
+  // crush 99% cacao or unsweetened dark chocolate for it.
+  if (typeof saturatedFat === "number" && !cocoaRich) {
     if (saturatedFat >= 18) sub = Math.min(sub, 32);
-    else if (saturatedFat >= 10) sub = Math.min(sub, sub - 5);
+    else if (saturatedFat >= 10) sub = sub - 5;
+  }
+
+  // Any industrially-introduced trans fat is bad news.
+  if (typeof transFat === "number" && transFat > 0.05) {
+    sub = sub - 8;
   }
 
   // Fried snacks / chips — energy-dense; not the same cap as fresh milk.
@@ -247,8 +310,14 @@ export function scoreNutrition(
   // Protein-fortified chips/snacks are better than ordinary chips, but not a
   // clean staple. Fibre and real protein can lift them, but keep a ceiling.
   if (isProteinSnackName(name) || isChipOrCrisp(name, category)) {
-    const proteinSnackCap = protein >= 25 && fiber >= 5 ? 40 : protein >= 15 ? 36 : 30;
+    const proteinSnackCap = protein >= 25 && fiber >= 5 ? 40 : protein >= 15 ? 36 : 28;
     sub = Math.min(sub, proteinSnackCap);
+  }
+
+  // Unsweetened dark chocolate / high-cocoa bars: tighten the floor so they
+  // don't get crushed by raw saturated-fat math. Sugar/sodium caps still apply.
+  if (cocoaRich && (sugar ?? 99) <= 8 && (nutrition.added_sugar_g_100g ?? 99) <= 3) {
+    sub = Math.max(sub, 42);
   }
 
   // Diet cola: zero sugar ≠ healthy; cap below fresh milk.

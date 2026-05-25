@@ -21,37 +21,37 @@ export const GOAL_PROFILES: GoalProfile[] = [
   {
     id: "balanced",
     label: "Balanced",
-    short: "Default",
+    short: "Balanced",
     description: "Standard Core score — nutrition, additives, and labels.",
   },
   {
     id: "gym",
     label: "Gym",
-    short: "High protein",
+    short: "Gym",
     description: "More protein per 100g, without crazy sugar.",
   },
   {
     id: "bulk",
     label: "Bulk",
-    short: "Weight gain",
+    short: "Bulk",
     description: "Calorie-dense picks with solid protein for gaining weight.",
   },
   {
     id: "diabetic",
     label: "Diabetic-friendly",
-    short: "Low sugar",
+    short: "Diabetic",
     description: "Penalises sugar and refined carbs; rewards fibre.",
   },
   {
     id: "fat-loss",
     label: "Fat loss",
-    short: "Lean picks",
+    short: "Fat loss",
     description: "Lower energy density, higher protein and fibre.",
   },
   {
     id: "pcos",
-    label: "PCOS mode",
-    short: "Stable glucose",
+    label: "PCOS",
+    short: "PCOS",
     description: "Low added sugar, moderate carbs, minimal ultra-processed signals.",
   },
   {
@@ -64,19 +64,19 @@ export const GOAL_PROFILES: GoalProfile[] = [
   {
     id: "vegan",
     label: "Vegan",
-    short: "Plant-based",
+    short: "Vegan",
     description: "No animal-derived ingredients (including dairy and eggs).",
   },
   {
     id: "protein-budget",
     label: "Protein / ₹",
-    short: "Budget gains",
+    short: "Protein/₹",
     description: "Maximises grams of protein per rupee in the catalog.",
   },
   {
     id: "kids",
-    label: "Kids — clean",
-    short: "Fewer additives",
+    label: "Kids",
+    short: "Kids",
     description: "Heavily penalises flagged additives and artificial colours.",
   },
 ];
