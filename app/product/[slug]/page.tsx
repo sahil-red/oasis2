@@ -19,6 +19,9 @@ const DETAIL_SKIP = new Set([
   "Disclaimer",
   "Return Policy",
   "Customer Care Details",
+  "Seller",
+  "Seller FSSAI",
+  "FSSAI License",
 ]);
 
 export default async function ProductPage({
@@ -124,25 +127,32 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-16">
-          <h2 className="font-display text-3xl">Ingredients</h2>
-          <p className="mt-2 max-w-2xl text-sm text-(--color-fg-muted)">
-            Each ingredient is checked against our additive rules (Yuka-style risk tiers).
-            Flagged items reduce the Additives subscore.
-          </p>
-          <div className="mt-6 max-w-2xl">
-            <IngredientPanel ingredientsRaw={product.ingredients_raw} />
-          </div>
-        </div>
-
-        {product.nutrition ? (
-          <div className="mt-12">
-            <h2 className="font-display text-3xl">Nutrition</h2>
-            <div className="mt-6 max-w-md">
-              <NutritionTable nutrition={product.nutrition} />
+        <div className="mt-16 grid gap-10 lg:grid-cols-2 lg:items-start">
+          <div>
+            <h2 className="font-display text-3xl">Ingredients</h2>
+            <p className="mt-2 text-sm text-(--color-fg-muted)">
+              Each ingredient is checked against our additive rules (Yuka-style risk tiers).
+              Flagged items reduce the Additives subscore.
+            </p>
+            <div className="mt-6">
+              <IngredientPanel ingredientsRaw={product.ingredients_raw} />
             </div>
           </div>
-        ) : null}
+
+          <div>
+            <h2 className="font-display text-3xl">Nutrition</h2>
+            <p className="mt-2 text-sm text-(--color-fg-muted)">Per 100g values from the product label.</p>
+            <div className="mt-6">
+              {product.nutrition ? (
+                <NutritionTable nutrition={product.nutrition} />
+              ) : (
+                <p className="text-sm text-(--color-fg-muted)">
+                  Nutrition data not available yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
         {attrEntries.length > 0 ? (
           <div className="mt-12">
@@ -163,19 +173,6 @@ export default async function ProductPage({
           </div>
         ) : null}
 
-        {product.product_url ? (
-          <p className="mt-12 text-xs text-(--color-fg-dim)">
-            Source:{" "}
-            <a
-              href={product.product_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-(--color-fg-muted)"
-            >
-              View on Blinkit
-            </a>
-          </p>
-        ) : null}
       </Section>
     </main>
   );
