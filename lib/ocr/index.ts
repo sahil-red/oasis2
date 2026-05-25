@@ -27,7 +27,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sha256 } from "./hash";
 import { preprocessForOcr } from "./preprocess";
 import { pickBackLabelCandidates } from "./picker";
-import { geminiOcr } from "./gemini";
+import { geminiOcrPooled } from "./gemini-pool";
 import { tesseractOcr } from "./tesseract";
 import { readCache, writeCache } from "./cache";
 import type { OcrPayload } from "./types";
@@ -140,13 +140,13 @@ export class OcrOrchestrator {
     } else if (backend === "gemini") {
       this.assertBudget();
       this.remoteCalls++;
-      payload = await geminiOcr(pre.bytes, "image/png");
+      payload = await geminiOcrPooled(pre.bytes, "image/png");
     } else {
       // auto: try Gemini first; if exhausted OR low confidence, fall back.
       try {
         this.assertBudget();
         this.remoteCalls++;
-        payload = await geminiOcr(pre.bytes, "image/png");
+        payload = await geminiOcrPooled(pre.bytes, "image/png");
         if (payload.confidence.overall < this.opts.confidenceCutoff) {
           const tess = await tesseractOcr(pre.bytes);
           if (tess.confidence.overall > payload.confidence.overall) {

@@ -55,13 +55,21 @@ export default async function Home() {
               Search packaged foods, see additive flags and nutrition at a glance, and
               compare Core scores — the same analysis chips on every catalog card.
             </p>
-            <Link
-              href="/search"
-              className="mt-8 inline-flex items-center gap-2 rounded-lg bg-(--color-fg) px-6 py-3 text-sm font-medium text-(--color-bg) hover:opacity-90"
-            >
-              Open catalog
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/search"
+                className="inline-flex items-center gap-2 rounded-lg bg-(--color-fg) px-6 py-3 text-sm font-medium text-(--color-bg) hover:opacity-90"
+              >
+                Open catalog
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/search?goal=gym"
+                className="inline-flex items-center gap-2 rounded-lg border border-(--color-line) bg-white px-5 py-3 text-sm font-medium hover:border-(--color-fg)"
+              >
+                Gym mode
+              </Link>
+            </div>
           </div>
 
           {sample?.core_scores ? (
@@ -86,6 +94,35 @@ export default async function Home() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <h2 className="font-display text-2xl">More than a score</h2>
+        <p className="mt-2 max-w-xl text-sm text-(--color-fg-muted)">
+          Make grocery decisions easier — swaps, goals, and cart context, not fear.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { href: "/search?goal=diabetic", title: "Goal modes", desc: "Gym, diabetic, PCOS, vegan, protein/₹" },
+            { href: "/product", title: "Swap engine", desc: "Better picks in the same aisle" },
+            { href: "/basket", title: "Cart analysis", desc: "Protein % and sugar averages" },
+            { href: "/insights", title: "Brand insights", desc: "Misleading “healthy” labels" },
+          ].map((f) => (
+            <Link
+              key={f.title}
+              href={f.href === "/product" ? "/search" : f.href}
+              className="rounded-xl border border-(--color-line) bg-white p-4 transition hover:border-(--color-accent)"
+            >
+              <p className="font-medium">{f.title}</p>
+              <p className="mt-1 text-sm text-(--color-fg-muted)">{f.desc}</p>
+            </Link>
+          ))}
+        </div>
+        <p className="mt-6 text-sm">
+          <Link href="/stacks" className="text-(--color-accent) hover:underline">
+            Suggested shopping stacks →
+          </Link>
+        </p>
       </section>
 
       <div className="hairline mx-auto max-w-6xl" />

@@ -80,13 +80,17 @@ export function parseCatalogParams(params: {
   };
 }
 
-export function catalogParamsToSearch(state: CatalogFilterState): string {
+export function catalogParamsToSearch(
+  state: CatalogFilterState,
+  goal?: string,
+): string {
   const p = new URLSearchParams();
   if (state.q.trim()) p.set("q", state.q.trim());
   if (state.category) p.set("category", state.category);
   if (state.subcategory) p.set("subcategory", state.subcategory);
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
+  if (goal && goal !== "balanced") p.set("goal", goal);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

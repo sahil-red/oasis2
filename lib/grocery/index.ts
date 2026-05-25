@@ -18,7 +18,7 @@ export { makeThrottledFetch, fetchJson, sleep } from "./http";
  */
 export function getAdapter(
   platform: Platform,
-  opts: { rps?: number } = {},
+  opts: { rps?: number; burst?: number } = {},
 ): GroceryAdapter {
   switch (platform) {
     case "blinkit":

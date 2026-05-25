@@ -10,12 +10,14 @@
 
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
-import { computeCoreScore } from "@/lib/scoring/core";
+import {
+  persistCoreScore,
+  SCORING_RULE_VERSION,
+  type ScoreableProduct,
+} from "@/lib/scoring/persist-core";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
-
-const RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 2);
 
 function parseArgs() {
   const argv = process.argv.slice(2);
@@ -28,6 +30,7 @@ function parseArgs() {
     dryRun: argv.includes("--dry-run"),
     withDetail: argv.includes("--with-detail"),
     force: argv.includes("--force"),
+    onlyUnscored: argv.includes("--only-unscored"),
   };
 }
 
@@ -38,7 +41,7 @@ async function main() {
   let query = supabase
     .from("products")
     .select(
-      "id, name, category, subcategory, ingredients_raw, nutrition, attributes",
+      "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )",
     )
     .not("nutrition", "is", null);
 
@@ -64,59 +67,40 @@ async function main() {
   let skipped = 0;
 
   for (const row of rows) {
-    const nutrition = row.nutrition as ProductNutrition | null;
-    const attributes = (row.attributes ?? null) as Record<string, string> | null;
+    const rel = row.core_scores as
+      | { rule_version: number }
+      | { rule_version: number }[]
+      | null;
+    const existing = Array.isArray(rel) ? rel[0] : rel;
+    if (
+      args.onlyUnscored &&
+      existing?.rule_version === SCORING_RULE_VERSION &&
+      !args.force
+    ) {
+      skipped++;
+      continue;
+    }
 
-    const result = computeCoreScore({
-      ingredients_raw: row.ingredients_raw,
-      nutrition,
+    const scoreRow: ScoreableProduct = {
+      id: row.id,
+      name: row.name,
       category: row.category,
       subcategory: row.subcategory,
-      product_name: row.name,
-      attributes,
+      ingredients_raw: row.ingredients_raw,
+      nutrition: row.nutrition as ProductNutrition | null,
+      attributes: (row.attributes ?? null) as Record<string, string> | null,
+    };
+
+    const outcome = await persistCoreScore(supabase, scoreRow, {
+      force: args.force,
+      dryRun: args.dryRun,
     });
-
-    if (args.dryRun) {
-      console.log(
-        `${row.name?.slice(0, 40).padEnd(40)}  ${result.score} ${result.grade}  ` +
-          `N${result.subscores.nutrition} A${result.subscores.additives} L${result.subscores.labels}`,
-      );
-      scored++;
-      continue;
-    }
-
-    if (!args.force) {
-      const { data: existing } = await supabase
-        .from("core_scores")
-        .select("product_id, rule_version")
-        .eq("product_id", row.id)
-        .maybeSingle();
-      if (existing && existing.rule_version === RULE_VERSION) {
-        skipped++;
-        continue;
-      }
-    }
-
-    const { error: upErr } = await supabase.from("core_scores").upsert({
-      product_id: row.id,
-      score: result.score,
-      grade: result.grade,
-      band: result.band,
-      subscores: result.subscores,
-      concerns: result.concerns,
-      breakdown: result.breakdown,
-      rule_version: RULE_VERSION,
-      computed_at: new Date().toISOString(),
-    });
-    if (upErr) {
-      console.warn(`[05-compute-scores] upsert ${row.id}:`, upErr.message);
-      continue;
-    }
-    scored++;
+    if (outcome === "scored") scored++;
+    else if (outcome === "skipped") skipped++;
   }
 
   console.log(
-    `[05-compute-scores] done. scored=${scored} skipped=${skipped} (rule_version=${RULE_VERSION})`,
+    `[05-compute-scores] done. scored=${scored} skipped=${skipped} (rule_version=${SCORING_RULE_VERSION})`,
   );
 }
 

@@ -38,7 +38,10 @@ import type {
   ScrapedProductDetail,
   ScrapedProductSummary,
 } from "@/lib/grocery";
+import { mapPool } from "@/lib/async-pool";
+import { persistCoreScore, hasScoreableNutrition } from "@/lib/scoring/persist-core";
 import { adminClient } from "@/lib/supabase/admin";
+import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
 
@@ -55,6 +58,9 @@ interface Args {
   skipCategories: string[] | null;
   ignoreProgress: boolean;
   maxProducts: number | null;
+  detailConcurrency: number;
+  detailBatchSize: number;
+  scoreAfterDetail: boolean;
 }
 
 function parseArgs(): Args {
@@ -98,6 +104,16 @@ function parseArgs(): Args {
     if (a.startsWith("--max-products=")) maxProducts = Number(a.split("=")[1]);
   }
   const detailOnly = argv.includes("--detail-only");
+  const detailConcurrency = Number(
+    argv.find((a) => a.startsWith("--concurrency="))?.split("=")[1] ??
+      process.env.SCRAPE_CONCURRENCY ??
+      4,
+  );
+  const detailBatchSize = Number(
+    argv.find((a) => a.startsWith("--detail-batch="))?.split("=")[1] ??
+      process.env.SCRAPE_DETAIL_BATCH ??
+      500,
+  );
   return {
     detail: argv.includes("--detail") || detailOnly,
     detailOnly,
@@ -108,6 +124,9 @@ function parseArgs(): Args {
     skipCategories,
     ignoreProgress: argv.includes("--ignore-progress"),
     maxProducts,
+    detailConcurrency: Math.max(1, Math.min(12, detailConcurrency)),
+    detailBatchSize: Math.max(50, Math.min(1000, detailBatchSize)),
+    scoreAfterDetail: !argv.includes("--no-score-after-detail"),
   };
 }
 
@@ -211,6 +230,7 @@ async function main() {
 
   const adapter = getAdapter(platform, {
     rps: Number(process.env.GROCERY_RPS) || 2,
+    burst: Number(process.env.GROCERY_BURST) || 1,
   });
 
   let categories = filterCategories(await loadDiscoveredCategories(platform), args);
@@ -332,67 +352,102 @@ async function main() {
     return;
   }
 
-  // Pull SKUs that haven't had a PDP fetch yet. We can't use image_urls —
-  // the summary pass already sets image_urls from the listing thumb, so
-  // every row looks "done" even without ingredients/nutrition/attributes.
-  // raw_payload is only written by productDetailUpdate().
-  const { data: skuRows, error: skuErr } = await supabase
-    .from("products")
-    .select("id, zepto_sku")
-    .eq("platform", platform)
-    .is("raw_payload", null)
-    .limit(10_000);
-  if (skuErr) {
-    console.error(`[02-scrape-products] failed to read pending SKUs:`, skuErr);
-    process.exit(1);
-  }
-
-  console.log(`[02-scrape-products] detail pending: ${skuRows?.length ?? 0}`);
+  console.log(
+    `[02-scrape-products] detail: concurrency=${args.detailConcurrency}, ` +
+      `batch=${args.detailBatchSize}, rps=${process.env.GROCERY_RPS ?? 2}, ` +
+      `burst=${process.env.GROCERY_BURST ?? 1}`,
+  );
 
   let ok = 0;
   let fail = 0;
   let consecutiveCf = 0;
+  let processed = 0;
+  let scoredInline = 0;
+  const scoreAfterDetail = args.scoreAfterDetail;
 
-  for (let i = 0; i < (skuRows?.length ?? 0); i++) {
-    const row = skuRows![i];
-    try {
-      const detailResp = await adapter.getProductDetail(session, row.zepto_sku);
-      await appendFile(detailsPath, JSON.stringify(detailResp) + "\n");
+  while (true) {
+    const { data: skuRows, error: skuErr } = await supabase
+      .from("products")
+      .select("id, zepto_sku, name, category, subcategory, attributes")
+      .eq("platform", platform)
+      .is("raw_payload", null)
+      .limit(args.detailBatchSize);
+    if (skuErr) {
+      console.error(`[02-scrape-products] failed to read pending SKUs:`, skuErr);
+      process.exit(1);
+    }
+    if (!skuRows?.length) break;
 
-      const update = productDetailUpdate(detailResp);
-      const { error } = await supabase
-        .from("products")
-        .update(update)
-        .eq("id", row.id);
-      if (error) console.warn(`detail upsert for ${row.zepto_sku}:`, error);
-      ok++;
-      consecutiveCf = 0;
-    } catch (err) {
-      const msg = (err as Error).message;
-      const isCf = /403|just a moment|cloudflare/i.test(msg);
-      if (isCf) consecutiveCf++;
-      fail++;
-      console.warn(`detail fail ${row.zepto_sku}: ${msg.slice(0, 120)}`);
+    console.log(
+      `[02-scrape-products] detail batch: ${skuRows.length} pending (done so far: ${processed})`,
+    );
 
-      if (consecutiveCf >= 8) {
-        console.error(
-          "\n[02-scrape-products] 8 Cloudflare blocks in a row — session is stale.\n" +
-            "  1. Ctrl+C to stop\n" +
-            "  2. Run: pnpm warm-session   (pick location in the browser, press ENTER)\n" +
-            "  3. Retry: GROCERY_RPS=1 pnpm tsx scripts/02-scrape-products.ts --detail-only\n" +
-            "     (slower rate; resumes SKUs where raw_payload is still null)\n",
-        );
-        process.exit(1);
+    await mapPool(skuRows, args.detailConcurrency, async (row) => {
+      try {
+        const detailResp = await adapter.getProductDetail(session, row.zepto_sku);
+        await appendFile(detailsPath, JSON.stringify(detailResp) + "\n");
+
+        const update = productDetailUpdate(detailResp);
+        const { error } = await supabase
+          .from("products")
+          .update(update)
+          .eq("id", row.id);
+        if (error) console.warn(`detail upsert for ${row.zepto_sku}:`, error);
+        else if (
+          scoreAfterDetail &&
+          hasScoreableNutrition(update.nutrition as ProductNutrition | null)
+        ) {
+          const r = await persistCoreScore(
+            supabase,
+            {
+              id: row.id,
+              name: detailResp.name ?? row.name,
+              category: detailResp.category ?? row.category,
+              subcategory: detailResp.subcategory ?? row.subcategory,
+              ingredients_raw: detailResp.ingredients_raw,
+              nutrition: detailResp.nutrition as ProductNutrition | null,
+              attributes: (detailResp.attributes ?? row.attributes) as Record<
+                string,
+                string
+              > | null,
+            },
+            { force: true },
+          );
+          if (r === "scored") scoredInline++;
+        }
+        ok++;
+        consecutiveCf = 0;
+      } catch (err) {
+        const msg = (err as Error).message;
+        const isCf = /403|just a moment|cloudflare/i.test(msg);
+        if (isCf) consecutiveCf++;
+        fail++;
+        console.warn(`detail fail ${row.zepto_sku}: ${msg.slice(0, 120)}`);
+
+        if (consecutiveCf >= 8) {
+          console.error(
+            "\n[02-scrape-products] 8 Cloudflare blocks in a row — session is stale.\n" +
+              "  1. Ctrl+C to stop\n" +
+              "  2. Run: pnpm warm-session\n" +
+              "  3. Retry: GROCERY_RPS=2 SCRAPE_CONCURRENCY=3 pnpm scrape:expand:detail\n",
+          );
+          process.exit(1);
+        }
       }
-    }
+    });
 
-    if ((i + 1) % 50 === 0) {
-      console.log(
-        `[02-scrape-products] detail ${i + 1}/${skuRows!.length}  ok=${ok} fail=${fail}`,
-      );
-    }
+    processed += skuRows.length;
+    console.log(
+      `[02-scrape-products] detail progress: processed=${processed} ok=${ok} fail=${fail}`,
+    );
+
+    if (skuRows.length < args.detailBatchSize) break;
   }
-  console.log(`[02-scrape-products] detail results: ok=${ok} fail=${fail}`);
+
+  console.log(
+    `[02-scrape-products] detail results: ok=${ok} fail=${fail}` +
+      (scoreAfterDetail ? ` scored_inline=${scoredInline}` : ""),
+  );
   console.log(`[02-scrape-products] detail phase done.`);
 }
 

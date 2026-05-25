@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { NavCartLink } from "@/components/nav-cart-link";
 
 export function SiteNav() {
   return (
@@ -11,15 +12,20 @@ export function SiteNav() {
           </span>
           <span className="font-display text-lg text-(--color-fg)">Oasis</span>
         </Link>
-        <div className="hidden items-center gap-8 text-sm text-(--color-fg-muted) md:flex">
+        <div className="hidden items-center gap-6 text-sm text-(--color-fg-muted) md:flex">
           <Link href="/search" className="hover:text-(--color-fg)">
             Catalog
           </Link>
-          <Link href="/#how-it-works" className="hover:text-(--color-fg)">
-            Method
+          <Link
+            href="/search"
+            className="hover:text-(--color-fg)"
+            title="Pick a goal mode on the catalog — rankings and swaps adapt"
+          >
+            Goals
           </Link>
-          <Link href="/#faq" className="hover:text-(--color-fg)">
-            FAQ
+          <NavCartLink className="inline-flex items-center hover:text-(--color-fg)" />
+          <Link href="/insights" className="hover:text-(--color-fg)">
+            Insights
           </Link>
         </div>
         <Link

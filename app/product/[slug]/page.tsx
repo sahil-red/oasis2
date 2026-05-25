@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { AnalysisGrid } from "@/components/analysis-grid";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
 import { ProductGallery } from "@/components/product-gallery";
+import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
 import { ScorePanel, ScorePending } from "@/components/score-display";
+import { SwapPanel } from "@/components/swap-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import { goalFromParam } from "@/lib/goals/types";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
-import { getProductBySlug } from "@/lib/products/queries";
+import { findAlternatives } from "@/lib/products/alternatives";
+import { getAllCatalogProducts, getProductBySlug } from "@/lib/products/queries";
 import type { SubScores } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +32,23 @@ const DETAIL_SKIP = new Set([
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ goal?: string }>;
 }) {
   const { slug } = await params;
+  const { goal: goalParam } = await searchParams;
+  const goal = goalFromParam(goalParam);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
+
+  const catalog = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+  const swaps = findAlternatives(product, catalog, goal, 3);
+  const goalFit =
+    goal !== "balanced"
+      ? computeGoalFit(goal, goalFitInputs(product))
+      : null;
 
   const score = product.core_scores;
   const subscores = score?.subscores as SubScores | undefined;
@@ -82,10 +99,19 @@ export default async function ProductPage({
                 ) : null}
               </p>
             ) : null}
+            <Suspense fallback={null}>
+              <ProductGoalToolbar slug={product.slug} name={product.name} />
+            </Suspense>
+            {goalFit ? (
+              <p className="mt-3 text-sm text-(--color-fg-muted)">
+                Goal fit <span className="font-semibold text-(--color-accent)">{goalFit.fit}</span>
+                — {goalFit.reasons.join(" · ")}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-10 space-y-8">
+        <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:items-stretch">
           {score ? (
             <ScorePanel
               score={score.score}
@@ -93,11 +119,15 @@ export default async function ProductPage({
               band={score.band}
               subscores={subscores}
               ruleVersion={score.rule_version}
+              compact
             />
           ) : (
-            <ScorePending />
+            <ScorePending compact />
           )}
+          <SwapPanel current={product} suggestions={swaps} compact />
+        </div>
 
+        <div className="mt-8 space-y-8">
           {highlights.length > 0 ? (
             <section>
               <h2 className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">

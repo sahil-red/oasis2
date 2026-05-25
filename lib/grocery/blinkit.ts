@@ -117,11 +117,13 @@ function asNumber(v: unknown): number | null {
 export class BlinkitAdapter implements GroceryAdapter {
   readonly platform: Platform = "blinkit";
   private readonly rps: number;
+  private readonly burst: number;
   private readonly backendOverride: string | null;
   private cachedHttp: { fn: ThrottledFetch; key: string } | null = null;
 
-  constructor(opts: { rps?: number } = {}) {
+  constructor(opts: { rps?: number; burst?: number } = {}) {
     this.rps = opts.rps ?? 2;
+    this.burst = opts.burst ?? (Number(process.env.GROCERY_BURST) || 1);
     this.backendOverride = process.env.HTTP_BACKEND
       ? process.env.HTTP_BACKEND.toLowerCase()
       : null;
@@ -165,11 +167,12 @@ export class BlinkitAdapter implements GroceryAdapter {
       fn = makePlaywrightFetch({
         storageStatePath: session.storage_state_path,
         rps: this.rps,
+        burst: this.burst,
       });
     } else if (backend === "fetch") {
-      fn = makeThrottledFetch({ rps: this.rps });
+      fn = makeThrottledFetch({ rps: this.rps, burst: this.burst });
     } else {
-      fn = makeCurlFetch({ rps: this.rps });
+      fn = makeCurlFetch({ rps: this.rps, burst: this.burst });
     }
 
     this.cachedHttp = { fn, key };

@@ -42,6 +42,7 @@ import {
   type OcrBackend,
   type OcrNutrition,
 } from "@/lib/ocr";
+import { geminiPoolSummary } from "@/lib/ocr/gemini-pool";
 
 loadEnv({ path: ".env.local" });
 
@@ -109,6 +110,11 @@ async function main() {
     bypassCache: args.bypassCache,
   });
 
+  const bulkSkipped = await markPlatformCompleteBulk(supabase, args.withDetail, args.dryRun);
+  if (bulkSkipped > 0) {
+    console.log(`[03-ocr-labels] bulk-marked ${bulkSkipped} platform-complete (skip Gemini).`);
+  }
+
   const statusFilter = args.retryFailed
     ? "pending,failed,no_label_found"
     : "pending";
@@ -141,7 +147,7 @@ async function main() {
   const backend = args.backend ?? process.env.OCR_BACKEND ?? "auto";
   console.log(
     `[03-ocr-labels] processing ${total} products (backend=${backend}, ` +
-      `gemini budget=${process.env.OCR_MAX_CALLS_PER_RUN ?? "400"}/run)`,
+      `gemini=${geminiPoolSummary()}, budget=${process.env.OCR_MAX_CALLS_PER_RUN ?? "400"}/run)`,
   );
   console.log(
     "[03-ocr-labels] first product may take 30–60s (Tesseract worker cold start + image download).",
@@ -320,6 +326,64 @@ async function updateProduct(
 ): Promise<void> {
   const { error } = await supabase.from("products").update(patch).eq("id", id);
   if (error) console.warn("[03-ocr-labels] update failed:", error.message);
+}
+
+/** Fast path: PDP already has ingredients + nutrition — no label OCR needed. */
+async function markPlatformCompleteBulk(
+  supabase: ReturnType<typeof adminClient>,
+  withDetail: boolean,
+  dryRun: boolean,
+): Promise<number> {
+  const pageSize = 500;
+  let marked = 0;
+  let offset = 0;
+
+  while (true) {
+    let q = supabase
+      .from("products")
+      .select("id, ingredients_raw, nutrition")
+      .eq("ocr_status", "pending")
+      .range(offset, offset + pageSize - 1);
+    if (withDetail) q = q.not("raw_payload", "is", null);
+
+    const { data, error } = await q;
+    if (error) {
+      console.warn("[03-ocr-labels] bulk platform skip query failed:", error.message);
+      break;
+    }
+    if (!data?.length) break;
+
+    const ids = data
+      .filter((r) =>
+        isPlatformComplete(
+          r.ingredients_raw as string | null,
+          r.nutrition as Record<string, unknown> | null,
+        ),
+      )
+      .map((r) => r.id as string);
+
+    if (ids.length && !dryRun) {
+      const now = new Date().toISOString();
+      const { error: upErr } = await supabase
+        .from("products")
+        .update({
+          ocr_status: "success",
+          ocr_payload: { source: "platform", skipped_reason: "platform_complete" },
+          ocr_attempted_at: now,
+          updated_at: now,
+        })
+        .in("id", ids);
+      if (upErr) console.warn("[03-ocr-labels] bulk update failed:", upErr.message);
+      else marked += ids.length;
+    } else {
+      marked += ids.length;
+    }
+
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return marked;
 }
 
 main().catch((err) => {

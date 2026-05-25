@@ -18,12 +18,15 @@
     "scrape:packaged:detail": "tsx scripts/02-scrape-products.ts --detail-only",
     "scrape:expand": "tsx scripts/02-scrape-products.ts --only-categories=snacks__munchies__breakfast__sweet_tooth__bakery__biscuit__sauce__spread__organic__healthy__dairy --pages-per-cat=100 --ignore-progress --max-products=4000",
     "scrape:expand:detail": "tsx scripts/02-scrape-products.ts --detail-only",
+    "pipeline:expand": "bash scripts/run-expand-pipeline.sh",
     "peek:blinkit": "tsx scripts/peek-blinkit.ts",
     "diag:blinkit": "tsx scripts/diag-blinkit.ts",
     "diag:supabase": "tsx scripts/diag-supabase.ts",
     "spy:blinkit": "tsx scripts/spy-blinkit.ts",
     "ocr": "tsx scripts/03-ocr-labels.ts",
-    "score": "tsx scripts/05-compute-scores.ts"
+    "score": "tsx scripts/05-compute-scores.ts",
+    "funnel": "tsx scripts/db-funnel.ts",
+    "db:status": "tsx scripts/db-status.ts"
   },
   "dependencies": {
     "@google/genai": "^2.6.0",

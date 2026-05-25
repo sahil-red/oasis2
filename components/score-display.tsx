@@ -46,7 +46,8 @@ export function ScorePanel({
   band,
   subscores,
   ruleVersion,
-}: ScoreCore & { ruleVersion?: number }) {
+  compact,
+}: ScoreCore & { ruleVersion?: number; compact?: boolean }) {
   const axes = subscores
     ? [
         { label: "Nutrition", value: subscores.nutrition, max: 60 },
@@ -54,6 +55,45 @@ export function ScorePanel({
         { label: "Labels", value: subscores.labels, max: 10 },
       ]
     : [];
+
+  if (compact) {
+    return (
+      <div className="h-full rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
+          Core score
+        </h2>
+        <div className="mt-3 flex items-center gap-4">
+          <ScoreRing score={score} size={96} stroke={8} />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset",
+                  BAND_STYLES[band],
+                )}
+              >
+                {labelForBand(band)}
+              </span>
+              <span className="text-xs font-medium text-(--color-fg)">Grade {grade}</span>
+            </div>
+            {axes.length > 0 ? (
+              <div className="grid grid-cols-3 gap-1 text-center">
+                {axes.map(({ label, value, max }) => (
+                  <div key={label} className="rounded-lg border border-(--color-line) bg-white px-1.5 py-1">
+                    <div className="text-[9px] uppercase tracking-wider text-(--color-fg-dim)">
+                      {label.slice(0, 4)}
+                    </div>
+                    <div className="font-display text-sm tabular-nums">{value}</div>
+                    <div className="text-[9px] text-(--color-fg-dim)">/{max}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-6 md:p-8">
@@ -102,10 +142,15 @@ export function ScorePanel({
   );
 }
 
-export function ScorePending() {
+export function ScorePending({ compact }: { compact?: boolean }) {
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-(--color-bg-soft) px-5 py-4 text-sm text-(--color-fg-muted)">
-      Score pending — waiting on nutrition data.
+    <div
+      className={cn(
+        "rounded-xl border border-(--color-line) bg-(--color-bg-soft) text-sm text-(--color-fg-muted)",
+        compact ? "flex h-full items-center px-4 py-3" : "px-5 py-4",
+      )}
+    >
+      {compact ? "Score pending" : "Score pending — waiting on nutrition data."}
     </div>
   );
 }

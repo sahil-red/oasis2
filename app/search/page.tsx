@@ -11,6 +11,7 @@ type SearchParams = {
   subcategory?: string;
   brand?: string;
   scored?: string;
+  goal?: string;
 };
 
 export default async function CatalogPage({

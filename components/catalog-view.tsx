@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import {
   buildFilterOptions,
   catalogParamsToSearch,
@@ -17,6 +20,7 @@ type Params = {
   subcategory?: string;
   brand?: string;
   scored?: string;
+  goal?: string;
 };
 
 const inputClass =
@@ -51,6 +55,7 @@ export function CatalogView({
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
   );
+  const [goal, setGoal] = useState<GoalId>(() => goalFromParam(initialParams.goal));
   const [isPending, startTransition] = useTransition();
 
   const filterOptions = useMemo(
@@ -63,18 +68,39 @@ export function CatalogView({
     [state, filterOptions],
   );
 
-  const filtered = useMemo(
-    () => filterCatalogProducts(products, activeState),
-    [products, activeState],
-  );
+  const filtered = useMemo(() => {
+    const list = filterCatalogProducts(products, activeState);
+    if (goal === "balanced") {
+      return [...list].sort(
+        (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
+      );
+    }
+    return [...list]
+      .map((p) => ({
+        p,
+        fit: computeGoalFit(goal, goalFitInputs(p)).fit,
+      }))
+      .sort((a, b) => b.fit - a.fit)
+      .map((x) => x.p);
+  }, [products, activeState, goal]);
+
+  const goalFits = useMemo(() => {
+    if (goal === "balanced") return new Map<string, number>();
+    return new Map(
+      filtered.map((p) => [
+        p.id,
+        computeGoalFit(goal, goalFitInputs(p)).fit,
+      ]),
+    );
+  }, [filtered, goal]);
 
   useEffect(() => {
-    const path = `/search${catalogParamsToSearch(activeState)}`;
+    const path = `/search${catalogParamsToSearch(activeState, goal)}`;
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== path) {
       window.history.replaceState(null, "", path);
     }
-  }, [activeState]);
+  }, [activeState, goal]);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
     startTransition(() => {
@@ -115,6 +141,23 @@ export function CatalogView({
   return (
     <div className="space-y-8">
       <div className="space-y-5">
+        <GoalModePicker value={goal} onChange={(g) => startTransition(() => setGoal(g))} compact />
+        {goal !== "balanced" ? (
+          <p className="text-[12px] leading-relaxed text-(--color-fg-dim)">
+            Ranked for{" "}
+            <span className="text-(--color-fg-muted)">
+              {GOAL_PROFILES.find((g) => g.id === goal)?.label ?? goal}
+            </span>
+            . Open a product for{" "}
+            <span className="text-(--color-fg-muted)">swap suggestions</span> in the same aisle.
+          </p>
+        ) : (
+          <p className="text-[12px] text-(--color-fg-dim)">
+            Tap <span className="text-(--color-fg-muted)">+</span> on a tile to add to your mock
+            cart · pick a goal mode to re-rank the catalog.
+          </p>
+        )}
+
         <div className="relative max-w-xl">
           <svg
             className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-(--color-fg-dim)"
@@ -240,7 +283,11 @@ export function CatalogView({
           }`}
         >
           {filtered.map((p) => (
-            <ProductCard key={p.id} product={p} />
+            <ProductCard
+              key={p.id}
+              product={p}
+              goalFit={goal !== "balanced" ? goalFits.get(p.id) : undefined}
+            />
           ))}
         </div>
       )}

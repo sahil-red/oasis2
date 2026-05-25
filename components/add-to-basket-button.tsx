@@ -1,0 +1,98 @@
+"use client";
+
+import { Minus, Plus, ShoppingCart } from "lucide-react";
+import { useEffect, useState } from "react";
+import { addToBasket, decrementBasket, readBasket } from "@/lib/basket/storage";
+import { cn } from "@/lib/utils";
+
+export function AddToBasketButton({
+  slug,
+  name,
+  className,
+  size = "default",
+}: {
+  slug: string;
+  name: string;
+  className?: string;
+  /** `icon` — compact overlay for catalog cards */
+  size?: "default" | "icon";
+}) {
+  const [qty, setQty] = useState(0);
+
+  useEffect(() => {
+    const sync = () => {
+      const e = readBasket().find((x) => x.slug === slug);
+      setQty(e?.qty ?? 0);
+    };
+    sync();
+    window.addEventListener("oasis-basket", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("oasis-basket", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [slug]);
+
+  if (size === "icon") {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-0.5 rounded-full border border-(--color-line) bg-white/95 p-0.5 shadow-sm backdrop-blur-sm",
+          className,
+        )}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {qty > 0 ? (
+          <>
+            <button
+              type="button"
+              aria-label="Remove one"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                decrementBasket(slug);
+              }}
+              className="grid h-7 w-7 place-items-center rounded-full text-(--color-fg-muted) hover:bg-(--color-bg-soft) hover:text-(--color-fg)"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <span className="min-w-[1.25rem] text-center text-xs font-semibold tabular-nums">
+              {qty}
+            </span>
+          </>
+        ) : null}
+        <button
+          type="button"
+          aria-label={qty > 0 ? "Add another" : "Add to cart"}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            addToBasket(slug, name);
+          }}
+          className="grid h-7 w-7 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) hover:opacity-90"
+        >
+          {qty > 0 ? (
+            <Plus className="h-3.5 w-3.5" />
+          ) : (
+            <ShoppingCart className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => addToBasket(slug, name)}
+      className={
+        className ??
+        "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-white px-3 py-2 text-sm font-medium text-(--color-fg) hover:border-(--color-fg)"
+      }
+    >
+      <ShoppingCart className="h-4 w-4" />
+      {qty > 0 ? `In cart (${qty})` : "Add to cart"}
+    </button>
+  );
+}

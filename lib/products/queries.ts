@@ -151,8 +151,19 @@ export async function getAllCatalogProducts(opts?: {
   return searchProducts({
     onlyWithDetail: opts?.onlyWithDetail ?? true,
     onlyScored: opts?.onlyScored,
-    limit: 500,
+    limit: 1500,
   });
+}
+
+export async function getProductsBySlugs(slugs: string[]): Promise<ProductListItem[]> {
+  if (!slugs.length) return [];
+  const supabase = db();
+  const { data, error } = await supabase
+    .from("products")
+    .select(`${LIST_FIELDS}, core_scores (score, grade, band, subscores, concerns, computed_at)`)
+    .in("slug", slugs);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {
