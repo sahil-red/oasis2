@@ -19,12 +19,27 @@ export function productShelf(
   return null;
 }
 
+/** Products whose names clearly belong elsewhere (bad listing category on Blinkit). */
+const AISLE_MISMATCH: Record<string, RegExp> = {
+  "Cold Drinks & Juices":
+    /\b(ketchup|sauce|masala|atta|dal|rice|chicken|meat|paneer|bread|biscuit|cookie|chips?|namkeen)\b/i,
+  "Fruits & Vegetables":
+    /\b(ketchup|sauce|masala|atta|dal|rice|chicken|biscuit|cookie|chocolate|drink|juice|soda|cola)\b/i,
+  "Snacks & Munchies":
+    /\b(ketchup|masala|atta|dal|rice|chicken|paneer|milk|curd|yogurt|juice|soda)\b/i,
+};
+
 export function productMatchesAisle(
-  p: Pick<ProductListItem, "category" | "super_category">,
+  p: Pick<ProductListItem, "category" | "super_category" | "name">,
   aisle: string,
 ): boolean {
   if (!aisle) return true;
-  return productAisle(p) === aisle;
+  const a = productAisle(p);
+  if (!a) return false;
+  if (a !== aisle) return false;
+  const block = AISLE_MISMATCH[aisle];
+  if (block && block.test(p.name)) return false;
+  return true;
 }
 
 export function productMatchesShelf(

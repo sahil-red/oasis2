@@ -34,6 +34,7 @@ eng.traineddata
 
 # scraper artifacts
 .cache/
+data/cache/
 .tmp/
 data/raw/
 data/images/

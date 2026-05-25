@@ -1,6 +1,40 @@
+import { isBlockedTaxonomy } from "@/lib/catalog/policy";
 import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
+import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
 import type { CoreScore, Product, ProductNutrition } from "@/lib/supabase/types";
+
+import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
+
+/** Rows eligible for public catalog (CSV import with real variant UUID). */
+export function isCatalogSourceRow(p: {
+  platform?: string | null;
+  zepto_sku?: string | null;
+}): boolean {
+  return p.platform === "zepto" && isZeptoVariantId(p.zepto_sku);
+}
+
+/** Food SKUs with label-grade nutrition — excludes non-food and Zepto rows pending nutrition. */
+function isCatalogVisible(p: {
+  name: string;
+  super_category: string | null;
+  category: string | null;
+  subcategory: string | null;
+  ingredients_raw: string | null;
+  nutrition: ProductNutrition | null;
+}): boolean {
+  if (
+    isBlockedTaxonomy({
+      super_category: p.super_category,
+      category: p.category,
+      subcategory: p.subcategory,
+      name: p.name,
+    })
+  ) {
+    return false;
+  }
+  return isPlatformNutritionComplete(p.ingredients_raw, p.nutrition);
+}
 
 /** Server-side reads: service role when set, else anon (browser-safe) client. */
 function db() {
@@ -12,7 +46,7 @@ function db() {
 }
 
 const LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
+  "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
 
 /** Drop multi-KB attribute blobs from catalog JSON (Vercel cache limit is 2MB). */
 const CATALOG_ATTR_KEYS = [
@@ -74,6 +108,7 @@ export type ProductListItem = Pick<
   | "super_category"
   | "category"
   | "subcategory"
+  | "l3_category"
   | "net_weight"
   | "attributes"
   | "price_inr"
@@ -115,6 +150,9 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     super_category: (row.super_category as string | null) ?? null,
     category: (row.category as string | null) ?? null,
     subcategory: (row.subcategory as string | null) ?? null,
+    l3_category:
+      (row.l3_category as string | null) ??
+      ((row.attributes as Record<string, string> | null)?.["L3 Category"] ?? null),
     net_weight: (row.net_weight as string | null) ?? null,
     attributes: (row.attributes as Record<string, string> | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
@@ -130,8 +168,8 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
   const supabase = db();
   let q = supabase
     .from("products")
-    .select("category, subcategory, brand")
-    .not("raw_payload", "is", null);
+    .select("name, super_category, category, subcategory, brand, ingredients_raw, nutrition, platform, zepto_sku")
+    .eq("platform", "zepto");
 
   if (category) q = q.eq("category", category);
 
@@ -143,6 +181,20 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
   const brands = new Set<string>();
 
   for (const row of data ?? []) {
+    const visible = isCatalogVisible({
+      name: row.name as string,
+      super_category: (row.super_category as string | null) ?? null,
+      category: (row.category as string | null) ?? null,
+      subcategory: (row.subcategory as string | null) ?? null,
+      ingredients_raw: (row.ingredients_raw as string | null) ?? null,
+      nutrition: (row.nutrition as ProductNutrition | null) ?? null,
+    });
+    if (
+      !visible ||
+      !isCatalogSourceRow(row as { platform?: string; zepto_sku?: string | null })
+    ) {
+      continue;
+    }
     if (row.category) categories.add(row.category as string);
     if (row.subcategory) subcategories.add(row.subcategory as string);
     if (row.brand) brands.add(row.brand as string);
@@ -175,7 +227,7 @@ export async function searchProducts(opts: {
     .limit(limit);
 
   if (opts.onlyWithDetail) {
-    query = query.not("raw_payload", "is", null);
+    query = query.eq("platform", "zepto");
   }
 
   if (opts.q?.trim()) {
@@ -191,7 +243,19 @@ export async function searchProducts(opts: {
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  const items = (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
+  const items = (data ?? [])
+    .filter((row) => {
+      const r = row as Record<string, unknown>;
+      const mapped = mapListRow(r);
+      return (
+        isCatalogVisible(mapped) &&
+        isCatalogSourceRow({
+          platform: r.platform as string,
+          zepto_sku: r.zepto_sku as string | null,
+        })
+      );
+    })
+    .map((row) => mapListRow(row as Record<string, unknown>));
   items.sort((a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1));
   return items;
 }
@@ -203,7 +267,7 @@ export async function getAllCatalogProducts(opts?: {
 }): Promise<ProductListItem[]> {
   const supabase = db();
   const pageSize = 1000;
-  const max = 2500;
+  const max = 30_000;
   const all: ProductListItem[] = [];
 
   for (let offset = 0; offset < max; offset += pageSize) {
@@ -214,7 +278,7 @@ export async function getAllCatalogProducts(opts?: {
       .range(offset, offset + pageSize - 1);
 
     if (opts?.onlyWithDetail ?? true) {
-      query = query.not("raw_payload", "is", null);
+      query = query.eq("platform", "zepto");
     }
     if (opts?.onlyScored) {
       query = query.not("core_scores", "is", null);
@@ -222,9 +286,22 @@ export async function getAllCatalogProducts(opts?: {
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-    const batch = (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
+    const rows = data ?? [];
+    const batch = rows
+      .filter((row) => {
+        const r = row as Record<string, unknown>;
+        const mapped = mapListRow(r);
+        return (
+          isCatalogVisible(mapped) &&
+          isCatalogSourceRow({
+            platform: r.platform as string,
+            zepto_sku: r.zepto_sku as string | null,
+          })
+        );
+      })
+      .map((row) => mapListRow(row as Record<string, unknown>));
     all.push(...batch);
-    if (batch.length < pageSize) break;
+    if (rows.length < pageSize) break;
   }
 
   all.sort((a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1));
@@ -241,7 +318,7 @@ export async function getProductsForSwaps(
   let query = supabase
     .from("products")
     .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
-    .not("raw_payload", "is", null)
+    .eq("platform", "zepto")
     .not("core_scores", "is", null)
     .neq("id", current.id)
     .limit(limit);
@@ -250,7 +327,9 @@ export async function getProductsForSwaps(
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
+  return (data ?? [])
+    .map((row) => mapListRow(row as Record<string, unknown>))
+    .filter(isCatalogVisible);
 }
 
 export async function getProductsBySlugs(slugs: string[]): Promise<ProductListItem[]> {
@@ -261,7 +340,9 @@ export async function getProductsBySlugs(slugs: string[]): Promise<ProductListIt
     .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
     .in("slug", slugs);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
+  return (data ?? [])
+    .map((row) => mapListRow(row as Record<string, unknown>))
+    .filter(isCatalogVisible);
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {
@@ -273,7 +354,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       `
       id, zepto_sku, slug, name, brand, super_category, category, subcategory,
       net_weight, price_inr, mrp_inr, image_urls, product_url, barcode,
-      ingredients_raw, nutrition, attributes, scraped_at, updated_at,
+      ingredients_raw, nutrition, attributes, raw_payload, scraped_at, updated_at,
       core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at)
     `,
     )
@@ -300,6 +381,9 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     super_category: (row.super_category as string | null) ?? null,
     category: (row.category as string | null) ?? null,
     subcategory: (row.subcategory as string | null) ?? null,
+    l3_category:
+      (row.l3_category as string | null) ??
+      ((row.attributes as Record<string, string> | null)?.["L3 Category"] ?? null),
     net_weight: (row.net_weight as string | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
@@ -309,7 +393,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     ingredients_raw: (row.ingredients_raw as string | null) ?? null,
     nutrition: (row.nutrition as ProductNutrition | null) ?? null,
     attributes: (row.attributes as Record<string, string> | null) ?? null,
-    raw_payload: null,
+    raw_payload: (row.raw_payload as Record<string, unknown> | null) ?? null,
     scraped_at: row.scraped_at as string,
     updated_at: row.updated_at as string,
     core_scores: core,
@@ -343,7 +427,7 @@ export async function countCatalog(): Promise<{
     supabase
       .from("products")
       .select("id", { count: "exact", head: true })
-      .not("raw_payload", "is", null),
+      .eq("platform", "zepto"),
     supabase.from("core_scores").select("product_id", { count: "exact", head: true }),
   ]);
 

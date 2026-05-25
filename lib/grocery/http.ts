@@ -14,6 +14,8 @@ export interface FetchOptions extends RequestInit {
   backoffMs?: number;
   /** Optional request label for logging. */
   label?: string;
+  /** After one 429 retry, stop (avoids hammering a hot rate limit). */
+  failFast429?: boolean;
 }
 
 export interface ThrottledFetch {

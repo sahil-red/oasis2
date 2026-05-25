@@ -58,7 +58,19 @@ export function nutritionFromAttributes(
   attributes: Record<string, string> | null | undefined,
   servingG?: number | null,
 ): ProductNutrition | null {
-  const block = attributes?.["Nutrition Information"]?.trim();
+  if (!attributes) return null;
+  let block: string | null = null;
+  for (const [k, v] of Object.entries(attributes)) {
+    if (!/nutri/i.test(k) || !v?.trim()) continue;
+    if (v.includes("\n") || /per\s*100/i.test(v) || /per\s*100/i.test(k)) {
+      block = v.trim();
+      break;
+    }
+  }
+  block ??=
+    attributes["Nutrition Information"]?.trim() ??
+    attributes["Nutritional Information"]?.trim() ??
+    null;
   if (!block) return null;
   return parseServingNutritionBlock(block, servingG ?? undefined);
 }

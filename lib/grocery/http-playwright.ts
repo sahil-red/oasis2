@@ -10,10 +10,9 @@
  *   APIRequestContext doesn't help — internally it uses Node's HTTP
  *   stack with the same Node TLS fingerprint.
  *
- *   The ONLY thing CF accepts is a fetch from inside a Chromium page
- *   context. So we keep a single headless Chromium page open with the
- *   user's saved storage state, and route every adapter request through
- *   `page.evaluate((init) => fetch(url, init))`.
+ *   Blinkit APIs are same-origin → `page.evaluate(fetch)` (passes CF).
+ *   Zepto hits `api.zepto.co.in` (cross-origin) → `context.request.fetch`
+ *   (no CORS; still sends cookies from storage state).
  *
  * Lifecycle:
  *   First call lazily launches a headless Chromium with the saved
@@ -48,7 +47,7 @@ interface PlaywrightState {
   callsSinceSave: number;
 }
 
-let _state: Promise<PlaywrightState> | null = null;
+const _states = new Map<string, Promise<PlaywrightState>>();
 /** Debounce full homepage reloads — each one costs ~6s and triggers more blocks if spammed. */
 let _lastCfRefreshMs = 0;
 /** One in-flight page.evaluate at a time — CF reload navigates the page and kills parallel evals. */
@@ -63,7 +62,7 @@ function enqueueFetch<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-const ORIGIN = "https://blinkit.com";
+const DEFAULT_ORIGIN = "https://blinkit.com";
 const SAVE_EVERY = 25;
 const CF_REFRESH_COOLDOWN_MS = Number(process.env.CF_REFRESH_COOLDOWN_MS) || 45_000;
 
@@ -81,10 +80,11 @@ async function refreshCfSession(state: PlaywrightState, force = false): Promise<
     return false;
   }
   _lastCfRefreshMs = now;
+  const origin = pageOrigin(state, DEFAULT_ORIGIN);
   console.warn(
-    "[grocery/http-playwright] Cloudflare block — reloading blinkit.com to refresh cookies…",
+    `[grocery/http-playwright] Cloudflare block — reloading ${origin} to refresh cookies…`,
   );
-  await state.page.goto(`${ORIGIN}/`, {
+  await state.page.goto(`${origin}/`, {
     waitUntil: "domcontentloaded",
     timeout: 45_000,
   });
@@ -130,9 +130,11 @@ async function launchBrowser(pw: PWModule): Promise<Browser> {
   }
 }
 
-async function getState(storagePath: string): Promise<PlaywrightState> {
-  if (_state) return _state;
-  _state = (async () => {
+async function getState(storagePath: string, origin: string): Promise<PlaywrightState> {
+  const key = `${storagePath}::${origin}`;
+  const existing = _states.get(key);
+  if (existing) return existing;
+  const created = (async () => {
     const pw = await import("playwright");
 
     const browser = await launchBrowser(pw);
@@ -153,7 +155,7 @@ async function getState(storagePath: string): Promise<PlaywrightState> {
     // Navigate so that `fetch()` inside page.evaluate runs same-origin to
     // blinkit.com — Blinkit's API rejects cross-origin (CORS) requests, but
     // same-origin requests bypass that entirely.
-    await page.goto(`${ORIGIN}/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(`${origin}/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
     return {
       pw,
@@ -164,23 +166,25 @@ async function getState(storagePath: string): Promise<PlaywrightState> {
       callsSinceSave: 0,
     };
   })();
-  return _state;
+  _states.set(key, created);
+  return created;
 }
 
 /** Force the next request to launch a fresh browser (e.g. after a CF streak). */
 export async function closePlaywrightFetch(): Promise<void> {
   _lastCfRefreshMs = 0;
-  if (!_state) return;
-  const s = await _state.catch(() => null);
-  _state = null;
-  if (!s) return;
-  try {
-    // Final save before close — keeps the storage state warm for next run.
-    await s.context.storageState({ path: s.storagePath });
-  } catch {}
-  try {
-    await s.browser.close();
-  } catch {}
+  const entries = [..._states.entries()];
+  _states.clear();
+  for (const [, promise] of entries) {
+    const s = await promise.catch(() => null);
+    if (!s) continue;
+    try {
+      await s.context.storageState({ path: s.storagePath });
+    } catch {}
+    try {
+      await s.browser.close();
+    } catch {}
+  }
 }
 
 // Best-effort cleanup on natural exit. Doesn't run on SIGKILL, but covers
@@ -190,10 +194,7 @@ function installExitHook() {
   if (_exitHookInstalled) return;
   _exitHookInstalled = true;
   const close = () => {
-    if (_state) {
-      // Fire-and-forget — Node will wait briefly for the close.
-      void closePlaywrightFetch();
-    }
+    if (_states.size > 0) void closePlaywrightFetch();
   };
   process.on("exit", close);
   process.on("SIGINT", () => {
@@ -204,6 +205,59 @@ function installExitHook() {
     close();
     setTimeout(() => process.exit(143), 200);
   });
+}
+
+function pageOrigin(state: PlaywrightState, fallbackOrigin: string): string {
+  if (state.page.url().startsWith("http")) {
+    try {
+      return new URL(state.page.url()).origin;
+    } catch {
+      // fall through
+    }
+  }
+  return fallbackOrigin;
+}
+
+function isCrossOriginFetch(pageOriginUrl: string, targetUrl: string): boolean {
+  try {
+    return new URL(targetUrl).origin !== new URL(pageOriginUrl).origin;
+  } catch {
+    return true;
+  }
+}
+
+async function runFetch(
+  state: PlaywrightState,
+  fallbackOrigin: string,
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<{ status: number; body: string }> {
+  const origin = pageOrigin(state, fallbackOrigin);
+  if (isCrossOriginFetch(origin, url)) {
+    const resp = await state.context.request.fetch(url, {
+      method,
+      headers,
+      data: body,
+      timeout: 45_000,
+      failOnStatusCode: false,
+    });
+    return { status: resp.status(), body: await resp.text() };
+  }
+
+  return state.page.evaluate(
+    async ({ url, method, headers, body }) => {
+      const r = await fetch(url, {
+        method,
+        headers,
+        body,
+        credentials: "include",
+      });
+      return { status: r.status, body: await r.text() };
+    },
+    { url, method, headers, body },
+  );
 }
 
 function normaliseHeaders(h: FetchOptions["headers"]): Record<string, string> {
@@ -221,9 +275,12 @@ function normaliseHeaders(h: FetchOptions["headers"]): Record<string, string> {
 
 export function makePlaywrightFetch(opts: {
   storageStatePath: string;
+  /** Site origin for same-origin API calls (e.g. https://www.zepto.com). */
+  origin?: string;
   rps?: number;
   burst?: number;
 }): ThrottledFetch {
+  const origin = opts.origin ?? DEFAULT_ORIGIN;
   installExitHook();
 
   const rps = opts.rps ?? 2;
@@ -232,10 +289,11 @@ export function makePlaywrightFetch(opts: {
 
   const throttled = throttle(async (url: string, init: FetchOptions = {}) =>
     enqueueFetch(async () => {
-    const state = await getState(opts.storageStatePath);
+    const state = await getState(opts.storageStatePath, origin);
 
     const retries = init.retries ?? 3;
     const baseBackoff = init.backoffMs ?? 800;
+    const failFast429 = init.failFast429 === true;
     const label = init.label ?? new URL(url).pathname;
 
     const headers = normaliseHeaders(init.headers);
@@ -250,30 +308,22 @@ export function makePlaywrightFetch(opts: {
     let lastErr: unknown;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const result = await state.page.evaluate(
-          async ({ url, method, headers, body }: {
-            url: string;
-            method: string;
-            headers: Record<string, string>;
-            body: string | undefined;
-          }) => {
-            const r = await fetch(url, {
-              method,
-              headers,
-              body,
-              credentials: "include",
-            });
-            return { status: r.status, body: await r.text() };
-          },
-          { url, method, headers, body },
-        );
+        const result = await runFetch(state, origin, url, method, headers, body);
 
         if (
           result.status === 429 ||
           result.status >= 500 ||
           isCloudflareChallenge(result.status, result.body)
         ) {
-          const wait = baseBackoff * Math.pow(2, attempt);
+          let wait = baseBackoff * Math.pow(2, attempt);
+          if (result.status === 429) {
+            wait = Math.max(wait, failFast429 ? 30_000 : 5_000 * (attempt + 1));
+            if (failFast429 && attempt >= 1) {
+              throw new Error(
+                `[grocery/http-playwright] ${label} → 429 rate limited (fail-fast)`,
+              );
+            }
+          }
           if (isCloudflareChallenge(result.status, result.body)) {
             const refreshed = await refreshCfSession(state);
             await sleep(refreshed ? wait + 1_000 : wait + 3_500);

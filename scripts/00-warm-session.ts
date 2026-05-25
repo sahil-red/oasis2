@@ -145,28 +145,45 @@ async function warmFromPlaywright(platform: Platform): Promise<GrocerySession> {
   // and TLS via the persistent context, but our adapter still wants to set
   // app_client / app_version / auth_key / referer to match the real client.
   const capturedHeaders: Record<string, string> = {};
+  let capturedStoreId: string | null = null;
   page.on("request", (req) => {
     const url = req.url();
-    if (
+    const isApi =
       url.includes("/v1/") ||
-      url.includes("/v2/services/") ||
-      url.includes("/v3/")
-    ) {
+      url.includes("/v2/") ||
+      url.includes("/v3/") ||
+      url.includes("api.zepto.co.in");
+    if (isApi) {
       const h = req.headers();
       for (const [k, v] of Object.entries(h)) {
         if (k.startsWith(":") || k === "cookie") continue;
         if (!capturedHeaders[k]) capturedHeaders[k] = v;
+      }
+      try {
+        const u = new URL(url);
+        const sid =
+          u.searchParams.get("storeId") ??
+          u.searchParams.get("store_id") ??
+          h.store_id ??
+          h.storeid;
+        if (sid?.trim()) capturedStoreId = sid.trim();
+      } catch {
+        // ignore malformed URLs
       }
     }
   });
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
 
+  const platformHint =
+    platform === "zepto"
+      ? "Pin a delivery address on zepto.com and wait for the home grid."
+      : "Pin a delivery address — the catalog is gated on it.";
   console.log(
     `\n[warm-session] Chromium is open. In that window:\n` +
       `  1. Sign in (if needed)\n` +
-      `  2. Pin a delivery address — Blinkit gates the catalog on it.\n` +
-      `  3. Wait for the home grid to load (a few seconds).\n` +
+      `  2. ${platformHint}\n` +
+      `  3. Wait for products/categories to load (a few seconds).\n` +
       `\n  When done, come back here and press ENTER.\n`,
   );
   await waitForEnter("[warm-session] press ENTER to capture and close > ");
@@ -195,6 +212,17 @@ async function warmFromPlaywright(platform: Platform): Promise<GrocerySession> {
   if (lat !== undefined && lon !== undefined && Number.isFinite(lat) && Number.isFinite(lon)) {
     session.location = { lat, lng: lon };
   }
+
+  if (platform === "zepto") {
+    const fromHeaders =
+      capturedHeaders.store_id?.trim() ||
+      capturedHeaders.storeid?.trim() ||
+      capturedStoreId;
+    if (fromHeaders) {
+      session.extra = { ...(session.extra ?? {}), store_id: fromHeaders };
+    }
+  }
+
   return session;
 }
 
@@ -212,7 +240,8 @@ async function main() {
         `  headers:           ${Object.keys(existing.headers).length}\n` +
         `  cookies:           ${existing.cookies.split(";").filter(Boolean).length}\n` +
         `  storage_state:     ${existing.storage_state_path ?? "(none)"}\n` +
-        `  location:          ${existing.location ? JSON.stringify(existing.location) : "(none)"}`,
+        `  location:          ${existing.location ? JSON.stringify(existing.location) : "(none)"}\n` +
+        `  zepto store_id:    ${existing.extra?.store_id ?? existing.headers.store_id ?? existing.headers.storeid ?? "(none)"}`,
     );
     return;
   }

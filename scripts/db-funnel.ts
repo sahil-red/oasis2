@@ -6,7 +6,9 @@
  */
 
 import { config } from "dotenv";
+import { isPlatformNutritionComplete, nutritionIsSparse } from "@/lib/nutrition/completeness";
 import { adminClient } from "@/lib/supabase/admin";
+import type { ProductNutrition } from "@/lib/supabase/types";
 
 config({ path: ".env.local" });
 
@@ -33,6 +35,8 @@ async function main() {
   const s = adminClient();
   const p = () =>
     s.from("products").select("*", { count: "exact", head: true }).eq("platform", "blinkit");
+
+  const sparseSample = await countSparseNutrition(s, 5000);
 
   const metrics: Record<string, number | null> = {
     total: await safeCount("total", p()),
@@ -61,6 +65,9 @@ async function main() {
       "ocrSuccessOnPdp",
       p().not("raw_payload", "is", null).eq("ocr_status", "success"),
     ),
+    nutritionCompleteSample: sparseSample.complete,
+    nutritionSparseSample: sparseSample.sparse,
+    llmTextSourceSample: sparseSample.llmText,
   };
 
   const T = metrics.total ?? 0;
@@ -102,6 +109,14 @@ async function main() {
         pct: pct(metrics.withIngredients, T),
       },
       {
+        step: "4b · Nutrition complete (sample)",
+        n: metrics.nutritionCompleteSample,
+        pct: pct(metrics.nutritionCompleteSample, sparseSample.sampled),
+        note: `sampled ${sparseSample.sampled} PDP rows`,
+        sparse: metrics.nutritionSparseSample,
+        llm_text: metrics.llmTextSourceSample,
+      },
+      {
         step: "5 · Core scored",
         n: metrics.scoredRows,
         pct: pct(metrics.scoredRows, T),
@@ -131,6 +146,7 @@ async function main() {
     commands: {
       scoreBacklog: "pnpm score -- --only-unscored",
       ocrBacklog: "pnpm ocr -- --with-detail",
+      nutritionPipeline: "pnpm export:nutrition:priority && pnpm nutrition:pipeline",
     },
   };
 
@@ -140,6 +156,39 @@ async function main() {
 function pct(n: number | null, d: number | null): number | null {
   if (n == null || d == null || !d) return null;
   return Math.round((n / d) * 1000) / 10;
+}
+
+async function countSparseNutrition(
+  s: ReturnType<typeof adminClient>,
+  maxRows: number,
+): Promise<{ sampled: number; complete: number; sparse: number; llmText: number }> {
+  let complete = 0;
+  let sparse = 0;
+  let llmText = 0;
+  let sampled = 0;
+  let offset = 0;
+  const page = 100;
+  while (sampled < maxRows) {
+    const { data, error } = await s
+      .from("products")
+      .select("nutrition, ingredients_raw")
+      .eq("platform", "blinkit")
+      .not("raw_payload", "is", null)
+      .range(offset, offset + page - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    for (const row of data) {
+      sampled++;
+      const n = row.nutrition as ProductNutrition | null;
+      if (n?.source === "llm_text") llmText++;
+      if (isPlatformNutritionComplete(row.ingredients_raw as string | null, n)) complete++;
+      else if (nutritionIsSparse(n)) sparse++;
+      if (sampled >= maxRows) break;
+    }
+    if (data.length < page) break;
+    offset += page;
+  }
+  return { sampled, complete, sparse, llmText };
 }
 
 async function countNutritionUnscored(s: ReturnType<typeof adminClient>): Promise<number> {

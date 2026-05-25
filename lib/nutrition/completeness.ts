@@ -42,8 +42,17 @@ export function nutritionIsSparse(
   return false;
 }
 
+/** Zepto often sends a marketing tagline (e.g. "Real Fruits") instead of a label list. */
+export function isPlausibleIngredientsList(raw: string | null | undefined): boolean {
+  if (!raw?.trim()) return false;
+  const s = raw.trim();
+  if (s.length < 25) return false;
+  if (/,|;|\(|\)|\d+\s*%/.test(s)) return true;
+  return s.split(/\s+/).length >= 6;
+}
+
 export function hasIngredients(ingredients_raw: string | null | undefined): boolean {
-  return Boolean(ingredients_raw?.trim());
+  return isPlausibleIngredientsList(ingredients_raw);
 }
 
 /** Blinkit PDP is good enough — skip label OCR. */

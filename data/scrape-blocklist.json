@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "notes": [
+    "Used by scrape + catalog cleanup. Super/sub/name patterns block non-food SKUs and future taxonomy fetches."
+  ],
+  "blocked_super_categories": [
+    "Fashion And Lifestyle",
+    "Beauty And Personal Care",
+    "Household Essentials"
+  ],
+  "blocked_category_patterns": [
+    "(?i)paan corner|cigarette|tobacco|electronics|electrical|fashion|jewell|jewelry|apparel|footwear|watches|makeup|beauty|grooming|shaving|perfume|detergent|cleaning essentials|home needs|pet |stationery|mobile phone|laptop|gaming|gift card|sexual wellness|condom|lubricant|massager|earphones|speakers|smart wearables"
+  ],
+  "blocked_subcategory_patterns": [
+    "(?i)^men'?s |^women'?s |^boys'? |^girls'? |^infant apparel|^infant clothing|^unisex |earrings|necklace|rings|bracelet|shaving|perfume|deodorant|detergent|floor cleaner|toilet cleaner|repellent|bulbs|earphones|mobile phone|laptop|tablet|gaming|cat food|dog food|writing essentials|recipes$"
+  ],
+  "combo_name_pattern": "(?i)\\bcombo\\b"
+}

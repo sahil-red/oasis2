@@ -10,13 +10,18 @@ export type ScoreBand = "bad" | "poor" | "good" | "excellent";
 
 export interface Product {
   id: string;
-  zepto_sku: string;
+  /** Legacy scrape id; CSV imports use product_key instead. */
+  zepto_sku: string | null;
+  product_key?: string | null;
+  data_source?: "scrape" | "csv" | string | null;
   slug: string;
   name: string;
   brand: string | null;
   super_category: string | null;
   category: string | null;
   subcategory: string | null;
+  /** Zepto L3 / use-case category. */
+  l3_category?: string | null;
   net_weight: string | null;
   price_inr: number | null;
   mrp_inr: number | null;
@@ -60,7 +65,7 @@ export interface ProductNutrition {
    *  - "ocr"      → from raw OCR text (no human/LLM cleanup)
    *  - "off"      → from Open Food Facts
    */
-  source?: "platform" | "label" | "ocr" | "off";
+  source?: "platform" | "label" | "ocr" | "off" | "llm_text";
 }
 
 export interface ZeptoTaxonomy {

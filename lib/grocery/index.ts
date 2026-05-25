@@ -6,6 +6,7 @@
  */
 
 import { BlinkitAdapter } from "./blinkit";
+import { ZeptoAdapter } from "./zepto";
 import type { GroceryAdapter, Platform } from "./types";
 
 export * from "./types";
@@ -24,11 +25,9 @@ export function getAdapter(
     case "blinkit":
       return new BlinkitAdapter(opts);
     case "zepto":
+      return new ZeptoAdapter(opts);
     case "swiggy":
-      throw new Error(
-        `[grocery] adapter for "${platform}" is not yet implemented. ` +
-          `Set GROCERY_PLATFORM=blinkit for now.`,
-      );
+      throw new Error(`[grocery] adapter for "${platform}" is not yet implemented.`);
     default: {
       const exhaustive: never = platform;
       throw new Error(`[grocery] unknown platform: ${exhaustive}`);

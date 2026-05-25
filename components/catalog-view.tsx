@@ -39,6 +39,11 @@ function normalizeState(
   options: ReturnType<typeof buildFilterOptions>,
 ): CatalogFilterState {
   const next = { ...state };
+  if (next.category && !options.categories.includes(next.category)) {
+    next.category = "";
+    next.subcategory = "";
+    next.brand = "";
+  }
   if (next.subcategory && !options.subcategories.includes(next.subcategory)) {
     next.subcategory = "";
   }
@@ -47,6 +52,8 @@ function normalizeState(
   }
   return next;
 }
+
+const CATALOG_PAGE_SIZE = 96;
 
 export function CatalogView({
   products,
@@ -72,6 +79,7 @@ export function CatalogView({
   });
   const [isPending, startTransition] = useTransition();
   const [showGoalHint, setShowGoalHint] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(CATALOG_PAGE_SIZE);
 
   useEffect(() => {
     if (!initialParams.goal) {
@@ -122,6 +130,12 @@ export function CatalogView({
       goalFits: new Map(ranked.map((x) => [x.p.id, x.fit])),
     };
   }, [products, activeState, goal, diet]);
+
+  useEffect(() => {
+    setVisibleCount(CATALOG_PAGE_SIZE);
+  }, [activeState, goal, diet]);
+
+  const visibleProducts = filtered.slice(0, visibleCount);
 
   useEffect(() => {
     const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
@@ -326,7 +340,7 @@ export function CatalogView({
             isPending ? "opacity-80" : "opacity-100"
           }`}
         >
-          {filtered.map((p) => (
+          {visibleProducts.map((p) => (
             <ProductCard
               key={p.id}
               product={p}
@@ -335,6 +349,18 @@ export function CatalogView({
           ))}
         </div>
       )}
+
+      {filtered.length > visibleCount ? (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((n) => n + CATALOG_PAGE_SIZE)}
+            className="rounded-full border border-(--color-line) px-5 py-2 text-sm text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+          >
+            Show more ({filtered.length - visibleCount} left)
+          </button>
+        </div>
+      ) : null}
 
       <p className="text-center text-[11px] text-(--color-fg-dim)">
         {stats.scored} scored · {stats.withDetail} with labels

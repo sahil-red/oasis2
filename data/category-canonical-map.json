@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "notes": [
+    "Maps platform taxonomy to unified Blinkit-style L1 aisles for scoring baselines + catalog filters.",
+    "Zepto uses parent super + subcategory shelf; Blinkit already uses L1 in category."
+  ],
+  "zepto_super_default": {
+    "Grocery And Kitchen": "Groceries",
+    "Snacks And Drinks": "Snacks & Munchies"
+  },
+  "subcategory_aisle_rules": [
+    { "pattern": "(?i)milk|curd|bread|egg|paneer|cheese|butter|yogurt|shrikhand|dahi|cream|batter", "aisle": "Dairy, Bread & Eggs" },
+    { "pattern": "(?i)fruit|vegetable|mango|onion|potato|tomato|leafy|sprout|flower|exotic|melon", "aisle": "Fruits & Vegetables" },
+    { "pattern": "(?i)chicken|mutton|meat|fish|egg|cold cut|sea food|seafood", "aisle": "Chicken, Meat & Fish" },
+    { "pattern": "(?i)atta|rice|dal|masala|oil|ghee|flour|besan|spice|salt|sugar|dry fruit|nut", "aisle": "Atta, Rice & Dal" },
+    { "pattern": "(?i)masala|spice|powder|paste|pickle|chutney", "aisle": "Masala, Oil & More" },
+    { "pattern": "(?i)tea|coffee|health drink|drink mix", "aisle": "Tea, Coffee & Health Drink" },
+    { "pattern": "(?i)juice|cold drink|soft drink|soda|water|energy drink", "aisle": "Cold Drinks & Juices" },
+    { "pattern": "(?i)chips|namkeen|snack|cracker|wafer|biscuit|cookie|rusk|chocolate|candy|sweet|mithai|ice cream|frozen|kulfi|cone", "aisle": "Snacks & Munchies" },
+    { "pattern": "(?i)biscuit|cookie|rusk|bakery|bread|bun", "aisle": "Bakery & Biscuits" },
+    { "pattern": "(?i)noodle|pasta|breakfast|muesli|cereal|oats|honey|spread|sauce|ketchup|instant|ready to eat|infant food|baby food", "aisle": "Breakfast & Instant Food" },
+    { "pattern": "(?i)protein|whey|creatine|supplement|bcaa|mass gainer", "aisle": "Tea, Coffee & Health Drink" },
+    { "pattern": "(?i)organic|healthy", "aisle": "Organic & Healthy Living" }
+  ],
+  "blinkit_aisle_aliases": {
+    "Sweet Tooth": "Sweet Tooth",
+    "Sauces & Spreads": "Sauces & Spreads"
+  }
+}
