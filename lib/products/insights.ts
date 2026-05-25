@@ -97,7 +97,7 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
     const core = p.core_scores?.score ?? 0;
     return (
       typeof protein === "number" &&
-      protein >= 10 &&
+      protein >= 6 &&
       p.price_inr != null &&
       p.price_inr > 0 &&
       core >= 45 &&

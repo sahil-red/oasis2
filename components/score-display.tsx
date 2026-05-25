@@ -105,42 +105,84 @@ export function GoalFitChip({ fit, label }: { fit: number; label: string }) {
   );
 }
 
-/** Nutrition / additives / labels + A–F legend — no overall ring (goals list covers overall). */
+/** Score pillars (points earned, not raw counts) + A–F legend. */
 export function ScoreSubscoresBlock({
   subscores,
+  flaggedAdditiveCount = 0,
   className,
 }: {
   subscores?: SubScores;
+  /** Moderate + hazardous additive matches on the ingredient list. */
+  flaggedAdditiveCount?: number;
   className?: string;
 }) {
-  const axes = subscores
-    ? [
-        { label: "Nutrition", value: subscores.nutrition, max: 60 },
-        { label: "Additives", value: subscores.additives, max: 30 },
-        { label: "Labels", value: subscores.labels, max: 10 },
-      ]
-    : [];
+  if (!subscores) return null;
+
+  const nutritionPct = Math.round((subscores.nutrition / 60) * 100);
+  const additivePct = Math.round((subscores.additives / 30) * 100);
+  const labelsPct = Math.round((subscores.labels / 10) * 100);
+
+  const pillars = [
+    {
+      key: "nutrition",
+      title: "Nutrition",
+      value: subscores.nutrition,
+      max: 60,
+      pct: nutritionPct,
+      hint: "vs category baseline on the label",
+    },
+    {
+      key: "additives",
+      title: "Ingredient safety",
+      value: subscores.additives,
+      max: 30,
+      pct: additivePct,
+      hint:
+        flaggedAdditiveCount === 0
+          ? "No flagged additives on list"
+          : `${flaggedAdditiveCount} flagged additive${flaggedAdditiveCount === 1 ? "" : "s"} on list`,
+    },
+    {
+      key: "labels",
+      title: "Pack signals",
+      value: subscores.labels,
+      max: 10,
+      pct: labelsPct,
+      hint: "Organic, sugar claims, short list",
+    },
+  ];
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {axes.length > 0 ? (
-        <dl className="grid grid-cols-3 gap-2">
-          {axes.map(({ label, value, max }) => (
-            <div
-              key={label}
-              className="rounded-xl border border-(--color-line) bg-white px-3 py-2.5 text-center shadow-sm"
-            >
-              <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
-                {label}
-              </dt>
-              <dd className="mt-1 font-display text-2xl tabular-nums text-(--color-fg)">
-                {value}
-                <span className="text-[10px] font-normal text-(--color-fg-dim)">/{max}</span>
-              </dd>
+    <div className={cn("space-y-3", className)}>
+      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+        Score breakdown
+      </p>
+      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {pillars.map((p) => (
+          <div
+            key={p.key}
+            className="rounded-xl border border-(--color-line) bg-white px-3 py-2.5 shadow-sm"
+          >
+            <dt className="text-[11px] font-medium text-(--color-fg)">{p.title}</dt>
+            <dd className="mt-1 flex items-baseline gap-1.5">
+              <span
+                className="font-display text-2xl tabular-nums leading-none"
+                style={{ color: colorForScore(p.pct) }}
+              >
+                {p.value}
+              </span>
+              <span className="text-[12px] text-(--color-fg-dim)">/ {p.max} pts</span>
+            </dd>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-(--color-bg-soft)">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${p.pct}%`, backgroundColor: colorForScore(p.pct) }}
+              />
             </div>
-          ))}
-        </dl>
-      ) : null}
+            <p className="mt-1.5 text-[11px] leading-snug text-(--color-fg-muted)">{p.hint}</p>
+          </div>
+        ))}
+      </dl>
       <GradeLegend compact />
     </div>
   );

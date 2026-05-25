@@ -90,17 +90,20 @@ export default async function InsightsPage() {
 
         <section className="mb-14">
           <h2 className="font-display text-2xl md:text-3xl">Best protein per rupee</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {insights.proteinPerRupee.map(({ product }) => (
-              <InsightProductCard
-                key={product.id}
-                product={product}
-                accent="value"
-                badge="Value"
-                headline={proteinValueBlurb(product)}
-                subline={proteinPerRupeeLine(product)}
-              />
-            ))}
+          <div className="mt-6 px-2 sm:px-6">
+            <InsightsProductCarousel ariaLabel="Best protein per rupee">
+              {insights.proteinPerRupee.map(({ product }) => (
+                <InsightsCarouselSlide key={product.id}>
+                  <InsightProductCard
+                    product={product}
+                    accent="value"
+                    badge="Value"
+                    headline={proteinValueBlurb(product)}
+                    subline={proteinPerRupeeLine(product)}
+                  />
+                </InsightsCarouselSlide>
+              ))}
+            </InsightsProductCarousel>
           </div>
         </section>
 
@@ -109,16 +112,19 @@ export default async function InsightsPage() {
           <p className="mt-2 max-w-xl text-[15px] text-(--color-fg-muted)">
             Snacks &amp; munchies with real protein — not just marketing on the bag.
           </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {insights.highProteinSnacks.map(({ product }) => (
-              <InsightProductCard
-                key={product.id}
-                product={product}
-                accent="snack"
-                headline={snackBlurb(product)}
-                subline={`${product.nutrition?.protein_g_100g ?? "—"}g protein / 100g`}
-              />
-            ))}
+          <div className="mt-6 px-2 sm:px-6">
+            <InsightsProductCarousel ariaLabel="High-protein snacks">
+              {insights.highProteinSnacks.map(({ product }) => (
+                <InsightsCarouselSlide key={product.id}>
+                  <InsightProductCard
+                    product={product}
+                    accent="snack"
+                    headline={snackBlurb(product)}
+                    subline={`${product.nutrition?.protein_g_100g ?? "—"}g protein / 100g`}
+                  />
+                </InsightsCarouselSlide>
+              ))}
+            </InsightsProductCarousel>
           </div>
         </section>
 

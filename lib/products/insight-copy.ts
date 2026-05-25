@@ -80,10 +80,11 @@ export function proteinValueRankScore(p: ProductListItem): number {
   const protein = p.nutrition?.protein_g_100g ?? 0;
   const price = p.price_inr ?? 0;
   const core = p.core_scores?.score ?? 0;
-  if (price <= 0 || protein < 8) return 0;
+  if (price <= 0 || protein < 6) return 0;
   const ppr = (protein / price) * 100;
-  const pprNorm = Math.min(100, ppr * 3.2);
-  let blended = pprNorm * 0.52 + core * 0.48;
+  const valueScore = Math.min(52, ppr * 2.8);
+  const densityScore = Math.min(38, (protein - 6) * 2);
+  let blended = valueScore + densityScore + core * 0.12;
   if (isChipStyleSnack(p)) blended *= 0.88;
   return blended;
 }

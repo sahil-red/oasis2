@@ -102,6 +102,7 @@ export function CatalogView({
         p,
         fit: computeGoalFit(goal, goalFitInputs(p)).fit,
       }))
+      .filter((x) => goal !== "vegan" || x.fit > 0)
       .sort((a, b) => b.fit - a.fit);
     return {
       filtered: ranked.map((x) => x.p),
@@ -157,12 +158,12 @@ export function CatalogView({
     <div className="space-y-8">
       <div className="space-y-5">
         {showGoalHint ? (
-          <div className="overflow-visible rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-4 pb-5">
-            <p className="text-[15px] font-medium text-(--color-fg)">What are you shopping for?</p>
-            <p className="mt-1 text-sm text-(--color-fg-muted)">
-              We&apos;ll rank products and scores for your goal. You can change this anytime.
+          <div className="rounded-lg border border-(--color-line) bg-(--color-bg-soft) px-3 py-3">
+            <p className="text-[14px] font-medium text-(--color-fg)">What are you shopping for?</p>
+            <p className="mt-0.5 text-[12px] leading-snug text-(--color-fg-muted)">
+              Tap a goal — rankings and colors update.
             </p>
-            <div className="mt-3 overflow-visible">
+            <div className="mt-2">
               <GoalModePicker value={goal} onChange={pickGoal} />
             </div>
           </div>

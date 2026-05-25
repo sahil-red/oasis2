@@ -18,6 +18,7 @@ import { SiteNav } from "@/components/site-nav";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
+import { matchAdditives } from "@/lib/scoring/rules";
 import type { SubScores } from "@/lib/supabase/types";
 
 export const revalidate = 60;
@@ -92,7 +93,12 @@ export default async function ProductPage({
             <ProductGallery images={product.image_urls} alt={product.name} />
 
             {score ? (
-              <ScoreSubscoresBlock subscores={subscores} />
+              <ScoreSubscoresBlock
+                subscores={subscores}
+                flaggedAdditiveCount={matchAdditives(product.ingredients_raw).filter(
+                  (m) => m.tier === "moderate" || m.tier === "hazardous",
+                ).length}
+              />
             ) : (
               <ScorePending compact />
             )}

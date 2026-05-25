@@ -1,5 +1,6 @@
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
+import { hasAnimalDerived } from "@/lib/goals/vegan";
 import type { GoalId } from "./types";
 
 export type GoalFitResult = {
@@ -7,9 +8,6 @@ export type GoalFitResult = {
   label: string;
   reasons: string[];
 };
-
-const ANIMAL =
-  /\b(milk|whey|casein|egg|honey|gelatin|ghee|butter|cheese|fish|chicken|mutton|beef|pork|lactose)\b/i;
 
 function num(n: unknown): number | null {
   return typeof n === "number" && Number.isFinite(n) ? n : null;
@@ -125,40 +123,52 @@ export function computeGoalFit(
       break;
     }
     case "vegan": {
-      const text = opts.ingredients_raw ?? "";
       const diet =
         attrs?.["Diet Preference"] ??
         attrs?.["Diet"] ??
         attrs?.["Food Preference"] ??
         "";
-      const nonVegLabel = /non[- ]?veg|contains egg|egg\b/i.test(diet);
-      const vegLabel = /(^|\s)veg(etarian)?(\s|$)/i.test(diet) && !nonVegLabel;
-      const animalHit = nonVegLabel || ANIMAL.test(text);
-      fit = animalHit
-        ? Math.max(0, 20 - flagged * 6)
-        : Math.min(100, (vegLabel ? 88 : 75) + fiber * 1.5 - flagged * 10);
-      if (nonVegLabel) reasons.push(`Label: ${diet}`);
-      else if (vegLabel) reasons.push("Marked vegetarian on pack");
-      reasons.push(
-        animalHit && !nonVegLabel
-          ? "Contains animal-derived ingredients"
-          : animalHit
-            ? "Not plant-based"
-            : "No obvious animal ingredients",
-      );
+      const animalHit = hasAnimalDerived({
+        ingredients_raw: opts.ingredients_raw,
+        attributes: attrs,
+      });
+      if (animalHit) {
+        fit = 0;
+        if (diet) reasons.push(`Label: ${diet}`);
+        reasons.push("Contains animal-derived ingredients — not vegan");
+        break;
+      }
+      const vegLabel =
+        /(^|\s)veg(etarian)?(\s|$)/i.test(diet) && !/non[- ]?veg/i.test(diet);
+      fit = Math.min(100, (vegLabel ? 88 : 78) + fiber * 1.5 - flagged * 10);
+      if (vegLabel) reasons.push("Marked vegetarian on pack");
+      else reasons.push("No obvious animal ingredients on label");
       break;
     }
     case "protein-budget": {
-      const ppr = price > 0 ? (protein / price) * 100 : protein * 2;
-      fit = Math.min(
-        100,
-        (price > 0 ? ppr * 35 : protein * 6) + (opts.core_score ?? 0) * 0.2,
-      );
+      if (!hasNutrition) {
+        fit = Math.round((opts.core_score ?? 0) * 0.25);
+        reasons.push("No nutrition table — weak for protein value");
+        break;
+      }
+      if (protein < 6) {
+        fit = Math.min(20, Math.round(protein * 2 + (opts.core_score ?? 0) * 0.08));
+        reasons.push(`${protein}g protein per 100g — too low for this goal`);
+        break;
+      }
+      const ppr = price > 0 ? (protein / price) * 100 : 0;
+      const valueScore = price > 0 ? Math.min(52, ppr * 2.8) : 0;
+      const densityScore = Math.min(38, (protein - 6) * 2);
+      const qualityBonus = Math.min(12, (opts.core_score ?? 0) * 0.12);
+      fit = Math.min(100, Math.round(valueScore + densityScore + qualityBonus));
       reasons.push(
         price > 0
-          ? `${protein}g protein · ₹${price} (~${ppr.toFixed(1)}g protein per ₹100)`
+          ? `${protein}g protein · ₹${price} (~${ppr.toFixed(1)}g per ₹100)`
           : `${protein}g protein / 100g`,
       );
+      if (fit >= 70 && protein < 10) {
+        reasons.push("Value is mostly price — protein density is still modest");
+      }
       break;
     }
     case "kids": {

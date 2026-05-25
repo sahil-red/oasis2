@@ -13,13 +13,13 @@ export function GoalModePicker({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("space-y-2", compact ? "" : "max-w-2xl")}>
+    <div className={cn(compact ? "" : "space-y-1.5")}>
       {!compact ? (
-        <p className="text-sm text-(--color-fg-muted)">
-          Pick what you&apos;re optimizing for — rankings and colors update across the catalog.
+        <p className="text-[13px] leading-snug text-(--color-fg-muted)">
+          Rankings update across the catalog.
         </p>
       ) : null}
-      <div className="-mx-1 flex gap-2 overflow-x-auto overflow-y-visible scroll-px-2 pb-2 pt-0.5 scrollbar-none">
+      <div className="flex flex-wrap gap-1.5">
         {GOAL_PROFILES.map((g) => (
           <button
             key={g.id}
@@ -27,7 +27,7 @@ export function GoalModePicker({
             onClick={() => onChange(g.id)}
             title={g.description}
             className={cn(
-              "shrink-0 rounded-full px-3.5 py-2 text-left text-[13px] transition",
+              "rounded-full px-2.5 py-1.5 text-[12px] transition",
               value === g.id
                 ? "bg-(--color-fg) text-(--color-bg)"
                 : "bg-(--color-bg-soft) text-(--color-fg-muted) hover:text-(--color-fg)",
