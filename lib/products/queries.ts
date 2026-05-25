@@ -14,6 +14,54 @@ function db() {
 const LIST_FIELDS =
   "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw";
 
+/** Drop multi-KB attribute blobs from catalog JSON (Vercel cache limit is 2MB). */
+const CATALOG_ATTR_KEYS = [
+  "Diet Preference",
+  "Food Preference",
+  "Diet",
+  "Type",
+  "Key Features",
+] as const;
+
+function slimAttributesForCatalog(
+  attrs: Record<string, string> | null,
+): Record<string, string> | null {
+  if (!attrs) return null;
+  const out: Record<string, string> = {};
+  for (const key of CATALOG_ATTR_KEYS) {
+    const v = attrs[key];
+    if (v?.trim()) out[key] = v.trim().slice(0, 240);
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function slimNutritionForCatalog(n: ProductNutrition | null): ProductNutrition | null {
+  if (!n) return null;
+  const slim: ProductNutrition = { source: n.source };
+  if (n.energy_kcal_100g != null) slim.energy_kcal_100g = n.energy_kcal_100g;
+  if (n.protein_g_100g != null) slim.protein_g_100g = n.protein_g_100g;
+  if (n.carbs_g_100g != null) slim.carbs_g_100g = n.carbs_g_100g;
+  if (n.fiber_g_100g != null) slim.fiber_g_100g = n.fiber_g_100g;
+  if (n.sugar_g_100g != null) slim.sugar_g_100g = n.sugar_g_100g;
+  if (n.added_sugar_g_100g != null) slim.added_sugar_g_100g = n.added_sugar_g_100g;
+  if (n.fat_g_100g != null) slim.fat_g_100g = n.fat_g_100g;
+  if (n.saturated_fat_g_100g != null) slim.saturated_fat_g_100g = n.saturated_fat_g_100g;
+  if (n.sodium_mg_100g != null) slim.sodium_mg_100g = n.sodium_mg_100g;
+  return slim;
+}
+
+function slimListItemForCatalog(row: ProductListItem): ProductListItem {
+  return {
+    ...row,
+    attributes: slimAttributesForCatalog(row.attributes),
+    ingredients_raw: row.ingredients_raw
+      ? row.ingredients_raw.slice(0, 600)
+      : null,
+    nutrition: slimNutritionForCatalog(row.nutrition),
+    image_urls: row.image_urls?.length ? [row.image_urls[0]] : [],
+  };
+}
+
 /** Lighter join for grids — omits heavy subscores/concerns JSON. */
 const LIST_SCORE_FIELDS = "score, grade, band";
 
@@ -180,7 +228,7 @@ export async function getAllCatalogProducts(opts?: {
   }
 
   all.sort((a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1));
-  return all;
+  return all.map(slimListItemForCatalog);
 }
 
 /** Same-aisle pool for PDP swaps — avoids loading the full catalog. */

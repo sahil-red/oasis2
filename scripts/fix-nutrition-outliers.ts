@@ -29,7 +29,14 @@ async function main() {
         "id, zepto_sku, name, category, subcategory, net_weight, ingredients_raw, nutrition, attributes, raw_payload",
       )
       .not("nutrition", "is", null);
-    if (nameQ) q = q.ilike("name", `%${nameQ}%`);
+    if (nameQ) {
+      q = q.ilike("name", `%${nameQ}%`);
+    } else {
+      // Only rows likely broken — avoids full-table scan timeouts.
+      q = q.or(
+        "nutrition->protein_g_100g.gt.40,nutrition->energy_kcal_100g.lt.15",
+      );
+    }
 
     const { data, error } = await q.range(offset, offset + page - 1);
     if (error) throw error;

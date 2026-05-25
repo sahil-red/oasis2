@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/site-nav";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { getCachedScoredCatalog } from "@/lib/products/catalog-cache";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 120;
 
 /** v0 auto-list: high-protein picks under ₹200 */

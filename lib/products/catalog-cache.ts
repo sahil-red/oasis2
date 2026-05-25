@@ -1,15 +1,14 @@
-import { unstable_cache } from "next/cache";
 import { getAllCatalogProducts } from "@/lib/products/queries";
 
-/** Cached catalog for search / insights (revalidates every 2 min). */
-export const getCachedCatalog = unstable_cache(
-  async () => getAllCatalogProducts({ onlyWithDetail: true }),
-  ["oasis-catalog-v4"],
-  { revalidate: 120 },
-);
+/**
+ * Full catalog for client search + insights. Not wrapped in unstable_cache
+ * because the payload exceeds Vercel's 2MB data cache limit (~2.2k products).
+ * Rely on CDN / route cache headers instead.
+ */
+export async function getCachedCatalog() {
+  return getAllCatalogProducts({ onlyWithDetail: true });
+}
 
-export const getCachedScoredCatalog = unstable_cache(
-  async () => getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true }),
-  ["oasis-catalog-scored-v2"],
-  { revalidate: 120 },
-);
+export async function getCachedScoredCatalog() {
+  return getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+}

@@ -17,6 +17,7 @@ import {
 } from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 120;
 
 export default async function InsightsPage() {
