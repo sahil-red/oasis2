@@ -57,6 +57,10 @@ export default async function ProductPage({
     usecase?: string;
     brand?: string;
     scored?: string;
+    min?: string;
+    maxprice?: string;
+    grade?: string;
+    sort?: string;
   }>;
 }) {
   const { slug } = await params;

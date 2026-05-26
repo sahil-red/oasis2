@@ -13,6 +13,10 @@ type CatalogParams = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  min?: string;
+  maxprice?: string;
+  grade?: string;
+  sort?: string;
   goal?: string;
   diet?: string;
 };
