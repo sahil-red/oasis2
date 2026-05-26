@@ -21,6 +21,7 @@ import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { DataProvenancePanel } from "@/components/data-provenance-panel";
+import { CatalogBackLink } from "@/components/catalog-back-link";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { findAlternatives } from "@/lib/products/alternatives";
@@ -47,10 +48,24 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ goal?: string; diet?: string }>;
+  searchParams: Promise<{
+    goal?: string;
+    diet?: string;
+    q?: string;
+    category?: string;
+    subcategory?: string;
+    usecase?: string;
+    brand?: string;
+    scored?: string;
+    min?: string;
+    maxprice?: string;
+    grade?: string;
+    sort?: string;
+  }>;
 }) {
   const { slug } = await params;
-  const { goal: goalParam, diet: dietParam } = await searchParams;
+  const sp = await searchParams;
+  const { goal: goalParam, diet: dietParam } = sp;
   const goal = goalFromParam(goalParam);
   const diet = dietFromParam(dietParam);
   const product = await getProductBySlug(slug);
@@ -111,12 +126,7 @@ export default async function ProductPage({
       <SiteNav />
 
       <div className="mx-auto max-w-6xl px-6 pb-20 pt-8">
-        <Link
-          href="/search"
-          className="text-sm text-(--color-fg-muted) hover:text-(--color-fg)"
-        >
-          ← Catalog
-        </Link>
+        <CatalogBackLink params={sp} />
 
         <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
           <div className="space-y-6">

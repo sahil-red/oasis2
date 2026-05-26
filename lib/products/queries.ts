@@ -5,14 +5,18 @@ import type { GoalId } from "@/lib/goals/types";
 import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
 import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
-import type { CoreScore, Product, ProductNutrition } from "@/lib/supabase/types";
+import type { CoreScore, Grade, Product, ProductNutrition } from "@/lib/supabase/types";
 
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
 import {
   filterCatalogProducts,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
-import { productAisle, productShelf, productUsecase } from "@/lib/products/catalog-meta";
+import {
+  sortCatalogItems,
+  sortFromParam,
+  type CatalogSort,
+} from "@/lib/products/catalog-sort";
 
 /** Rows eligible for public catalog (CSV import with real variant UUID). */
 export function isCatalogSourceRow(p: {
@@ -245,56 +249,78 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
   };
 }
 
-const FILTER_SCAN_FIELDS =
-  "name, super_category, category, subcategory, brand, ingredients_raw, nutrition, attributes, platform, zepto_sku, core_scores (score, grade, band)";
+const FILTER_OPTION_FIELDS = "category, subcategory, brand, attributes";
 
-async function scanVisibleZeptoRows(
-  opts?: { category?: string },
-): Promise<Record<string, unknown>[]> {
+/** Lightweight row scan for filter dropdowns — no score join or visibility gate. */
+async function fetchZeptoFilterRows(category?: string): Promise<Record<string, unknown>[]> {
   const supabase = db();
-  const pageSize = 1000;
-  const max = 30_000;
+  const pageSize = 2000;
   const all: Record<string, unknown>[] = [];
 
-  for (let offset = 0; offset < max; offset += pageSize) {
+  for (let offset = 0; offset < 25_000; offset += pageSize) {
     let q = supabase
       .from("products")
-      .select(FILTER_SCAN_FIELDS)
+      .select(FILTER_OPTION_FIELDS)
       .eq("platform", "zepto")
-      .order("name", { ascending: true })
+      .not("category", "is", null)
       .range(offset, offset + pageSize - 1);
 
-    if (opts?.category) q = q.eq("category", opts.category);
+    if (category) q = q.eq("category", category);
 
     const { data, error } = await q;
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as Record<string, unknown>[];
-    for (const row of rows) {
-      if (rowIsCatalogEligible(row)) all.push(row);
-    }
+    all.push(...rows);
     if (rows.length < pageSize) break;
   }
 
   return all;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyDbSort(q: any, sort: CatalogSort): any {
+  switch (sort) {
+    case "score-asc":
+      return q.order("score", {
+        referencedTable: "core_scores",
+        ascending: true,
+        nullsFirst: false,
+      });
+    case "price-asc":
+      return q.order("price_inr", { ascending: true, nullsFirst: false });
+    case "price-desc":
+      return q.order("price_inr", { ascending: false, nullsFirst: false });
+    case "name-asc":
+      return q.order("name", { ascending: true });
+    case "protein-desc":
+    case "score-desc":
+    default:
+      return q.order("score", {
+        referencedTable: "core_scores",
+        ascending: false,
+        nullsFirst: false,
+      });
+  }
+}
+
 export async function getCatalogFilters(category?: string): Promise<CatalogFilters> {
-  const rows = await scanVisibleZeptoRows({ category });
+  const rows = await fetchZeptoFilterRows(category);
   const categories = new Set<string>();
   const subcategories = new Set<string>();
   const usecases = new Set<string>();
   const brands = new Set<string>();
 
   for (const row of rows) {
-    const mapped = mapListRow(row);
-    const aisle = productAisle(mapped);
-    if (aisle) categories.add(aisle);
-    if (!category || aisle === category) {
-      const shelf = productShelf(mapped);
-      if (shelf) subcategories.add(shelf);
-      const usecase = productUsecase(mapped);
-      if (usecase) usecases.add(usecase);
-      if (mapped.brand) brands.add(mapped.brand);
+    const cat = row.category as string | null;
+    const sub = row.subcategory as string | null;
+    const brand = row.brand as string | null;
+    const attrs = row.attributes as Record<string, string> | null;
+    if (cat) categories.add(cat);
+    if (!category || cat === category) {
+      if (sub) subcategories.add(sub);
+      const l3 = attrs?.["L3 Category"];
+      if (l3?.trim()) usecases.add(l3.trim());
+      if (brand) brands.add(brand);
     }
   }
 
@@ -313,20 +339,21 @@ export async function countVisibleCatalog(): Promise<{
   zepto: number;
 }> {
   const supabase = db();
-  const zeptoRes = await supabase
-    .from("products")
-    .select("id", { count: "exact", head: true })
-    .eq("platform", "zepto");
 
-  const rows = await scanVisibleZeptoRows();
-  const scored = rows.filter((row) => {
-    const mapped = mapListRow(row);
-    return Boolean(mapped.core_scores);
-  }).length;
+  const [zeptoRes, scoredRes, visibleRes] = await Promise.all([
+    supabase.from("products").select("id", { count: "exact", head: true }).eq("platform", "zepto"),
+    supabase.from("core_scores").select("product_id", { count: "exact", head: true }),
+    supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("platform", "zepto")
+      .not("nutrition", "is", null)
+      .not("ingredients_raw", "is", null),
+  ]);
 
   return {
-    visible: rows.length,
-    scored,
+    visible: visibleRes.count ?? 0,
+    scored: scoredRes.count ?? 0,
     zepto: zeptoRes.count ?? 0,
   };
 }
@@ -341,72 +368,32 @@ export async function getCatalogMeta(category?: string): Promise<CatalogMeta> {
 
 function buildCatalogDbQuery(
   supabase: ReturnType<typeof db>,
-  opts: {
-    q?: string;
-    category?: string;
-    subcategory?: string;
-    usecase?: string;
-    brand?: string;
-    onlyScored?: boolean;
-  },
+  state: CatalogFilterState,
 ) {
   let q = supabase
     .from("products")
     .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
     .eq("platform", "zepto");
 
-  if (opts.onlyScored) q = q.not("core_scores", "is", null);
-  if (opts.brand) q = q.eq("brand", opts.brand);
-  if (opts.category) q = q.eq("category", opts.category);
-  if (opts.subcategory) q = q.eq("subcategory", opts.subcategory);
-  if (opts.usecase) {
-    q = q.filter("attributes->>L3 Category", "eq", opts.usecase);
+  if (state.onlyScored) q = q.not("core_scores", "is", null);
+  if (state.brand) q = q.eq("brand", state.brand);
+  if (state.category) q = q.eq("category", state.category);
+  if (state.subcategory) q = q.eq("subcategory", state.subcategory);
+  if (state.usecase) {
+    q = q.filter("attributes->>L3 Category", "eq", state.usecase);
   }
-  if (opts.q?.trim()) {
-    const term = opts.q.trim().replace(/[%_]/g, "");
+  if (state.maxPrice > 0) {
+    q = q.lte("price_inr", state.maxPrice);
+  }
+  if (state.q.trim()) {
+    const term = state.q.trim().replace(/[%_]/g, "");
     if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
   }
   return q;
 }
 
-async function fetchFilteredCatalog(
-  state: CatalogFilterState,
-  diet: DietMode,
-  opts?: { maxRows?: number; orderByScore?: boolean },
-): Promise<ProductListItem[]> {
-  const supabase = db();
-  const pageSize = 1000;
-  const max = opts?.maxRows ?? 30_000;
-  const all: ProductListItem[] = [];
-
-  for (let offset = 0; offset < max; offset += pageSize) {
-    let q = buildCatalogDbQuery(supabase, {
-      q: state.q,
-      category: state.category || undefined,
-      subcategory: state.subcategory || undefined,
-      usecase: state.usecase || undefined,
-      brand: state.brand || undefined,
-      onlyScored: state.onlyScored,
-    });
-    if (opts?.orderByScore) {
-      q = q.order("score", {
-        referencedTable: "core_scores",
-        ascending: false,
-        nullsFirst: false,
-      });
-    } else {
-      q = q.order("name", { ascending: true });
-    }
-    const { data, error } = await q.range(offset, offset + pageSize - 1);
-
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const batch = mapVisibleBatch(rows);
-    all.push(...filterCatalogProducts(batch, state, diet));
-    if (rows.length < pageSize) break;
-  }
-
-  return all;
+function needsMemorySort(sort: CatalogSort): boolean {
+  return sort === "protein-desc";
 }
 
 function hasHeavyFilters(state: CatalogFilterState, diet: DietMode): boolean {
@@ -416,18 +403,36 @@ function hasHeavyFilters(state: CatalogFilterState, diet: DietMode): boolean {
       state.usecase ||
       state.brand ||
       state.onlyScored ||
+      state.minScore > 0 ||
+      state.grade ||
+      state.maxPrice > 0 ||
+      needsMemorySort(state.sort) ||
       diet !== "any",
   );
 }
 
-async function countFilteredVisibleCatalog(
+async function fetchFilteredCatalog(
   state: CatalogFilterState,
   diet: DietMode,
-): Promise<number> {
-  const rows = await scanVisibleZeptoRows({
-    category: state.category || undefined,
-  });
-  return filterCatalogProducts(mapVisibleBatch(rows), state, diet).length;
+  opts?: { maxRows?: number },
+): Promise<ProductListItem[]> {
+  const supabase = db();
+  const pageSize = 1000;
+  const max = opts?.maxRows ?? 30_000;
+  const all: ProductListItem[] = [];
+
+  for (let offset = 0; offset < max; offset += pageSize) {
+    let q = applyDbSort(buildCatalogDbQuery(supabase, state), state.sort);
+    const { data, error } = await q.range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const batch = mapVisibleBatch(rows);
+    all.push(...filterCatalogProducts(batch, state, diet));
+    if (rows.length < pageSize) break;
+  }
+
+  return sortCatalogItems(all, state.sort);
 }
 
 async function paginateBalancedCatalog(opts: {
@@ -446,20 +451,10 @@ async function paginateBalancedCatalog(opts: {
   let dbExhausted = false;
 
   while (visible.length < need && !dbExhausted) {
-    let q = buildCatalogDbQuery(supabase, {
-      q: state.q,
-      category: state.category || undefined,
-      subcategory: state.subcategory || undefined,
-      usecase: state.usecase || undefined,
-      brand: state.brand || undefined,
-      onlyScored: state.onlyScored,
-    })
-      .order("score", {
-        referencedTable: "core_scores",
-        ascending: false,
-        nullsFirst: false,
-      })
-      .range(dbOffset, dbOffset + batchSize - 1);
+    let q = applyDbSort(buildCatalogDbQuery(supabase, state), state.sort).range(
+      dbOffset,
+      dbOffset + batchSize - 1,
+    );
 
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -470,14 +465,38 @@ async function paginateBalancedCatalog(opts: {
     visible.push(...filterCatalogProducts(mapVisibleBatch(rows), state, diet));
   }
 
-  visible.sort(
-    (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
-  );
-  const items = visible.slice(start, start + limit);
+  const sorted = sortCatalogItems(visible, state.sort);
+  const items = sorted.slice(start, start + limit);
   return {
     items,
-    total: dbExhausted ? visible.length : Math.max(visible.length, start + limit + 1),
-    hasMore: dbExhausted ? start + limit < visible.length : items.length === limit,
+    total: dbExhausted ? sorted.length : Math.max(sorted.length, start + limit + 1),
+    hasMore: dbExhausted ? start + limit < sorted.length : items.length === limit,
+  };
+}
+
+function parseSearchState(opts: {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  usecase?: string;
+  brand?: string;
+  onlyScored?: boolean;
+  minScore?: number;
+  maxPrice?: number;
+  grade?: Grade | "";
+  sort?: CatalogSort;
+}): CatalogFilterState {
+  return {
+    q: opts.q?.trim() ?? "",
+    category: opts.category ?? "",
+    subcategory: opts.subcategory ?? "",
+    usecase: opts.usecase ?? "",
+    brand: opts.brand ?? "",
+    onlyScored: opts.onlyScored ?? false,
+    minScore: opts.minScore ?? 0,
+    maxPrice: opts.maxPrice ?? 0,
+    grade: opts.grade ?? "",
+    sort: opts.sort ?? "score-desc",
   };
 }
 
@@ -490,6 +509,10 @@ export async function searchCatalogGrid(opts: {
   page?: number;
   limit?: number;
   onlyScored?: boolean;
+  minScore?: number;
+  maxPrice?: number;
+  grade?: Grade | "";
+  sort?: CatalogSort;
   goal?: GoalId;
   diet?: DietMode;
 }): Promise<CatalogSearchResult> {
@@ -497,37 +520,25 @@ export async function searchCatalogGrid(opts: {
   const limit = Math.min(120, Math.max(1, opts.limit ?? 96));
   const goal = opts.goal ?? "balanced";
   const diet = opts.diet ?? "any";
-  const state: CatalogFilterState = {
-    q: opts.q?.trim() ?? "",
-    category: opts.category ?? "",
-    subcategory: opts.subcategory ?? "",
-    usecase: opts.usecase ?? "",
-    brand: opts.brand ?? "",
-    onlyScored: opts.onlyScored ?? false,
-  };
+  const state = parseSearchState(opts);
 
   const goalSort = goal !== "balanced";
   const heavy = hasHeavyFilters(state, diet);
 
   if (!goalSort && !heavy) {
     const paged = await paginateBalancedCatalog({ page, limit, state, diet });
-    let total = paged.total;
-    if (page === 1 && paged.hasMore) {
-      total = await countFilteredVisibleCatalog(state, diet);
-    }
     return {
       items: paged.items.map(toGridItem),
       goalFits: {},
       page,
       limit,
-      total,
+      total: paged.total,
       hasMore: paged.hasMore,
     };
   }
 
   const pool = await fetchFilteredCatalog(state, diet, {
     maxRows: goalSort ? 8000 : 30_000,
-    orderByScore: !goalSort,
   });
 
   let goalFits: Record<string, number> = {};
@@ -540,9 +551,7 @@ export async function searchCatalogGrid(opts: {
     goalFits = Object.fromEntries(ranked.map(({ p, fit }) => [p.id, fit]));
     sorted = ranked.map((x) => x.p);
   } else {
-    sorted = [...pool].sort(
-      (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
-    );
+    sorted = pool;
   }
 
   const total = sorted.length;

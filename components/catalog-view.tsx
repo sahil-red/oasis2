@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
-import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
+import { writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
-import { readDietMode, writeDietMode } from "@/lib/diet/storage";
+import { writeDietMode } from "@/lib/diet/storage";
+import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import {
   catalogContextQuery,
   catalogParamsToSearch,
@@ -20,7 +21,9 @@ import {
   type CatalogGridItem,
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
+import { CATALOG_SORT_OPTIONS } from "@/lib/products/catalog-sort";
 import type { CatalogFilters } from "@/lib/products/queries";
+import type { Grade } from "@/lib/supabase/types";
 
 type Params = {
   q?: string;
@@ -29,6 +32,10 @@ type Params = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  min?: string;
+  maxprice?: string;
+  grade?: string;
+  sort?: string;
   goal?: string;
   diet?: string;
 };
@@ -47,7 +54,50 @@ const selectClass =
   "min-w-0 cursor-pointer appearance-none rounded-none border-0 border-b border-(--color-line) bg-transparent py-2 text-sm text-(--color-fg) outline-none transition focus:border-(--color-fg-muted)";
 
 const CATALOG_PAGE_SIZE = 96;
-const SEARCH_DEBOUNCE_MS = 320;
+const SEARCH_DEBOUNCE_MS = 200;
+
+function buildSearchRequest(
+  activeState: CatalogFilterState,
+  debouncedQ: string,
+  goal: GoalId,
+  diet: DietMode,
+  page: number,
+) {
+  return {
+    q: debouncedQ.trim() || undefined,
+    category: activeState.category || undefined,
+    subcategory: activeState.subcategory || undefined,
+    usecase: activeState.usecase || undefined,
+    brand: activeState.brand || undefined,
+    scored: activeState.onlyScored ? "1" : undefined,
+    min: activeState.minScore > 0 ? activeState.minScore : undefined,
+    maxprice: activeState.maxPrice > 0 ? activeState.maxPrice : undefined,
+    grade: activeState.grade || undefined,
+    sort: goal === "balanced" && activeState.sort !== "score-desc" ? activeState.sort : undefined,
+    goal: goal !== "balanced" ? goal : undefined,
+    diet: diet !== "any" ? diet : undefined,
+    page,
+    limit: CATALOG_PAGE_SIZE,
+  };
+}
+
+function paramsFromLocation(): Params {
+  const sp = new URLSearchParams(window.location.search);
+  return {
+    q: sp.get("q") ?? undefined,
+    category: sp.get("category") ?? undefined,
+    subcategory: sp.get("subcategory") ?? undefined,
+    usecase: sp.get("usecase") ?? undefined,
+    brand: sp.get("brand") ?? undefined,
+    scored: sp.get("scored") ?? undefined,
+    min: sp.get("min") ?? undefined,
+    maxprice: sp.get("maxprice") ?? undefined,
+    grade: sp.get("grade") ?? undefined,
+    sort: sp.get("sort") ?? undefined,
+    goal: sp.get("goal") ?? undefined,
+    diet: sp.get("diet") ?? undefined,
+  };
+}
 
 function normalizeState(
   state: CatalogFilterState,
@@ -83,23 +133,43 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 function goalFromParams(params: Params): GoalId {
-  if (params.goal) return goalFromParam(params.goal);
-  return readStoredGoal();
+  return params.goal ? goalFromParam(params.goal) : "balanced";
 }
 
 function dietFromParams(params: Params): DietMode {
-  if (params.diet) return dietFromParam(params.diet);
-  return readDietMode();
+  return params.diet ? dietFromParam(params.diet) : "any";
 }
 
-export function CatalogView({ initialParams }: { initialParams: Params }) {
+function paramsKey(params: Params): string {
+  return JSON.stringify(params);
+}
+
+function syncFromParams(params: Params): {
+  state: CatalogFilterState;
+  goal: GoalId;
+  diet: DietMode;
+} {
+  return {
+    state: parseCatalogParams(params),
+    goal: goalFromParams(params),
+    diet: dietFromParams(params),
+  };
+}
+
+export function CatalogView({
+  initialParams,
+  initialMeta,
+}: {
+  initialParams: Params;
+  initialMeta?: CatalogMetaResponse;
+}) {
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
   );
   const [goal, setGoal] = useState<GoalId>(() => goalFromParams(initialParams));
   const [diet, setDiet] = useState<DietMode>(() => dietFromParams(initialParams));
-  const [meta, setMeta] = useState<CatalogMetaResponse | null>(null);
-  const [metaReady, setMetaReady] = useState(false);
+  const [meta, setMeta] = useState<CatalogMetaResponse | null>(initialMeta ?? null);
+  const [metaReady, setMetaReady] = useState(Boolean(initialMeta));
   const [items, setItems] = useState<CatalogGridItem[]>([]);
   const [goalFits, setGoalFits] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
@@ -109,8 +179,32 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const [showGoalHint, setShowGoalHint] = useState(false);
   const [loading, setLoading] = useState(true);
   const fetchGen = useRef(0);
+  const skipParamsSync = useRef(true);
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
+
+  const initialKey = paramsKey(initialParams);
+  useEffect(() => {
+    if (skipParamsSync.current) {
+      skipParamsSync.current = false;
+      return;
+    }
+    const next = syncFromParams(initialParams);
+    setState(next.state);
+    setGoal(next.goal);
+    setDiet(next.diet);
+  }, [initialKey]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const next = syncFromParams(paramsFromLocation());
+      setState(next.state);
+      setGoal(next.goal);
+      setDiet(next.diet);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     setShowGoalHint(
@@ -139,6 +233,10 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         usecase: activeState.usecase,
         brand: activeState.brand,
         onlyScored: activeState.onlyScored,
+        minScore: activeState.minScore,
+        maxPrice: activeState.maxPrice,
+        grade: activeState.grade,
+        sort: activeState.sort,
         goal,
         diet,
       }),
@@ -149,12 +247,21 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
       activeState.usecase,
       activeState.brand,
       activeState.onlyScored,
+      activeState.minScore,
+      activeState.maxPrice,
+      activeState.grade,
+      activeState.sort,
       goal,
       diet,
     ],
   );
 
   useEffect(() => {
+    if (initialMeta && !activeState.category) {
+      setMeta(initialMeta);
+      setMetaReady(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -170,7 +277,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
     return () => {
       cancelled = true;
     };
-  }, [activeState.category]);
+  }, [activeState.category, initialMeta]);
 
   useEffect(() => {
     const gen = ++fetchGen.current;
@@ -179,18 +286,9 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
 
     (async () => {
       try {
-        const result = await fetchCatalogSearch({
-          q: debouncedQ.trim() || undefined,
-          category: activeState.category || undefined,
-          subcategory: activeState.subcategory || undefined,
-          usecase: activeState.usecase || undefined,
-          brand: activeState.brand || undefined,
-          scored: activeState.onlyScored ? "1" : undefined,
-          goal: goal !== "balanced" ? goal : undefined,
-          diet: diet !== "any" ? diet : undefined,
-          page: 1,
-          limit: CATALOG_PAGE_SIZE,
-        });
+        const result = await fetchCatalogSearch(
+          buildSearchRequest(activeState, debouncedQ, goal, diet, 1),
+        );
         if (gen !== fetchGen.current) return;
         setItems(result.items);
         setGoalFits(result.goalFits);
@@ -212,18 +310,9 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const loadMore = useCallback(async () => {
     const nextPage = page + 1;
     try {
-      const result = await fetchCatalogSearch({
-        q: debouncedQ.trim() || undefined,
-        category: activeState.category || undefined,
-        subcategory: activeState.subcategory || undefined,
-        usecase: activeState.usecase || undefined,
-        brand: activeState.brand || undefined,
-        scored: activeState.onlyScored ? "1" : undefined,
-        goal: goal !== "balanced" ? goal : undefined,
-        diet: diet !== "any" ? diet : undefined,
-        page: nextPage,
-        limit: CATALOG_PAGE_SIZE,
-      });
+      const result = await fetchCatalogSearch(
+        buildSearchRequest(activeState, debouncedQ, goal, diet, nextPage),
+      );
       setItems((prev) => [...prev, ...result.items]);
       setGoalFits((prev) => ({ ...prev, ...result.goalFits }));
       setPage(nextPage);
@@ -235,6 +324,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
 
   useEffect(() => {
     const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
+    saveCatalogReturnUrl(path);
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== path) {
       window.history.replaceState(null, "", path);
@@ -276,7 +366,11 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
       activeState.subcategory ||
       activeState.usecase ||
       activeState.brand ||
-      activeState.onlyScored,
+      activeState.onlyScored ||
+      activeState.minScore > 0 ||
+      activeState.maxPrice > 0 ||
+      activeState.grade ||
+      activeState.sort !== "score-desc",
   );
 
   const clearAll = () => {
@@ -287,6 +381,10 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
       usecase: "",
       brand: "",
       onlyScored: false,
+      minScore: 0,
+      maxPrice: 0,
+      grade: "",
+      sort: "score-desc",
     });
   };
 
@@ -335,8 +433,9 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
           </p>
         ) : (
           <p className="text-sm text-(--color-fg-muted)">
-            Tap <span className="font-medium text-(--color-fg)">+</span> on a tile to add to your
-            cart, or pick a goal above to re-rank.
+            Sorted by score (best first). Tap{" "}
+            <span className="font-medium text-(--color-fg)">+</span> on a tile to add to your cart,
+            or pick a goal above to re-rank.
           </p>
         )}
 
@@ -440,6 +539,71 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
                   {b}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[12rem]">
+            <span className="text-[11px] text-(--color-fg-dim)">Sort</span>
+            <select
+              value={goal === "balanced" ? activeState.sort : "score-desc"}
+              onChange={(e) => patch({ sort: e.target.value as CatalogFilterState["sort"] })}
+              className={selectClass}
+              disabled={goal !== "balanced"}
+              title={goal !== "balanced" ? "Switch to Balanced to pick sort order" : undefined}
+            >
+              {CATALOG_SORT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[10rem]">
+            <span className="text-[11px] text-(--color-fg-dim)">Min score</span>
+            <select
+              value={activeState.minScore || ""}
+              onChange={(e) =>
+                patch({ minScore: e.target.value ? Number(e.target.value) : 0 })
+              }
+              className={selectClass}
+            >
+              <option value="">Any</option>
+              <option value="40">40+</option>
+              <option value="50">50+</option>
+              <option value="60">60+</option>
+              <option value="70">70+</option>
+            </select>
+          </label>
+
+          <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[10rem]">
+            <span className="text-[11px] text-(--color-fg-dim)">Max price</span>
+            <select
+              value={activeState.maxPrice || ""}
+              onChange={(e) =>
+                patch({ maxPrice: e.target.value ? Number(e.target.value) : 0 })
+              }
+              className={selectClass}
+            >
+              <option value="">Any</option>
+              <option value="100">Under ₹100</option>
+              <option value="200">Under ₹200</option>
+              <option value="500">Under ₹500</option>
+            </select>
+          </label>
+
+          <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[10rem]">
+            <span className="text-[11px] text-(--color-fg-dim)">Grade</span>
+            <select
+              value={activeState.grade}
+              onChange={(e) => patch({ grade: (e.target.value || "") as Grade | "" })}
+              className={selectClass}
+            >
+              <option value="">Any</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
             </select>
           </label>
 
