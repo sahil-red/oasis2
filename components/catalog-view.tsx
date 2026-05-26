@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
@@ -9,6 +9,7 @@ import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
 import { readDietMode, writeDietMode } from "@/lib/diet/storage";
 import {
+  catalogContextQuery,
   catalogParamsToSearch,
   parseCatalogParams,
   type CatalogFilterState,
@@ -32,6 +33,13 @@ type Params = {
   diet?: string;
 };
 
+const EMPTY_FILTERS: CatalogFilters = {
+  categories: [],
+  subcategories: [],
+  usecases: [],
+  brands: [],
+};
+
 const inputClass =
   "w-full min-w-0 appearance-none rounded-none border-0 border-b border-(--color-line) bg-transparent py-2.5 text-[15px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim)/70 focus:border-(--color-fg-muted)";
 
@@ -39,7 +47,7 @@ const selectClass =
   "min-w-0 cursor-pointer appearance-none rounded-none border-0 border-b border-(--color-line) bg-transparent py-2 text-sm text-(--color-fg) outline-none transition focus:border-(--color-fg-muted)";
 
 const CATALOG_PAGE_SIZE = 96;
-const SEARCH_DEBOUNCE_MS = 280;
+const SEARCH_DEBOUNCE_MS = 320;
 
 function normalizeState(
   state: CatalogFilterState,
@@ -74,28 +82,30 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
+function goalFromParams(params: Params): GoalId {
+  if (params.goal) return goalFromParam(params.goal);
+  return readStoredGoal();
+}
+
+function dietFromParams(params: Params): DietMode {
+  if (params.diet) return dietFromParam(params.diet);
+  return readDietMode();
+}
+
 export function CatalogView({ initialParams }: { initialParams: Params }) {
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
   );
-  const [goal, setGoal] = useState<GoalId>(() => {
-    const fromUrl = goalFromParam(initialParams.goal);
-    return fromUrl !== "balanced" || initialParams.goal
-      ? fromUrl
-      : readStoredGoal();
-  });
-  const [diet, setDiet] = useState<DietMode>(() => {
-    if (initialParams.diet) return dietFromParam(initialParams.diet);
-    return readDietMode();
-  });
+  const [goal, setGoal] = useState<GoalId>(() => goalFromParams(initialParams));
+  const [diet, setDiet] = useState<DietMode>(() => dietFromParams(initialParams));
   const [meta, setMeta] = useState<CatalogMetaResponse | null>(null);
+  const [metaReady, setMetaReady] = useState(false);
   const [items, setItems] = useState<CatalogGridItem[]>([]);
   const [goalFits, setGoalFits] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
   const [showGoalHint, setShowGoalHint] = useState(false);
   const [loading, setLoading] = useState(true);
   const fetchGen = useRef(0);
@@ -103,27 +113,21 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
   useEffect(() => {
-    if (!initialParams.goal) {
-      const stored = readStoredGoal();
-      if (stored !== "balanced") setGoal(stored);
-      setShowGoalHint(!localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"));
-    }
-    if (!initialParams.diet) {
-      const storedDiet = readDietMode();
-      if (storedDiet !== "any") setDiet(storedDiet);
-    }
-  }, [initialParams.goal, initialParams.diet]);
+    setShowGoalHint(
+      !localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"),
+    );
+  }, []);
 
-  const filterOptions = meta?.filters ?? {
-    categories: [],
-    subcategories: [],
-    usecases: [],
-    brands: [],
-  };
+  const filterOptions = meta?.filters ?? EMPTY_FILTERS;
 
-  const activeState = useMemo(
-    () => normalizeState(state, filterOptions),
-    [state, filterOptions],
+  const activeState = useMemo(() => {
+    if (!metaReady) return state;
+    return normalizeState(state, filterOptions);
+  }, [state, filterOptions, metaReady]);
+
+  const productQuery = useMemo(
+    () => catalogContextQuery(activeState, goal, { diet }),
+    [activeState, goal, diet],
   );
 
   const searchKey = useMemo(
@@ -138,7 +142,16 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         goal,
         diet,
       }),
-    [debouncedQ, activeState, goal, diet],
+    [
+      debouncedQ,
+      activeState.category,
+      activeState.subcategory,
+      activeState.usecase,
+      activeState.brand,
+      activeState.onlyScored,
+      goal,
+      diet,
+    ],
   );
 
   useEffect(() => {
@@ -146,7 +159,10 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
     (async () => {
       try {
         const data = await fetchCatalogMeta(activeState.category || undefined);
-        if (!cancelled) setMeta(data);
+        if (!cancelled) {
+          setMeta(data);
+          setMetaReady(true);
+        }
       } catch (e) {
         if (!cancelled) setLoadError((e as Error).message);
       }
@@ -160,7 +176,6 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
     const gen = ++fetchGen.current;
     setLoading(true);
     setLoadError(null);
-    setPage(1);
 
     (async () => {
       try {
@@ -192,7 +207,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         if (gen === fetchGen.current) setLoading(false);
       }
     })();
-  }, [searchKey, debouncedQ, activeState, goal, diet]);
+  }, [searchKey]);
 
   const loadMore = useCallback(async () => {
     const nextPage = page + 1;
@@ -229,34 +244,29 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const pickGoal = useCallback((g: GoalId) => {
     writeStoredGoal(g);
     setShowGoalHint(false);
-    startTransition(() => setGoal(g));
+    setGoal(g);
   }, []);
 
   const pickDiet = useCallback((d: DietMode) => {
     writeDietMode(d);
-    startTransition(() => setDiet(d));
+    setDiet(d);
   }, []);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
-    startTransition(() => {
-      setState((prev) => {
-        const next = { ...prev, ...partial };
-        if (
-          partial.category !== undefined &&
-          partial.category !== prev.category
-        ) {
-          next.subcategory = "";
-          next.usecase = "";
-          next.brand = "";
-        }
-        if (
-          partial.subcategory !== undefined &&
-          partial.subcategory !== prev.subcategory
-        ) {
-          next.usecase = "";
-        }
-        return next;
-      });
+    setState((prev) => {
+      const next = { ...prev, ...partial };
+      if (partial.category !== undefined && partial.category !== prev.category) {
+        next.subcategory = "";
+        next.usecase = "";
+        next.brand = "";
+      }
+      if (
+        partial.subcategory !== undefined &&
+        partial.subcategory !== prev.subcategory
+      ) {
+        next.usecase = "";
+      }
+      return next;
     });
   }, []);
 
@@ -270,19 +280,21 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   );
 
   const clearAll = () => {
-    startTransition(() => {
-      setState({
-        q: "",
-        category: "",
-        subcategory: "",
-        usecase: "",
-        brand: "",
-        onlyScored: false,
-      });
+    setState({
+      q: "",
+      category: "",
+      subcategory: "",
+      usecase: "",
+      brand: "",
+      onlyScored: false,
     });
   };
 
-  const catalogTotal = meta?.stats.visible ?? 0;
+  const catalogTotal = useMemo(() => {
+    if (hasFilters) return total;
+    return meta?.stats.visible ?? total;
+  }, [hasFilters, total, meta?.stats.visible]);
+
   const stats = meta?.stats;
 
   if (loadError && !items.length && !meta) {
@@ -386,7 +398,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
               value={activeState.subcategory}
               onChange={(e) => patch({ subcategory: e.target.value })}
               className={selectClass}
-              disabled={!filterOptions.subcategories.length}
+              disabled={!metaReady || !filterOptions.subcategories.length}
             >
               <option value="">All</option>
               {filterOptions.subcategories.map((s) => (
@@ -403,7 +415,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
               value={activeState.usecase}
               onChange={(e) => patch({ usecase: e.target.value })}
               className={selectClass}
-              disabled={!filterOptions.usecases.length}
+              disabled={!metaReady || !filterOptions.usecases.length}
             >
               <option value="">All</option>
               {filterOptions.usecases.map((u) => (
@@ -420,7 +432,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
               value={activeState.brand}
               onChange={(e) => patch({ brand: e.target.value })}
               className={selectClass}
-              disabled={!filterOptions.brands.length}
+              disabled={!metaReady || !filterOptions.brands.length}
             >
               <option value="">All</option>
               {filterOptions.brands.map((b) => (
@@ -442,9 +454,11 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
           </label>
 
           <p className="ml-auto pb-2 text-sm tabular-nums text-(--color-fg-dim)">
-            <span className="text-(--color-fg)">{loading ? "…" : total}</span>
+            <span className="text-(--color-fg)">
+              {loading && items.length === 0 ? "…" : total.toLocaleString()}
+            </span>
             <span className="mx-1">/</span>
-            {catalogTotal || "…"}
+            {catalogTotal ? catalogTotal.toLocaleString() : "…"}
           </p>
         </div>
 
@@ -474,14 +488,15 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         </p>
       ) : (
         <div
-          className={`grid grid-cols-2 gap-x-4 gap-y-8 transition-opacity duration-150 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
-            isPending || loading ? "opacity-80" : "opacity-100"
-          }`}
+          className={`relative grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+            loading ? "opacity-70" : "opacity-100"
+          } transition-opacity duration-150`}
         >
           {items.map((p) => (
             <ProductCard
               key={p.id}
               product={p}
+              hrefQuery={productQuery}
               goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
             />
           ))}
@@ -493,16 +508,17 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
           <button
             type="button"
             onClick={loadMore}
-            className="rounded-full border border-(--color-line) px-5 py-2 text-sm text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+            disabled={loading}
+            className="rounded-full border border-(--color-line) px-5 py-2 text-sm text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg) disabled:opacity-50"
           >
-            Show more ({total - items.length} left)
+            Show more ({Math.max(0, total - items.length).toLocaleString()} left)
           </button>
         </div>
       ) : null}
 
       {stats ? (
         <p className="text-center text-[11px] text-(--color-fg-dim)">
-          {stats.scored} scored · {stats.visible} with labels
+          {stats.scored.toLocaleString()} scored · {stats.visible.toLocaleString()} with labels
         </p>
       ) : null}
     </div>

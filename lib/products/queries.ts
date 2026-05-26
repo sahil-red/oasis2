@@ -414,11 +414,20 @@ function hasHeavyFilters(state: CatalogFilterState, diet: DietMode): boolean {
     state.q.trim() ||
       state.subcategory ||
       state.usecase ||
-      state.category ||
       state.brand ||
       state.onlyScored ||
       diet !== "any",
   );
+}
+
+async function countFilteredVisibleCatalog(
+  state: CatalogFilterState,
+  diet: DietMode,
+): Promise<number> {
+  const rows = await scanVisibleZeptoRows({
+    category: state.category || undefined,
+  });
+  return filterCatalogProducts(mapVisibleBatch(rows), state, diet).length;
 }
 
 async function paginateBalancedCatalog(opts: {
@@ -461,7 +470,9 @@ async function paginateBalancedCatalog(opts: {
     visible.push(...filterCatalogProducts(mapVisibleBatch(rows), state, diet));
   }
 
-  const total = dbExhausted ? visible.length : visible.length + 1;
+  visible.sort(
+    (a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1),
+  );
   const items = visible.slice(start, start + limit);
   return {
     items,
@@ -500,12 +511,16 @@ export async function searchCatalogGrid(opts: {
 
   if (!goalSort && !heavy) {
     const paged = await paginateBalancedCatalog({ page, limit, state, diet });
+    let total = paged.total;
+    if (page === 1 && paged.hasMore) {
+      total = await countFilteredVisibleCatalog(state, diet);
+    }
     return {
       items: paged.items.map(toGridItem),
       goalFits: {},
       page,
       limit,
-      total: paged.total,
+      total,
       hasMore: paged.hasMore,
     };
   }

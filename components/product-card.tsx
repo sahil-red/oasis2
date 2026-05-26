@@ -8,20 +8,24 @@ import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 export function ProductCard({
   product,
   goalFit,
+  hrefQuery = "",
 }: {
   product: ProductListItem | CatalogGridItem;
   /** When set, show goal-fit instead of Core score */
   goalFit?: number;
+  /** Catalog filter query string to preserve on PDP navigation */
+  hrefQuery?: string;
 }) {
   const thumb = product.image_urls[0];
   const core = product.core_scores;
   const price = displayPriceInr(product);
+  const href = `/product/${product.slug}${hrefQuery}`;
 
   return (
     <article className="group">
       <div className="relative aspect-square overflow-hidden rounded-xl bg-(--color-bg-soft)">
         <Link
-          href={`/product/${product.slug}`}
+          href={href}
           className="absolute inset-0 z-0 block"
           tabIndex={-1}
           aria-hidden
@@ -56,7 +60,7 @@ export function ProductCard({
         ) : null}
       </div>
 
-      <Link href={`/product/${product.slug}`} className="mt-2.5 block space-y-1">
+      <Link href={href} className="mt-2.5 block space-y-1">
         {product.brand ? (
           <p className="truncate text-[11px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
             {product.brand}

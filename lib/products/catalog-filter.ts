@@ -112,3 +112,12 @@ export function catalogParamsToSearch(
   const s = p.toString();
   return s ? `?${s}` : "";
 }
+
+/** Preserve catalog filters on PDP links so back navigation restores context. */
+export function catalogContextQuery(
+  state: CatalogFilterState,
+  goal?: string,
+  opts?: { diet?: DietMode },
+): string {
+  return catalogParamsToSearch(state, goal, opts);
+}
