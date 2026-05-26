@@ -78,6 +78,7 @@ export default async function ProductPage({
     attributes: product.attributes,
     name: product.name,
     category: product.category,
+    subcategory: product.subcategory,
     net_weight: product.net_weight,
   });
   const productForGoals = displayNutrition ? { ...product, nutrition: displayNutrition } : product;
@@ -219,7 +220,13 @@ export default async function ProductPage({
             <div className="mt-5">
               {displayNutrition ? (
                 <>
-                  <NutritionTable nutrition={displayNutrition} netWeight={product.net_weight} />
+                  <NutritionTable
+                    nutrition={displayNutrition}
+                    netWeight={product.net_weight}
+                    name={product.name}
+                    category={product.category}
+                    subcategory={product.subcategory}
+                  />
                   <ProteinQualityNote
                     nutrition={displayNutrition}
                     name={product.name}

@@ -2,6 +2,7 @@
 
 import { CatalogView } from "@/components/catalog-view";
 import type { CatalogMetaResponse } from "@/lib/products/catalog-api";
+import type { CatalogSearchResult } from "@/lib/products/queries";
 
 type Params = {
   q?: string;
@@ -21,9 +22,17 @@ type Params = {
 export function CatalogLoader({
   initialParams,
   initialMeta,
+  initialSearch,
 }: {
   initialParams: Params;
   initialMeta?: CatalogMetaResponse;
+  initialSearch?: CatalogSearchResult;
 }) {
-  return <CatalogView initialParams={initialParams} initialMeta={initialMeta} />;
+  return (
+    <CatalogView
+      initialParams={initialParams}
+      initialMeta={initialMeta}
+      initialSearch={initialSearch}
+    />
+  );
 }

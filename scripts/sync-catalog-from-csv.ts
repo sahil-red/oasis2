@@ -24,6 +24,7 @@ import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import { detectCatalogDbSchema, l3FromRow } from "@/lib/catalog/db-schema";
 import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
+import { computeCatalogVisible } from "@/lib/products/catalog-eligibility";
 import { isPackagedProduceLike } from "@/lib/catalog/packaged-produce";
 import { matchProduce, produceLabelHint, produceToNutrition } from "@/lib/produce/seed";
 import {
@@ -196,6 +197,16 @@ async function main() {
         if (schema.hasProductKey) payload.product_key = row.product_key;
         if (schema.hasL3Category) payload.l3_category = row.l3_category;
         if (schema.hasDataSource) payload.data_source = "csv";
+        payload.catalog_visible = computeCatalogVisible({
+          platform: "zepto",
+          zepto_sku: row.zepto_sku,
+          name: row.name,
+          super_category: row.super_category,
+          category: row.category,
+          subcategory: row.subcategory,
+          ingredients_raw: merged.ingredients_raw,
+          nutrition: merged.nutrition,
+        });
         return payload;
       });
 

@@ -38,6 +38,7 @@ export interface Product {
    */
   attributes: Record<string, string> | null;
   raw_payload: Record<string, unknown> | null;
+  catalog_visible?: boolean;
   scraped_at: string;
   updated_at: string;
 }

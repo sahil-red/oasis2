@@ -151,7 +151,12 @@ export function ScoreSubscoresBlock({
       title: "Pack signals",
       pct: labelsPct,
       label: pillarLabel(labelsPct),
-      hint: "Organic, sugar claims, short list",
+      hint:
+        labelsPct >= 80
+          ? "Organic, sugar claims, short list"
+          : labelsPct >= 55
+            ? "Some positive pack cues"
+            : "Marketing claims don't match label (e.g. sugar)",
     },
   ];
 

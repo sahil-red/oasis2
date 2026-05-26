@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { nutritionHasCriticalAnomalies } from "@/lib/nutrition/anomaly";
 import { computeCoreScore } from "@/lib/scoring/core";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
-export const SCORING_RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 6);
+export const SCORING_RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 7);
 
 export type ScoreableProduct = {
   id: string;
@@ -32,6 +33,17 @@ export async function persistCoreScore(
   opts: { force?: boolean; dryRun?: boolean } = {},
 ): Promise<"scored" | "skipped" | "no_nutrition"> {
   if (!hasScoreableNutrition(row.nutrition)) return "no_nutrition";
+
+  if (
+    row.nutrition &&
+    nutritionHasCriticalAnomalies(row.nutrition, {
+      name: row.name ?? "",
+      category: row.category,
+      subcategory: row.subcategory,
+    })
+  ) {
+    return "no_nutrition";
+  }
 
   if (!opts.force) {
     const { data: existing } = await supabase

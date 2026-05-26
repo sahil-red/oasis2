@@ -1,4 +1,5 @@
 import { mergeNutrition, parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
+import { nutritionHasCriticalAnomalies, sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
 import { parsePackGrams } from "@/lib/products/pack-nutrition";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -34,24 +35,9 @@ export function nutritionLooksImplausible(
   nutrition: ProductNutrition,
   name: string,
   category: string | null,
+  subcategory?: string | null,
 ): boolean {
-  const protein = nutrition.protein_g_100g;
-  const kcal = nutrition.energy_kcal_100g;
-  const maxP = maxProteinPer100g(name, category);
-
-  if (typeof protein === "number" && protein > maxP) return true;
-  // Masala/spice OCR often swaps kcal ↔ protein columns.
-  if (
-    typeof protein === "number" &&
-    protein > 15 &&
-    typeof kcal === "number" &&
-    kcal > 0 &&
-    kcal < 30
-  ) {
-    return true;
-  }
-  if (typeof kcal === "number" && kcal > 900 && (protein ?? 0) < 5) return true;
-  return false;
+  return nutritionHasCriticalAnomalies(nutrition, { name, category, subcategory });
 }
 
 /** Prefer Blinkit "Nutrition Information" attribute when platform/OCR rows are wrong. */
@@ -81,38 +67,51 @@ export function reconcileNutrition(opts: {
   attributes?: Record<string, string> | null;
   name: string;
   category: string | null;
+  subcategory?: string | null;
   net_weight?: string | null;
 }): ProductNutrition | null {
   const servingG = parsePackGrams(opts.net_weight);
   const fromAttrs = nutritionFromAttributes(opts.attributes, servingG);
+  const ctx = { name: opts.name, category: opts.category, subcategory: opts.subcategory };
 
   const current = opts.nutrition;
   if (!current && !fromAttrs) return null;
-  if (!fromAttrs) return current;
-  if (!current) return fromAttrs;
-  if (nutritionIsSparse(current) && fromAttrs) {
+
+  let picked: ProductNutrition | null;
+
+  if (!fromAttrs) {
+    picked = current;
+  } else if (!current) {
+    picked = fromAttrs;
+  } else if (nutritionIsSparse(current) && fromAttrs) {
     const merged = mergeNutrition(fromAttrs, current);
-    if (merged && !nutritionIsSparse(merged)) return { ...merged, source: "platform" };
-  }
+    picked =
+      merged && !nutritionIsSparse(merged) ? { ...merged, source: "platform" } : fromAttrs;
+  } else {
+    const currentBad = nutritionHasCriticalAnomalies(current, ctx);
+    const attrsBad = nutritionHasCriticalAnomalies(fromAttrs, ctx);
 
-  const currentBad = nutritionLooksImplausible(current, opts.name, opts.category);
-  const attrsBad = nutritionLooksImplausible(fromAttrs, opts.name, opts.category);
-
-  if (currentBad && !attrsBad) return { ...fromAttrs, source: "platform" };
-  if (!currentBad && attrsBad) return current;
-
-  // If OCR but attributes have sane protein, prefer attributes for protein/kcal.
-  if (current.source === "ocr" && fromAttrs.protein_g_100g != null) {
-    const p = current.protein_g_100g ?? 0;
-    const ap = fromAttrs.protein_g_100g ?? 0;
-    if (p > maxProteinPer100g(opts.name, opts.category) && ap <= maxProteinPer100g(opts.name, opts.category)) {
-      return {
-        ...current,
-        ...fromAttrs,
-        source: "platform",
-      };
+    if (currentBad && attrsBad) {
+      picked = null;
+    } else if (currentBad && !attrsBad) {
+      picked = { ...fromAttrs, source: "platform" };
+    } else if (!currentBad && attrsBad) {
+      picked = current;
+    } else if (current.source === "ocr" && fromAttrs.protein_g_100g != null) {
+      const p = current.protein_g_100g ?? 0;
+      const ap = fromAttrs.protein_g_100g ?? 0;
+      if (
+        p > maxProteinPer100g(opts.name, opts.category) &&
+        ap <= maxProteinPer100g(opts.name, opts.category)
+      ) {
+        picked = { ...current, ...fromAttrs, source: "platform" };
+      } else {
+        picked = current;
+      }
+    } else {
+      picked = current;
     }
   }
 
-  return current;
+  return sanitizeNutrition(picked, ctx);
 }

@@ -58,6 +58,8 @@ export function applyGoalHealthCaps(goal: GoalId, fit: number, f: GoalFeatures):
   }
 
   if (goal === "kids") {
+    if (f.addedSugar >= 12) capped = Math.min(capped, 38);
+    else if (f.addedSugar >= 8) capped = Math.min(capped, 52);
     if (f.sodium >= 1200) capped = Math.min(capped, 18);
     else if (f.sodium >= 800) capped = Math.min(capped, 30);
     else if (f.sodium >= 500) capped = Math.min(capped, 45);

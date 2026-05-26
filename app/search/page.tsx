@@ -1,7 +1,10 @@
 import { CatalogLoader } from "@/components/catalog-loader";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getCachedCatalogMeta } from "@/lib/products/catalog-cache";
+import {
+  getCachedCatalogMeta,
+  getCachedCatalogSearch,
+} from "@/lib/products/catalog-cache";
 
 type SearchParams = {
   q?: string;
@@ -25,7 +28,10 @@ export default async function CatalogPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const meta = await getCachedCatalogMeta(params.category);
+  const [meta, initialSearch] = await Promise.all([
+    getCachedCatalogMeta(params.category),
+    getCachedCatalogSearch({ ...params, page: 1, limit: 96 }),
+  ]);
 
   return (
     <main className="min-h-screen">
@@ -41,7 +47,7 @@ export default async function CatalogPage({
           </p>
         </header>
 
-        <CatalogLoader initialParams={params} initialMeta={meta} />
+        <CatalogLoader initialParams={params} initialMeta={meta} initialSearch={initialSearch} />
       </div>
 
       <SiteFooter />

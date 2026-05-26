@@ -1,19 +1,40 @@
 #!/usr/bin/env -S pnpm tsx
 /**
- * Fix products with implausible nutrition (usually bad OCR) by re-reading
- * Blinkit "Nutrition Information" blocks and reconciling with sanity rules.
+ * Fix products with implausible nutrition (bad OCR, CSV decimal errors) by
+ * reconciling with attribute blocks and auto-correcting decimal anomalies.
  */
 import { config as loadEnv } from "dotenv";
 import { parseBlinkitProductDetail } from "@/lib/grocery/blinkit";
 import {
-  nutritionLooksImplausible,
-  reconcileNutrition,
-} from "@/lib/nutrition/sanity";
+  detectNutritionAnomalies,
+  nutritionHasCriticalAnomalies,
+  sanitizeNutrition,
+} from "@/lib/nutrition/anomaly";
+import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { adminClient } from "@/lib/supabase/admin";
 import { persistCoreScore, hasScoreableNutrition } from "@/lib/scoring/persist-core";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
+
+function macroSum(n: ProductNutrition): number {
+  return (n.protein_g_100g ?? 0) + (n.carbs_g_100g ?? 0) + (n.fat_g_100g ?? 0);
+}
+
+function rowNeedsFix(
+  nutrition: ProductNutrition,
+  name: string,
+  category: string | null,
+  subcategory: string | null,
+): boolean {
+  const ctx = { name, category, subcategory };
+  if (nutritionHasCriticalAnomalies(nutrition, ctx)) return true;
+  if (macroSum(nutrition) > 100) return true;
+  if (detectNutritionAnomalies(nutrition, ctx).some((a) => a.code === "decimal_anomaly")) {
+    return true;
+  }
+  return false;
+}
 
 async function main() {
   const nameQ = process.argv.find((a) => a.startsWith("--name="))?.split("=")[1];
@@ -30,11 +51,11 @@ async function main() {
       )
       .not("nutrition", "is", null);
     if (nameQ) {
-      q = q.ilike("name", `%${nameQ}%`);
+      q = q.ilike("name", "%" + nameQ + "%");
     } else {
-      // Only rows likely broken — avoids full-table scan timeouts.
+      // Broad net: high protein, low kcal, or macro mass overflow.
       q = q.or(
-        "nutrition->protein_g_100g.gt.40,nutrition->energy_kcal_100g.lt.15",
+        "nutrition->protein_g_100g.gt.25,nutrition->protein_g_100g.gt.40,nutrition->energy_kcal_100g.lt.15",
       );
     }
 
@@ -44,7 +65,8 @@ async function main() {
 
     for (const row of data) {
       const prev = row.nutrition as ProductNutrition;
-      if (!nutritionLooksImplausible(prev, row.name, row.category)) continue;
+      const ctx = { name: row.name, category: row.category, subcategory: row.subcategory };
+      if (!rowNeedsFix(prev, row.name, row.category, row.subcategory)) continue;
 
       const attrs = (row.attributes ?? {}) as Record<string, string>;
       let next: ProductNutrition | null = reconcileNutrition({
@@ -52,6 +74,7 @@ async function main() {
         attributes: attrs,
         name: row.name,
         category: row.category,
+        subcategory: row.subcategory,
         net_weight: row.net_weight,
       });
 
@@ -63,18 +86,24 @@ async function main() {
           attributes: mergedAttrs,
           name: parsed.name ?? row.name,
           category: row.category,
+          subcategory: row.subcategory,
           net_weight: row.net_weight,
         });
       }
 
+      // Direct sanitize for Zepto CSV rows without attribute fallback.
+      if (!next || nutritionHasCriticalAnomalies(next, ctx)) {
+        next = sanitizeNutrition(prev, ctx);
+      }
+
       if (!next || JSON.stringify(prev) === JSON.stringify(next)) continue;
-      if (nutritionLooksImplausible(next, row.name, row.category)) continue;
+      if (nutritionHasCriticalAnomalies(next, ctx)) continue;
 
       await supabase.from("products").update({ nutrition: next }).eq("id", row.id);
       fixed++;
-      console.log(`[fix] ${row.name}`);
-      console.log(`  was protein=${prev.protein_g_100g} kcal=${prev.energy_kcal_100g}`);
-      console.log(`  now protein=${next.protein_g_100g} kcal=${next.energy_kcal_100g}`);
+      console.log("[fix] " + row.name);
+      console.log("  was protein=" + prev.protein_g_100g + " kcal=" + prev.energy_kcal_100g);
+      console.log("  now protein=" + next.protein_g_100g + " kcal=" + next.energy_kcal_100g);
 
       if (hasScoreableNutrition(next)) {
         await persistCoreScore(
@@ -97,7 +126,7 @@ async function main() {
     offset += page;
   }
 
-  console.log(`[fix-nutrition-outliers] done. fixed=${fixed}`);
+  console.log("[fix-nutrition-outliers] done. fixed=" + fixed);
 }
 
 main().catch((e) => {

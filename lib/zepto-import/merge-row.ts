@@ -1,4 +1,5 @@
 import { isPlatformNutritionComplete, countNutritionFields } from "@/lib/nutrition/completeness";
+import { sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ZeptoCsvRow } from "@/lib/zepto-import/csv-row";
 
@@ -53,6 +54,14 @@ export function mergeCsvWithExisting(
     "Data Source": "zepto_csv",
     "Variant ID": csv.zepto_sku,
   };
+
+  if (nutrition) {
+    nutrition = sanitizeNutrition(nutrition, {
+      name: csv.name,
+      category: csv.category,
+      subcategory: csv.subcategory,
+    });
+  }
 
   return {
     ingredients_raw,

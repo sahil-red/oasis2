@@ -22,7 +22,7 @@ import {
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
 import { CATALOG_SORT_OPTIONS } from "@/lib/products/catalog-sort";
-import type { CatalogFilters } from "@/lib/products/queries";
+import type { CatalogFilters, CatalogSearchResult } from "@/lib/products/queries";
 import type { Grade } from "@/lib/supabase/types";
 
 type Params = {
@@ -159,9 +159,11 @@ function syncFromParams(params: Params): {
 export function CatalogView({
   initialParams,
   initialMeta,
+  initialSearch,
 }: {
   initialParams: Params;
   initialMeta?: CatalogMetaResponse;
+  initialSearch?: CatalogSearchResult;
 }) {
   const [state, setState] = useState<CatalogFilterState>(() =>
     parseCatalogParams(initialParams),
@@ -170,16 +172,19 @@ export function CatalogView({
   const [diet, setDiet] = useState<DietMode>(() => dietFromParams(initialParams));
   const [meta, setMeta] = useState<CatalogMetaResponse | null>(initialMeta ?? null);
   const [metaReady, setMetaReady] = useState(Boolean(initialMeta));
-  const [items, setItems] = useState<CatalogGridItem[]>([]);
-  const [goalFits, setGoalFits] = useState<Record<string, number>>({});
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [items, setItems] = useState<CatalogGridItem[]>(() => initialSearch?.items ?? []);
+  const [goalFits, setGoalFits] = useState<Record<string, number>>(
+    () => initialSearch?.goalFits ?? {},
+  );
+  const [total, setTotal] = useState(() => initialSearch?.total ?? 0);
+  const [page, setPage] = useState(() => initialSearch?.page ?? 1);
+  const [hasMore, setHasMore] = useState(() => initialSearch?.hasMore ?? false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showGoalHint, setShowGoalHint] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialSearch);
   const fetchGen = useRef(0);
   const skipParamsSync = useRef(true);
+  const skipInitialSearch = useRef(Boolean(initialSearch));
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
@@ -280,6 +285,10 @@ export function CatalogView({
   }, [activeState.category, initialMeta]);
 
   useEffect(() => {
+    if (skipInitialSearch.current) {
+      skipInitialSearch.current = false;
+      return;
+    }
     const gen = ++fetchGen.current;
     setLoading(true);
     setLoadError(null);

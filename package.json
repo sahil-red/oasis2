@@ -12,6 +12,7 @@
     "warm-session": "tsx scripts/00-warm-session.ts",
     "pw:install": "playwright install chromium",
     "catalog:sync": "tsx scripts/sync-catalog-from-csv.ts",
+    "catalog:backfill-visible": "tsx scripts/backfill-catalog-visible.ts",
     "gemini:fill": "tsx scripts/gemini-fill-incomplete.ts",
     "score": "tsx scripts/05-compute-scores.ts",
     "seed:produce": "tsx scripts/seed-fresh-produce.ts",
