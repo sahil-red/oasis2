@@ -172,6 +172,7 @@ export type CatalogSearchResult = {
   goalFits: Record<string, number>;
   page: number;
   limit: number;
+  /** Products matching current filters (scored pool when unfiltered). */
   total: number;
   hasMore: boolean;
 };
@@ -435,6 +436,21 @@ async function fetchFilteredCatalog(
   return sortCatalogItems(all, state.sort);
 }
 
+function isUnfilteredCatalog(state: CatalogFilterState, diet: DietMode): boolean {
+  return (
+    !state.q.trim() &&
+    !state.subcategory &&
+    !state.usecase &&
+    !state.brand &&
+    !state.onlyScored &&
+    !state.minScore &&
+    !state.grade &&
+    !state.maxPrice &&
+    !state.category &&
+    diet === "any"
+  );
+}
+
 async function paginateBalancedCatalog(opts: {
   page: number;
   limit: number;
@@ -443,35 +459,47 @@ async function paginateBalancedCatalog(opts: {
 }): Promise<{ items: ProductListItem[]; total: number; hasMore: boolean }> {
   const { page, limit, state, diet } = opts;
   const start = (page - 1) * limit;
-  const need = start + limit;
+  const target = start + limit;
   const supabase = db();
-  const batchSize = 400;
+  const batchSize = 250;
   const visible: ProductListItem[] = [];
   let dbOffset = 0;
   let dbExhausted = false;
 
-  while (visible.length < need && !dbExhausted) {
-    let q = applyDbSort(buildCatalogDbQuery(supabase, state), state.sort).range(
-      dbOffset,
-      dbOffset + batchSize - 1,
-    );
-
-    const { data, error } = await q;
+  while (visible.length < target && !dbExhausted && dbOffset < 25_000) {
+    let q = applyDbSort(buildCatalogDbQuery(supabase, state), state.sort);
+    if (state.sort === "score-desc" || state.sort === "score-asc") {
+      q = q.not("core_scores", "is", null);
+    }
+    const { data, error } = await q.range(dbOffset, dbOffset + batchSize - 1);
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as Record<string, unknown>[];
     if (rows.length < batchSize) dbExhausted = true;
-    dbOffset += batchSize;
+    dbOffset += rows.length;
 
     visible.push(...filterCatalogProducts(mapVisibleBatch(rows), state, diet));
   }
 
   const sorted = sortCatalogItems(visible, state.sort);
   const items = sorted.slice(start, start + limit);
-  return {
-    items,
-    total: dbExhausted ? sorted.length : Math.max(sorted.length, start + limit + 1),
-    hasMore: dbExhausted ? start + limit < sorted.length : items.length === limit,
-  };
+
+  let total = sorted.length;
+  if (isUnfilteredCatalog(state, diet) && page === 1) {
+    const stats = await countVisibleCatalog();
+    total = stats.scored;
+  } else if (dbExhausted) {
+    total = sorted.length;
+  } else {
+    total = Math.max(sorted.length, target + 1);
+  }
+
+  const hasMore = isUnfilteredCatalog(state, diet)
+    ? start + items.length < total
+    : dbExhausted
+      ? start + limit < sorted.length
+      : items.length === limit;
+
+  return { items, total, hasMore };
 }
 
 function parseSearchState(opts: {

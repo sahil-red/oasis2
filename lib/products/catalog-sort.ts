@@ -44,6 +44,5 @@ export function compareCatalogItems(a: ProductListItem, b: ProductListItem, sort
 }
 
 export function sortCatalogItems(items: ProductListItem[], sort: CatalogSort): ProductListItem[] {
-  if (sort === "score-desc") return items;
   return [...items].sort((a, b) => compareCatalogItems(a, b, sort));
 }

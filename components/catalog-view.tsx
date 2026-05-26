@@ -389,9 +389,8 @@ export function CatalogView({
   };
 
   const catalogTotal = useMemo(() => {
-    if (hasFilters) return total;
-    return meta?.stats.visible ?? total;
-  }, [hasFilters, total, meta?.stats.visible]);
+    return meta?.stats.scored ?? meta?.stats.visible ?? total;
+  }, [meta?.stats.scored, meta?.stats.visible, total]);
 
   const stats = meta?.stats;
 
@@ -619,10 +618,12 @@ export function CatalogView({
 
           <p className="ml-auto pb-2 text-sm tabular-nums text-(--color-fg-dim)">
             <span className="text-(--color-fg)">
-              {loading && items.length === 0 ? "…" : total.toLocaleString()}
+              {loading && items.length === 0 ? "…" : items.length.toLocaleString()}
             </span>
-            <span className="mx-1">/</span>
+            {hasMore ? "+" : ""}
+            <span className="mx-1">of</span>
             {catalogTotal ? catalogTotal.toLocaleString() : "…"}
+            <span className="ml-1.5 hidden sm:inline">scored</span>
           </p>
         </div>
 
