@@ -6,6 +6,7 @@ import {
   goalCaption,
   type GoalFeatureInput,
 } from "./features";
+import { finalizeGoalFit } from "./health-penalties";
 import type { GoalId } from "./types";
 
 export type GoalFitResult = {
@@ -30,6 +31,7 @@ function buildHeroReasons(goal: GoalId, f: ReturnType<typeof buildGoalFeatures>,
   };
   if (goal === "balanced" || goal === "kids" || goal === "pcos") {
     if (f.additiveBurden >= 2 && !captionLower.includes("additive")) add("Several processing additives");
+    if (goal === "kids" && f.sodium >= 500 && !captionLower.includes("salt")) add("High sodium for children");
   }
   if (goal === "gym" || goal === "protein-budget" || goal === "bulk") {
     if (f.protein >= 15 && !captionLower.includes("protein")) add("Decent protein density");
@@ -90,10 +92,10 @@ export function computeGoalFit(
         f.addedSugar * 1.2 -
         f.saturatedFat * 0.8 -
         Math.max(0, f.kcal - 420) * 0.04 -
-        f.additiveBurden * 4 -
-        Math.max(0, f.sodium - 400) * 0.012;
+        f.additiveBurden * 6 -
+        Math.max(0, f.sodium - 300) * 0.016;
       if (pq?.tier === "grain" && f.protein >= 8) fit = Math.min(fit, 52);
-      if (f.isProteinSnack) fit = Math.min(fit, f.additiveBurden > 1.5 ? 76 : 82);
+      if (f.isProteinSnack) fit = Math.min(fit, f.additiveBurden > 1.5 ? 68 : 78);
       if (f.protein < 5) fit = Math.min(fit, 30);
       break;
     }
@@ -110,12 +112,12 @@ export function computeGoalFit(
         Math.min(24, f.protein * 1.8) +
         Math.min(10, f.kcalPerRupee100 * 0.022) +
         (f.carbs > 35 ? 6 : f.carbs > 22 ? 3 : 0) -
-        f.addedSugar * 0.7 -
-        f.additiveBurden * 3 -
-        Math.max(0, f.sodium - 300) * 0.012 -
-        Math.max(0, f.saturatedFat - 8) * 0.5;
-      if (f.addedSugar > 18 && !f.isStaple) fit = Math.min(fit, 55);
-      if (f.sodium >= 1000) fit = Math.min(fit, 55);
+        f.addedSugar * 0.9 -
+        f.additiveBurden * 5 -
+        Math.max(0, f.sodium - 250) * 0.016 -
+        Math.max(0, f.saturatedFat - 8) * 0.6;
+      if (f.addedSugar > 18 && !f.isStaple) fit = Math.min(fit, 48);
+      if (f.sodium >= 1000) fit = Math.min(fit, 42);
       if (f.kcal < 200) fit = Math.min(fit, 40);
       break;
     }
@@ -172,8 +174,8 @@ export function computeGoalFit(
         f.protein * 2.2 +
         f.fiber * 2.4 -
         f.addedSugar * 2 -
-        f.sodium * 0.006 -
-        f.additiveBurden * 4.5;
+        f.sodium * 0.008 -
+        f.additiveBurden * 6;
       if (f.isProteinSnack && f.kcal > 360) fit = Math.min(fit, 68);
       break;
     }
@@ -196,20 +198,27 @@ export function computeGoalFit(
         protein_g_100g: f.protein,
         core_score: opts.core_score,
       });
-      if (f.isProteinSnack && f.additiveBurden > 1.5) fit = Math.min(fit, 76);
+      fit -= f.additiveBurden * 3 + Math.max(0, f.sodium - 400) * 0.006;
+      if (f.isProteinSnack && f.additiveBurden > 1.5) fit = Math.min(fit, 65);
       break;
     }
     case "kids": {
-      fit = (opts.core_score ?? 50) - f.additiveBurden * 10 - f.addedSugar * 1.2 - f.sodium * 0.005;
-      if (f.isSweetSnack) fit -= 8;
-      if (f.isSugaryDrink) fit -= 12;
+      fit =
+        (opts.core_score ?? 50) -
+        f.additiveBurden * 12 -
+        f.hazardousAdditiveCount * 10 -
+        f.addedSugar * 1.4 -
+        f.sodium * 0.01;
+      if (f.isSweetSnack) fit -= 12;
+      if (f.isSugaryDrink) fit -= 16;
       if (!f.hasIngredientData && (f.isSnack || f.isSugaryDrink || f.addedSugar > 0)) {
-        fit = Math.min(fit, 50);
+        fit = Math.min(fit, 42);
       }
       break;
     }
   }
 
+  fit = finalizeGoalFit(goal, fit, f);
   return result(goal, fit, reasons, f);
 }
 

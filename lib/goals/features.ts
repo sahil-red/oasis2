@@ -1,4 +1,5 @@
 import { additiveGoalBurden, scoreIngredientSignals } from "@/lib/scoring/ingredient-signals";
+import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { vegetarianLabelHint } from "@/lib/goals/vegetarian";
 import { proteinQualityInsight, type ProteinQualityInsight } from "@/lib/goals/protein-quality";
@@ -43,6 +44,8 @@ export type GoalFeatures = {
   proteinPer100Kcal: number;
   kcalPerRupee100: number;
   additiveBurden: number;
+  hazardousAdditiveCount: number;
+  moderateAdditiveCount: number;
   processingNotes: string[];
   isSnack: boolean;
   isSweetSnack: boolean;
@@ -95,6 +98,9 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     net_weight: input.net_weight,
   });
   const signals = scoreIngredientSignals(input.ingredients_raw, input.attributes ?? null);
+  const additiveMatches = matchAdditives(input.ingredients_raw);
+  const hazardousAdditiveCount = additiveMatches.filter((m) => m.tier === "hazardous").length;
+  const moderateAdditiveCount = additiveMatches.filter((m) => m.tier === "moderate").length;
 
   const proteinInPack =
     packCtx.proteinInPack ??
@@ -145,6 +151,8 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     kcalPerRupee100:
       price > 0 && packKcal != null ? (packKcal / price) * 100 : 0,
     additiveBurden: additiveGoalBurden(input.ingredients_raw),
+    hazardousAdditiveCount,
+    moderateAdditiveCount,
     processingNotes: signals.notes,
     isSnack,
     isSweetSnack,
