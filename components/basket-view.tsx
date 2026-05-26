@@ -105,14 +105,14 @@ export function BasketView() {
     };
     syncGoal();
     sync();
-    window.addEventListener("oasis-basket", sync);
-    window.addEventListener("oasis-goal", syncGoal);
-    window.addEventListener("oasis-diet", syncGoal);
+    window.addEventListener("scout-basket", sync);
+    window.addEventListener("scout-goal", syncGoal);
+    window.addEventListener("scout-diet", syncGoal);
     return () => {
       cancelled = true;
-      window.removeEventListener("oasis-basket", sync);
-      window.removeEventListener("oasis-goal", syncGoal);
-      window.removeEventListener("oasis-diet", syncGoal);
+      window.removeEventListener("scout-basket", sync);
+      window.removeEventListener("scout-goal", syncGoal);
+      window.removeEventListener("scout-diet", syncGoal);
     };
   }, []);
 

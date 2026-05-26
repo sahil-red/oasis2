@@ -19,7 +19,6 @@ export type ReferenceKind =
   | "protein"
   | "dairy"
   | "grain"
-  | "pulse"
   | "fat"
   | "nut";
 

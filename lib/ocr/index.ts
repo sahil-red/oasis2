@@ -113,7 +113,7 @@ async function fetchImage(url: string, retries = 2): Promise<Buffer> {
         headers: {
           accept: "image/*",
           "user-agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 oasis-clone",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 scout",
         },
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

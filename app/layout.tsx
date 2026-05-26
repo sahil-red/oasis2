@@ -5,12 +5,12 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  title: "Oasis Clone — See what's really inside your products",
+  title: "Scout — See what's really inside your products",
   description:
     "Instantly uncover contaminants and additives in everyday Indian grocery products. Backed by Open Food Facts, ingredient research, and our Core safety score.",
   metadataBase: new URL(siteUrl),
   openGraph: {
-    title: "Oasis Clone",
+    title: "Scout",
     description: "See what's really inside your products.",
     type: "website",
   },

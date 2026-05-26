@@ -10,10 +10,10 @@ export function NavCartLink({ className }: { className?: string }) {
   useEffect(() => {
     const sync = () => setCount(basketCount());
     sync();
-    window.addEventListener("oasis-basket", sync);
+    window.addEventListener("scout-basket", sync);
     window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener("oasis-basket", sync);
+      window.removeEventListener("scout-basket", sync);
       window.removeEventListener("storage", sync);
     };
   }, []);

@@ -1,7 +1,7 @@
 /**
  * Canonical OCR output schema.
  *
- * The OCR step is the regulatory source of truth in the Oasis-clone
+ * The OCR step is the regulatory source of truth in Scout
  * pipeline. By FSSAI rule everything we need is printed on the back
  * label of every Indian packaged food product, in English. So one
  * image → one `OcrPayload`. Same shape regardless of whether we used

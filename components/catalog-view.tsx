@@ -100,7 +100,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
     if (!initialParams.goal) {
       const stored = readStoredGoal();
       if (stored !== "balanced") setGoal(stored);
-      setShowGoalHint(!localStorage.getItem("oasis-goal-v1"));
+      setShowGoalHint(!localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"));
     }
     if (!initialParams.diet) {
       const storedDiet = readDietMode();

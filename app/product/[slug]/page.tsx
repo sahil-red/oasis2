@@ -20,7 +20,9 @@ import { DietBadgeRow } from "@/components/diet-badge";
 import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
+import { DataProvenancePanel } from "@/components/data-provenance-panel";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
+import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
@@ -81,6 +83,15 @@ export default async function ProductPage({
     subscores,
     4,
   );
+
+  const provenance = buildProductProvenance({
+    nutrition: product.nutrition,
+    ingredients_raw: product.ingredients_raw,
+    platform: product.platform,
+    data_source: product.data_source,
+    ocr_status: product.ocr_status,
+    ocr_payload: product.ocr_payload,
+  });
 
   const scoreWhy = score
     ? explainScore({
@@ -228,6 +239,16 @@ export default async function ProductPage({
             </dl>
           </section>
         ) : null}
+
+        <section className="mt-12">
+          <h2 className="font-display text-2xl">Data sources</h2>
+          <p className="mt-2 text-sm text-(--color-fg-muted)">
+            Where nutrition and ingredients on this page came from.
+          </p>
+          <div className="mt-5">
+            <DataProvenancePanel provenance={provenance} />
+          </div>
+        </section>
       </div>
 
       <SiteFooter />

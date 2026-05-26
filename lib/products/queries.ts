@@ -133,6 +133,11 @@ export type ProductListItem = Pick<
 
 export type ProductDetail = Product & {
   core_scores: CoreScore | null;
+  platform?: string | null;
+  data_source?: string | null;
+  ocr_status?: string | null;
+  ocr_payload?: Record<string, unknown> | null;
+  ocr_image_url?: string | null;
 };
 
 export type CatalogFilters = {
@@ -697,6 +702,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       id, zepto_sku, slug, name, brand, super_category, category, subcategory,
       net_weight, price_inr, mrp_inr, image_urls, product_url, barcode,
       ingredients_raw, nutrition, attributes, raw_payload, scraped_at, updated_at,
+      platform, data_source, ocr_status, ocr_payload, ocr_image_url,
       core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at)
     `,
     )
@@ -738,6 +744,11 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     raw_payload: (row.raw_payload as Record<string, unknown> | null) ?? null,
     scraped_at: row.scraped_at as string,
     updated_at: row.updated_at as string,
+    platform: (row.platform as string | null) ?? null,
+    data_source: (row.data_source as string | null) ?? null,
+    ocr_status: (row.ocr_status as string | null) ?? null,
+    ocr_payload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
+    ocr_image_url: (row.ocr_image_url as string | null) ?? null,
     core_scores: core,
   };
 }

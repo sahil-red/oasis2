@@ -25,10 +25,10 @@ export function AddToBasketButton({
       setQty(e?.qty ?? 0);
     };
     sync();
-    window.addEventListener("oasis-basket", sync);
+    window.addEventListener("scout-basket", sync);
     window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener("oasis-basket", sync);
+      window.removeEventListener("scout-basket", sync);
       window.removeEventListener("storage", sync);
     };
   }, [slug]);

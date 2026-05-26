@@ -6,11 +6,10 @@ export function SiteFooter() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-14 md:flex-row md:items-start md:justify-between">
         <div>
           <Link href="/" className="font-display text-xl text-(--color-fg)">
-            Oasis
+            Scout
           </Link>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-(--color-fg-muted)">
-            Independent ingredient research for Indian packaged groceries. Not affiliated
-            with Oasis Health Inc.
+            Independent ingredient research for Indian packaged groceries.
           </p>
         </div>
         <div className="flex gap-12 text-sm">
@@ -38,7 +37,7 @@ export function SiteFooter() {
       </div>
       <div className="hairline mx-auto max-w-6xl" />
       <p className="mx-auto max-w-6xl px-6 py-6 text-xs text-(--color-fg-dim)">
-        © {new Date().getFullYear()} Oasis Clone
+        © {new Date().getFullYear()} Scout
       </p>
     </footer>
   );

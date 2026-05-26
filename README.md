@@ -1,8 +1,6 @@
-# Oasis Clone
+# Scout
 
-An aesthetic clone of [oasishealth.app](https://www.oasishealth.app/), reimagined for the Indian grocery market. We scrape Blinkit's catalog, pull structured ingredients + nutrition from their PDP (with OCR back-label fallback for the long tail), and compute a transparent "Core" safety score per product — all on free-tier infrastructure.
-
-This is a personal research project. Not affiliated with Oasis Health Inc.
+Transparent ingredient and nutrition research for the Indian grocery market. We import Zepto's catalog, fill gaps with reference data and label OCR, and compute a transparent Core safety score per product.
 
 ## Stack (zero recurring cost)
 
@@ -200,7 +198,6 @@ This project scrapes Indian quick-commerce platforms (Blinkit primary, others pl
 
 ## Acknowledgements
 
-- [Oasis Health](https://www.oasishealth.app/) for the visual language
 - [Open Food Facts](https://world.openfoodfacts.org/) for the ingredient & nutrition reference data
 - [shadcn/ui](https://ui.shadcn.com/) for the design patterns
 

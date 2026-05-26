@@ -5,12 +5,30 @@ export type BasketEntry = {
   addedAt: number;
 };
 
-const KEY = "oasis-basket-v1";
+const KEY = "scout-basket-v1";
+const LEGACY_KEY = "oasis-basket-v1";
+const EVENT = "scout-basket";
+
+function readRaw(): string | null {
+  if (typeof window === "undefined") return null;
+  const current = localStorage.getItem(KEY);
+  if (current != null) return current;
+  const legacy = localStorage.getItem(LEGACY_KEY);
+  if (legacy != null) {
+    localStorage.setItem(KEY, legacy);
+    return legacy;
+  }
+  return null;
+}
+
+function dispatchBasket(): void {
+  window.dispatchEvent(new Event(EVENT));
+}
 
 export function readBasket(): BasketEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw();
     if (!raw) return [];
     return JSON.parse(raw) as BasketEntry[];
   } catch {
@@ -28,14 +46,14 @@ export function addToBasket(slug: string, name: string): BasketEntry[] {
   if (existing) existing.qty += 1;
   else list.push({ slug, name, qty: 1, addedAt: Date.now() });
   writeBasket(list);
-  window.dispatchEvent(new Event("oasis-basket"));
+  dispatchBasket();
   return list;
 }
 
 export function removeFromBasket(slug: string): BasketEntry[] {
   const list = readBasket().filter((e) => e.slug !== slug);
   writeBasket(list);
-  window.dispatchEvent(new Event("oasis-basket"));
+  dispatchBasket();
   return list;
 }
 
@@ -49,14 +67,14 @@ export function replaceInBasket(fromSlug: string, toSlug: string, toName: string
     existingTarget.qty += entry.qty;
     const next = list.filter((e) => e.slug !== fromSlug);
     writeBasket(next);
-    window.dispatchEvent(new Event("oasis-basket"));
+    dispatchBasket();
     return next;
   }
   entry.slug = toSlug;
   entry.name = toName;
   entry.addedAt = Date.now();
   writeBasket(list);
-  window.dispatchEvent(new Event("oasis-basket"));
+  dispatchBasket();
   return list;
 }
 
@@ -67,13 +85,13 @@ export function decrementBasket(slug: string): BasketEntry[] {
   if (entry.qty <= 1) return removeFromBasket(slug);
   entry.qty -= 1;
   writeBasket(list);
-  window.dispatchEvent(new Event("oasis-basket"));
+  dispatchBasket();
   return list;
 }
 
 export function clearBasket(): void {
   writeBasket([]);
-  window.dispatchEvent(new Event("oasis-basket"));
+  dispatchBasket();
 }
 
 export function basketCount(): number {

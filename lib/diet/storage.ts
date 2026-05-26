@@ -1,14 +1,17 @@
 import { dietFromParam, type DietMode } from "./types";
+import { readStoredKey } from "@/lib/storage/legacy";
 
-const KEY = "oasis-diet-v1";
+const KEY = "scout-diet-v1";
+const LEGACY_KEY = "oasis-diet-v1";
 /** Legacy keys we still read for one cycle so users don't lose their setting. */
 const LEGACY_VEG_EGGS_KEY = "oasis-veg-eggs-v1";
 const LEGACY_GOAL_KEY = "oasis-goal-v1";
+const EVENT = "scout-diet";
 
 export function readDietMode(): DietMode {
   if (typeof window === "undefined") return "any";
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readStoredKey(KEY, LEGACY_KEY);
     if (raw) return dietFromParam(raw);
     // Migrate from older split state: goal=veg + allow_eggs flag.
     const legacyGoal = localStorage.getItem(LEGACY_GOAL_KEY);
@@ -30,5 +33,5 @@ export function writeDietMode(diet: DietMode): void {
   } catch {
     /* ignore quota */
   }
-  window.dispatchEvent(new Event("oasis-diet"));
+  window.dispatchEvent(new Event(EVENT));
 }
