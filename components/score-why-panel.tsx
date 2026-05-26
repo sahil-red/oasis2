@@ -13,7 +13,7 @@ export function ScoreWhyPanel({
   return (
     <section
       className={cn(
-        "rounded-xl border border-(--color-line) bg-white p-5 sm:p-6",
+        "rounded-xl border border-(--color-line) bg-(--color-panel) p-5 sm:p-6",
         className,
       )}
     >

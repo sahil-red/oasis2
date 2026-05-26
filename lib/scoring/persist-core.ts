@@ -104,12 +104,41 @@ export async function persistCoreScoresBatch(
   return { scored, no_nutrition: rows.length - payloads.length };
 }
 
+/** Remove stale score rows when nutrition is no longer scoreable or rule version changed. */
+export async function purgeCoreScoreForProduct(
+  supabase: SupabaseClient,
+  productId: string,
+): Promise<void> {
+  await supabase.from("core_scores").delete().eq("product_id", productId);
+}
+
+export async function purgeOutdatedCoreScores(
+  supabase: SupabaseClient,
+  ruleVersion = SCORING_RULE_VERSION,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("core_scores")
+    .select("product_id")
+    .neq("rule_version", ruleVersion);
+  if (error || !data?.length) return 0;
+  const ids = data.map((r) => r.product_id as string);
+  const { error: delErr } = await supabase.from("core_scores").delete().in("product_id", ids);
+  if (delErr) {
+    console.warn("[persist-core] purge outdated:", delErr.message);
+    return 0;
+  }
+  return ids.length;
+}
+
 export async function persistCoreScore(
   supabase: SupabaseClient,
   row: ScoreableProduct,
   opts: { force?: boolean; dryRun?: boolean } = {},
 ): Promise<"scored" | "skipped" | "no_nutrition"> {
-  if (!hasScoreableNutrition(row.nutrition)) return "no_nutrition";
+  if (!hasScoreableNutrition(row.nutrition)) {
+    if (!opts.dryRun) await purgeCoreScoreForProduct(supabase, row.id);
+    return "no_nutrition";
+  }
 
   if (
     row.nutrition &&
@@ -119,6 +148,7 @@ export async function persistCoreScore(
       subcategory: row.subcategory,
     })
   ) {
+    if (!opts.dryRun) await purgeCoreScoreForProduct(supabase, row.id);
     return "no_nutrition";
   }
 
@@ -134,7 +164,10 @@ export async function persistCoreScore(
   }
 
   const payload = buildCoreScoreUpsert(row);
-  if (!payload) return "no_nutrition";
+  if (!payload) {
+    if (!opts.dryRun) await purgeCoreScoreForProduct(supabase, row.id);
+    return "no_nutrition";
+  }
   if (opts.dryRun) return "scored";
 
   const { error } = await supabase.from("core_scores").upsert(payload);

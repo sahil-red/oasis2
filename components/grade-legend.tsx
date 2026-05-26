@@ -30,7 +30,7 @@ export function GradeLegend({
   return (
     <div
       className={cn(
-        !bare && "rounded-lg border border-(--color-line) bg-white",
+        !bare && "rounded-lg border border-(--color-line) bg-(--color-panel)",
         compact ? "px-3 py-2.5" : "px-4 py-3.5",
         className,
       )}

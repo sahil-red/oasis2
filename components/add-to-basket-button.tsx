@@ -37,7 +37,7 @@ export function AddToBasketButton({
     return (
       <div
         className={cn(
-          "flex items-center gap-0.5 rounded-full border border-(--color-line) bg-white/95 p-0.5 shadow-sm backdrop-blur-sm",
+          "flex items-center gap-0.5 rounded-full border border-(--color-line) bg-(--color-panel)/95 p-0.5 shadow-sm backdrop-blur-sm",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -84,7 +84,7 @@ export function AddToBasketButton({
       onClick={() => addToBasket(slug, name)}
       className={
         className ??
-        "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-white px-3 py-2 text-sm font-medium text-(--color-fg) hover:border-(--color-fg)"
+        "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-(--color-panel) px-3 py-2 text-sm font-medium text-(--color-fg) hover:border-(--color-fg)"
       }
     >
       <Plus className="h-4 w-4" />

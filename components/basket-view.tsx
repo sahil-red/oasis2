@@ -266,7 +266,7 @@ export function BasketView() {
             ["Watch", watchSummary],
             ["Improve", improveSummary],
           ].map(([label, body]) => (
-            <div key={label} className="rounded-xl bg-white/75 px-3 py-3 ring-1 ring-violet-100">
+            <div key={label} className="rounded-xl bg-(--color-panel)/75 px-3 py-3 ring-1 ring-violet-100">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-violet-800/80">
                 {label}
               </p>
@@ -312,7 +312,7 @@ export function BasketView() {
           return (
           <article
             key={product.id}
-            className="rounded-2xl border border-(--color-line) bg-white p-3 shadow-sm sm:p-4"
+            className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 shadow-sm sm:p-4"
           >
             <div className="flex items-center gap-4">
               <Link
@@ -362,7 +362,7 @@ export function BasketView() {
                   type="button"
                   aria-label="Remove one"
                   onClick={() => decrementBasket(product.slug)}
-                  className="grid h-8 w-8 place-items-center rounded-full hover:bg-white"
+                  className="grid h-8 w-8 place-items-center rounded-full hover:bg-(--color-panel)"
                 >
                   <Minus className="h-4 w-4" />
                 </button>

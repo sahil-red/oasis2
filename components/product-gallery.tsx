@@ -69,7 +69,7 @@ export function ProductGallery({
             <button
               type="button"
               onClick={prev}
-              className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-white/95 text-(--color-fg) shadow-sm transition hover:bg-white md:opacity-0 md:group-hover:opacity-100"
+              className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel)/95 text-(--color-fg) shadow-sm transition hover:bg-(--color-panel) md:opacity-0 md:group-hover:opacity-100"
               aria-label="Previous image"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -77,12 +77,12 @@ export function ProductGallery({
             <button
               type="button"
               onClick={next}
-              className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-white/95 text-(--color-fg) shadow-sm transition hover:bg-white md:opacity-0 md:group-hover:opacity-100"
+              className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel)/95 text-(--color-fg) shadow-sm transition hover:bg-(--color-panel) md:opacity-0 md:group-hover:opacity-100"
               aria-label="Next image"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-(--color-line) bg-white/95 px-2.5 py-0.5 text-xs tabular-nums text-(--color-fg-muted) shadow-sm">
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-(--color-line) bg-(--color-panel)/95 px-2.5 py-0.5 text-xs tabular-nums text-(--color-fg-muted) shadow-sm">
               {index + 1} / {n}
             </div>
           </>

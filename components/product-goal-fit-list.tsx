@@ -129,7 +129,7 @@ export function ProductGoalFitList({
       )}
 
       {gridGoals.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-(--color-line) bg-white p-3 shadow-sm">
+        <div className="mt-4 rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 shadow-sm">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
             All goals at a glance
           </p>

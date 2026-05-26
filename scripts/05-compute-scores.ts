@@ -14,6 +14,7 @@ import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
 import {
   persistCoreScoresBatch,
+  purgeOutdatedCoreScores,
   SCORING_RULE_VERSION,
   type ScoreableProduct,
 } from "@/lib/scoring/persist-core";
@@ -40,6 +41,11 @@ async function main() {
   const args = parseArgs();
   const supabase = adminClient();
   const started = Date.now();
+
+  if (args.force && !args.dryRun) {
+    const purged = await purgeOutdatedCoreScores(supabase);
+    if (purged) console.log(`[05-compute-scores] purged ${purged} outdated core_scores rows`);
+  }
 
   let query: any = supabase
     .from("products")

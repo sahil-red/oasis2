@@ -34,12 +34,21 @@ export function productMatchesUsecase(
   return productUsecase(p) === usecase;
 }
 
+export function isFruitsVegetablesAisle(
+  p: Pick<ProductListItem, "category" | "super_category">,
+): boolean {
+  const aisle = productAisle(p);
+  return aisle?.trim() === FRUITS_VEGETABLES_AISLE;
+}
+
 export function productMatchesAisle(
   p: Pick<ProductListItem, "category" | "super_category" | "subcategory" | "name" | "nutrition">,
   aisle: string,
 ): boolean {
   if (!aisle) return true;
   if (aisle === FRUITS_VEGETABLES_AISLE) {
+    // Primary: Zepto CSV category_name is already "Fruits & Vegetables".
+    if (isFruitsVegetablesAisle(p)) return true;
     return (
       hasReferenceNutrition(p.nutrition ?? null) ||
       isFreshWholeProduce({

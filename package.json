@@ -14,6 +14,7 @@
     "catalog:sync": "tsx scripts/sync-catalog-from-csv.ts",
     "catalog:backfill-visible": "tsx scripts/backfill-catalog-visible.ts",
     "catalog:migrate": "tsx scripts/apply-catalog-migration.ts",
+    "db:migrate": "tsx scripts/apply-all-migrations.ts",
     "score": "tsx scripts/05-compute-scores.ts",
     "nutrition:fix": "tsx scripts/fix-nutrition-outliers.ts",
     "nutrition:purge-scores": "tsx scripts/purge-untrustworthy-scores.ts",
@@ -21,7 +22,18 @@
     "reference:fill": "tsx scripts/fill-reference-nutrition.ts",
     "funnel": "tsx scripts/db-funnel.ts",
     "db:status": "tsx scripts/db-status.ts",
-    "diag:supabase": "tsx scripts/diag-supabase.ts"
+    "diag:supabase": "tsx scripts/diag-supabase.ts",
+    "import:downloads": "tsx scripts/import-downloads-assets.ts",
+    "ocr:sample": "tsx scripts/ocr-pipeline-sample.ts",
+    "ocr:gaps": "tsx scripts/ocr-catalog-gaps.ts",
+    "ocr:csv": "tsx scripts/ocr-csv-images.ts",
+    "ocr:audit": "tsx scripts/ocr-batch-compare.ts",
+    "ocr:rollup": "tsx scripts/ocr-audit-rollup.ts",
+    "ocr:compare": "tsx scripts/compare-ocr-vs-csv.ts",
+    "audit:catalog": "tsx scripts/audit-catalog-readiness.ts",
+    "ocr:setup": "python3 -m venv ocr-pipeline/.venv && ocr-pipeline/.venv/bin/pip install -r ocr-pipeline/requirements.txt",
+    "ocr:bench": "ocr-pipeline/.venv/bin/python ocr-pipeline/benchmark.py",
+    "ocr:lm": "tsx scripts/ocr-lm-pipeline.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
@@ -50,5 +62,6 @@
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
-  }
+  },
+  "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215"
 }

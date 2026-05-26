@@ -65,7 +65,7 @@ export default async function Home() {
               </Link>
               <Link
                 href="/insights"
-                className="inline-flex items-center gap-2 rounded-lg border border-(--color-line) bg-white px-5 py-3 text-sm font-medium hover:border-(--color-fg)"
+                className="inline-flex items-center gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) px-5 py-3 text-sm font-medium hover:border-(--color-fg)"
               >
                 Fake &quot;healthy&quot; picks
               </Link>
@@ -111,7 +111,7 @@ export default async function Home() {
             <Link
               key={f.title}
               href={f.href}
-              className="rounded-xl border border-(--color-line) bg-white p-5 transition hover:border-(--color-accent)"
+              className="rounded-xl border border-(--color-line) bg-(--color-panel) p-5 transition hover:border-(--color-accent)"
             >
               <p className="font-medium text-(--color-fg)">{f.title}</p>
               <p className="mt-1.5 text-sm leading-relaxed text-(--color-fg-muted)">{f.desc}</p>

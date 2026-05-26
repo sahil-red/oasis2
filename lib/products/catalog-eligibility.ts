@@ -1,5 +1,6 @@
 import { isBlockedTaxonomy } from "@/lib/catalog/policy";
-import { isFreshWholeProduce } from "@/lib/catalog/packaged-produce";
+import { isPackagedProduceLike, isFreshWholeProduce } from "@/lib/catalog/packaged-produce";
+import { FRUITS_VEGETABLES_AISLE } from "@/lib/products/catalog-meta";
 import {
   isPlatformNutritionComplete,
   isReferenceProduceNutritionComplete,
@@ -37,6 +38,12 @@ export function isCatalogVisible(p: CatalogEligibilityRow): boolean {
     })
   ) {
     return false;
+  }
+
+  // Zepto CSV aisle — show whole produce rows even before reference/OCR fill.
+  if (p.category?.trim() === FRUITS_VEGETABLES_AISLE) {
+    if (isPackagedProduceLike(p.name, p.subcategory)) return false;
+    return true;
   }
 
   const freshProduce = isFreshWholeProduce({

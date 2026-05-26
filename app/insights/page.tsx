@@ -207,7 +207,7 @@ function InsightStatCard({
   body: string;
 }) {
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-white px-4 py-4 shadow-sm">
+    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) px-4 py-4 shadow-sm">
       <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
         {label}
       </p>

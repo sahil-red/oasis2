@@ -7,7 +7,12 @@ import type { OcrIngredient, OcrNutrition, OcrPayload } from "./types";
 
 export function parseLabelTextToPayload(
   text: string,
-  opts: { avgConfidence?: number; rawText?: string } = {},
+  opts: {
+    avgConfidence?: number;
+    rawText?: string;
+    backend?: OcrPayload["backend"];
+    backendNote?: string;
+  } = {},
 ): OcrPayload {
   const ingredients = extractIngredients(text);
   const { per100g, perServe } = extractNutrition(text);
@@ -37,9 +42,9 @@ export function parseLabelTextToPayload(
       overall: Math.min(1, overall),
       has_ingredients: hasIngredients,
       has_nutrition_table: hasNutrition,
-      notes: `paddle avg_conf=${confBase.toFixed(2)}`,
+      notes: opts.backendNote ?? `ocr avg_conf=${confBase.toFixed(2)}`,
     },
-    backend: "paddle",
+    backend: opts.backend ?? "paddle",
     raw_text: opts.rawText ?? text,
   };
 }

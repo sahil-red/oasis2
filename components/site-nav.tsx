@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { NavCartLink } from "@/components/nav-cart-link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function SiteNav() {
   return (
-    <header className="sticky top-0 z-50 border-b border-(--color-line) bg-white/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-(--color-line) bg-(--color-panel)/90 backdrop-blur-md">
       <nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-(--color-fg) font-display text-base text-(--color-bg)">
@@ -21,13 +22,16 @@ export function SiteNav() {
             Insights
           </Link>
         </div>
-        <Link
-          href="/search"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-(--color-fg) px-4 py-2 text-sm font-medium text-(--color-bg) hover:opacity-90"
-        >
-          Browse
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link
+            href="/search"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-(--color-fg) px-4 py-2 text-sm font-medium text-(--color-bg) hover:opacity-90"
+          >
+            Browse
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </nav>
     </header>
   );

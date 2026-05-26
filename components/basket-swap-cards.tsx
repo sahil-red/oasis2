@@ -45,7 +45,7 @@ export function BasketSwapCards({
         {suggestions.map(({ product, goalFit, deltas }) => (
           <li
             key={product.id}
-            className="flex flex-col overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+            className="flex flex-col overflow-hidden rounded-xl border border-emerald-100 bg-(--color-panel) shadow-sm transition hover:border-emerald-300 hover:shadow-md"
           >
             <Link
               href={`/product/${product.slug}`}
@@ -61,7 +61,7 @@ export function BasketSwapCards({
                   unoptimized
                 />
               ) : null}
-              <div className="absolute right-2 top-2 rounded-lg bg-white/95 px-1 py-0.5 shadow-sm">
+              <div className="absolute right-2 top-2 rounded-lg bg-(--color-panel)/95 px-1 py-0.5 shadow-sm">
                 {goal !== "balanced" && product.core_scores ? (
                   <GoalFitBadge fit={goalFit} size="sm" />
                 ) : product.core_scores ? (

@@ -24,7 +24,7 @@ export function InsightProductCard({
         ? "border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-white"
         : accent === "snack"
           ? "border-violet-200 bg-gradient-to-b from-violet-50/50 to-white"
-          : "border-(--color-line) bg-white";
+          : "border-(--color-line) bg-(--color-panel)";
 
   return (
     <Link
@@ -50,7 +50,7 @@ export function InsightProductCard({
           </div>
         )}
         {product.core_scores ? (
-          <div className="absolute right-2 top-2 rounded-lg bg-white/95 px-1.5 py-0.5 shadow-sm">
+          <div className="absolute right-2 top-2 rounded-lg bg-(--color-panel)/95 px-1.5 py-0.5 shadow-sm">
             <ScoreBadge
               score={product.core_scores.score}
               grade={product.core_scores.grade}
@@ -102,7 +102,7 @@ export function InsightFeaturedCard({
       href={`/product/${product.slug}`}
       className="group grid overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
     >
-      <div className="relative aspect-square bg-white md:aspect-auto md:min-h-[220px]">
+      <div className="relative aspect-square bg-(--color-panel) md:aspect-auto md:min-h-[220px]">
         {product.image_urls[0] ? (
           <Image
             src={product.image_urls[0]}
@@ -121,11 +121,11 @@ export function InsightFeaturedCard({
           {product.name}
         </h2>
         <div className="mt-4 space-y-3">
-          <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-amber-100">
+          <div className="rounded-lg bg-(--color-panel)/80 px-3 py-2 ring-1 ring-amber-100">
             <p className="text-[13px] font-medium text-amber-900">Claim</p>
             <p className="text-[15px] text-(--color-fg)">{callout.claim}</p>
           </div>
-          <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-amber-100">
+          <div className="rounded-lg bg-(--color-panel)/80 px-3 py-2 ring-1 ring-amber-100">
             <p className="text-[13px] font-medium text-amber-900">Reality</p>
             <p className="text-[15px] leading-relaxed text-(--color-fg-muted)">
               {callout.reality}

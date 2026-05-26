@@ -49,10 +49,29 @@ export type ProvenanceInput = {
   ocr_payload?: Record<string, unknown> | null;
 };
 
-function ocrPayload(input: ProvenanceInput): (OcrPayload & { applied?: boolean; gate_reason?: string }) | null {
+type LabelResolutionMeta = {
+  nutrition_source?: string;
+  ingredients_source?: string;
+  lm_called?: boolean;
+};
+
+function ocrPayload(input: ProvenanceInput): (OcrPayload & {
+  applied?: boolean;
+  gate_reason?: string;
+  label_resolution?: LabelResolutionMeta;
+}) | null {
   const p = input.ocr_payload;
   if (!p || typeof p !== "object") return null;
-  return p as unknown as OcrPayload & { applied?: boolean; gate_reason?: string };
+  return p as unknown as OcrPayload & {
+    applied?: boolean;
+    gate_reason?: string;
+    label_resolution?: LabelResolutionMeta;
+  };
+}
+
+function labelResolution(input: ProvenanceInput): LabelResolutionMeta | null {
+  const ocr = ocrPayload(input);
+  return ocr?.label_resolution ?? null;
 }
 
 function referenceProvenance(
@@ -91,11 +110,27 @@ function inferNutritionProvenance(input: ProvenanceInput): FieldProvenance {
     return referenceProvenance(extra);
   }
 
+  const resolution = labelResolution(input);
+  if (resolution?.nutrition_source === "csv") {
+    return {
+      kind: "csv",
+      label: "Zepto CSV",
+      detail: "Matches label OCR — catalog export kept",
+    };
+  }
+  if (resolution?.nutrition_source === "llm") {
+    return {
+      kind: "llm",
+      label: "Label LLM (Qwen)",
+      detail: "Structured from pack image when CSV disagreed with OCR",
+    };
+  }
+
   if (n.source === "label" || n.source === "ocr") {
     const ocr = ocrPayload(input);
     return {
       kind: "ocr",
-      label: "Label OCR (Tesseract)",
+      label: "Label OCR",
       detail: ocr?.gate_reason ? `Gate: ${ocr.gate_reason}` : undefined,
       confidence: ocr?.confidence?.overall,
     };
@@ -137,6 +172,22 @@ function inferNutritionProvenance(input: ProvenanceInput): FieldProvenance {
 function inferIngredientsProvenance(input: ProvenanceInput): FieldProvenance {
   if (!hasIngredients(input.ingredients_raw)) {
     return { kind: "missing", label: "Not available" };
+  }
+
+  const resolution = labelResolution(input);
+  if (resolution?.ingredients_source === "csv") {
+    return {
+      kind: "csv",
+      label: "Zepto CSV",
+      detail: "Matches label OCR — catalog export kept",
+    };
+  }
+  if (resolution?.ingredients_source === "llm") {
+    return {
+      kind: "llm",
+      label: "Label LLM (Qwen)",
+      detail: "Structured from pack image when CSV disagreed with OCR",
+    };
   }
 
   const ocr = ocrPayload(input);

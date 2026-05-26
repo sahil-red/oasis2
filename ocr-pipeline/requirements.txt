@@ -1,0 +1,4 @@
+ocrmac>=1.0.0
+# Optional — legacy Tesseract preprocess only (NOT used by Vision)
+opencv-python-headless>=4.10.0
+numpy>=1.26.0

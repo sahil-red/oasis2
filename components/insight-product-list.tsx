@@ -14,7 +14,7 @@ export function InsightProductList({
     return <p className="text-sm text-(--color-fg-muted)">Not enough data yet.</p>;
   }
   return (
-    <ul className="divide-y divide-(--color-line) rounded-xl border border-(--color-line) bg-white">
+    <ul className="divide-y divide-(--color-line) rounded-xl border border-(--color-line) bg-(--color-panel)">
       {products.map((p) => (
         <li key={p.id}>
           <Link

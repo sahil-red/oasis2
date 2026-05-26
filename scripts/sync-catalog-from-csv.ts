@@ -21,6 +21,7 @@ import { config as loadEnv } from "dotenv";
 import { detectCatalogDbSchema, l3FromRow } from "@/lib/catalog/db-schema";
 import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
 import { computeCatalogVisible } from "@/lib/products/catalog-eligibility";
+import { FRUITS_VEGETABLES_AISLE } from "@/lib/products/catalog-meta";
 import { isPackagedProduceLike } from "@/lib/catalog/packaged-produce";
 import { matchProduce, produceLabelHint, produceToNutrition } from "@/lib/produce/seed";
 import {
@@ -192,7 +193,8 @@ async function main() {
 
       if (dryRun) continue;
 
-      const onConflict = schema.hasProductKey ? "product_key" : "platform,zepto_sku";
+      // product_key column may exist without 0005 unique index — zepto_sku is always unique per platform.
+      const onConflict = "platform,zepto_sku";
       const { error } = await supabase.from("products").upsert(payloads, { onConflict });
       if (error) {
         console.error("[catalog:sync] upsert failed:", error.message);
@@ -278,8 +280,10 @@ async function main() {
       const name = row.name as string;
       const sub = row.subcategory as string | null;
       if (isPackagedProduceLike(name, sub)) continue;
+      const cat = (row.category as string | null)?.trim() ?? "";
       const blob = `${name} ${row.category} ${sub} ${l3 ?? ""}`;
-      if (!PRODUCE_RE.test(blob)) continue;
+      const inFvAisle = cat === FRUITS_VEGETABLES_AISLE;
+      if (!inFvAisle && !PRODUCE_RE.test(blob)) continue;
       const entry = matchProduce(name);
       if (!entry) continue;
       const nutrition = produceToNutrition(entry);

@@ -161,7 +161,7 @@ export function ScoreSubscoresBlock({
   ];
 
   return (
-    <details className={cn("group rounded-xl border border-(--color-line) bg-white", className)}>
+    <details className={cn("group rounded-xl border border-(--color-line) bg-(--color-panel)", className)}>
       <summary className="cursor-pointer list-none px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-2">
           <span className="text-[13px] font-medium text-(--color-fg)">Label breakdown</span>
@@ -244,7 +244,7 @@ export function ScorePanel({
                 {axes.map(({ label, value, max }) => (
                   <div
                     key={label}
-                    className="rounded-md border border-(--color-line) bg-white px-1 py-1 text-center"
+                    className="rounded-md border border-(--color-line) bg-(--color-panel) px-1 py-1 text-center"
                   >
                     <dt className="text-[9px] leading-tight text-(--color-fg-dim)">{label}</dt>
                     <dd className="font-display text-sm leading-none tabular-nums text-(--color-fg)">
@@ -292,7 +292,7 @@ export function ScorePanel({
               {axes.map(({ label, value, max }) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-(--color-line) bg-white px-3 py-2.5 text-center"
+                  className="rounded-xl border border-(--color-line) bg-(--color-panel) px-3 py-2.5 text-center"
                 >
                   <div className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
                     {label}

@@ -495,7 +495,12 @@ export async function getCatalogMeta(category?: string): Promise<CatalogMeta> {
 function applyCategoryFilter(q: any, state: CatalogFilterState, productsPrefix?: string): any {
   if (!state.category) return q;
   if (state.category === FRUITS_VEGETABLES_AISLE) {
-    return q.not("nutrition->extra->>reference_id", "is", null);
+    const col = productsPrefix ? `${productsPrefix}.category` : "category";
+    const nut = productsPrefix ? `${productsPrefix}.nutrition` : "nutrition";
+    // CSV category_name + reference-seeded produce (legacy rows).
+    return q.or(
+      `${col}.eq.${FRUITS_VEGETABLES_AISLE},${nut}->extra->>reference_id.not.is.null`,
+    );
   }
   const col = productsPrefix ? `${productsPrefix}.category` : "category";
   return q.eq(col, state.category);

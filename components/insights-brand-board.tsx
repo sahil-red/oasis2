@@ -15,7 +15,7 @@ function BrandRow({
   const pct = Math.min(100, brand.avgScore);
   const barColor = colorForScore(brand.avgScore);
   return (
-    <li className="rounded-xl border border-(--color-line) bg-white p-4">
+    <li className="rounded-xl border border-(--color-line) bg-(--color-panel) p-4">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[15px] font-medium text-(--color-fg)">
           <span className="text-(--color-fg-dim)">{rank}. </span>

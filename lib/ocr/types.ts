@@ -65,9 +65,21 @@ export interface OcrPayload {
   };
 
   /** Which backend filled this. */
-  backend: "paddle" | "manual";
+  backend: "paddle" | "vision" | "manual";
   /** Raw OCR text after validation. */
   raw_text?: string;
+}
+
+export interface OcrOrchestratorOptions {
+  bypassCache?: boolean;
+}
+
+export interface OcrResult {
+  payload: OcrPayload;
+  imageUrl: string;
+  imageSha256: string;
+  fromCache: boolean;
+  attempts: Array<{ url: string; reason: string }>;
 }
 
 /** The pick step decides which image to OCR. */

@@ -8,3 +8,8 @@ export function sha256(bytes: ArrayBuffer | Uint8Array | Buffer): string {
   h.update(bytes instanceof ArrayBuffer ? Buffer.from(bytes) : bytes);
   return h.digest("hex");
 }
+
+/** Stable cache key when only the image URL is known (before download). */
+export function hashImageUrl(url: string): string {
+  return createHash("sha256").update(url.trim()).digest("hex");
+}

@@ -22,6 +22,7 @@ yarn-error.log*
 # env
 .env*.local
 .env
+.env.vercel*
 
 # vercel
 .vercel
@@ -31,12 +32,15 @@ yarn-error.log*
 
 # PaddleOCR Python venv + models
 ocr-paddle/.venv/
+ocr-pipeline/.venv/
 ocr-paddle/**/__pycache__/
 eng.traineddata
 
 # scraper artifacts
 .cache/
 data/cache/
+# OCR audit jsonl can be large — keep locally
+data/cache/ocr-audit/
 .tmp/
 data/raw/
 data/images/

@@ -11,6 +11,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { applyOcrToProduct } from "@/lib/ocr/apply-to-product";
 import { OcrOrchestrator, shutdownOcr, paddleSummary } from "@/lib/ocr";
 import { needsLabelOcr } from "@/lib/nutrition/completeness";
+import { persistCoreScore } from "@/lib/scoring/persist-core";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
@@ -176,6 +177,21 @@ async function main() {
 
         if (!args.dryRun) {
           await supabase.from("products").update(outcome.patch).eq("id", row.id);
+          const nutrition = (outcome.patch.nutrition ?? row.nutrition) as ProductNutrition | null;
+          const ingredients_raw = (outcome.patch.ingredients_raw ?? row.ingredients_raw) as string | null;
+          await persistCoreScore(
+            supabase,
+            {
+              id: row.id,
+              name: row.name,
+              category: null,
+              subcategory: null,
+              ingredients_raw,
+              nutrition,
+              attributes: null,
+            },
+            { force: true },
+          );
         } else {
           console.log(
             `         applied=${outcome.applied} gate=${outcome.gate_reason} status=${outcome.ocr_status}`,
