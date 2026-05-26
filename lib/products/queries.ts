@@ -33,6 +33,68 @@ function db() {
 /** Cached probe — prod may not have migration 0006 applied yet. */
 let catalogVisibleColumn: boolean | undefined;
 
+let cachedEligibleTotal: { count: number; at: number } | null = null;
+const ELIGIBLE_COUNT_TTL_MS = 5 * 60 * 1000;
+
+async function countEligibleCatalogProducts(
+  state: CatalogFilterState,
+  diet: DietMode,
+): Promise<number> {
+  if (
+    cachedEligibleTotal &&
+    Date.now() - cachedEligibleTotal.at < ELIGIBLE_COUNT_TTL_MS &&
+    !state.q.trim() &&
+    !state.category &&
+    !state.subcategory &&
+    !state.usecase &&
+    !state.brand &&
+    !state.minScore &&
+    !state.grade &&
+    !state.maxPrice &&
+    diet === "any"
+  ) {
+    return cachedEligibleTotal.count;
+  }
+
+  const supabase = db();
+  const sqlVisible = await catalogHasVisibleColumn();
+  const batchSize = 1000;
+  let dbOffset = 0;
+  let total = 0;
+
+  for (;;) {
+    let q = applyScoreSortFilters(
+      buildCatalogDbQuery(supabase, state, "full", sqlVisible),
+      state,
+    );
+    const { data, error } = await q.range(dbOffset, dbOffset + batchSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as unknown as Record<string, unknown>[];
+    if (!rows.length) break;
+    const batch = sqlVisible ? rows.map(mapListRow) : mapVisibleBatch(rows);
+    total += filterCatalogProducts(batch, state, diet).length;
+    if (rows.length < batchSize) break;
+    dbOffset += rows.length;
+    if (dbOffset >= 25_000) break;
+  }
+
+  if (
+    !state.q.trim() &&
+    !state.category &&
+    !state.subcategory &&
+    !state.usecase &&
+    !state.brand &&
+    !state.minScore &&
+    !state.grade &&
+    !state.maxPrice &&
+    diet === "any"
+  ) {
+    cachedEligibleTotal = { count: total, at: Date.now() };
+  }
+
+  return total;
+}
+
 async function catalogHasVisibleColumn(): Promise<boolean> {
   if (catalogVisibleColumn !== undefined) return catalogVisibleColumn;
   const supabase = db();
@@ -570,7 +632,11 @@ async function paginateCatalogWithClientFilter(opts: {
 
   const sorted = sortCatalogItems(matched, state.sort);
   const items = sorted.slice(start, start + limit);
-  const total = dbExhausted ? sorted.length : Math.max(sorted.length, target + 1);
+  const total = dbExhausted
+    ? sorted.length
+    : page === 1
+      ? await countEligibleCatalogProducts(state, diet)
+      : (cachedEligibleTotal?.count ?? Math.max(sorted.length, start + limit));
 
   return {
     items,
