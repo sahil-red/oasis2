@@ -17,7 +17,7 @@ import {
 } from "@/lib/products/catalog-sort";
 import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
-import type { CoreScore, Grade, Product, ProductNutrition } from "@/lib/supabase/types";
+import type { CoreScore, Grade, Product, ProductNutrition, ScoreBand } from "@/lib/supabase/types";
 
 export { isCatalogSourceRow } from "@/lib/products/catalog-eligibility";
 
@@ -522,6 +522,122 @@ function needsMemorySort(sort: CatalogSort): boolean {
   return sort === "protein-desc";
 }
 
+function isScoreSort(sort: CatalogSort): boolean {
+  return sort === "score-desc" || sort === "score-asc";
+}
+
+function mapScoreSortedRow(row: Record<string, unknown>): ProductListItem {
+  const raw = row.products;
+  const p =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : Array.isArray(raw) && raw[0]
+        ? (raw[0] as Record<string, unknown>)
+        : null;
+  if (!p) {
+    throw new Error("mapScoreSortedRow: missing products embed");
+  }
+  return {
+    id: p.id as string,
+    slug: p.slug as string,
+    name: p.name as string,
+    brand: (p.brand as string | null) ?? null,
+    super_category: (p.super_category as string | null) ?? null,
+    category: (p.category as string | null) ?? null,
+    subcategory: (p.subcategory as string | null) ?? null,
+    l3_category: (p.l3_category as string | null) ?? null,
+    net_weight: (p.net_weight as string | null) ?? null,
+    attributes: null,
+    price_inr: p.price_inr != null ? Number(p.price_inr) : null,
+    mrp_inr: p.mrp_inr != null ? Number(p.mrp_inr) : null,
+    image_urls: (p.image_urls as string[]) ?? [],
+    nutrition: null,
+    ingredients_raw: null,
+    core_scores: {
+      score: row.score as number,
+      grade: row.grade as Grade,
+      band: row.band as ScoreBand,
+    },
+  } as ProductListItem;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyScoreCatalogFilters(q: any, state: CatalogFilterState): any {
+  if (state.grade) q = q.eq("grade", state.grade);
+  if (state.minScore > 0) q = q.gte("score", state.minScore);
+  if (state.brand) q = q.eq("products.brand", state.brand);
+  if (state.category) q = q.eq("products.category", state.category);
+  if (state.subcategory) q = q.eq("products.subcategory", state.subcategory);
+  if (state.usecase) {
+    q = q.filter("products.attributes->>L3 Category", "eq", state.usecase);
+  }
+  if (state.maxPrice > 0) q = q.lte("products.price_inr", state.maxPrice);
+  if (state.q.trim()) {
+    const term = state.q.trim().replace(/[%_]/g, "");
+    if (term) {
+      q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`, { referencedTable: "products" });
+    }
+  }
+  return q;
+}
+
+function buildScoreSortedCatalogQuery(
+  supabase: ReturnType<typeof db>,
+  state: CatalogFilterState,
+  ascending: boolean,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("core_scores")
+    .select(`score, grade, band, products!inner(${GRID_LIST_FIELDS}, catalog_visible)`)
+    .eq("products.platform", "zepto")
+    .eq("products.catalog_visible", true);
+  q = applyScoreCatalogFilters(q, state);
+  return q.order("score", { ascending, nullsFirst: false });
+}
+
+async function countScoreSortedCatalogMatches(
+  supabase: ReturnType<typeof db>,
+  state: CatalogFilterState,
+): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("core_scores")
+    .select("score, products!inner(id)", { count: "exact", head: true })
+    .eq("products.platform", "zepto")
+    .eq("products.catalog_visible", true);
+  q = applyScoreCatalogFilters(q, state);
+  const { count, error } = await q;
+  if (error) throw new Error(error.message || "countScoreSortedCatalogMatches failed");
+  return count ?? 0;
+}
+
+async function paginateCatalogByScoreSql(opts: {
+  page: number;
+  limit: number;
+  state: CatalogFilterState;
+}): Promise<{ items: ProductListItem[]; total: number; hasMore: boolean }> {
+  const { page, limit, state } = opts;
+  const ascending = state.sort === "score-asc";
+  const start = (page - 1) * limit;
+  const supabase = db();
+  const q = buildScoreSortedCatalogQuery(supabase, state, ascending);
+
+  const [{ data, error }, total] = await Promise.all([
+    q.range(start, start + limit - 1),
+    countScoreSortedCatalogMatches(supabase, state),
+  ]);
+
+  if (error) throw new Error(error.message);
+  const items = ((data ?? []) as Record<string, unknown>[]).map(mapScoreSortedRow);
+
+  return {
+    items,
+    total,
+    hasMore: start + items.length < total,
+  };
+}
+
 function countNeedsScoreJoin(state: CatalogFilterState): boolean {
   return (
     state.onlyScored ||
@@ -589,6 +705,10 @@ async function paginateCatalogSql(opts: {
       diet,
       variant: sqlVisible ? variant : "full",
     });
+  }
+
+  if (isScoreSort(state.sort)) {
+    return paginateCatalogByScoreSql({ page, limit, state });
   }
 
   const start = (page - 1) * limit;

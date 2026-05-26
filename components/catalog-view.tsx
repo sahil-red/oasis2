@@ -73,7 +73,7 @@ function buildSearchRequest(
     min: activeState.minScore > 0 ? activeState.minScore : undefined,
     maxprice: activeState.maxPrice > 0 ? activeState.maxPrice : undefined,
     grade: activeState.grade || undefined,
-    sort: goal === "balanced" && activeState.sort !== "score-desc" ? activeState.sort : undefined,
+    sort: goal === "balanced" ? activeState.sort : undefined,
     goal: goal !== "balanced" ? goal : undefined,
     diet: diet !== "any" ? diet : undefined,
     page,
