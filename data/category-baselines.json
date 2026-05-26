@@ -163,6 +163,16 @@
     "Fresh Vegetables::All": {
       "floor": 90, "ceiling": 100,
       "nutrients": { "fiber_g_100g": 0.50, "protein_g_100g": 0.20, "sodium_mg_100g": -0.10 }
+    },
+    "Baby & Toddler Food::Baby Cereal": {
+      "floor": 45, "ceiling": 72,
+      "nutrients": {
+        "protein_g_100g": 0.30,
+        "fiber_g_100g": 0.25,
+        "sugar_g_100g": -0.45,
+        "added_sugar_g_100g": -0.40,
+        "sodium_mg_100g": -0.20
+      }
     }
   }
 }

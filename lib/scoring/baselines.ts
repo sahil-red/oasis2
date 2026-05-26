@@ -45,6 +45,13 @@ const BASELINE_CEILINGS: Record<string, Partial<Record<keyof ProductNutrition | 
     added_sugar_g_100g: 14,
     energy_kcal_100g: 65,
   },
+  "Baby & Toddler Food::Baby Cereal": {
+    protein_g_100g: 15,
+    sugar_g_100g: 8,
+    added_sugar_g_100g: 8,
+    sodium_mg_100g: 400,
+    energy_kcal_100g: 450,
+  },
 };
 
 const GLOBAL_CEILINGS: Record<string, number> = {
@@ -66,6 +73,15 @@ function isChocolateMilk(name: string): boolean {
 
 function isFreshMilk(name: string): boolean {
   return /milk|doodh/i.test(name) && !isChocolateMilk(name);
+}
+
+function isBabyFoodCategory(
+  category: string | null,
+  subcategory: string | null,
+  productName?: string | null,
+): boolean {
+  const hay = `${category ?? ""} ${subcategory ?? ""} ${productName ?? ""}`.toLowerCase();
+  return /\bbaby\b|\btoddler\b|\binfant\b/.test(hay);
 }
 
 /** Resolve which baseline row applies (Blinkit taxonomy + product name). */
@@ -112,6 +128,10 @@ export function resolveBaselineKey(
       return "Soft Drinks & Juices::Packaged Fruit Juices";
     }
     return "Soft Drinks & Juices::Carbonated Drinks";
+  }
+
+  if (isBabyFoodCategory(cat, subcategory, productName)) {
+    return "Baby & Toddler Food::Baby Cereal";
   }
 
   // Fresh produce — match by name to decide fruit vs vegetable baseline.
@@ -290,6 +310,11 @@ export function scoreNutrition(
     if (sugar >= 50) sub = Math.min(sub, 12);
     else if (sugar >= 35) sub = Math.min(sub, 18);
     else if (sugar >= 22) sub = Math.min(sub, 28);
+  }
+
+  if (isBabyFoodCategory(category, subcategory, productName) && typeof sugar === "number") {
+    if (sugar >= 12) sub = Math.min(sub, 28);
+    else if (sugar >= 8) sub = Math.min(sub, 35);
   }
 
   // Sodium — these hold across all categories; processed snacks pile on too much
