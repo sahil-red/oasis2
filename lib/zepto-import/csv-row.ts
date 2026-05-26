@@ -22,6 +22,8 @@ export type ZeptoCsvRow = {
   name: string;
   pack_size: string | null;
   mrp_inr: number | null;
+  /** Selling price; defaults to mrp_inr when CSV has no separate price column. */
+  price_inr: number | null;
   ingredients_raw: string | null;
   nutrition: ProductNutrition | null;
   product_key: string;
@@ -61,6 +63,15 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "formatted_packsize",
   ],
   mrp: ["mrp", "mrp_inr", "max_retail_price", "mrp_paise"],
+  price: [
+    "price",
+    "price_inr",
+    "selling_price",
+    "sale_price",
+    "sp",
+    "discounted_price",
+    "offer_price",
+  ],
   ingredients: ["ingredients", "ingredients_raw", "ingredient", "ingredient_list"],
   nutrition: [
     "nutrition",
@@ -109,7 +120,7 @@ function cell(row: Record<string, string>, col: string | null): string {
   return isNullCsvCell(v) ? "" : v;
 }
 
-function parseMrp(raw: string): number | null {
+function parseInrAmount(raw: string): number | null {
   if (!raw) return null;
   const n = Number.parseFloat(raw.replace(/[^\d.]/g, ""));
   if (!Number.isFinite(n)) return null;
@@ -173,6 +184,9 @@ export function csvRecordToRow(
     subcategory: l3_category ?? subcategory,
   });
 
+  const mrp_inr = parseInrAmount(cell(record, cols.mrp));
+  const selling = parseInrAmount(cell(record, cols.price));
+
   return {
     super_category,
     category: canon.category ?? category,
@@ -181,7 +195,8 @@ export function csvRecordToRow(
     brand,
     name,
     pack_size,
-    mrp_inr: parseMrp(cell(record, cols.mrp)),
+    mrp_inr,
+    price_inr: selling ?? mrp_inr,
     ingredients_raw,
     nutrition,
     product_key,

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
+import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 
 export function ProductCard({
   product,
@@ -14,6 +15,7 @@ export function ProductCard({
 }) {
   const thumb = product.image_urls[0];
   const core = product.core_scores;
+  const price = displayPriceInr(product);
 
   return (
     <article className="group">
@@ -64,14 +66,12 @@ export function ProductCard({
           {product.name}
         </h3>
         <div className="flex items-baseline gap-2 pt-0.5">
-          {product.price_inr != null ? (
+          {price != null ? (
             <span className="text-[15px] font-semibold tabular-nums tracking-tight text-(--color-fg)">
-              ₹{product.price_inr}
+              ₹{price}
             </span>
           ) : null}
-          {product.mrp_inr != null &&
-          product.price_inr != null &&
-          product.mrp_inr > product.price_inr ? (
+          {showMrpStrike(product) ? (
             <span className="text-xs text-(--color-fg-dim) line-through tabular-nums">
               ₹{product.mrp_inr}
             </span>

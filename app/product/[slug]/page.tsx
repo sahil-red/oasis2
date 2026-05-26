@@ -23,6 +23,7 @@ import { SiteNav } from "@/components/site-nav";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
+import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { SubScores } from "@/lib/supabase/types";
 
@@ -52,6 +53,8 @@ export default async function ProductPage({
   const diet = dietFromParam(dietParam);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
+
+  const price = displayPriceInr(product);
 
   const displayNutrition = reconcileNutrition({
     nutrition: product.nutrition,
@@ -136,10 +139,10 @@ export default async function ProductPage({
               {product.net_weight ? ` · ${product.net_weight}` : ""}
             </p>
             <DietBadgeRow badge={dietBadge} selected={diet} />
-            {product.price_inr != null ? (
+            {price != null ? (
               <p className="mt-4 text-2xl font-semibold tabular-nums">
-                ₹{product.price_inr}
-                {product.mrp_inr != null && product.mrp_inr > product.price_inr ? (
+                ₹{price}
+                {showMrpStrike(product) ? (
                   <span className="ml-2 text-base font-normal text-(--color-fg-dim) line-through">
                     ₹{product.mrp_inr}
                   </span>

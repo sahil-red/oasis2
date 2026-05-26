@@ -179,6 +179,7 @@ async function main() {
           category: row.category,
           subcategory: row.subcategory,
           net_weight: row.pack_size,
+          price_inr: row.price_inr,
           mrp_inr: row.mrp_inr,
           ingredients_raw: merged.ingredients_raw,
           nutrition: merged.nutrition,
