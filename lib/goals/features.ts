@@ -284,8 +284,10 @@ function gymCaption(f: GoalFeatures): string {
 
 function bulkCaption(f: GoalFeatures): string {
   const core = f.coreScore ?? 50;
-  if (f.kcal < 80) return "Too light for bulking";
-  if (core < 35 && f.kcal >= 350) return "Cheap empty calories";
+  if (f.kcal < 80 && f.protein < 10) return "Too light for bulking";
+  if (f.isProteinPowder && f.protein >= 50) return "High-protein bulk supplement";
+  if (f.protein >= 25 && f.proteinPer100Kcal >= 10) return "Lean protein for bulking";
+  if (core < 35 && f.kcal >= 350 && f.protein < 12) return "Cheap empty calories";
   if (f.sodium >= 1000 && f.kcal >= 350) return "Calories but very salty";
   if (f.kcal >= 500 && f.protein >= 14) return "Calorie + protein dense";
   if (f.isCocoaRich && f.kcal >= 400) return "Clean calorie-dense bar";
@@ -293,7 +295,7 @@ function bulkCaption(f: GoalFeatures): string {
   if (f.kcal >= 400 && f.protein >= 10) return "Solid bulk option";
   if (f.addedSugar >= 18) return "Bulk via cheap sugar";
   if (f.kcal >= 350) return "Calorie dense";
-  if (f.protein >= 15) return "Protein, modest calories";
+  if (f.protein >= 15) return "Protein-forward bulk pick";
   return "Modest bulk pick";
 }
 

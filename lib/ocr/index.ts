@@ -14,7 +14,15 @@ import { tesseractOcr } from "./tesseract";
 import { readCache, writeCache } from "./cache";
 import type { OcrPayload } from "./types";
 
-export type OcrBackend = "tesseract";
+export type OcrBackend = "tesseract" | "gemini" | "auto";
+
+/** Legacy — Tesseract-only path never throws this; kept for CLI compatibility. */
+export class RemoteBudgetExhausted extends Error {
+  constructor(message = "Remote OCR budget exhausted") {
+    super(message);
+    this.name = "RemoteBudgetExhausted";
+  }
+}
 
 export interface OcrOrchestratorOptions {
   /** Ignored — kept for CLI compatibility. OCR is always Tesseract. */

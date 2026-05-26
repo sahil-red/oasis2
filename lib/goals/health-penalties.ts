@@ -21,7 +21,13 @@ export function goalHealthPenalty(goal: GoalId, f: GoalFeatures): number {
     penalty += goal === "kids" ? 12 : 8;
   }
 
-  if (goal === "bulk" && f.kcal >= 350 && (sodium >= 600 || f.additiveBurden >= 3)) {
+  if (
+    goal === "bulk" &&
+    !f.isProteinPowder &&
+    f.kcal >= 350 &&
+    f.protein < 15 &&
+    (sodium >= 600 || f.additiveBurden >= 3)
+  ) {
     penalty += 10;
   }
 

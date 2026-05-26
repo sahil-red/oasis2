@@ -65,10 +65,15 @@ export function ProductCard({
         <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
           {product.name}
         </h3>
-        <div className="flex items-baseline gap-2 pt-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-0.5">
           {price != null ? (
             <span className="text-[15px] font-semibold tabular-nums tracking-tight text-(--color-fg)">
               ₹{price}
+            </span>
+          ) : null}
+          {product.net_weight ? (
+            <span className="text-xs text-(--color-fg-dim) tabular-nums">
+              {product.net_weight}
             </span>
           ) : null}
           {showMrpStrike(product) ? (

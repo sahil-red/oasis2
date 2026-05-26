@@ -34,7 +34,11 @@ function buildHeroReasons(goal: GoalId, f: ReturnType<typeof buildGoalFeatures>,
     if (goal === "kids" && f.sodium >= 500 && !captionLower.includes("salt")) add("High sodium for children");
   }
   if (goal === "gym" || goal === "protein-budget" || goal === "bulk") {
-    if (f.protein >= 15 && !captionLower.includes("protein")) add("Decent protein density");
+    if (goal === "bulk" && f.isProteinPowder && f.protein >= 40) {
+      add("Concentrated protein for bulking");
+    } else if (f.protein >= 15 && !captionLower.includes("protein")) {
+      add("Decent protein density");
+    }
   }
   if (goal === "fat-loss" && f.fiber >= 5 && !captionLower.includes("fibre")) add("Good fibre");
   if (goal === "diabetic" || goal === "pcos") {
@@ -104,21 +108,33 @@ export function computeGoalFit(
         fit = opts.core_score ?? 50;
         break;
       }
-      // Anchor to core quality so junky calories can't beat clean calorie-dense food.
-      const qualityAnchor = (opts.core_score ?? 50) * 0.30;
+      // Light quality anchor — bulk prioritises protein + calories over label polish.
+      const qualityAnchor = (opts.core_score ?? 50) * 0.18;
+      const calorieScore = Math.min(22, Math.max(0, (f.kcal - 160) * 0.07));
+      const proteinScore = Math.min(38, f.protein * 2.6);
+      const proteinDensity = Math.min(18, f.proteinPer100Kcal * 2.1);
       fit =
         qualityAnchor +
-        Math.min(28, Math.max(0, (f.kcal - 180) * 0.09)) +
-        Math.min(24, f.protein * 1.8) +
+        calorieScore +
+        proteinScore +
+        proteinDensity +
         Math.min(10, f.kcalPerRupee100 * 0.022) +
-        (f.carbs > 35 ? 6 : f.carbs > 22 ? 3 : 0) -
+        (f.carbs > 35 ? 4 : f.carbs > 22 ? 2 : 0) -
         f.addedSugar * 0.9 -
-        f.additiveBurden * 5 -
+        f.additiveBurden * 4 -
         Math.max(0, f.sodium - 250) * 0.016 -
-        Math.max(0, f.saturatedFat - 8) * 0.6;
-      if (f.addedSugar > 18 && !f.isStaple) fit = Math.min(fit, 48);
+        Math.max(0, f.saturatedFat - 8) * 0.5;
+      // Concentrated protein (powders, paneer, chicken) is a bulk win even when low-carb.
+      if (f.isProteinPowder && f.protein >= 40) {
+        fit += 14;
+      } else if (f.protein >= 25 && f.proteinPer100Kcal >= 10) {
+        fit += 10;
+      } else if (f.protein >= 15 && f.proteinPer100Kcal >= 8) {
+        fit += 5;
+      }
+      if (f.addedSugar > 18 && !f.isStaple && !f.isProteinPowder) fit = Math.min(fit, 48);
       if (f.sodium >= 1000) fit = Math.min(fit, 42);
-      if (f.kcal < 200) fit = Math.min(fit, 40);
+      if (f.kcal < 200 && f.protein < 15) fit = Math.min(fit, 40);
       break;
     }
     case "diabetic": {
