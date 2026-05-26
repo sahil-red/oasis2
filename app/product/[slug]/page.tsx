@@ -146,7 +146,9 @@ export default async function ProductPage({
               {product.name}
             </h1>
             <p className="mt-2 text-sm text-(--color-fg-muted)">
-              {[product.category, product.subcategory].filter(Boolean).join(" · ")}
+              {[product.category, product.subcategory, product.l3_category]
+                .filter(Boolean)
+                .join(" · ")}
               {product.net_weight ? ` · ${product.net_weight}` : ""}
             </p>
             <DietBadgeRow badge={dietBadge} selected={diet} />

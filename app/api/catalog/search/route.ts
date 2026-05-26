@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     q: sp.get("q") ?? undefined,
     category: sp.get("category") ?? undefined,
     subcategory: sp.get("subcategory") ?? undefined,
+    usecase: sp.get("usecase") ?? undefined,
     brand: sp.get("brand") ?? undefined,
     page: sp.has("page") ? Number(sp.get("page")) : 1,
     limit: sp.has("limit") ? Number(sp.get("limit")) : 96,

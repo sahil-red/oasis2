@@ -177,20 +177,26 @@ export function csvRecordToRow(
   const product_url = `https://www.zepto.com/pn/${slugifyForUrl(name)}/pvid/${variantId}`;
   const image_urls = parseCsvImageUrls(cell(record, cols.image_link));
 
-  const canon = mapToCanonicalTaxonomy({
-    platform: "zepto",
-    super_category,
-    category,
-    subcategory: l3_category ?? subcategory,
-  });
+  // Zepto CSV category_name is already the L1 aisle. Only remap generic supers
+  // (legacy scrape). Never map via l3 use-case labels like "Fruit Bun".
+  let displayCategory = category;
+  if (category && /^(grocery and kitchen|snacks and drinks)$/i.test(category.trim())) {
+    const canon = mapToCanonicalTaxonomy({
+      platform: "zepto",
+      super_category: super_category ?? category,
+      category,
+      subcategory: subcategory ?? null,
+    });
+    displayCategory = canon.category ?? category;
+  }
 
   const mrp_inr = parseInrAmount(cell(record, cols.mrp));
   const selling = parseInrAmount(cell(record, cols.price));
 
   return {
-    super_category,
-    category: canon.category ?? category,
-    subcategory: canon.subcategory ?? subcategory,
+    super_category: super_category ?? category,
+    category: displayCategory,
+    subcategory,
     l3_category,
     brand,
     name,

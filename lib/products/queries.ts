@@ -12,7 +12,7 @@ import {
   filterCatalogProducts,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
-import { productAisle, productShelf } from "@/lib/products/catalog-meta";
+import { productAisle, productShelf, productUsecase } from "@/lib/products/catalog-meta";
 
 /** Rows eligible for public catalog (CSV import with real variant UUID). */
 export function isCatalogSourceRow(p: {
@@ -143,6 +143,7 @@ export type ProductDetail = Product & {
 export type CatalogFilters = {
   categories: string[];
   subcategories: string[];
+  usecases: string[];
   brands: string[];
 };
 
@@ -281,6 +282,7 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
   const rows = await scanVisibleZeptoRows({ category });
   const categories = new Set<string>();
   const subcategories = new Set<string>();
+  const usecases = new Set<string>();
   const brands = new Set<string>();
 
   for (const row of rows) {
@@ -290,6 +292,8 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
     if (!category || aisle === category) {
       const shelf = productShelf(mapped);
       if (shelf) subcategories.add(shelf);
+      const usecase = productUsecase(mapped);
+      if (usecase) usecases.add(usecase);
       if (mapped.brand) brands.add(mapped.brand);
     }
   }
@@ -298,6 +302,7 @@ export async function getCatalogFilters(category?: string): Promise<CatalogFilte
   return {
     categories: [...categories].sort(sort),
     subcategories: [...subcategories].sort(sort),
+    usecases: [...usecases].sort(sort),
     brands: [...brands].sort(sort),
   };
 }
@@ -339,6 +344,8 @@ function buildCatalogDbQuery(
   opts: {
     q?: string;
     category?: string;
+    subcategory?: string;
+    usecase?: string;
     brand?: string;
     onlyScored?: boolean;
   },
@@ -351,6 +358,10 @@ function buildCatalogDbQuery(
   if (opts.onlyScored) q = q.not("core_scores", "is", null);
   if (opts.brand) q = q.eq("brand", opts.brand);
   if (opts.category) q = q.eq("category", opts.category);
+  if (opts.subcategory) q = q.eq("subcategory", opts.subcategory);
+  if (opts.usecase) {
+    q = q.filter("attributes->>L3 Category", "eq", opts.usecase);
+  }
   if (opts.q?.trim()) {
     const term = opts.q.trim().replace(/[%_]/g, "");
     if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
@@ -372,6 +383,8 @@ async function fetchFilteredCatalog(
     let q = buildCatalogDbQuery(supabase, {
       q: state.q,
       category: state.category || undefined,
+      subcategory: state.subcategory || undefined,
+      usecase: state.usecase || undefined,
       brand: state.brand || undefined,
       onlyScored: state.onlyScored,
     });
@@ -400,6 +413,7 @@ function hasHeavyFilters(state: CatalogFilterState, diet: DietMode): boolean {
   return Boolean(
     state.q.trim() ||
       state.subcategory ||
+      state.usecase ||
       state.category ||
       state.brand ||
       state.onlyScored ||
@@ -426,6 +440,8 @@ async function paginateBalancedCatalog(opts: {
     let q = buildCatalogDbQuery(supabase, {
       q: state.q,
       category: state.category || undefined,
+      subcategory: state.subcategory || undefined,
+      usecase: state.usecase || undefined,
       brand: state.brand || undefined,
       onlyScored: state.onlyScored,
     })
@@ -458,6 +474,7 @@ export async function searchCatalogGrid(opts: {
   q?: string;
   category?: string;
   subcategory?: string;
+  usecase?: string;
   brand?: string;
   page?: number;
   limit?: number;
@@ -473,6 +490,7 @@ export async function searchCatalogGrid(opts: {
     q: opts.q?.trim() ?? "",
     category: opts.category ?? "",
     subcategory: opts.subcategory ?? "",
+    usecase: opts.usecase ?? "",
     brand: opts.brand ?? "",
     onlyScored: opts.onlyScored ?? false,
   };
@@ -482,14 +500,12 @@ export async function searchCatalogGrid(opts: {
 
   if (!goalSort && !heavy) {
     const paged = await paginateBalancedCatalog({ page, limit, state, diet });
-    const meta = page === 1 ? await countVisibleCatalog() : null;
-    const total = meta?.visible ?? paged.total;
     return {
       items: paged.items.map(toGridItem),
       goalFits: {},
       page,
       limit,
-      total,
+      total: paged.total,
       hasMore: paged.hasMore,
     };
   }
@@ -702,7 +718,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       id, zepto_sku, slug, name, brand, super_category, category, subcategory,
       net_weight, price_inr, mrp_inr, image_urls, product_url, barcode,
       ingredients_raw, nutrition, attributes, raw_payload, scraped_at, updated_at,
-      platform, data_source, ocr_status, ocr_payload, ocr_image_url,
+      platform, ocr_status, ocr_payload, ocr_image_url,
       core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at)
     `,
     )
@@ -745,7 +761,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     scraped_at: row.scraped_at as string,
     updated_at: row.updated_at as string,
     platform: (row.platform as string | null) ?? null,
-    data_source: (row.data_source as string | null) ?? null,
+    data_source: row.platform === "zepto" ? "csv" : "scrape",
     ocr_status: (row.ocr_status as string | null) ?? null,
     ocr_payload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
     ocr_image_url: (row.ocr_image_url as string | null) ?? null,

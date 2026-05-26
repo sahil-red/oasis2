@@ -1,45 +1,41 @@
 import type { ProductListItem } from "@/lib/products/queries";
 
-/** Blinkit L1 aisle on listing scrape (e.g. "Snacks & Munchies"). */
+/** L1 aisle from CSV category_name. */
 export function productAisle(p: Pick<ProductListItem, "category" | "super_category">): string | null {
   return p.category ?? p.super_category ?? null;
 }
 
-/** Finer shelf label: DB subcategory, else PDP attribute (Type, etc.). */
+/** L2 type from CSV subcategory_name. */
 export function productShelf(
   p: Pick<ProductListItem, "subcategory" | "attributes">,
 ): string | null {
   if (p.subcategory?.trim()) return p.subcategory.trim();
-  const attrs = p.attributes;
-  if (!attrs || typeof attrs !== "object") return null;
-  for (const key of ["Type", "type", "Subcategory", "Category", "Product Type"]) {
-    const v = attrs[key];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
   return null;
 }
 
-/** Products whose names clearly belong elsewhere (bad listing category on Blinkit). */
-const AISLE_MISMATCH: Record<string, RegExp> = {
-  "Cold Drinks & Juices":
-    /\b(ketchup|sauce|masala|atta|dal|rice|chicken|meat|paneer|bread|biscuit|cookie|chips?|namkeen)\b/i,
-  "Fruits & Vegetables":
-    /\b(ketchup|sauce|masala|atta|dal|rice|chicken|biscuit|cookie|chocolate|drink|juice|soda|cola)\b/i,
-  "Snacks & Munchies":
-    /\b(ketchup|masala|atta|dal|rice|chicken|paneer|milk|curd|yogurt|juice|soda)\b/i,
-};
+/** L3 use-case from CSV l3_category_name (stored in attributes when column absent). */
+export function productUsecase(
+  p: Pick<ProductListItem, "l3_category" | "attributes">,
+): string | null {
+  if (p.l3_category?.trim()) return p.l3_category.trim();
+  const v = p.attributes?.["L3 Category"];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+export function productMatchesUsecase(
+  p: Pick<ProductListItem, "l3_category" | "attributes">,
+  usecase: string,
+): boolean {
+  if (!usecase) return true;
+  return productUsecase(p) === usecase;
+}
 
 export function productMatchesAisle(
-  p: Pick<ProductListItem, "category" | "super_category" | "name">,
+  p: Pick<ProductListItem, "category" | "super_category">,
   aisle: string,
 ): boolean {
   if (!aisle) return true;
-  const a = productAisle(p);
-  if (!a) return false;
-  if (a !== aisle) return false;
-  const block = AISLE_MISMATCH[aisle];
-  if (block && block.test(p.name)) return false;
-  return true;
+  return productAisle(p) === aisle;
 }
 
 export function productMatchesShelf(

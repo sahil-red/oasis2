@@ -6,6 +6,7 @@ type Params = {
   q?: string;
   category?: string;
   subcategory?: string;
+  usecase?: string;
   brand?: string;
   scored?: string;
   goal?: string;

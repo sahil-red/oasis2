@@ -4,7 +4,9 @@ import {
   productAisle,
   productMatchesAisle,
   productMatchesShelf,
+  productMatchesUsecase,
   productShelf,
+  productUsecase,
 } from "@/lib/products/catalog-meta";
 import type { CatalogFilters, ProductListItem } from "@/lib/products/queries";
 
@@ -12,6 +14,7 @@ export type CatalogFilterState = {
   q: string;
   category: string;
   subcategory: string;
+  usecase: string;
   brand: string;
   onlyScored: boolean;
 };
@@ -27,11 +30,13 @@ export function filterCatalogProducts(
     if (state.onlyScored && !p.core_scores) return false;
     if (!productMatchesAisle(p, state.category)) return false;
     if (!productMatchesShelf(p, state.subcategory)) return false;
+    if (!productMatchesUsecase(p, state.usecase)) return false;
     if (state.brand && p.brand !== state.brand) return false;
     if (diet !== "any" && !isDietCompatible(diet, p).ok) return false;
     if (!q) return true;
     const shelf = productShelf(p);
-    const hay = [p.name, p.brand, productAisle(p), shelf]
+    const usecase = productUsecase(p);
+    const hay = [p.name, p.brand, productAisle(p), shelf, usecase]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -48,6 +53,7 @@ export function buildFilterOptions(
     : products;
   const categories = new Set<string>();
   const subcategories = new Set<string>();
+  const usecases = new Set<string>();
   const brands = new Set<string>();
 
   for (const p of products) {
@@ -57,6 +63,8 @@ export function buildFilterOptions(
   for (const p of pool) {
     const shelf = productShelf(p);
     if (shelf) subcategories.add(shelf);
+    const usecase = productUsecase(p);
+    if (usecase) usecases.add(usecase);
     if (p.brand) brands.add(p.brand);
   }
 
@@ -64,6 +72,7 @@ export function buildFilterOptions(
   return {
     categories: [...categories].sort(sort),
     subcategories: [...subcategories].sort(sort),
+    usecases: [...usecases].sort(sort),
     brands: [...brands].sort(sort),
   };
 }
@@ -72,6 +81,7 @@ export function parseCatalogParams(params: {
   q?: string;
   category?: string;
   subcategory?: string;
+  usecase?: string;
   brand?: string;
   scored?: string;
 }): CatalogFilterState {
@@ -79,6 +89,7 @@ export function parseCatalogParams(params: {
     q: params.q?.trim() ?? "",
     category: params.category ?? "",
     subcategory: params.subcategory ?? "",
+    usecase: params.usecase ?? "",
     brand: params.brand ?? "",
     onlyScored: params.scored === "1",
   };
@@ -93,6 +104,7 @@ export function catalogParamsToSearch(
   if (state.q.trim()) p.set("q", state.q.trim());
   if (state.category) p.set("category", state.category);
   if (state.subcategory) p.set("subcategory", state.subcategory);
+  if (state.usecase) p.set("usecase", state.usecase);
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
   if (goal && goal !== "balanced") p.set("goal", goal);

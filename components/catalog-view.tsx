@@ -25,6 +25,7 @@ type Params = {
   q?: string;
   category?: string;
   subcategory?: string;
+  usecase?: string;
   brand?: string;
   scored?: string;
   goal?: string;
@@ -48,10 +49,15 @@ function normalizeState(
   if (next.category && !options.categories.includes(next.category)) {
     next.category = "";
     next.subcategory = "";
+    next.usecase = "";
     next.brand = "";
   }
   if (next.subcategory && !options.subcategories.includes(next.subcategory)) {
     next.subcategory = "";
+    next.usecase = "";
+  }
+  if (next.usecase && !options.usecases.includes(next.usecase)) {
+    next.usecase = "";
   }
   if (next.brand && !options.brands.includes(next.brand)) {
     next.brand = "";
@@ -111,6 +117,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const filterOptions = meta?.filters ?? {
     categories: [],
     subcategories: [],
+    usecases: [],
     brands: [],
   };
 
@@ -125,6 +132,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         q: debouncedQ.trim(),
         category: activeState.category,
         subcategory: activeState.subcategory,
+        usecase: activeState.usecase,
         brand: activeState.brand,
         onlyScored: activeState.onlyScored,
         goal,
@@ -160,6 +168,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
           q: debouncedQ.trim() || undefined,
           category: activeState.category || undefined,
           subcategory: activeState.subcategory || undefined,
+          usecase: activeState.usecase || undefined,
           brand: activeState.brand || undefined,
           scored: activeState.onlyScored ? "1" : undefined,
           goal: goal !== "balanced" ? goal : undefined,
@@ -192,6 +201,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         q: debouncedQ.trim() || undefined,
         category: activeState.category || undefined,
         subcategory: activeState.subcategory || undefined,
+        usecase: activeState.usecase || undefined,
         brand: activeState.brand || undefined,
         scored: activeState.onlyScored ? "1" : undefined,
         goal: goal !== "balanced" ? goal : undefined,
@@ -236,7 +246,14 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
           partial.category !== prev.category
         ) {
           next.subcategory = "";
+          next.usecase = "";
           next.brand = "";
+        }
+        if (
+          partial.subcategory !== undefined &&
+          partial.subcategory !== prev.subcategory
+        ) {
+          next.usecase = "";
         }
         return next;
       });
@@ -247,6 +264,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
     activeState.q ||
       activeState.category ||
       activeState.subcategory ||
+      activeState.usecase ||
       activeState.brand ||
       activeState.onlyScored,
   );
@@ -257,6 +275,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
         q: "",
         category: "",
         subcategory: "",
+        usecase: "",
         brand: "",
         onlyScored: false,
       });
@@ -373,6 +392,23 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
               {filterOptions.subcategories.map((s) => (
                 <option key={s} value={s}>
                   {s}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="min-w-[9rem] flex-1 space-y-1 sm:max-w-[12rem]">
+            <span className="text-[11px] text-(--color-fg-dim)">Usecase</span>
+            <select
+              value={activeState.usecase}
+              onChange={(e) => patch({ usecase: e.target.value })}
+              className={selectClass}
+              disabled={!filterOptions.usecases.length}
+            >
+              <option value="">All</option>
+              {filterOptions.usecases.map((u) => (
+                <option key={u} value={u}>
+                  {u}
                 </option>
               ))}
             </select>

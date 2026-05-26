@@ -24,6 +24,7 @@ import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import { detectCatalogDbSchema, l3FromRow } from "@/lib/catalog/db-schema";
 import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
+import { isPackagedProduceLike } from "@/lib/catalog/packaged-produce";
 import { matchProduce, produceLabelHint, produceToNutrition } from "@/lib/produce/seed";
 import {
   csvRecordToRow,
@@ -283,9 +284,12 @@ async function main() {
         continue;
       }
       const l3 = l3FromRow(row as { attributes?: Record<string, string> | null; subcategory?: string | null });
-      const blob = `${row.name} ${row.category} ${row.subcategory} ${l3 ?? ""}`;
+      const name = row.name as string;
+      const sub = row.subcategory as string | null;
+      if (isPackagedProduceLike(name, sub)) continue;
+      const blob = `${name} ${row.category} ${sub} ${l3 ?? ""}`;
       if (!PRODUCE_RE.test(blob)) continue;
-      const entry = matchProduce(row.name as string);
+      const entry = matchProduce(name);
       if (!entry) continue;
       const nutrition = produceToNutrition(entry);
       const ingredients_raw =

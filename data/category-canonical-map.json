@@ -1,26 +1,32 @@
 {
-  "version": 1,
+  "version": 2,
   "notes": [
     "Maps platform taxonomy to unified Blinkit-style L1 aisles for scoring baselines + catalog filters.",
-    "Zepto uses parent super + subcategory shelf; Blinkit already uses L1 in category."
+    "Zepto uses parent super + subcategory shelf; Blinkit already uses L1 in category.",
+    "Rule order matters: specific packaged-food shelves before generic fruit/vegetable patterns."
   ],
   "zepto_super_default": {
     "Grocery And Kitchen": "Groceries",
     "Snacks And Drinks": "Snacks & Munchies"
   },
   "subcategory_aisle_rules": [
+    { "pattern": "(?i)fruit bun|fruit buns", "aisle": "Bakery & Biscuits" },
+    { "pattern": "(?i)dry fruits? mix|trail mix|panchmeva|nut mix|festive.*nut|smoked almond", "aisle": "Snacks & Munchies" },
+    { "pattern": "(?i)fruit juice|fruit juices|mixed fruit juice|nectar|aamras|fruit drink|real fruit power", "aisle": "Cold Drinks & Juices" },
+    { "pattern": "(?i)dry fruit|nuts?|almond|cashew|walnut|pista|raisin|dates|anjeer|makhana|seeds", "aisle": "Atta, Rice & Dal" },
+    { "pattern": "(?i)frozen|frozen fruit|frozen vegetable|frozen pulp|frozen peas|frozen corn", "aisle": "Snacks & Munchies" },
+    { "pattern": "(?i)biscuit|cookie|rusk|bakery|bread|bun|pav|muffin|croissant", "aisle": "Bakery & Biscuits" },
+    { "pattern": "(?i)juice|cold drink|soft drink|soda|water|energy drink|sharbat|sherbet", "aisle": "Cold Drinks & Juices" },
     { "pattern": "(?i)milk|curd|bread|egg|paneer|cheese|butter|yogurt|shrikhand|dahi|cream|batter", "aisle": "Dairy, Bread & Eggs" },
-    { "pattern": "(?i)fruit|vegetable|mango|onion|potato|tomato|leafy|sprout|flower|exotic|melon", "aisle": "Fruits & Vegetables" },
-    { "pattern": "(?i)chicken|mutton|meat|fish|egg|cold cut|sea food|seafood", "aisle": "Chicken, Meat & Fish" },
-    { "pattern": "(?i)atta|rice|dal|masala|oil|ghee|flour|besan|spice|salt|sugar|dry fruit|nut", "aisle": "Atta, Rice & Dal" },
-    { "pattern": "(?i)masala|spice|powder|paste|pickle|chutney", "aisle": "Masala, Oil & More" },
+    { "pattern": "(?i)chicken|mutton|meat|fish|cold cut|sea food|seafood", "aisle": "Chicken, Meat & Fish" },
+    { "pattern": "(?i)atta|rice|dal|masala|oil|ghee|flour|besan|spice|salt|sugar", "aisle": "Atta, Rice & Dal" },
+    { "pattern": "(?i)dried fig|dried anjeer|dates|dried fruit|dried red chilli|chilli flakes|chilli|chili|pepper|spice|flakes|masala", "aisle": "Masala, Oil & More" },
     { "pattern": "(?i)tea|coffee|health drink|drink mix", "aisle": "Tea, Coffee & Health Drink" },
-    { "pattern": "(?i)juice|cold drink|soft drink|soda|water|energy drink", "aisle": "Cold Drinks & Juices" },
-    { "pattern": "(?i)chips|namkeen|snack|cracker|wafer|biscuit|cookie|rusk|chocolate|candy|sweet|mithai|ice cream|frozen|kulfi|cone", "aisle": "Snacks & Munchies" },
-    { "pattern": "(?i)biscuit|cookie|rusk|bakery|bread|bun", "aisle": "Bakery & Biscuits" },
+    { "pattern": "(?i)chips|namkeen|snack|cracker|wafer|chocolate|candy|sweet|mithai|ice cream|kulfi|cone", "aisle": "Snacks & Munchies" },
     { "pattern": "(?i)noodle|pasta|breakfast|muesli|cereal|oats|honey|spread|sauce|ketchup|instant|ready to eat|infant food|baby food", "aisle": "Breakfast & Instant Food" },
     { "pattern": "(?i)protein|whey|creatine|supplement|bcaa|mass gainer", "aisle": "Tea, Coffee & Health Drink" },
-    { "pattern": "(?i)organic|healthy", "aisle": "Organic & Healthy Living" }
+    { "pattern": "(?i)organic|healthy", "aisle": "Organic & Healthy Living" },
+    { "pattern": "(?i)fresh fruits?|fresh vegetables?|leafy|herbs|exotic fruits?|seasonal fruits?|vegetables|onion|potato|tomato|mango|apple|banana|grape|berry|spinach|coriander|mint|broccoli|cauliflower|capsicum|carrot|beetroot|lemon|orange|papaya|guava|pear|pineapple|watermelon|pomegranate|drumstick|beans|peas|mushroom|cabbage|cucumber|ginger|garlic|chilli|lettuce|avocado|kiwi|melon|sapota|cherry|plum|peach|fig|jackfruit|beet|radish|turnip|sweet corn|baby corn|gourd|brinjal|okra", "aisle": "Fruits & Vegetables" }
   ],
   "blinkit_aisle_aliases": {
     "Sweet Tooth": "Sweet Tooth",

@@ -1,5 +1,6 @@
 import produceData from "@/data/fresh-produce.json";
 import referenceData from "@/data/reference-foods.json";
+import { isPackagedProduceLike } from "@/lib/catalog/packaged-produce";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 export type ProduceKind =
@@ -229,6 +230,7 @@ export function matchReferenceFood(
 ): ReferenceMatch | null {
   const normalized = normalizeProductName(name);
   if (!normalized) return null;
+  if (isPackagedProduceLike(name, opts?.subcategory)) return null;
 
   const minConfidence = opts?.minConfidence ?? 0.55;
   const exact = tryExactAlias(normalized);

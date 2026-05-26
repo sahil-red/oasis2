@@ -1,5 +1,6 @@
 import { additiveGoalBurden, scoreIngredientSignals } from "@/lib/scoring/ingredient-signals";
 import { matchAdditives } from "@/lib/scoring/rules";
+import { isFreshWholeProduce } from "@/lib/catalog/packaged-produce";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { vegetarianLabelHint } from "@/lib/goals/vegetarian";
 import { proteinQualityInsight, type ProteinQualityInsight } from "@/lib/goals/protein-quality";
@@ -121,11 +122,11 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
   const isSugaryDrink =
     /\b(cola|soda|soft drink|fizzy|carbonated|drink|beverage|juice|nimbooz|sherbet)\b/i.test(t) &&
     sugar >= 6;
-  const isFreshProduce =
-    /\b(fresh fruit|fresh vegetable|vegetables)\b/i.test(t) ||
-    /(Fresh Fruits|Fresh Vegetables|Fruits\s*&\s*Vegetables)/i.test(
-      `${input.category ?? ""} ${input.subcategory ?? ""}`,
-    );
+  const isFreshProduce = isFreshWholeProduce({
+    name: input.name,
+    category: input.category,
+    subcategory: input.subcategory,
+  });
   const hasIngredientData = ((input.ingredients_raw ?? "").trim().length > 0) || ((input.attributes?.["Ingredients"] ?? "").trim().length > 0);
 
   return {
