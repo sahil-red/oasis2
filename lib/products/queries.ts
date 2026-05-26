@@ -522,19 +522,33 @@ function needsMemorySort(sort: CatalogSort): boolean {
   return sort === "protein-desc";
 }
 
+function countNeedsScoreJoin(state: CatalogFilterState): boolean {
+  return (
+    state.onlyScored ||
+    state.minScore > 0 ||
+    Boolean(state.grade) ||
+    state.sort === "score-desc" ||
+    state.sort === "score-asc"
+  );
+}
+
 async function countCatalogMatches(
   supabase: ReturnType<typeof db>,
   state: CatalogFilterState,
   sqlVisible = true,
 ): Promise<number> {
+  const scoreJoin = countNeedsScoreJoin(state);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase as any)
     .from("products")
-    .select("id", { count: "exact", head: true })
+    .select(scoreJoin ? "id, core_scores!inner(score)" : "id", {
+      count: "exact",
+      head: true,
+    })
     .eq("platform", "zepto");
   if (sqlVisible) q = q.eq("catalog_visible", true);
 
-  if (state.onlyScored) q = q.not("core_scores", "is", null);
+  if (!scoreJoin && state.onlyScored) q = q.not("core_scores", "is", null);
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
   if (state.brand) q = q.eq("brand", state.brand);
@@ -548,12 +562,12 @@ async function countCatalogMatches(
     const term = state.q.trim().replace(/[%_]/g, "");
     if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
   }
-  if (state.sort === "score-desc" || state.sort === "score-asc") {
+  if (!scoreJoin && (state.sort === "score-desc" || state.sort === "score-asc")) {
     q = q.not("core_scores", "is", null);
   }
 
   const { count, error } = await q;
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(error.message || "countCatalogMatches failed");
   return count ?? 0;
 }
 
