@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
-import { readStoredGoal, writeStoredGoal } from "@/lib/goals/storage";
+import { writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
-import { readDietMode, writeDietMode } from "@/lib/diet/storage";
+import { writeDietMode } from "@/lib/diet/storage";
+import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import {
   catalogContextQuery,
   catalogParamsToSearch,
@@ -83,13 +84,27 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 function goalFromParams(params: Params): GoalId {
-  if (params.goal) return goalFromParam(params.goal);
-  return readStoredGoal();
+  return params.goal ? goalFromParam(params.goal) : "balanced";
 }
 
 function dietFromParams(params: Params): DietMode {
-  if (params.diet) return dietFromParam(params.diet);
-  return readDietMode();
+  return params.diet ? dietFromParam(params.diet) : "any";
+}
+
+function paramsKey(params: Params): string {
+  return JSON.stringify(params);
+}
+
+function syncFromParams(params: Params): {
+  state: CatalogFilterState;
+  goal: GoalId;
+  diet: DietMode;
+} {
+  return {
+    state: parseCatalogParams(params),
+    goal: goalFromParams(params),
+    diet: dietFromParams(params),
+  };
 }
 
 export function CatalogView({ initialParams }: { initialParams: Params }) {
@@ -109,8 +124,43 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
   const [showGoalHint, setShowGoalHint] = useState(false);
   const [loading, setLoading] = useState(true);
   const fetchGen = useRef(0);
+  const skipParamsSync = useRef(true);
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
+
+  const initialKey = paramsKey(initialParams);
+  useEffect(() => {
+    if (skipParamsSync.current) {
+      skipParamsSync.current = false;
+      return;
+    }
+    const next = syncFromParams(initialParams);
+    setState(next.state);
+    setGoal(next.goal);
+    setDiet(next.diet);
+  }, [initialKey]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const p: Params = {
+        q: sp.get("q") ?? undefined,
+        category: sp.get("category") ?? undefined,
+        subcategory: sp.get("subcategory") ?? undefined,
+        usecase: sp.get("usecase") ?? undefined,
+        brand: sp.get("brand") ?? undefined,
+        scored: sp.get("scored") ?? undefined,
+        goal: sp.get("goal") ?? undefined,
+        diet: sp.get("diet") ?? undefined,
+      };
+      const next = syncFromParams(p);
+      setState(next.state);
+      setGoal(next.goal);
+      setDiet(next.diet);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     setShowGoalHint(
@@ -235,6 +285,7 @@ export function CatalogView({ initialParams }: { initialParams: Params }) {
 
   useEffect(() => {
     const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
+    saveCatalogReturnUrl(path);
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== path) {
       window.history.replaceState(null, "", path);

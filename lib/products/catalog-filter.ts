@@ -1,5 +1,7 @@
 import { isDietCompatible } from "@/lib/diet/match";
 import type { DietMode } from "@/lib/diet/types";
+import { dietFromParam } from "@/lib/diet/types";
+import { goalFromParam } from "@/lib/goals/types";
 import {
   productAisle,
   productMatchesAisle,
@@ -120,4 +122,21 @@ export function catalogContextQuery(
   opts?: { diet?: DietMode },
 ): string {
   return catalogParamsToSearch(state, goal, opts);
+}
+
+/** Rebuild /search URL from PDP query params (pass-through from catalog → product links). */
+export function catalogReturnHref(params: {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  usecase?: string;
+  brand?: string;
+  scored?: string;
+  goal?: string;
+  diet?: string;
+}): string {
+  const state = parseCatalogParams(params);
+  const goal = params.goal ? goalFromParam(params.goal) : "balanced";
+  const diet = params.diet ? dietFromParam(params.diet) : "any";
+  return `/search${catalogParamsToSearch(state, goal, { diet })}`;
 }

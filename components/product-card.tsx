@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
+import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
@@ -29,6 +30,7 @@ export function ProductCard({
           className="absolute inset-0 z-0 block"
           tabIndex={-1}
           aria-hidden
+          onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
         >
           {thumb ? (
             <Image
@@ -60,7 +62,11 @@ export function ProductCard({
         ) : null}
       </div>
 
-      <Link href={href} className="mt-2.5 block space-y-1">
+      <Link
+        href={href}
+        className="mt-2.5 block space-y-1"
+        onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+      >
         {product.brand ? (
           <p className="truncate text-[11px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
             {product.brand}
