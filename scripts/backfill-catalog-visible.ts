@@ -57,11 +57,25 @@ async function main() {
       }
     }
 
-    for (let i = 0; i < patches.length; i += 100) {
-      const chunk = patches.slice(i, i + 100);
-      const { error: upErr } = await supabase.from("products").upsert(chunk);
-      if (upErr) throw new Error(upErr.message);
-      updated += chunk.length;
+    if (patches.length) {
+      const toTrue = patches.filter((p) => p.catalog_visible).map((p) => p.id);
+      const toFalse = patches.filter((p) => !p.catalog_visible).map((p) => p.id);
+
+      if (toTrue.length) {
+        const { error: upErr } = await supabase
+          .from("products")
+          .update({ catalog_visible: true })
+          .in("id", toTrue);
+        if (upErr) throw new Error(upErr.message);
+      }
+      if (toFalse.length) {
+        const { error: upErr } = await supabase
+          .from("products")
+          .update({ catalog_visible: false })
+          .in("id", toFalse);
+        if (upErr) throw new Error(upErr.message);
+      }
+      updated += patches.length;
     }
 
     if (data.length < PAGE) break;
