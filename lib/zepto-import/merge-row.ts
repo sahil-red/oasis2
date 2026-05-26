@@ -1,4 +1,4 @@
-import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
+import { isPlatformNutritionComplete, countNutritionFields } from "@/lib/nutrition/completeness";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ZeptoCsvRow } from "@/lib/zepto-import/csv-row";
 
@@ -36,11 +36,12 @@ export function mergeCsvWithExisting(
     ingredients_raw = existing.ingredients_raw ?? ingredients_raw;
     nutrition = existing.nutrition ?? nutrition;
   } else if (
-    isPlatformNutritionComplete(csv.ingredients_raw, csv.nutrition) &&
-    existing &&
-    !isPlatformNutritionComplete(existing.ingredients_raw, existing.nutrition)
+    isPlatformNutritionComplete(csv.ingredients_raw, csv.nutrition) ||
+    (csv.nutrition &&
+      countNutritionFields(csv.nutrition) >
+        countNutritionFields(existing?.nutrition ?? null))
   ) {
-    // prefer CSV
+    // Prefer CSV when label-grade complete or strictly richer than existing row.
   } else if (existing) {
     ingredients_raw = ingredients_raw ?? existing.ingredients_raw;
     nutrition = nutrition ?? existing.nutrition;

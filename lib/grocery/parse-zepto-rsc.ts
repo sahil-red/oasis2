@@ -3,7 +3,11 @@
  * (`self.__next_f.push`), not in product-assortment-service product-detail JSON.
  */
 import { isPlausibleIngredientsList } from "@/lib/nutrition/completeness";
-import { parseServingNutritionBlock } from "./parse-nutrition-block";
+import {
+  nutrientFieldFromLabel,
+  parseNutrientAmount,
+  parseServingNutritionBlock,
+} from "./parse-nutrition-block";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Decode escaped RSC flight chunks from PDP HTML. */
@@ -33,50 +37,68 @@ export function extractZeptoRscAttributes(html: string): Record<string, string> 
   return attrs;
 }
 
-/** Parse Zepto RSC "nutrition information" one-liner (comma-separated). */
+function parseLabelValueSegment(trimmed: string): { label: string; value: number } | null {
+  const colon = trimmed.indexOf(":");
+  if (colon >= 0) {
+    const label = trimmed.slice(0, colon).trim();
+    const value = parseNutrientAmount(trimmed.slice(colon + 1));
+    if (label && value != null) return { label, value };
+  }
+
+  const m =
+    /^(.+?)\s+([-+]?\d+(?:\.\d+)?|<\s*\d+(?:\.\d+)?|TRACE|trace)\s*(?:\(([^)]*)\))?/i.exec(
+      trimmed,
+    ) ??
+    /^(.+?)\s*\(([^)]+)\)\s+([-+]?\d+(?:\.\d+)?|<\s*\d+(?:\.\d+)?|TRACE|trace)/i.exec(trimmed);
+  if (!m) {
+    const labelFirst =
+      /^(fat|protein|carbohydrate|carbs|sugar|energy|calorie|calories|sodium|fibre|fiber)\s+([-+]?\d+(?:\.\d+)?|<\s*\d+(?:\.\d+)?)\s*(?:gm|g|mg|kcal|k\s*cal)?/i.exec(
+        trimmed,
+      );
+    if (labelFirst) {
+      const value = parseNutrientAmount(labelFirst[2]);
+      if (value != null) return { label: labelFirst[1], value };
+    }
+    return null;
+  }
+
+  let label: string;
+  let valueRaw: string;
+  if (m.length === 4 && /kcal|protein|carb|fat|sugar|sodium|fibre|fiber|vitamin|zinc/i.test(m[1])) {
+    label = m[1].trim();
+    valueRaw = m[2].trim();
+  } else if (m[2] && /trace/i.test(m[2])) {
+    label = m[1].trim();
+    valueRaw = "0";
+  } else {
+    label = (m[1] ?? m[2] ?? "").trim();
+    valueRaw = (m[2] ?? m[3] ?? "").trim();
+  }
+
+  const value = parseNutrientAmount(valueRaw);
+  if (value == null) return null;
+  return { label, value };
+}
+
+function applySegment(canonical: Record<string, number>, trimmed: string): void {
+  const parsed = parseLabelValueSegment(trimmed);
+  if (!parsed) return;
+  const field = nutrientFieldFromLabel(parsed.label);
+  if (field) canonical[field] = parsed.value;
+}
+
+/** Parse Zepto RSC / CSV "nutrition information" one-liner. */
 export function parseZeptoRscNutritionLine(text: string): ProductNutrition | null {
   if (!text?.trim()) return null;
 
   const canonical: Record<string, number> = {};
-  const segments = text.split(/,(?=\s*[A-Za-z])/);
 
-  for (const seg of segments) {
-    const trimmed = seg.trim();
-    const m =
-      /^(.+?)\s+([-+]?\d+(?:\.\d+)?|TRACE|trace)\s*(?:\(([^)]*)\))?/i.exec(trimmed) ??
-      /^(.+?)\s*\(([^)]+)\)\s+([-+]?\d+(?:\.\d+)?|TRACE|trace)/i.exec(trimmed);
-    if (!m) continue;
+  const chunks = text.includes(";")
+    ? text.split(/\s*;\s*/)
+    : text.split(/,(?=\s*[A-Za-z])/);
 
-    let label: string;
-    let valueRaw: string;
-    if (m.length === 4 && /kcal|protein|carb|fat|sugar|sodium|fibre|fiber|vitamin|zinc/i.test(m[1])) {
-      label = m[1].trim();
-      valueRaw = m[2].trim();
-    } else if (m[2] && /trace/i.test(m[2])) {
-      label = m[1].trim();
-      valueRaw = "0";
-    } else {
-      label = (m[1] ?? m[2] ?? "").trim();
-      valueRaw = (m[2] ?? m[3] ?? "").trim();
-    }
-
-    const lower = label.toLowerCase();
-    const numM = /([-+]?\d+(?:\.\d+)?)/i.exec(valueRaw.replace(/trace/i, "0"));
-    if (!numM) continue;
-    const v = Number.parseFloat(numM[1]);
-
-    if (/^energy|calorie|kcal/.test(lower)) canonical.energy_kcal_100g = v;
-    else if (/protein/.test(lower)) canonical.protein_g_100g = v;
-    else if (/added sugar/.test(lower)) canonical.added_sugar_g_100g = v;
-    else if (/total sugar/.test(lower)) canonical.sugar_g_100g = v;
-    else if (/carbohydrate/.test(lower)) canonical.carbs_g_100g = v;
-    else if (/dietary fibre|dietary fiber|fibre|fiber/.test(lower)) canonical.fiber_g_100g = v;
-    else if (/trans fat/.test(lower)) canonical.trans_fat_g_100g = v;
-    else if (/saturated fat/.test(lower)) canonical.saturated_fat_g_100g = v;
-    else if (/total fat/.test(lower)) canonical.fat_g_100g = v;
-    else if (/cholesterol/.test(lower)) {
-      /* optional extra */
-    } else if (/sodium/.test(lower)) canonical.sodium_mg_100g = v;
+  for (const seg of chunks) {
+    applySegment(canonical, seg.trim());
   }
 
   if (Object.keys(canonical).length === 0) {

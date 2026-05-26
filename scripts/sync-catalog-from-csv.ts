@@ -11,9 +11,11 @@
  *   pnpm catalog:sync -- --dry-run
  *   pnpm catalog:sync -- --skip-images          # CSV images only (default when Image_Link present)
  *   pnpm catalog:sync -- --fetch-bff-images     # BFF backfill for rows missing CSV image
- *   pnpm catalog:sync -- --skip-gemini
- *   pnpm catalog:sync -- --skip-gemini --skip-score   # upsert only; run gemini + score after
- *   pnpm catalog:sync -- --skip-import --skip-score  # gemini only (after upsert)
+ * 4. Produce seed → score (Gemini off by default; pass --gemini to opt in)
+ *
+ *   pnpm catalog:sync
+ *   pnpm catalog:sync -- --gemini              # opt-in Gemini for produce/chicken gaps
+ *   pnpm catalog:sync -- --skip-score
  *   pnpm catalog:sync -- --skip-import --skip-gemini # score only
  */
 import { homedir } from "node:os";
@@ -102,7 +104,7 @@ async function main() {
   const dryRun = argv.includes("--dry-run");
   const skipImages = argv.includes("--skip-images");
   const fetchBffImages = argv.includes("--fetch-bff-images");
-  const skipGemini = argv.includes("--skip-gemini");
+  const skipGemini = !argv.includes("--gemini");
   const skipScore = argv.includes("--skip-score");
   const skipImport = argv.includes("--skip-import");
   const pathArg = argv.find((a) => !a.startsWith("--") && a.endsWith(".csv"));
