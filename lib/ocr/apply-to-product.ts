@@ -1,7 +1,6 @@
 import {
   hasIngredients,
   isPlatformNutritionComplete,
-  nutritionIsSparse,
 } from "@/lib/nutrition/completeness";
 import { mergeOcrIntoProductNutrition } from "@/lib/nutrition/from-ocr";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -124,7 +123,6 @@ export function applyOcrToProduct(
   );
   if (
     mergedNutrition &&
-    nutritionIsSparse(current.nutrition) &&
     JSON.stringify(mergedNutrition) !== JSON.stringify(current.nutrition)
   ) {
     patch.nutrition = mergedNutrition;

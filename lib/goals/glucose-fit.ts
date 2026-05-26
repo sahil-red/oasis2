@@ -10,14 +10,17 @@ export type GlucoseFitContext = {
   name: string;
   category: string | null;
   subcategory: string | null;
+  isDessert?: boolean;
 };
 
 function isSweetSnack(name: string, category: string | null, subcategory: string | null): boolean {
   const t = `${name} ${category ?? ""} ${subcategory ?? ""}`.toLowerCase();
   if (/\b(atta|flour|dal|pulse|lentil|bean|paneer|curd|egg|oil|ghee|masala)\b/i.test(t)) {
-    return false;
+    if (!/\b(gulab|jamun|jalebi|ladoo|barfi|halwa|kheer|rasgulla|peda|burfi|mithai|sweet)\b/i.test(t)) {
+      return false;
+    }
   }
-  return /\b(choco|chocolate|wafer|confection|sweet|munch|biscuit|cookie|cereal|chocos|flakes|bar)\b/i.test(
+  return /\b(choco|chocolate|wafer|confection|sweet|munch|biscuit|cookie|cereal|chocos|flakes|bar|gulab|jamun|jalebi|ladoo|barfi|halwa|kheer|rasgulla|peda|burfi|mithai|dessert|ice cream|kulfi)\b/i.test(
     t,
   );
 }
@@ -46,6 +49,10 @@ export function diabeticGoalFit(ctx: GlucoseFitContext): { fit: number; reasons:
   if (isSweetSnack(name, category, subcategory)) {
     fit -= 22;
     reasons.push("Sweet snack / cereal aisle — poor default for glucose control");
+  }
+  if (ctx.isDessert) {
+    fit -= 16;
+    reasons.push("Dessert / mithai — high glucose load");
   }
   if (isGlucoseStaple(name, category, subcategory) && addedSugarG <= 12 && netCarbs < 58) {
     fit += 10;
@@ -76,6 +83,7 @@ export function pcosGoalFit(ctx: GlucoseFitContext): { fit: number; reasons: str
     flagged * 10;
 
   if (isSweetSnack(name, category, subcategory)) fit -= 18;
+  if (ctx.isDessert) fit -= 14;
   if (isGlucoseStaple(name, category, subcategory) && addedSugarG <= 10 && netCarbs < 55) {
     fit += 8;
   }

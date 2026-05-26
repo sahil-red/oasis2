@@ -1,3 +1,5 @@
+import { detectNutritionAnomalies, nutritionMacrosUntrustworthy } from "@/lib/nutrition/anomaly";
+import { countNutritionFields, nutritionIsSparse } from "@/lib/nutrition/completeness";
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ConcernEntry, ScoreBand, SubScores } from "@/lib/supabase/types";
@@ -26,6 +28,8 @@ export function explainScore(opts: {
   nutrition: ProductNutrition | null;
   ingredients_raw: string | null;
   productName?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
 }): ScoreExplanation {
   const reasons: string[] = [];
   const n = opts.nutrition;
@@ -36,26 +40,47 @@ export function explainScore(opts: {
   const kcal = n?.energy_kcal_100g;
   const subs = opts.subscores;
 
-  if (sugarG != null) {
+  const nutritionCtx = {
+    name: opts.productName ?? "",
+    category: opts.category ?? null,
+    subcategory: opts.subcategory ?? null,
+  };
+  const macroFields = n ? countNutritionFields(n) : 0;
+  const macrosSparse = n ? nutritionIsSparse(n) : true;
+  const macrosBad = n ? nutritionMacrosUntrustworthy(n, nutritionCtx) : true;
+
+  if (!n || macroFields < 2 || macrosSparse) {
+    pushUnique(reasons, "Not enough reliable nutrition on file to judge macros");
+  } else if (macrosBad) {
+    const top = detectNutritionAnomalies(n, nutritionCtx).find(
+      (a) => a.field === "protein_g_100g" || a.severity === "critical",
+    );
+    pushUnique(
+      reasons,
+      top?.message ?? "Nutrition numbers look unreliable — don't trust protein/sugar claims here",
+    );
+  }
+
+  if (sugarG != null && !macrosBad) {
     if (sugarG >= 18) pushUnique(reasons, `High sugar for a packaged food (${sugarG}g per 100g)`);
     else if (sugarG >= 10) pushUnique(reasons, `Moderate sugar (${sugarG}g per 100g)`);
     else if (sugarG <= 5) pushUnique(reasons, `Relatively low sugar (${sugarG}g per 100g)`);
   }
 
-  if (typeof protein === "number") {
+  if (typeof protein === "number" && !macrosBad) {
     if (protein >= 15) pushUnique(reasons, `Good protein density (${protein}g per 100g)`);
     else if (protein < 6) pushUnique(reasons, `Low protein (${protein}g per 100g)`);
   }
 
-  if (typeof fiber === "number" && fiber >= 5) {
+  if (typeof fiber === "number" && fiber >= 5 && !macrosBad) {
     pushUnique(reasons, `Decent fibre (${fiber}g per 100g)`);
   }
 
-  if (typeof sodium === "number" && sodium >= 500) {
+  if (typeof sodium === "number" && sodium >= 500 && !macrosBad) {
     pushUnique(reasons, `High sodium (${sodium}mg per 100g)`);
   }
 
-  if (typeof kcal === "number" && kcal >= 450) {
+  if (typeof kcal === "number" && kcal >= 450 && !macrosBad) {
     pushUnique(reasons, `Calorie-dense (${kcal} kcal per 100g)`);
   }
 

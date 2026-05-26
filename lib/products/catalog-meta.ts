@@ -1,4 +1,8 @@
+import { isFreshWholeProduce } from "@/lib/catalog/packaged-produce";
+import { hasReferenceNutrition } from "@/lib/nutrition/completeness";
 import type { ProductListItem } from "@/lib/products/queries";
+
+export const FRUITS_VEGETABLES_AISLE = "Fruits & Vegetables";
 
 /** L1 aisle from CSV category_name. */
 export function productAisle(p: Pick<ProductListItem, "category" | "super_category">): string | null {
@@ -31,10 +35,20 @@ export function productMatchesUsecase(
 }
 
 export function productMatchesAisle(
-  p: Pick<ProductListItem, "category" | "super_category">,
+  p: Pick<ProductListItem, "category" | "super_category" | "subcategory" | "name" | "nutrition">,
   aisle: string,
 ): boolean {
   if (!aisle) return true;
+  if (aisle === FRUITS_VEGETABLES_AISLE) {
+    return (
+      hasReferenceNutrition(p.nutrition ?? null) ||
+      isFreshWholeProduce({
+        name: p.name,
+        category: p.category,
+        subcategory: p.subcategory,
+      })
+    );
+  }
   return productAisle(p) === aisle;
 }
 

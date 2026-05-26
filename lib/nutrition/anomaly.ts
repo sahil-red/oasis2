@@ -40,6 +40,24 @@ function isCookingOil(ctx: NutritionContext): boolean {
   );
 }
 
+function isMouthFreshenerOrCandy(ctx: NutritionContext): boolean {
+  return /\b(mouth freshener|mukhwas|mukhwas|supari|paan masala|chewing gum|breath freshener|mint balls?|candy|toffee|lollipop|khatta meetha)\b/i.test(
+    ctxText(ctx),
+  );
+}
+
+function isNoodlesOrInstantMeal(ctx: NutritionContext): boolean {
+  return /\b(noodle|noodles|instant noodles|cup noodles|happy bowl|ramen|maggi|macaroni|pasta meal)\b/i.test(
+    ctxText(ctx),
+  );
+}
+
+function isHighProteinCategory(ctx: NutritionContext): boolean {
+  return /\b(whey|protein powder|isolate|paneer|chicken|broiler|egg|fish|meat|mutton|soya chunk|tofu|greek yogurt|protein bar|mass gainer)\b/i.test(
+    ctxText(ctx),
+  );
+}
+
 function macroSum(n: ProductNutrition): number {
   return (n.protein_g_100g ?? 0) + (n.carbs_g_100g ?? 0) + (n.fat_g_100g ?? 0);
 }
@@ -104,6 +122,56 @@ export function detectNutritionAnomalies(
   }
 
   const protein = nutrition.protein_g_100g;
+  const energy = nutrition.energy_kcal_100g;
+
+  if (typeof protein === "number" && isMouthFreshenerOrCandy(ctx)) {
+    const max = 5;
+    if (protein > max) {
+      out.push({
+        code: "category_protein_critical",
+        severity: protein > 15 ? "critical" : "warning",
+        message: `Mouth freshener / candy with ${protein}g protein per 100g is implausible (likely bad data)`,
+        field: "protein_g_100g",
+      });
+    }
+  }
+
+  if (typeof protein === "number" && !isHighProteinCategory(ctx)) {
+    if (protein > 55) {
+      out.push({
+        code: "category_protein_critical",
+        severity: "critical",
+        message: `${protein}g protein per 100g is implausible for this product type`,
+        field: "protein_g_100g",
+      });
+    } else if (protein > 35 && (energy == null || energy < 150)) {
+      out.push({
+        code: "category_protein_high",
+        severity: "warning",
+        message: `Very high protein (${protein}g) without believable energy — label data may be wrong`,
+        field: "protein_g_100g",
+      });
+    }
+  }
+
+  if (typeof protein === "number" && isNoodlesOrInstantMeal(ctx)) {
+    if (protein > 20) {
+      out.push({
+        code: "category_protein_critical",
+        severity: "critical",
+        message: `Instant noodles with ${protein}g protein per 100g is implausible — label data may be wrong`,
+        field: "protein_g_100g",
+      });
+    } else if (protein > 10) {
+      out.push({
+        code: "category_protein_high",
+        severity: "warning",
+        message: `Instant noodles with ${protein}g protein per 100g is unusually high — check label`,
+        field: "protein_g_100g",
+      });
+    }
+  }
+
   if (typeof protein === "number" && isTeaOrCoffee(ctx)) {
     if (protein > 25) {
       out.push({
@@ -137,10 +205,11 @@ export function detectNutritionAnomalies(
   const sugar = nutrition.sugar_g_100g;
   const carbs = nutrition.carbs_g_100g;
   if (typeof sugar === "number" && typeof carbs === "number" && sugar > carbs) {
+    const likelyDecimalCarbs = carbs < 15 && sugar >= 10;
     out.push({
       code: "sugar_exceeds_carbs",
-      severity: "warning",
-      message: `Sugar (${sugar}g) exceeds total carbs (${carbs}g)`,
+      severity: likelyDecimalCarbs ? "critical" : "warning",
+      message: `Sugar (${sugar}g) exceeds total carbs (${carbs}g) — carbs may be mis-scaled`,
       field: "sugar_g_100g",
     });
   }
@@ -196,6 +265,26 @@ export function nutritionHasCriticalAnomalies(
   return detectNutritionAnomalies(nutrition, ctx).some((a) => a.severity === "critical");
 }
 
+/** True when macro-based score copy would mislead (any protein-related anomaly). */
+export function nutritionMacrosUntrustworthy(
+  nutrition: ProductNutrition | null | undefined,
+  ctx: NutritionContext,
+): boolean {
+  if (!nutrition) return true;
+  const anomalies = detectNutritionAnomalies(nutrition, ctx);
+  if (anomalies.some((a) => a.severity === "critical")) return true;
+  return anomalies.some(
+    (a) =>
+      a.field === "protein_g_100g" ||
+      a.code === "category_protein_critical" ||
+      a.code === "category_protein_high" ||
+      a.code === "kcal_protein_swap" ||
+      a.code === "decimal_anomaly" ||
+      a.code === "sugar_exceeds_carbs" ||
+      a.code === "macro_mass_exceeds_100g",
+  );
+}
+
 function scaleMacro(n: ProductNutrition, key: (typeof MACRO_KEYS)[number], factor: number): ProductNutrition {
   const v = n[key];
   if (typeof v !== "number") return n;
@@ -211,6 +300,18 @@ export function tryCorrectNutrition(
   const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
   type Candidate = { n: ProductNutrition; mismatch: number; critical: boolean };
   const candidates: Candidate[] = [];
+
+  if (macroSum(nutrition) > 100) {
+    for (const factor of [0.1, 0.01] as const) {
+      let trial = nutrition;
+      for (const key of MACRO_KEYS) trial = scaleMacro(trial, key, factor);
+      const critical = nutritionHasCriticalAnomalies(trial, ctx);
+      const mismatch = kcalMismatchRatio(trial) ?? 1;
+      if (!critical && mismatch <= baseMismatch) {
+        candidates.push({ n: trial, mismatch, critical });
+      }
+    }
+  }
 
   const divisors = [1, 0.1, 0.01] as const;
   for (const pDiv of divisors) {

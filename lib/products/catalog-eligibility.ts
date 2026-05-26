@@ -1,5 +1,9 @@
 import { isBlockedTaxonomy } from "@/lib/catalog/policy";
-import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
+import { isFreshWholeProduce } from "@/lib/catalog/packaged-produce";
+import {
+  isPlatformNutritionComplete,
+  isReferenceProduceNutritionComplete,
+} from "@/lib/nutrition/completeness";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
 
@@ -34,6 +38,16 @@ export function isCatalogVisible(p: CatalogEligibilityRow): boolean {
   ) {
     return false;
   }
+
+  const freshProduce = isFreshWholeProduce({
+    name: p.name,
+    category: p.category,
+    subcategory: p.subcategory,
+  });
+  if (freshProduce && isReferenceProduceNutritionComplete(p.nutrition ?? null)) {
+    return true;
+  }
+
   return isPlatformNutritionComplete(p.ingredients_raw ?? null, p.nutrition ?? null);
 }
 

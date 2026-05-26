@@ -37,6 +37,7 @@ export function NutritionTable({
     ? { name, category, subcategory }
     : null;
   const anomalies = ctx ? detectNutritionAnomalies(nutrition, ctx) : [];
+  const critical = anomalies.filter((a) => a.severity === "critical");
   const warnings = anomalies.filter((a) => a.severity === "warning");
   const rows = ROWS.filter((r) => nutrition[r.key] != null);
   const packGrams = parsePackGrams(netWeight);
@@ -51,6 +52,16 @@ export function NutritionTable({
 
   return (
     <div>
+      {critical.length > 0 ? (
+        <div className="mb-3 rounded-lg border border-red-200/90 bg-red-50/70 px-3 py-2.5 text-[13px] leading-snug text-red-950">
+          <p className="font-medium">Nutrition data looks wrong</p>
+          <ul className="mt-1 list-inside list-disc text-red-900/90">
+            {critical.map((a) => (
+              <li key={a.code}>{a.message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {warnings.length > 0 ? (
         <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 text-[13px] leading-snug text-amber-950">
           <p className="font-medium">Nutrition data may be inaccurate</p>

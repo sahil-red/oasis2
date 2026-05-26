@@ -29,7 +29,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
-# OCR local model (downloaded by tesseract.js; not needed for web deploy)
+# PaddleOCR Python venv + models
+ocr-paddle/.venv/
+ocr-paddle/**/__pycache__/
 eng.traineddata
 
 # scraper artifacts

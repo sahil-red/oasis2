@@ -98,6 +98,6 @@ export async function getCachedCatalogSearch(
         diet,
       }),
     ["catalog-search", cacheKey],
-    { revalidate: 120 },
+    { revalidate: 300 },
   )();
 }

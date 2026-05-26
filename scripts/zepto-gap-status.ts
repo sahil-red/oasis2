@@ -4,6 +4,8 @@ import { adminClient } from "@/lib/supabase/admin";
 import {
   hasIngredients,
   isPlatformNutritionComplete,
+  needsLabelOcr,
+  nutritionHasCriticalGaps,
   nutritionIsSparse,
 } from "@/lib/nutrition/completeness";
 
@@ -23,7 +25,8 @@ async function main() {
   let ocrSuccess = 0;
   let ocrRetryable = 0;
   let hasImages = 0;
-  let ocrCandidates = 0;
+  let nutritionGaps = 0;
+  let needsOcr = 0;
 
   while (true) {
     const { data, error } = await s
@@ -45,7 +48,12 @@ async function main() {
       if (complete) catalogComplete++;
       if (nutritionIsSparse(nutrition)) missingNutrition++;
       if (!hasIngredients(ingredients)) missingIngredients++;
-      if (!complete && (nutritionIsSparse(nutrition) || !hasIngredients(ingredients))) {
+      if (nutritionHasCriticalGaps(nutrition)) nutritionGaps++;
+      if (needsLabelOcr(ingredients, nutrition)) needsOcr++;
+      if (
+        !complete &&
+        (nutritionIsSparse(nutrition) || !hasIngredients(ingredients))
+      ) {
         needsReference++;
       }
       if (row.ocr_status === "pending") ocrPending++;
@@ -54,7 +62,6 @@ async function main() {
         ocrRetryable++;
       }
       if (images.length > 0) hasImages++;
-      if (!complete && images.length > 0) ocrCandidates++;
     }
 
     offset += pageSize;
@@ -70,9 +77,10 @@ async function main() {
         catalogComplete,
         missingNutrition,
         missingIngredients,
+        nutritionGaps,
+        needsLabelOcr: needsOcr,
         needsReferenceOrOcr: needsReference,
         hasImages,
-        ocrCandidates,
         ocrPending,
         ocrSuccess,
         ocrRetryable,

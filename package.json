@@ -14,17 +14,16 @@
     "catalog:sync": "tsx scripts/sync-catalog-from-csv.ts",
     "catalog:backfill-visible": "tsx scripts/backfill-catalog-visible.ts",
     "catalog:migrate": "tsx scripts/apply-catalog-migration.ts",
-    "gemini:fill": "tsx scripts/gemini-fill-incomplete.ts",
     "score": "tsx scripts/05-compute-scores.ts",
+    "nutrition:fix": "tsx scripts/fix-nutrition-outliers.ts",
+    "nutrition:purge-scores": "tsx scripts/purge-untrustworthy-scores.ts",
     "seed:produce": "tsx scripts/seed-fresh-produce.ts",
     "reference:fill": "tsx scripts/fill-reference-nutrition.ts",
-    "ocr:gaps": "tsx scripts/ocr-catalog-gaps.ts",
     "funnel": "tsx scripts/db-funnel.ts",
     "db:status": "tsx scripts/db-status.ts",
     "diag:supabase": "tsx scripts/diag-supabase.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.6.0",
     "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
@@ -38,7 +37,6 @@
     "react-dom": "^19.2.6",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0",
-    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -1,15 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 /**
- * OCR catalog gaps — Tesseract-first, confidence-gated, Zepto-optimized.
+ * OCR catalog gaps — PaddleOCR (Python) with validation layer.
  *
  *   pnpm ocr:gaps -- --dry-run --limit=5
- *   pnpm ocr:gaps -- --limit=200 --concurrency=1
+ *   pnpm ocr:gaps -- --gaps-only --limit=200
  *   pnpm ocr:gaps -- --platform=zepto --retry-failed
  */
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
 import { applyOcrToProduct } from "@/lib/ocr/apply-to-product";
-import { OcrOrchestrator, shutdownTesseract } from "@/lib/ocr";
+import { OcrOrchestrator, shutdownOcr, paddleSummary } from "@/lib/ocr";
+import { needsLabelOcr } from "@/lib/nutrition/completeness";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
@@ -20,6 +21,7 @@ interface Args {
   bypassCache: boolean;
   retryFailed: boolean;
   force: boolean;
+  gapsOnly: boolean;
   platform: string | null;
   concurrency: number;
 }
@@ -50,6 +52,7 @@ function parseArgs(): Args {
     bypassCache: argv.includes("--bypass-cache"),
     retryFailed: argv.includes("--retry-failed"),
     force: argv.includes("--force"),
+    gapsOnly: argv.includes("--gaps-only"),
     platform,
     concurrency,
   };
@@ -60,34 +63,65 @@ async function main() {
   const supabase = adminClient();
   const orch = new OcrOrchestrator(supabase, { bypassCache: args.bypassCache });
 
-  const statusFilter = args.retryFailed
-    ? ["pending", "failed", "no_label_found"]
-    : ["pending"];
+  let rows: Row[] = [];
 
-  let query = supabase
-    .from("products")
-    .select("id, name, image_urls, ingredients_raw, nutrition, net_weight")
-    .in("ocr_status", statusFilter)
-    .not("image_urls", "is", null)
-    .order("scraped_at", { ascending: true });
+  if (args.gapsOnly) {
+    const pageSize = 1000;
+    let offset = 0;
+    while (true) {
+      let q = supabase
+        .from("products")
+        .select("id, name, image_urls, ingredients_raw, nutrition, net_weight")
+        .not("image_urls", "is", null)
+        .order("scraped_at", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (args.platform) q = q.eq("platform", args.platform);
+      const { data, error } = await q;
+      if (error) {
+        console.error("[ocr:gaps] fetch failed:", error.message);
+        process.exit(1);
+      }
+      if (!data?.length) break;
+      for (const row of data as Row[]) {
+        if (needsLabelOcr(row.ingredients_raw, row.nutrition)) rows.push(row);
+      }
+      offset += pageSize;
+      if (data.length < pageSize) break;
+      if (args.limit && rows.length >= args.limit) break;
+    }
+    if (args.limit) rows = rows.slice(0, args.limit);
+  } else {
+    const statusFilter = args.retryFailed
+      ? ["pending", "failed", "no_label_found"]
+      : ["pending"];
 
-  if (args.platform) query = query.eq("platform", args.platform);
-  if (args.limit) query = query.limit(args.limit);
-  else query = query.limit(10_000);
+    let query = supabase
+      .from("products")
+      .select("id, name, image_urls, ingredients_raw, nutrition, net_weight")
+      .in("ocr_status", statusFilter)
+      .not("image_urls", "is", null)
+      .order("scraped_at", { ascending: true });
 
-  const { data: rows, error } = await query;
-  if (error) {
-    console.error("[ocr:gaps] fetch failed:", error.message);
-    process.exit(1);
+    if (args.platform) query = query.eq("platform", args.platform);
+    if (args.limit) query = query.limit(args.limit);
+    else query = query.limit(10_000);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("[ocr:gaps] fetch failed:", error.message);
+      process.exit(1);
+    }
+    rows = (data ?? []) as Row[];
   }
-  if (!rows?.length) {
-    console.log("[ocr:gaps] nothing pending.");
+
+  if (!rows.length) {
+    console.log("[ocr:gaps] nothing to process.");
     return;
   }
 
   const total = rows.length;
   console.log(
-    `[ocr:gaps] processing ${total} products (platform=${args.platform ?? "all"}, concurrency=${args.concurrency}, dry_run=${args.dryRun})`,
+    `[ocr:gaps] processing ${total} products (platform=${args.platform ?? "all"}, gaps_only=${args.gapsOnly}, paddle=${paddleSummary()}, concurrency=${args.concurrency}, dry_run=${args.dryRun})`,
   );
 
   let applied = 0;
@@ -96,7 +130,7 @@ async function main() {
   let noImages = 0;
   let failed = 0;
 
-  const queue = [...(rows as Row[])];
+  const queue = [...rows];
   const workers = Math.min(args.concurrency, queue.length);
 
   async function worker(workerId: number): Promise<void> {
@@ -169,7 +203,7 @@ async function main() {
     `[ocr:gaps] done applied=${applied} gated=${gated} skipped_platform=${skipped} no_images=${noImages} failed=${failed}`,
   );
 
-  await shutdownTesseract();
+  await shutdownOcr();
 }
 
 main().catch((err) => {

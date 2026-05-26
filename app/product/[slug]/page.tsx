@@ -119,6 +119,8 @@ export default async function ProductPage({
         nutrition: product.nutrition,
         ingredients_raw: product.ingredients_raw,
         productName: product.name,
+        category: product.category,
+        subcategory: product.subcategory,
       })
     : null;
 

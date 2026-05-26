@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countNutritionFields } from "@/lib/nutrition/completeness";
 import { nutritionHasCriticalAnomalies } from "@/lib/nutrition/anomaly";
 import { computeCoreScore, type CoreScoreResult } from "@/lib/scoring/core";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -31,12 +32,9 @@ export function hasScoreableNutrition(
   nutrition: ProductNutrition | Record<string, unknown> | null,
 ): boolean {
   if (!nutrition || typeof nutrition !== "object") return false;
-  const META = new Set(["source", "extra"]);
-  for (const [k, v] of Object.entries(nutrition)) {
-    if (META.has(k)) continue;
-    if (typeof v === "number" && Number.isFinite(v)) return true;
-  }
-  return false;
+  // Single stray field (e.g. only bogus protein) must not drive a score.
+  if (countNutritionFields(nutrition) < 2) return false;
+  return true;
 }
 
 export function buildCoreScoreUpsert(row: ScoreableProduct): CoreScoreUpsert | null {

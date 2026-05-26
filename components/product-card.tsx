@@ -1,3 +1,4 @@
+import { memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
@@ -6,7 +7,7 @@ import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 
-export function ProductCard({
+export const ProductCard = memo(function ProductCard({
   product,
   goalFit,
   hrefQuery = "",
@@ -95,4 +96,4 @@ export function ProductCard({
       </Link>
     </article>
   );
-}
+});

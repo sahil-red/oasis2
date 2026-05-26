@@ -5,18 +5,14 @@
  * 1. Parse CSV (product_variant_id), drop Zepto Cafe
  * 2. Images from CSV image_links column (optional BFF backfill via --fetch-bff-images)
  * 3. Upsert all rows, purge everything not in CSV
- * 4. Produce seed → Gemini (produce/chicken gaps only) → score (no OCR)
+ * 4. Produce seed → score (label gaps: pnpm ocr:gaps -- --gaps-only)
  *
  *   pnpm catalog:sync
  *   pnpm catalog:sync -- --dry-run
  *   pnpm catalog:sync -- --skip-images          # CSV images only (default when Image_Link present)
  *   pnpm catalog:sync -- --fetch-bff-images     # BFF backfill for rows missing CSV image
- * 4. Produce seed → score (Gemini off by default; pass --gemini to opt in)
- *
- *   pnpm catalog:sync
- *   pnpm catalog:sync -- --gemini              # opt-in Gemini for produce/chicken gaps
  *   pnpm catalog:sync -- --skip-score
- *   pnpm catalog:sync -- --skip-import --skip-gemini # score only
+ *   pnpm catalog:sync -- --skip-import          # score only
  */
 import { homedir } from "node:os";
 import { access } from "node:fs/promises";
@@ -38,12 +34,6 @@ import {
 } from "@/lib/zepto-import/fetch-variant-images";
 import { mergeCsvWithExisting } from "@/lib/zepto-import/merge-row";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
-import { buildProductFillContext } from "@/lib/nutrition/fill-context";
-import {
-  geminiTextFillBatch,
-  type TextFillInput,
-} from "@/lib/nutrition/gemini-text-fill";
-import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { persistCoreScore, hasScoreableNutrition } from "@/lib/scoring/persist-core";
 import { adminClient } from "@/lib/supabase/admin";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -52,15 +42,6 @@ loadEnv({ path: ".env.local" });
 
 const PRODUCE_RE =
   /fruit|vegetable|herb|leaf|onion|tomato|potato|banana|apple|mango|grape|berry|spinach|coriander|mint|broccoli|cauliflower|capsicum|carrot|beetroot|lemon|orange|papaya|guava|pear|pineapple|watermelon|pomegranate|drumstick|beans|peas|mushroom|cabbage|cucumber|ginger|garlic|chilli|chili|lettuce|avocado|kiwi|melon|sapota|cherry|plum|peach|apricot|fig|jackfruit|custard|beet|radish|turnip|sweet corn|baby corn/i;
-
-const PROTEIN_RE =
-  /chicken|broiler|poultry|egg\b|eggs\b|drumstick|breast|curry cut|boneless chicken|country chicken|hygienic eggs/i;
-
-/** Gemini text fill only for fresh produce + chicken/eggs — not all nutrition gaps. */
-function needsGeminiFill(name: string, category: string | null, subcategory: string | null): boolean {
-  const blob = `${name} ${category ?? ""} ${subcategory ?? ""}`;
-  return PRODUCE_RE.test(blob) || PROTEIN_RE.test(blob);
-}
 
 async function defaultCsvPath(): Promise<string> {
   const p = resolve(homedir(), "Downloads", "data.csv");
@@ -106,7 +87,6 @@ async function main() {
   const dryRun = argv.includes("--dry-run");
   const skipImages = argv.includes("--skip-images");
   const fetchBffImages = argv.includes("--fetch-bff-images");
-  const skipGemini = !argv.includes("--gemini");
   const skipScore = argv.includes("--skip-score");
   const skipImport = argv.includes("--skip-import");
   const pathArg = argv.find((a) => !a.startsWith("--") && a.endsWith(".csv"));
@@ -314,80 +294,6 @@ async function main() {
     }
   }
   console.log(`[catalog:sync] produce seed: ${produceOk}`);
-
-  // ── Gemini (produce + chicken/eggs gaps only) ──
-  if (!skipGemini) {
-    const queue: TextFillInput[] = [];
-    const rowBySlug = new Map<string, Record<string, unknown>>();
-    for (let k = 0; k < skuList.length; k += 200) {
-      const chunk = skuList.slice(k, k + 200);
-      const { data: gapRows } = await supabase
-        .from("products")
-        .select(
-          "id, slug, name, brand, category, subcategory, net_weight, ingredients_raw, nutrition, attributes",
-        )
-        .in("zepto_sku", chunk);
-
-      for (const row of gapRows ?? []) {
-        if (isPlatformNutritionComplete(row.ingredients_raw, row.nutrition as ProductNutrition | null)) {
-          continue;
-        }
-        const name = row.name as string;
-        const category = row.category as string | null;
-        const subcategory = row.subcategory as string | null;
-        if (!needsGeminiFill(name, category, subcategory)) continue;
-
-        const attrs = (row.attributes ?? {}) as Record<string, string>;
-        queue.push({
-          slug: row.slug as string,
-          name,
-          brand: row.brand as string | null,
-          category,
-          subcategory,
-          net_weight: row.net_weight as string | null,
-          context: [
-            buildProductFillContext(attrs, null, "zepto"),
-            row.ingredients_raw ? `Partial ingredients: ${row.ingredients_raw}` : "",
-            PROTEIN_RE.test(`${name} ${category} ${subcategory}`)
-              ? "Category hint: raw chicken or eggs"
-              : "Category hint: fresh fruit or vegetable",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-          partial_nutrition: row.nutrition as ProductNutrition | null,
-          partial_ingredients: row.ingredients_raw as string | null,
-          attributes: attrs,
-        });
-        rowBySlug.set(row.slug as string, row);
-      }
-    }
-
-    console.log(`[catalog:sync] Gemini queue (produce/chicken only): ${queue.length}`);
-    const filled = await geminiTextFillBatch(queue);
-    let geminiOk = 0;
-    for (const item of filled) {
-      const row = rowBySlug.get(item.slug);
-      if (!row) continue;
-      const nutrition = reconcileNutrition({
-        nutrition: item.nutrition,
-        attributes: row.attributes as Record<string, string>,
-        name: row.name as string,
-        category: row.category as string | null,
-        net_weight: row.net_weight as string | null,
-      });
-      if (!nutrition && !item.ingredients_raw) continue;
-      await supabase
-        .from("products")
-        .update({
-          nutrition,
-          ingredients_raw: item.ingredients_raw ?? row.ingredients_raw,
-          ocr_status: "success",
-        })
-        .eq("id", row.id);
-      geminiOk++;
-    }
-    console.log(`[catalog:sync] Gemini filled: ${geminiOk}`);
-  }
 
   // ── Score ──
   if (!skipScore) {

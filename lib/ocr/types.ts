@@ -1,14 +1,9 @@
 /**
  * Canonical OCR output schema.
  *
- * The OCR step is the regulatory source of truth in Scout
- * pipeline. By FSSAI rule everything we need is printed on the back
- * label of every Indian packaged food product, in English. So one
- * image → one `OcrPayload`. Same shape regardless of whether we used
- * Gemini Vision or Tesseract.
- *
- * Phase 4 (scoring) consumes only this shape; it doesn't look at the
- * platform's hint fields anymore.
+ * The OCR step is the regulatory source of truth in the Scout pipeline.
+ * By FSSAI rule everything we need is printed on the back label of every
+ * Indian packaged food product, in English. One image → one `OcrPayload`.
  */
 
 export interface OcrIngredient {
@@ -70,10 +65,8 @@ export interface OcrPayload {
   };
 
   /** Which backend filled this. */
-  backend: "gemini" | "tesseract" | "manual";
-  /** Model identifier (e.g. "gemini-3.1-flash-lite"). */
-  model?: string;
-  /** Raw OCR text — only meaningful for Tesseract; Gemini already structured. */
+  backend: "paddle" | "manual";
+  /** Raw OCR text after validation. */
   raw_text?: string;
 }
 
@@ -85,7 +78,6 @@ export interface ImagePickResult {
   reason:
     | "only_image"
     | "last_image_heuristic"
-    | "gemini_classifier"
     | "tesseract_keyword_match";
   /** 0..1 confidence that this is the back-label. */
   confidence: number;

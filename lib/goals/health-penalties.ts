@@ -35,6 +35,14 @@ export function goalHealthPenalty(goal: GoalId, f: GoalFeatures): number {
     penalty += 8;
   }
 
+  const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+  if (goal === "fat-loss" && (f.isDessert || f.isSweetCategory)) {
+    penalty += 12;
+  }
+  if ((goal === "fat-loss" || goal === "diabetic" || goal === "pcos") && sugarLoad >= 18) {
+    penalty += goal === "fat-loss" ? 10 : 6;
+  }
+
   return penalty;
 }
 
@@ -75,6 +83,20 @@ export function applyGoalHealthCaps(goal: GoalId, fit: number, f: GoalFeatures):
     if (f.sodium >= 1200) capped = Math.min(capped, 48);
     else if (f.sodium >= 800) capped = Math.min(capped, 58);
     if (f.isProteinSnack && f.additiveBurden >= 3) capped = Math.min(capped, 62);
+    if (f.isDessert) capped = Math.min(capped, 45);
+  } else if (goal === "fat-loss") {
+    const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+    if (f.isDessert || f.isSweetCategory) capped = Math.min(capped, 28);
+    if (sugarLoad >= 15) capped = Math.min(capped, 32);
+    if (f.kcal >= 350) capped = Math.min(capped, 35);
+    if (f.sodium >= 1200) capped = Math.min(capped, 38);
+    else if (f.sodium >= 800) capped = Math.min(capped, 48);
+  } else if (goal === "diabetic" || goal === "pcos") {
+    const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+    if (f.isDessert) capped = Math.min(capped, 32);
+    if (sugarLoad >= 20) capped = Math.min(capped, 28);
+    if (f.sodium >= 1200) capped = Math.min(capped, 38);
+    else if (f.sodium >= 800) capped = Math.min(capped, 48);
   } else {
     if (f.sodium >= 1200) capped = Math.min(capped, 38);
     else if (f.sodium >= 800) capped = Math.min(capped, 50);

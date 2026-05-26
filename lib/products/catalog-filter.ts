@@ -27,6 +27,25 @@ export type CatalogFilterState = {
   sort: CatalogSort;
 };
 
+/** True when SQL count must reflect filters — otherwise meta.stats.scored is enough. */
+export function hasActiveCatalogFilters(
+  state: CatalogFilterState,
+  diet: DietMode = "any",
+): boolean {
+  return Boolean(
+    state.q.trim() ||
+      state.category ||
+      state.subcategory ||
+      state.usecase ||
+      state.brand ||
+      state.onlyScored ||
+      state.minScore > 0 ||
+      state.maxPrice > 0 ||
+      state.grade ||
+      diet !== "any",
+  );
+}
+
 export function filterCatalogProducts(
   products: ProductListItem[],
   state: CatalogFilterState,

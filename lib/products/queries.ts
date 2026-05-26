@@ -8,9 +8,12 @@ import {
 } from "@/lib/products/catalog-eligibility";
 import {
   filterCatalogProducts,
+  hasActiveCatalogFilters,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
+import { FRUITS_VEGETABLES_AISLE } from "@/lib/products/catalog-meta";
 import {
+  compareCatalogItems,
   sortCatalogItems,
   sortFromParam,
   type CatalogSort,
@@ -315,6 +318,17 @@ type CatalogFilterRpc = {
   brands: string[];
 };
 
+/** Always offer these aisles in the UI even if visibility backfill is still catching up. */
+const PINNED_CATALOG_AISLES = [FRUITS_VEGETABLES_AISLE];
+
+function mergePinnedCategories(filters: CatalogFilters): CatalogFilters {
+  const rest = filters.categories
+    .filter((c) => !PINNED_CATALOG_AISLES.includes(c))
+    .sort((a, b) => a.localeCompare(b));
+  const categories = [...PINNED_CATALOG_AISLES, ...rest];
+  return { ...filters, categories };
+}
+
 type CatalogStatsRpc = {
   visible: number;
   scored: number;
@@ -331,12 +345,12 @@ async function fetchCatalogFilterOptions(category?: string): Promise<CatalogFilt
     return getCatalogFiltersFallback(category);
   }
   const row = data as CatalogFilterRpc | null;
-  return {
+  return mergePinnedCategories({
     categories: row?.categories ?? [],
     subcategories: row?.subcategories ?? [],
     usecases: row?.usecases ?? [],
     brands: row?.brands ?? [],
-  };
+  });
 }
 
 async function fetchCatalogStats(): Promise<CatalogStatsRpc> {
@@ -361,14 +375,17 @@ async function getCatalogFiltersFallback(category?: string): Promise<CatalogFilt
   const all: Record<string, unknown>[] = [];
 
   for (let offset = 0; offset < 25_000; offset += pageSize) {
-    let q = supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase as any)
       .from("products")
       .select("category, subcategory, brand, attributes, l3_category")
       .eq("platform", "zepto")
       .not("category", "is", null)
       .range(offset, offset + pageSize - 1);
 
-    if (category) q = q.eq("category", category);
+    if (category) {
+      q = applyCategoryFilter(q, { category } as CatalogFilterState);
+    }
 
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -399,12 +416,12 @@ async function getCatalogFiltersFallback(category?: string): Promise<CatalogFilt
   }
 
   const sort = (a: string, b: string) => a.localeCompare(b);
-  return {
+  return mergePinnedCategories({
     categories: [...categories].sort(sort),
     subcategories: [...subcategories].sort(sort),
     usecases: [...usecases].sort(sort),
     brands: [...brands].sort(sort),
-  };
+  });
 }
 
 async function countVisibleCatalogFallback(): Promise<CatalogStatsRpc> {
@@ -474,6 +491,16 @@ export async function getCatalogMeta(category?: string): Promise<CatalogMeta> {
   return { stats, filters };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCategoryFilter(q: any, state: CatalogFilterState, productsPrefix?: string): any {
+  if (!state.category) return q;
+  if (state.category === FRUITS_VEGETABLES_AISLE) {
+    return q.not("nutrition->extra->>reference_id", "is", null);
+  }
+  const col = productsPrefix ? `${productsPrefix}.category` : "category";
+  return q.eq(col, state.category);
+}
+
 function buildCatalogDbQuery(
   supabase: ReturnType<typeof db>,
   state: CatalogFilterState,
@@ -493,7 +520,7 @@ function buildCatalogDbQuery(
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
   if (state.brand) q = q.eq("brand", state.brand);
-  if (state.category) q = q.eq("category", state.category);
+  q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);
   if (state.usecase) {
     q = q.filter("attributes->>L3 Category", "eq", state.usecase);
@@ -566,7 +593,7 @@ function applyScoreCatalogFilters(q: any, state: CatalogFilterState): any {
   if (state.grade) q = q.eq("grade", state.grade);
   if (state.minScore > 0) q = q.gte("score", state.minScore);
   if (state.brand) q = q.eq("products.brand", state.brand);
-  if (state.category) q = q.eq("products.category", state.category);
+  q = applyCategoryFilter(q, state, "products");
   if (state.subcategory) q = q.eq("products.subcategory", state.subcategory);
   if (state.usecase) {
     q = q.filter("products.attributes->>L3 Category", "eq", state.usecase);
@@ -625,7 +652,9 @@ async function paginateCatalogByScoreSql(opts: {
 
   const [{ data, error }, total] = await Promise.all([
     q.range(start, start + limit - 1),
-    countScoreSortedCatalogMatches(supabase, state),
+    hasActiveCatalogFilters(state)
+      ? countScoreSortedCatalogMatches(supabase, state)
+      : fetchCatalogStats().then((s) => s.scored),
   ]);
 
   if (error) throw new Error(error.message);
@@ -668,7 +697,7 @@ async function countCatalogMatches(
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
   if (state.brand) q = q.eq("brand", state.brand);
-  if (state.category) q = q.eq("category", state.category);
+  q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);
   if (state.usecase) {
     q = q.filter("attributes->>L3 Category", "eq", state.usecase);
@@ -718,7 +747,9 @@ async function paginateCatalogSql(opts: {
 
   const [{ data, error }, total] = await Promise.all([
     q.range(start, start + limit - 1),
-    countCatalogMatches(supabase, state, true),
+    hasActiveCatalogFilters(state, diet)
+      ? countCatalogMatches(supabase, state, true)
+      : fetchCatalogStats().then((s) => s.visible),
   ]);
 
   if (error) throw new Error(error.message);
@@ -809,7 +840,11 @@ async function paginateGoalCatalog(opts: {
 
   const ranked = pool
     .map((p) => ({ p, fit: computeGoalFit(goal, goalFitInputs(p)).fit }))
-    .sort((a, b) => b.fit - a.fit);
+    .sort((a, b) => {
+      const fitDiff = b.fit - a.fit;
+      if (fitDiff !== 0) return fitDiff;
+      return compareCatalogItems(a.p, b.p, state.sort);
+    });
   const goalFits = Object.fromEntries(ranked.map(({ p, fit }) => [p.id, fit]));
   const sorted = ranked.map((x) => x.p);
   const total = sorted.length;

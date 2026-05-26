@@ -2,7 +2,7 @@ import { parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block"
 import type { OcrNutrition, OcrPayload } from "./types";
 
 export interface OcrTrustOptions {
-  /** Minimum confidence.overall (default: 0.55 tesseract, 0.45 gemini). */
+  /** Minimum confidence.overall (default: 0.55). */
   minOverall?: number;
   /** Max allowed deviation between stated kcal and 4P+4C+9F (default 0.30). */
   macroSanityTolerance?: number;
@@ -21,8 +21,8 @@ const CORE_MACRO_KEYS: Array<keyof OcrNutrition> = [
   "fat_g",
 ];
 
-function defaultMinOverall(payload: OcrPayload): number {
-  return payload.backend === "gemini" ? 0.45 : 0.55;
+function defaultMinOverall(_payload: OcrPayload): number {
+  return 0.55;
 }
 
 function countCoreMacros(n?: OcrNutrition): number {

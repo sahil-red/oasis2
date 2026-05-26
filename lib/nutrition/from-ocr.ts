@@ -1,5 +1,5 @@
 import { mergeNutrition } from "@/lib/grocery/parse-nutrition-block";
-import { nutritionIsSparse } from "@/lib/nutrition/completeness";
+import { nutritionHasCriticalGaps } from "@/lib/nutrition/completeness";
 import type { OcrNutrition } from "@/lib/ocr/types";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -18,7 +18,7 @@ export function ocrNutritionToProduct(n: OcrNutrition): ProductNutrition {
   return out;
 }
 
-/** Fill gaps in sparse platform nutrition from a label OCR read. */
+/** Fill gaps in platform nutrition from a label OCR read (never overwrites existing values). */
 export function mergeOcrIntoProductNutrition(
   current: ProductNutrition | null,
   ocr: OcrNutrition | undefined,
@@ -26,8 +26,17 @@ export function mergeOcrIntoProductNutrition(
   if (!ocr) return current;
   const fromOcr = ocrNutritionToProduct(ocr);
   if (!current) return { ...fromOcr, source: "label" };
-  if (!nutritionIsSparse(current)) return current;
-  const merged = mergeNutrition(fromOcr, current);
-  if (!merged) return current;
-  return { ...merged, source: current.source === "platform" ? "platform" : "label" };
+
+  const merged = mergeNutrition(current, fromOcr);
+  if (!merged || JSON.stringify(merged) === JSON.stringify(current)) return current;
+
+  const hadGaps = nutritionHasCriticalGaps(current);
+  return {
+    ...merged,
+    source: current.source === "platform" ? "platform" : "label",
+    extra: {
+      ...(merged.extra ?? {}),
+      ...(hadGaps ? { ocr_filled_gaps: 1 } : {}),
+    },
+  };
 }

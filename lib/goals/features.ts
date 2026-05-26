@@ -57,6 +57,11 @@ export type GoalFeatures = {
   isCocoaRich: boolean;
   isSugaryDrink: boolean;
   isFreshProduce: boolean;
+  isDessert: boolean;
+  isSweetCategory: boolean;
+  /** Sugar for scoring — uses label values or infers from carbs/aisle when missing. */
+  effectiveSugar: number;
+  effectiveAddedSugar: number;
   isVegLabel: boolean;
   proteinQuality: ProteinQualityInsight | null;
   coreScore: number | null;
@@ -64,6 +69,75 @@ export type GoalFeatures = {
 
 function num(n: unknown): number {
   return typeof n === "number" && Number.isFinite(n) ? n : 0;
+}
+
+function hasReportedSugar(n: ProductNutrition | null): boolean {
+  if (!n) return false;
+  return (
+    (typeof n.added_sugar_g_100g === "number" && n.added_sugar_g_100g > 0) ||
+    (typeof n.sugar_g_100g === "number" && n.sugar_g_100g > 0)
+  );
+}
+
+function ingredientsSuggestSugar(raw: string | null | undefined): boolean {
+  if (!raw?.trim()) return false;
+  return /\b(sugar|jaggery|honey|glucose|fructose|syrup|invert sugar|maltose|sucrose|corn syrup|golden syrup|treacle|molasses)\b/i.test(
+    raw,
+  );
+}
+
+function isSweetCategoryText(category: string | null | undefined, subcategory: string | null | undefined): boolean {
+  const blob = `${category ?? ""} ${subcategory ?? ""}`;
+  return /\b(sweet|mithai|dessert|confection|bakery|ice cream|frozen dessert|chocolates?|candies|candy)\b/i.test(
+    blob,
+  );
+}
+
+function isDessertLikeText(t: string): boolean {
+  if (/\b(atta|flour|dal|pulse|lentil|bean|rice|oil|ghee|masala|spice|paneer|curd|milk powder|whey)\b/i.test(t)) {
+    // Gulab jamun / sweet mixes are desserts despite containing flour or milk solids.
+    if (!/\b(gulab|jamun|jalebi|ladoo|barfi|halwa|kheer|rasgulla|peda|burfi|mithai|sweet)\b/i.test(t)) {
+      return false;
+    }
+  }
+  return /\b(gulab|jamun|jalebi|ladoo|laddu|barfi|burfi|halwa|kheer|rasgulla|peda|mithai|dessert|confection|pastry|donut|doughnut|brownie|cupcake|muffin|cake|kulfi|ice cream|fudge|toffee|candy|cadbury|ferrero|lollipop|gummy|syrup.?filled|sweet mix|instant mix)\b/i.test(
+    t,
+  );
+}
+
+/** Infer sugar when the label omits it but carbs/aisle/ingredients imply a sweet product. */
+export function inferEffectiveSugar(opts: {
+  nutrition: ProductNutrition | null;
+  isSweetCategory: boolean;
+  isDessert: boolean;
+  isSweetSnack: boolean;
+  ingredients_raw: string | null;
+}): { sugar: number; addedSugar: number } {
+  const n = opts.nutrition;
+  const reportedSugar = num(n?.sugar_g_100g);
+  const reportedAdded = num(n?.added_sugar_g_100g);
+  if (hasReportedSugar(n)) {
+    const sugar = Math.max(reportedSugar, reportedAdded);
+    const addedSugar = reportedAdded > 0 ? reportedAdded : reportedSugar;
+    return { sugar, addedSugar };
+  }
+
+  const carbs = num(n?.carbs_g_100g);
+  const fiber = num(n?.fiber_g_100g);
+  const netCarbs = Math.max(0, carbs - fiber);
+  if (netCarbs <= 0) return { sugar: 0, addedSugar: 0 };
+
+  const sweet =
+    opts.isDessert ||
+    opts.isSweetCategory ||
+    opts.isSweetSnack ||
+    ingredientsSuggestSugar(opts.ingredients_raw);
+
+  if (!sweet && netCarbs < 28) return { sugar: 0, addedSugar: 0 };
+
+  const ratio = opts.isDessert ? 0.88 : opts.isSweetCategory || opts.isSweetSnack ? 0.78 : 0.55;
+  const inferred = netCarbs * ratio;
+  return { sugar: inferred, addedSugar: inferred };
 }
 
 function text(input: GoalFeatureInput): string {
@@ -90,6 +164,8 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
   const fiber = num(n?.fiber_g_100g);
   const sugar = num(n?.sugar_g_100g ?? n?.added_sugar_g_100g);
   const addedSugar = num(n?.added_sugar_g_100g ?? n?.sugar_g_100g);
+  const isSweetCategory = isSweetCategoryText(input.category, input.subcategory);
+  const isDessert = isDessertLikeText(t) || isSweetCategory;
   const fat = num(n?.fat_g_100g);
   const saturatedFat = num(n?.saturated_fat_g_100g);
   const sodium = num(n?.sodium_mg_100g);
@@ -128,6 +204,13 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     subcategory: input.subcategory,
   });
   const hasIngredientData = ((input.ingredients_raw ?? "").trim().length > 0) || ((input.attributes?.["Ingredients"] ?? "").trim().length > 0);
+  const effective = inferEffectiveSugar({
+    nutrition: n,
+    isSweetCategory,
+    isDessert,
+    isSweetSnack,
+    ingredients_raw: input.ingredients_raw,
+  });
 
   return {
     hasNutrition: n != null && Object.keys(n).length > 0,
@@ -164,6 +247,10 @@ export function buildGoalFeatures(input: GoalFeatureInput): GoalFeatures {
     isCocoaRich,
     isSugaryDrink,
     isFreshProduce,
+    isDessert,
+    isSweetCategory,
+    effectiveSugar: effective.sugar,
+    effectiveAddedSugar: effective.addedSugar,
     isVegLabel: vegetarianLabelHint(input.attributes ?? null),
     proteinQuality: proteinQualityInsight({
       name: input.name,
@@ -301,31 +388,37 @@ function bulkCaption(f: GoalFeatures): string {
 }
 
 function fatLossCaption(f: GoalFeatures): string {
+  const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+  if (f.isDessert || f.isSweetCategory) return "Dessert — poor for fat loss";
   if (f.kcal >= 450) return "Too calorie dense";
-  if (f.addedSugar >= 15) return "Too sugary for fat loss";
+  if (sugarLoad >= 15) return "Too sugary for fat loss";
   if (f.kcal < 100 && f.protein >= 6) return "Light + protein-rich";
   if (f.kcal < 60) return "Very low calorie";
   if (f.protein >= 20 && f.kcal < 250) return "Lean protein source";
-  if (f.fiber >= 8 && f.addedSugar <= 4) return "Filling, low sugar";
+  if (f.fiber >= 8 && sugarLoad <= 4) return "Filling, low sugar";
   if (f.isProteinSnack && f.kcal > 360) return "Calorie-heavy protein snack";
   if (f.kcal < 200) return "Lean calorie pick";
   return "Moderate calorie load";
 }
 
 function diabeticCaption(f: GoalFeatures): string {
-  if (f.addedSugar >= 18) return "Too much added sugar";
+  const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+  if (f.isDessert) return "Dessert — risky for glucose";
+  if (sugarLoad >= 18) return "Too much added sugar";
   if (f.netCarbs >= 50 && f.fiber < 4) return "Very high net carbs";
   if (f.isSugaryDrink) return "Sugar shock for glucose";
   if (f.isSweetSnack) return "Sweet snack, risky";
   if (f.netCarbs >= 30 && f.fiber < 3) return "Carb-heavy, low fibre";
   if (f.isStaple && f.fiber >= 6) return "Whole-food fibre staple";
-  if (f.fiber >= 6 && f.addedSugar <= 2) return "Low sugar, good fibre";
-  if (f.addedSugar <= 2 && f.netCarbs < 20) return "Low-carb, low sugar";
+  if (f.fiber >= 6 && sugarLoad <= 2) return "Low sugar, good fibre";
+  if (sugarLoad <= 2 && f.netCarbs < 20) return "Low-carb, low sugar";
   return "Moderate for blood sugar";
 }
 
 function pcosCaption(f: GoalFeatures): string {
-  if (f.addedSugar >= 15) return "Sugar — bad for PCOS";
+  const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+  if (f.isDessert) return "Dessert — bad for PCOS";
+  if (sugarLoad >= 15) return "Sugar — bad for PCOS";
   if (f.processingNotes.length >= 3) return "Heavily processed for PCOS";
   if (f.isSweetSnack) return "Sweet snack — limit it";
   if (f.fiber >= 7 && f.addedSugar <= 3) return "Fibre supports insulin";

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedCatalogMeta } from "@/lib/products/catalog-cache";
 
-export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export async function GET(req: NextRequest) {

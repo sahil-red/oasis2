@@ -1,7 +1,42 @@
 import { collectZeptoAttributes } from "@/lib/grocery/parse-zepto-detail";
-import { buildTextFillContext } from "@/lib/nutrition/gemini-text-fill";
 
-/** Build Gemini CONTEXT from Blinkit attributes or Zepto raw_payload. */
+const CONTEXT_KEYS = [
+  "Description",
+  "About the Product",
+  "Ingredients",
+  "Nutritional Information",
+  "Key Features",
+  "Allergen Information",
+  "Diet Preference",
+  "Country of Origin",
+  "Net Quantity",
+  "Shelf Life",
+  "Storage",
+  "Disclaimer",
+  "Manufacturer",
+  "Seller",
+  "Brand",
+  "Type",
+  "Flavour",
+  "Pack Size",
+];
+
+/** Build a plain-text context block from platform attributes (no LLM). */
+export function buildTextFillContext(attrs: Record<string, string>): string {
+  const lines: string[] = [];
+  for (const key of CONTEXT_KEYS) {
+    const val = attrs[key]?.trim();
+    if (val) lines.push(`${key}:\n${val}`);
+  }
+  for (const [key, val] of Object.entries(attrs)) {
+    if (CONTEXT_KEYS.includes(key)) continue;
+    const v = val?.trim();
+    if (v && v.length > 2) lines.push(`${key}:\n${v}`);
+  }
+  return lines.join("\n\n");
+}
+
+/** Build context from Blinkit attributes or Zepto raw_payload. */
 export function buildProductFillContext(
   attrs: Record<string, string> | null,
   raw_payload: Record<string, unknown> | null,

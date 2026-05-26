@@ -82,6 +82,7 @@ export function computeGoalFit(
         fit = opts.core_score ?? 50;
         break;
       }
+      const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
       const pq = f.proteinQuality;
       const proteinEff =
         pq?.tier === "grain"
@@ -93,14 +94,16 @@ export function computeGoalFit(
         proteinEff +
         Math.min(18, f.proteinPer100Kcal * 2.2) +
         Math.min(10, f.fiber * 1.2) -
-        f.addedSugar * 1.2 -
+        sugarLoad * 1.2 -
         f.saturatedFat * 0.8 -
         Math.max(0, f.kcal - 420) * 0.04 -
         f.additiveBurden * 6 -
         Math.max(0, f.sodium - 300) * 0.016;
+      if (f.isDessert || f.isSweetCategory) fit -= 18;
       if (pq?.tier === "grain" && f.protein >= 8) fit = Math.min(fit, 52);
       if (f.isProteinSnack) fit = Math.min(fit, f.additiveBurden > 1.5 ? 68 : 78);
       if (f.protein < 5) fit = Math.min(fit, 30);
+      if (sugarLoad >= 20 && f.protein < 18) fit = Math.min(fit, 38);
       break;
     }
     case "bulk": {
@@ -108,6 +111,7 @@ export function computeGoalFit(
         fit = opts.core_score ?? 50;
         break;
       }
+      const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
       // Light quality anchor — bulk prioritises protein + calories over label polish.
       const qualityAnchor = (opts.core_score ?? 50) * 0.18;
       const calorieScore = Math.min(22, Math.max(0, (f.kcal - 160) * 0.07));
@@ -120,7 +124,7 @@ export function computeGoalFit(
         proteinDensity +
         Math.min(10, f.kcalPerRupee100 * 0.022) +
         (f.carbs > 35 ? 4 : f.carbs > 22 ? 2 : 0) -
-        f.addedSugar * 0.9 -
+        sugarLoad * 0.9 -
         f.additiveBurden * 4 -
         Math.max(0, f.sodium - 250) * 0.016 -
         Math.max(0, f.saturatedFat - 8) * 0.5;
@@ -132,7 +136,8 @@ export function computeGoalFit(
       } else if (f.protein >= 15 && f.proteinPer100Kcal >= 8) {
         fit += 5;
       }
-      if (f.addedSugar > 18 && !f.isStaple && !f.isProteinPowder) fit = Math.min(fit, 48);
+      if (sugarLoad > 18 && !f.isStaple && !f.isProteinPowder) fit = Math.min(fit, 48);
+      if (f.isDessert && !f.isProteinPowder) fit = Math.min(fit, 42);
       if (f.sodium >= 1000) fit = Math.min(fit, 42);
       if (f.kcal < 200 && f.protein < 15) fit = Math.min(fit, 40);
       break;
@@ -144,14 +149,15 @@ export function computeGoalFit(
       }
       const d = diabeticGoalFit({
         nutrition: opts.nutrition!,
-        addedSugarG: f.addedSugar,
-        sugarG: f.sugar,
+        addedSugarG: f.effectiveAddedSugar,
+        sugarG: f.effectiveSugar,
         carbsG: f.carbs,
         fiberG: f.fiber,
         flagged: Math.round(f.additiveBurden),
         name: opts.name ?? "",
         category: opts.category ?? null,
         subcategory: opts.subcategory ?? null,
+        isDessert: f.isDessert,
       });
       fit = d.fit;
       if (f.processingNotes.some((n) => /syrup|refined/i.test(n))) fit -= 8;
@@ -165,14 +171,15 @@ export function computeGoalFit(
       }
       const p = pcosGoalFit({
         nutrition: opts.nutrition!,
-        addedSugarG: f.addedSugar,
-        sugarG: f.sugar,
+        addedSugarG: f.effectiveAddedSugar,
+        sugarG: f.effectiveSugar,
         carbsG: f.carbs,
         fiberG: f.fiber,
         flagged: Math.round(f.additiveBurden),
         name: opts.name ?? "",
         category: opts.category ?? null,
         subcategory: opts.subcategory ?? null,
+        isDessert: f.isDessert,
       });
       fit = p.fit;
       if (f.isSweetSnack) fit -= 4;
@@ -184,14 +191,24 @@ export function computeGoalFit(
         fit = opts.core_score ?? 50;
         break;
       }
+      const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+      const proteinDensity = f.proteinPer100Kcal;
       fit =
-        76 -
-        f.kcal * 0.075 +
-        f.protein * 2.2 +
-        f.fiber * 2.4 -
-        f.addedSugar * 2 -
-        f.sodium * 0.008 -
-        f.additiveBurden * 6;
+        52 +
+        Math.min(22, proteinDensity * 3.2) +
+        Math.min(14, f.fiber * 1.8) -
+        Math.max(0, f.kcal - 110) * 0.11 -
+        sugarLoad * 2.6 -
+        Math.max(0, f.fat - 10) * 0.9 -
+        f.saturatedFat * 1.1 -
+        f.additiveBurden * 5 -
+        f.sodium * 0.006;
+      if (f.isDessert || f.isSweetCategory) fit -= 28;
+      if (f.isSweetSnack || f.isSugaryDrink) fit -= 14;
+      if (sugarLoad >= 12) fit = Math.min(fit, 38);
+      if (sugarLoad >= 20) fit = Math.min(fit, 22);
+      if (f.kcal >= 320 && proteinDensity < 6) fit = Math.min(fit, 35);
+      if (f.kcal >= 450) fit = Math.min(fit, 18);
       if (f.isProteinSnack && f.kcal > 360) fit = Math.min(fit, 68);
       break;
     }
@@ -215,19 +232,24 @@ export function computeGoalFit(
         core_score: opts.core_score,
       });
       fit -= f.additiveBurden * 3 + Math.max(0, f.sodium - 400) * 0.006;
+      if (f.isDessert || f.isSweetCategory) fit = Math.min(fit, 35);
+      if (Math.max(f.addedSugar, f.effectiveAddedSugar) >= 15 && f.protein < 20) {
+        fit = Math.min(fit, 40);
+      }
       if (f.isProteinSnack && f.additiveBurden > 1.5) fit = Math.min(fit, 65);
       break;
     }
     case "kids": {
+      const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
       fit =
         (opts.core_score ?? 50) -
         f.additiveBurden * 12 -
         f.hazardousAdditiveCount * 10 -
-        f.addedSugar * 1.4 -
+        sugarLoad * 1.4 -
         f.sodium * 0.01;
-      if (f.isSweetSnack) fit -= 12;
+      if (f.isSweetSnack || f.isDessert) fit -= 12;
       if (f.isSugaryDrink) fit -= 16;
-      if (!f.hasIngredientData && (f.isSnack || f.isSugaryDrink || f.addedSugar > 0)) {
+      if (!f.hasIngredientData && (f.isSnack || f.isSugaryDrink || sugarLoad > 0)) {
         fit = Math.min(fit, 42);
       }
       break;

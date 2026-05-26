@@ -2,7 +2,7 @@
 /**
  * Fill nutrition + ingredients for priority SKUs using only:
  *   1) Saved Blinkit raw_payload (reparse + reconcile)
- *   2) Label OCR on product images (Gemini vision / Tesseract — no web search)
+ *   2) Label OCR on product images (PaddleOCR — local Python, no cloud)
  *
  *   pnpm fill:nutrition:priority
  *   pnpm fill:nutrition:priority -- --dry-run
@@ -22,11 +22,9 @@ import { mergeOcrIntoProductNutrition } from "@/lib/nutrition/from-ocr";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import {
   OcrOrchestrator,
-  RemoteBudgetExhausted,
-  shutdownTesseract,
-  type OcrBackend,
+  shutdownOcr,
+  paddleSummary,
 } from "@/lib/ocr";
-import { geminiPoolSummary } from "@/lib/ocr/gemini-pool";
 import { persistCoreScore, hasScoreableNutrition } from "@/lib/scoring/persist-core";
 import { adminClient } from "@/lib/supabase/admin";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -41,19 +39,13 @@ type SeedFile = {
 function parseArgs() {
   const argv = process.argv.slice(2);
   let slug: string | null = null;
-  let backend: OcrBackend | null = null;
   for (const a of argv) {
     if (a.startsWith("--slug=")) slug = a.split("=")[1];
-    if (a.startsWith("--backend=")) {
-      const v = a.split("=")[1];
-      if (v === "gemini" || v === "tesseract" || v === "auto") backend = v;
-    }
   }
   return {
     dryRun: argv.includes("--dry-run"),
     noOcr: argv.includes("--no-ocr"),
     slug,
-    backend,
   };
 }
 
@@ -104,13 +96,13 @@ async function main() {
   }
 
   const supabase = adminClient();
-  const orch = new OcrOrchestrator(supabase, { backend: args.backend ?? undefined });
+  const orch = new OcrOrchestrator(supabase);
   let blinkitFixed = 0;
   let ocrFixed = 0;
   let scored = 0;
 
   console.log(
-    `[fill-priority-nutrition] ${entries.length} SKUs (ocr=${!args.noOcr}, ${geminiPoolSummary()})`,
+    `[fill-priority-nutrition] ${entries.length} SKUs (ocr=${!args.noOcr}, ${paddleSummary()})`,
   );
 
   for (let i = 0; i < entries.length; i++) {
@@ -230,10 +222,6 @@ async function main() {
             console.log(`${prefix} — OCR found no label`);
           }
         } catch (err) {
-          if (err instanceof RemoteBudgetExhausted) {
-            console.warn("[fill-priority-nutrition] Gemini OCR budget exhausted.");
-            break;
-          }
           console.warn(`${prefix} — OCR failed: ${(err as Error).message}`);
         }
       }
@@ -257,7 +245,7 @@ async function main() {
     }
   }
 
-  await shutdownTesseract();
+  await shutdownOcr();
   console.log(
     `[fill-priority-nutrition] done. blinkit=${blinkitFixed} ocr=${ocrFixed} rescored=${scored}`,
   );

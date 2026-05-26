@@ -50,7 +50,7 @@ export async function writeCache(
       image_sha256: args.sha,
       image_url: args.imageUrl,
       backend: args.payload.backend,
-      model: args.payload.model ?? null,
+      model: null,
       payload: args.payload,
       confidence: args.payload.confidence.overall,
       flags: {

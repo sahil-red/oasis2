@@ -4,12 +4,12 @@
  * structured ingredients + nutrition.
  *
  *   pnpm ocr                       # default: only OCR what's actually missing
- *   pnpm ocr -- --limit=200        # stop after 200 products
- *   pnpm ocr -- --backend=tesseract  # force fully-local
- *   pnpm ocr -- --with-detail      # only SKUs that finished the PDP scrape
- *   pnpm ocr -- --force            # OCR even products that have platform data
- *                                  # (useful for cross-validation runs)
- *   pnpm ocr -- --bypass-cache     # re-OCR everything (use sparingly)
+ *   pnpm ocr -- --limit=200
+ *   pnpm ocr -- --with-detail
+ *   pnpm ocr -- --force
+ *   pnpm ocr -- --bypass-cache
+ *
+ * Requires Python PaddleOCR — see ocr-paddle/README.md
  *
  * Default skip rule:
  *   A product is considered "platform-complete" and skipped when it has
@@ -26,11 +26,8 @@
  *   • `image_ocr_cache` entry    ← keyed on SHA-256 of the image bytes
  *
  * Notes:
- *   • If the same image is shared across SKUs (variant pack sizes), the
- *     image_ocr_cache de-dupes — only the first product pays the Gemini call.
- *   • The orchestrator self-rate-limits to OCR_MAX_CALLS_PER_RUN. To
- *     process 10k products on Gemini free tier (~1500 RPD), batch this
- *     script across multiple days, or set OCR_BACKEND=tesseract.
+ *   • image_ocr_cache de-dupes by image bytes hash.
+ *   • For nutrition gaps (e.g. missing sugar), use: pnpm ocr:gaps -- --gaps-only
  */
 
 import { config as loadEnv } from "dotenv";
@@ -39,18 +36,15 @@ import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
 import { mergeOcrIntoProductNutrition } from "@/lib/nutrition/from-ocr";
 import {
   OcrOrchestrator,
-  RemoteBudgetExhausted,
-  shutdownTesseract,
-  type OcrBackend,
+  shutdownOcr,
+  paddleSummary,
 } from "@/lib/ocr";
-import { geminiPoolSummary } from "@/lib/ocr/gemini-pool";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 loadEnv({ path: ".env.local" });
 
 interface Args {
   limit: number | null;
-  backend: OcrBackend | null;
   bypassCache: boolean;
   retryFailed: boolean;
   dryRun: boolean;
@@ -61,17 +55,11 @@ interface Args {
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
   let limit: number | null = null;
-  let backend: OcrBackend | null = null;
   for (const a of argv) {
     if (a.startsWith("--limit=")) limit = Number(a.split("=")[1]);
-    if (a.startsWith("--backend=")) {
-      const v = a.split("=")[1];
-      if (v === "gemini" || v === "tesseract" || v === "auto") backend = v;
-    }
   }
   return {
     limit,
-    backend,
     bypassCache: argv.includes("--bypass-cache"),
     retryFailed: argv.includes("--retry-failed"),
     dryRun: argv.includes("--dry-run"),
@@ -95,10 +83,7 @@ async function main() {
     console.log("[03-ocr-labels] --with-detail: only products with raw_payload (PDP scraped).");
   }
 
-  const orch = new OcrOrchestrator(supabase, {
-    backend: args.backend ?? undefined,
-    bypassCache: args.bypassCache,
-  });
+  const orch = new OcrOrchestrator(supabase, { bypassCache: args.bypassCache });
 
   const bulkSkipped = await markPlatformCompleteBulk(supabase, args.withDetail, args.dryRun);
   if (bulkSkipped > 0) {
@@ -134,14 +119,10 @@ async function main() {
   }
 
   const total = rows.length;
-  const backend = args.backend ?? process.env.OCR_BACKEND ?? "auto";
   console.log(
-    `[03-ocr-labels] processing ${total} products (backend=${backend}, ` +
-      `gemini=${geminiPoolSummary()}, budget=${process.env.OCR_MAX_CALLS_PER_RUN ?? "400"}/run)`,
+    `[03-ocr-labels] processing ${total} products (paddle=${paddleSummary()})`,
   );
-  console.log(
-    "[03-ocr-labels] first product may take 30–60s (Tesseract worker cold start + image download).",
-  );
+  console.log("[03-ocr-labels] first product may take a moment (PaddleOCR model load).");
 
   let success = 0;
   let noLabel = 0;
@@ -191,7 +172,7 @@ async function main() {
       continue;
     }
 
-    console.log(`         … ocr ${imageUrls.length} image(s) (may call Gemini)…`);
+    console.log(`         … ocr ${imageUrls.length} image(s)…`);
 
     try {
       const result = await orch.ocrProductImages(imageUrls);
@@ -252,12 +233,6 @@ async function main() {
         console.log(`         ∅ low confidence / no label  ${elapsed(itemStart)}`);
       }
     } catch (err) {
-      if (err instanceof RemoteBudgetExhausted) {
-        console.log(
-          `[03-ocr-labels] hit Gemini budget after ${i + 1} products. Re-run later.`,
-        );
-        break;
-      }
       console.warn(`         ✗ ${(err as Error).message.slice(0, 120)}  ${elapsed(itemStart)}`);
       await updateProduct(supabase, r.id, {
         ocr_status: "failed",
@@ -270,8 +245,7 @@ async function main() {
       const runSec = ((Date.now() - runStart) / 1000).toFixed(0);
       console.log(
         `[03-ocr-labels] checkpoint ${i + 1}/${total} (${runSec}s)  ` +
-          `✓${success}  ∅${noLabel}  ⚡${skipped}  ✗${failed}  ` +
-          `gemini=${orch.stats.remoteCalls}/${orch.stats.remoteBudget}`,
+          `✓${success}  ∅${noLabel}  ⚡${skipped}  ✗${failed}`,
       );
     }
   }
@@ -279,11 +253,10 @@ async function main() {
   const runSec = ((Date.now() - runStart) / 1000).toFixed(0);
   console.log(
     `[03-ocr-labels] done (${runSec}s). ` +
-      `success=${success} no_label=${noLabel} skipped_platform=${skipped} failed=${failed} ` +
-      `gemini_calls=${orch.stats.remoteCalls}`,
+      `success=${success} no_label=${noLabel} skipped_platform=${skipped} failed=${failed}`,
   );
 
-  await shutdownTesseract();
+  await shutdownOcr();
 }
 
 function progressBar(done: number, total: number, width = 24): string {
