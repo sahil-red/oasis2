@@ -1,4 +1,21 @@
 -- Catalog performance: precomputed visibility + filter/stats RPCs + indexes.
+-- Includes 0005 column prereqs when prod skipped that migration.
+
+alter table public.products
+  add column if not exists l3_category text;
+
+alter table public.products
+  add column if not exists product_key text;
+
+alter table public.products
+  add column if not exists data_source text;
+
+update public.products
+set data_source = 'scrape'
+where data_source is null;
+
+alter table public.products
+  alter column data_source set default 'scrape';
 
 alter table public.products
   add column if not exists catalog_visible boolean not null default false;

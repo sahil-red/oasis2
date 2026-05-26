@@ -1,15 +1,28 @@
 /**
  * Backfill products.catalog_visible from TS eligibility rules.
  * Run after applying migration 0006_catalog_performance.sql:
- *   pnpm tsx scripts/backfill-catalog-visible.ts
+ *   pnpm catalog:backfill-visible
  */
+import { config as loadEnv } from "dotenv";
 import { computeCatalogVisible } from "@/lib/products/catalog-eligibility";
 import { adminClient } from "@/lib/supabase/admin";
+
+loadEnv({ path: ".env.local" });
 
 const PAGE = 500;
 
 async function main() {
   const supabase = adminClient();
+
+  const { error: probeErr } = await supabase.from("products").select("catalog_visible").limit(0);
+  if (probeErr?.message.includes("catalog_visible")) {
+    console.error(
+      "[backfill-catalog-visible] Missing column products.catalog_visible.\n" +
+        "Run migration first: paste supabase/migrations/0006_catalog_performance.sql in Supabase SQL Editor, then retry.",
+    );
+    process.exit(1);
+  }
+
   let offset = 0;
   let updated = 0;
   let scanned = 0;
