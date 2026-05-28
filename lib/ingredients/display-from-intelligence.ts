@@ -15,10 +15,14 @@ const BENEFICIAL_ROLES = new Set([
 ]);
 
 const PROBIOTIC_NAME_RE =
-  /\b(probiotic|culture|lactobacillus|bifidobacterium|bacillus)\b/i;
+  /\b(probiotic|prebiotic|fos|fructooligosaccharide|inulin|culture|lactobacillus|bifidobacterium|bacillus)\b/i;
 
 function isProbioticName(...parts: string[]): boolean {
   return PROBIOTIC_NAME_RE.test(parts.join(" "));
+}
+
+function isPrebioticRole(row: IngredientIntelligenceRow): boolean {
+  return row.role === "probiotic" || PROBIOTIC_NAME_RE.test(row.normalized_name);
 }
 
 const TIER_LABELS: Record<IngredientRisk, string> = {
@@ -33,7 +37,7 @@ function riskFromIntelligence(
   row: IngredientIntelligenceRow,
   displayName: string,
 ): IngredientRisk {
-  if (isProbioticName(displayName, row.display_name ?? "", row.normalized_name)) {
+  if (isPrebioticRole(row) || isProbioticName(displayName, row.display_name ?? "", row.normalized_name)) {
     return "risk-free";
   }
   if (row.concern_tier === "hazardous" || row.concern_tier === "problematic") {
@@ -46,6 +50,16 @@ function riskFromIntelligence(
   return "unknown";
 }
 
+function tierLabelFromIntelligence(row: IngredientIntelligenceRow, displayName: string): string {
+  if (isPrebioticRole(row) || isProbioticName(displayName, row.display_name ?? "", row.normalized_name)) {
+    return "Prebiotic";
+  }
+  const risk = riskFromIntelligence(row, displayName);
+  if (risk === "risk-free" && row.nova_class) return `NOVA ${row.nova_class} · Beneficial`;
+  if (row.nova_class) return `NOVA ${row.nova_class} · ${TIER_LABELS[risk]}`;
+  return TIER_LABELS[risk];
+}
+
 function applyProbioticDisplayFallback(
   item: IngredientDisplayItem,
 ): IngredientDisplayItem {
@@ -53,7 +67,7 @@ function applyProbioticDisplayFallback(
   return {
     ...item,
     risk: "risk-free",
-    tierLabel: "Probiotic",
+    tierLabel: "Prebiotic / Probiotic",
     flagged: false,
   };
 }
@@ -98,18 +112,20 @@ function fromIntelligence(
   const risk = riskFromIntelligence(row, display);
   const why =
     row.concern_reasons.length > 0
-      ? row.concern_reasons.join(" ")
+      ? row.concern_reasons.join(" · ")
       : base.why;
   const nova = row.nova_class;
-  const role = row.role.replace(/_/g, " ");
-  const tierLabel =
-    risk === "risk-free" && isProbioticName(display, base.key)
-      ? "Probiotic"
-      : risk === "unknown"
-        ? `Neutral · NOVA ${nova}`
-        : risk === "risk-free"
-          ? `${TIER_LABELS[risk]} · ${role}`
-          : `${TIER_LABELS[risk]} · NOVA ${nova}`;
+
+  let tierLabel: string;
+  if (isPrebioticRole(row) || isProbioticName(display, base.key, row.normalized_name)) {
+    tierLabel = "Prebiotic · Beneficial";
+  } else if (risk === "risk-free") {
+    tierLabel = nova ? `Beneficial · NOVA ${nova}` : "Beneficial";
+  } else if (risk === "unknown") {
+    tierLabel = nova ? `Neutral · NOVA ${nova}` : "Neutral";
+  } else {
+    tierLabel = nova ? `${TIER_LABELS[risk]} · NOVA ${nova}` : TIER_LABELS[risk];
+  }
 
   return {
     ...base,

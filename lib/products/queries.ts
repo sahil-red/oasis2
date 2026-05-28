@@ -578,7 +578,7 @@ function buildCatalogDbQuery(
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
   if (state.verdict) q = q.eq("core_scores.verdict", state.verdict);
-  if (state.sublabel) q = q.contains("core_scores.verdict_sublabels", [state.sublabel]);
+  if (state.sublabel) q = q.filter("core_scores.verdict_sublabels", "cs", `{"${state.sublabel}"}`);
   if (state.brand) q = q.eq("brand", state.brand);
   q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);
@@ -644,6 +644,10 @@ function mapScoreSortedRow(row: Record<string, unknown>): ProductListItem {
       score: row.score as number,
       grade: row.grade as Grade,
       band: row.band as ScoreBand,
+      verdict: (row.verdict as string | null) ?? null,
+      verdict_sublabels: (row.verdict_sublabels as string[] | null) ?? [],
+      relative_score: (row.relative_score as number | null) ?? null,
+      cohort_size: (row.cohort_size as number | null) ?? null,
     },
   } as ProductListItem;
 }
@@ -653,7 +657,8 @@ function applyScoreCatalogFilters(q: any, state: CatalogFilterState): any {
   if (state.grade) q = q.eq("grade", state.grade);
   if (state.minScore > 0) q = q.gte("score", state.minScore);
   if (state.verdict) q = q.eq("verdict", state.verdict);
-  if (state.sublabel) q = q.contains("verdict_sublabels", [state.sublabel]);
+  // JSONB array containment: verdict_sublabels @> '["sublabel"]'::jsonb
+  if (state.sublabel) q = q.filter("verdict_sublabels", "cs", `{"${state.sublabel}"}`);
   if (state.brand) q = q.eq("products.brand", state.brand);
   q = applyCategoryFilter(q, state, "products");
   if (state.subcategory) q = q.eq("products.subcategory", state.subcategory);
@@ -678,7 +683,7 @@ function buildScoreSortedCatalogQuery(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase as any)
     .from("core_scores")
-    .select(`score, grade, band, products!inner(${GRID_LIST_FIELDS}, catalog_visible)`)
+    .select(`score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size, products!inner(${GRID_LIST_FIELDS}, catalog_visible)`)
     .eq("products.platform", "zepto")
     .eq("products.catalog_visible", true);
   q = applyScoreCatalogFilters(q, state);
@@ -734,6 +739,8 @@ function countNeedsScoreJoin(state: CatalogFilterState): boolean {
     state.onlyScored ||
     state.minScore > 0 ||
     Boolean(state.grade) ||
+    Boolean(state.verdict) ||
+    Boolean(state.sublabel) ||
     state.sort === "score-desc" ||
     state.sort === "score-asc"
   );
@@ -760,7 +767,7 @@ async function countCatalogMatches(
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
   if (state.verdict) q = q.eq("core_scores.verdict", state.verdict);
-  if (state.sublabel) q = q.contains("core_scores.verdict_sublabels", [state.sublabel]);
+  if (state.sublabel) q = q.filter("core_scores.verdict_sublabels", "cs", `{"${state.sublabel}"}`);
   if (state.brand) q = q.eq("brand", state.brand);
   q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);

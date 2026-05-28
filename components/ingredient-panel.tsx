@@ -110,24 +110,30 @@ export function IngredientPanel({
     );
   }
 
-  // Summary bar: single merged pill row
+  // Summary bar
   const ratedPct = summary.total > 0 ? Math.round((summary.rated / summary.total) * 100) : 0;
-  const allClean = summary.flagged === 0 && summary.hazardous === 0;
+  const watchfulCount = items.filter((i) => i.risk === "limited").length;
+  const allClean = summary.flagged === 0 && summary.hazardous === 0 && watchfulCount === 0;
+  const concernCount = summary.flagged + watchfulCount;
 
   return (
     <div className="space-y-3">
       {/* ── merged summary bar ── */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-[12px]">
-        {/* flagged / clean signal */}
         {allClean ? (
           <span className="flex items-center gap-1.5 font-semibold text-[#4ade80]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-            No flagged additives
+            No concerns
           </span>
-        ) : (
+        ) : summary.hazardous > 0 ? (
           <span className="flex items-center gap-1.5 font-semibold text-[#f87171]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
-            {summary.flagged} flagged{summary.hazardous > 0 ? ` · ${summary.hazardous} high risk` : ""}
+            {summary.hazardous} high risk · {summary.flagged} flagged
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 font-semibold text-[#f59e0b]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
+            {concernCount} concern{concernCount !== 1 ? "s" : ""}
           </span>
         )}
 
