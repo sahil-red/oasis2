@@ -54,7 +54,7 @@ function parseArgs() {
     if (a.startsWith("--sku=")) sku = a.split("=")[1]?.trim() || null;
     if (a.startsWith("--name=")) nameQuery = a.slice("--name=".length).trim() || null;
     if (a.startsWith("--ocr-concurrency=")) {
-      ocrConcurrency = Math.max(1, Math.min(8, Number(a.split("=")[1]) || 4));
+      ocrConcurrency = Math.max(1, Math.min(32, Number(a.split("=")[1]) || 4));
     }
   }
 

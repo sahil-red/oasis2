@@ -1,77 +1,97 @@
+import {
+  CATEGORY_DEFAULT_ROLE,
+  normTaxonomyLabel,
+  SUBCATEGORY_ROLE,
+} from "@/lib/scoring/role-cohort-taxonomy";
+
 export type RoleCohort = "staple" | "snack" | "treat" | "meal_replacement" | "adjunct";
 
-export function inferRoleCohort(opts: {
+export type RoleCohortInput = {
   name?: string | null;
   category?: string | null;
   subcategory?: string | null;
-}): RoleCohort {
-  const name = (opts.name ?? "").toLowerCase();
-  const cat = (opts.category ?? "").toLowerCase();
-  const sub = (opts.subcategory ?? "").toLowerCase();
-  const hay = `${name} ${cat} ${sub}`;
+};
 
-  // Plain bubbly water (soda water, sparkling water, club soda) — NOT treats.
-  // Must come before treat regex which would match `\bsoda\b`.
-  if (
-    /\b(soda water|sparkling water|carbonated water|club soda|seltzer|mineral water|drinking water|spring water)\b/i.test(name)
-  ) {
-    return "staple";
-  }
+/** Plain / zero-calorie drinks — never treats. Checked before generic soda rules. */
+const PLAIN_WATER_NAME_RE =
+  /\b(soda water|sparkling water|carbonated water|club soda|seltzer|tonic water|mineral water|drinking water|spring water|coconut water|plain water|table water)\b/i;
 
-  // Adjuncts: seasonings, oils, condiments, tea/coffee. Identified by NAME or
-  // SUBCATEGORY only — NOT category — because "Atta, Rice, Oil & Dals" contains
-  // the word "oil" and would falsely flag flour/rice/dal as adjuncts.
-  const adjunctNameRe =
-    /\b(tea|chai|coffee|masala|spice|seasoning|hing|turmeric|coriander|chilli powder|garam|chaat masala|essence|flavouring|flavoring|oil|ghee|vinegar|soy sauce|ketchup|chutney|pickle|achaar)\b/i;
-  const adjunctSubRe =
-    /\b(masala|spice|powder|paste|oil|ghee|vinegar|condiment|pickle|chutney|seasoning|tea|coffee)\b/i;
-  if (
-    (adjunctNameRe.test(name) || adjunctSubRe.test(sub)) &&
-    !/\b(biscuit|cookie|chip|chocolate|noodle|dahi|milk|bread|paneer|cake)\b/i.test(name)
-  ) {
-    return "adjunct";
-  }
+/** Sweet soda / cola in product name (name-only — not category haystack). */
+const SWEET_SODA_NAME_RE =
+  /\b(cola|pepsi|thums up|thumbs up|sprite|fanta|mountain dew|7up|7-up|mirinda|limca|maaza|frooti|appy|paper boat.*juice|red bull|monster energy)\b/i;
 
-  if (
-    /\b(chip|chips|crisp|namkeen|bhujia|kurkure|wafer|biscuit|cookie|cracker|rusk)\b/i.test(
-      hay,
-    )
-  ) {
-    return "snack";
-  }
+/** Generic "soda" in name but not plain water. */
+const GENERIC_SODA_NAME_RE = /\bsoda\b/i;
 
-  // "rice cakes", "oat cakes", "ragi cake", "fish cake" etc. are NOT desserts.
-  // Match the dessert sense of "cake" only when not preceded by a grain/savoury word.
-  const dessertCakeRe = /\b(?<!rice |oat |oats |ragi |bajra |jowar |multigrain |wholegrain |whole grain |fish |chicken |veg |paneer |corn )(cake|pastry|brownie|cupcake|muffin)s?\b/i;
-  if (
-    /\b(chocolate|candy|ice cream|kulfi|toffee|gummies|gummy|sweet treat|dessert|cola|soda|soft drink|sweetened|tetra juice|cold drink)\b/i.test(
-      hay,
-    ) ||
-    dessertCakeRe.test(name) ||
-    /\b(Sweet Tooth|Chocolates|Ice Cream|Desserts?)\b/i.test(cat)
-  ) {
+const SNACK_NAME_RE =
+  /\b(chip|chips|crisp|namkeen|bhujia|kurkure|wafer|biscuit|cookie|cracker|rusk)\b/i;
+
+const DESSERT_CAKE_RE =
+  /\b(?<!rice |oat |oats |ragi |bajra |jowar |multigrain |wholegrain |whole grain |fish |chicken |veg |paneer |corn )(cake|pastry|brownie|cupcake|muffin)s?\b/i;
+
+const TREAT_NAME_RE =
+  /\b(chocolate|candy|ice cream|kulfi|toffee|gummies|gummy|sweet treat|dessert|soft drink|sweetened|tetra juice)\b/i;
+
+const MEAL_REPLACEMENT_NAME_RE =
+  /\b(protein bar|energy bar|ready to eat|rte|instant noodle|maggi|meal kit|breakfast cereal)\b/i;
+
+const STAPLE_NAME_RE =
+  /\b(milk|dahi|yogurt|curd|paneer|egg|anda|chicken|fish|meat|prawn|dal|atta|flour|millets?|oats|fruit|vegetable|produce|bread|roti|chapati|pav)\b/i;
+
+/** Cooking oils, spices, condiments — product name only. */
+const ADJUNCT_NAME_RE =
+  /\b(mustard oil|olive oil|sunflower oil|groundnut oil|peanut oil|coconut oil|sesame oil|soyabean oil|soybean oil|rice bran oil|canola oil|vegetable oil|refined oil|wood cold pressed|cold pressed oil|ghee|vanaspati|tea powder|chai masala|coffee powder|instant coffee|masala powder|spice mix|seasoning|hing|turmeric powder|coriander powder|chilli powder|garam masala|chaat masala|vinegar|soy sauce|ketchup|pickle|achaar|chutney)\b/i;
+
+function roleFromSubcategory(sub: string, name: string): RoleCohort | null {
+  const key = normTaxonomyLabel(sub);
+  if (key === "soda & mixers") {
+    if (PLAIN_WATER_NAME_RE.test(name)) return "staple";
+    if (SWEET_SODA_NAME_RE.test(name)) return "treat";
+    if (GENERIC_SODA_NAME_RE.test(name) && !PLAIN_WATER_NAME_RE.test(name)) return "treat";
+    // Unspecified mixers / tonic → treat
     return "treat";
   }
+  return SUBCATEGORY_ROLE[key] ?? null;
+}
 
-  if (
-    /\b(protein bar|energy bar|ready to eat|rte|instant noodle|maggi|meal kit|breakfast cereal)\b/i.test(
-      hay,
-    )
-  ) {
-    return "meal_replacement";
+function roleFromCategoryDefault(cat: string): RoleCohort | null {
+  return CATEGORY_DEFAULT_ROLE[normTaxonomyLabel(cat)] ?? null;
+}
+
+/**
+ * Infer how the product is used in a diet (staple vs treat vs adjunct…).
+ *
+ * Priority: name exceptions → subcategory map → name patterns → category default → staple.
+ * Never match short tokens (oil, soda, tea, rice) against combined category+name haystacks.
+ */
+export function inferRoleCohort(opts: RoleCohortInput): RoleCohort {
+  const name = (opts.name ?? "").toLowerCase();
+  const cat = (opts.category ?? "").trim();
+  const sub = (opts.subcategory ?? "").trim();
+
+  if (PLAIN_WATER_NAME_RE.test(name)) return "staple";
+
+  if (sub) {
+    const fromSub = roleFromSubcategory(sub, name);
+    if (fromSub) return fromSub;
   }
 
-  if (
-    /\b(milk|dahi|yogurt|curd|paneer|egg|anda|chicken|fish|meat|prawn|dal|atta|rice|oats|fruit|vegetable|produce|bread|roti|chapati|pav)\b/i.test(
-      hay,
-    ) ||
-    /\b(Dairy|Eggs|Chicken|Meat|Fish|Fruits|Vegetables|Atta|Rice|Pulses)\b/i.test(cat)
-  ) {
-    return "staple";
-  }
+  if (ADJUNCT_NAME_RE.test(name)) return "adjunct";
 
-  if (/\b(Snacks|Munchies|Namkeen)\b/i.test(cat)) return "snack";
-  if (/\b(Cold Drinks|Juices|Beverages)\b/i.test(cat)) return "treat";
+  if (SNACK_NAME_RE.test(name)) return "snack";
+
+  if (TREAT_NAME_RE.test(name) || DESSERT_CAKE_RE.test(name)) return "treat";
+  if (SWEET_SODA_NAME_RE.test(name)) return "treat";
+  if (GENERIC_SODA_NAME_RE.test(name) && !PLAIN_WATER_NAME_RE.test(name)) return "treat";
+
+  if (MEAL_REPLACEMENT_NAME_RE.test(name)) return "meal_replacement";
+
+  if (STAPLE_NAME_RE.test(name)) return "staple";
+
+  if (cat) {
+    const fromCat = roleFromCategoryDefault(cat);
+    if (fromCat) return fromCat;
+  }
 
   return "staple";
 }
