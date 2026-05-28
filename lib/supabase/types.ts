@@ -59,7 +59,7 @@ export interface ProductNutrition {
   iron_mg_100g?: number;
   caffeine_mg_100g?: number;
   /** Free-form, e.g. when a value didn't fit the schema. */
-  extra?: Record<string, number | string>;
+  extra?: Record<string, number | string | null>;
   /** Where the values came from.
    *  - "platform" → from the grocery platform's structured API (e.g. Blinkit's PDP fields)
    *  - "label"    → from the printed back-label text (after OCR + light cleanup)

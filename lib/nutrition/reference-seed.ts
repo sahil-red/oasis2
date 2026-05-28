@@ -219,6 +219,34 @@ function tryCategoryHint(
   return best;
 }
 
+// Categories where reference-seed (raw food) nutrition is meaningful.
+// Anything outside this allowlist must NOT receive reference-fill — packaged products
+// have brand/process-specific nutrition that raw-food reference data cannot represent.
+const REFERENCE_FILL_ALLOWLIST = [
+  "Fruits & Vegetables",
+  "Fresh Fruits",
+  "Fresh Vegetables",
+  "Vegetables",
+  "Fruits",
+  "Eggs, Meat & Fish",
+  "Chicken, Meat & Fish",
+  "Eggs",
+  "Paneer & Cheese",
+  "Sprouts",
+];
+
+function isAllowedForReferenceFill(
+  category?: string | null,
+  subcategory?: string | null,
+): boolean {
+  const haystack = `${category ?? ""}|${subcategory ?? ""}`.toLowerCase();
+  return REFERENCE_FILL_ALLOWLIST.some((c) => haystack.includes(c.toLowerCase()));
+}
+
+// Names that imply a processed/branded product even within allowed categories.
+const PROCESSED_NAME_RE =
+  /\b(milkshake|smoothie|drink|protein|powder|mix|shake|biscuit|cookie|cake|chocolate|ice\s*cream|noodle|chip|snack|bar|wafer|cracker|cereal|muesli|granola|yogurt|peanut\s+butter|jam|spread|sauce|ketchup|pickle|masala\s+mix|instant|fortified|flavoured|flavored)\b/i;
+
 /** Match a product name (and optional category hints) to a reference food entry. */
 export function matchReferenceFood(
   name: string | null | undefined,
@@ -231,6 +259,13 @@ export function matchReferenceFood(
   const normalized = normalizeProductName(name);
   if (!normalized) return null;
   if (isPackagedProduceLike(name, opts?.subcategory)) return null;
+
+  // HARD GUARD: only match raw-food categories. Packaged/branded products must
+  // get nutrition from OCR/OpenFoodFacts/CSV, never from raw reference data.
+  if (!isAllowedForReferenceFill(opts?.category, opts?.subcategory)) return null;
+
+  // Even within allowed categories, reject branded/processed names.
+  if (name && PROCESSED_NAME_RE.test(name)) return null;
 
   const minConfidence = opts?.minConfidence ?? 0.55;
   const exact = tryExactAlias(normalized);
