@@ -1,6 +1,8 @@
 import { detectNutritionAnomalies, nutritionMacrosUntrustworthy } from "@/lib/nutrition/anomaly";
 import { countNutritionFields, nutritionIsSparse } from "@/lib/nutrition/completeness";
 import { matchAdditives } from "@/lib/scoring/rules";
+import type { RoleCohort } from "@/lib/scoring/role-cohort";
+import { perServeFromNutrition } from "@/lib/scoring/per-serve";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ConcernEntry, ScoreBand, SubScores } from "@/lib/supabase/types";
 import { labelForBand } from "@/lib/utils";
@@ -19,6 +21,18 @@ function pushUnique(list: string[], line: string) {
   if (!list.includes(line)) list.push(line);
 }
 
+/**
+ * Build a short, role-aware explanation of why a product scores as it does.
+ *
+ * Role-cohort awareness is critical:
+ *   - "adjunct" (masala, oil, ghee, ketchup, pickle, tea): per-100g claims are
+ *     meaningless because real serving is 2-10g. We focus on ingredient quality
+ *     and processing — NOT protein/fibre density.
+ *   - "treat" (cola, ice cream, candy): high protein here is a curiosity, not a
+ *     selling point — caveat any positive macro claims.
+ *   - "staple"/"meal_replacement": per-100g and per-serve both matter.
+ *   - "snack": both matter, lean per-serve.
+ */
 export function explainScore(opts: {
   score: number;
   band: ScoreBand;
@@ -30,9 +44,19 @@ export function explainScore(opts: {
   productName?: string | null;
   category?: string | null;
   subcategory?: string | null;
+  role_cohort?: RoleCohort | null;
 }): ScoreExplanation {
   const reasons: string[] = [];
   const n = opts.nutrition;
+  const role = opts.role_cohort ?? null;
+  const isAdjunct = role === "adjunct";
+  const isTreat = role === "treat";
+  const isSnack = role === "snack";
+  const isMeal = role === "meal_replacement";
+
+  const perServe = n ? perServeFromNutrition(n) : null;
+  const serveG = perServe?.serving_g ?? null;
+
   const sugarG = sugar(n);
   const protein = n?.protein_g_100g;
   const fiber = n?.fiber_g_100g;
@@ -49,6 +73,7 @@ export function explainScore(opts: {
   const macrosSparse = n ? nutritionIsSparse(n) : true;
   const macrosBad = n ? nutritionMacrosUntrustworthy(n, nutritionCtx) : true;
 
+  // ── Data quality first ───────────────────────────────────────────
   if (!n || macroFields < 2 || macrosSparse) {
     pushUnique(reasons, "Not enough reliable nutrition on file to judge macros");
   } else if (macrosBad) {
@@ -61,29 +86,57 @@ export function explainScore(opts: {
     );
   }
 
-  if (sugarG != null && !macrosBad) {
-    if (sugarG >= 18) pushUnique(reasons, `High sugar for a packaged food (${sugarG}g per 100g)`);
-    else if (sugarG >= 10) pushUnique(reasons, `Moderate sugar (${sugarG}g per 100g)`);
-    else if (sugarG <= 5) pushUnique(reasons, `Relatively low sugar (${sugarG}g per 100g)`);
+  // ── Adjunct path: focus on ingredients, not macro density ─────────
+  if (isAdjunct && !macrosBad) {
+    pushUnique(
+      reasons,
+      `This is a seasoning — eaten in tiny amounts (${serveG ? `~${serveG}g per dish` : "1–10g per dish"}), so per-100g numbers don't mean much. What matters is what's in it.`,
+    );
+
+    // Sodium for adjuncts only matters if you'll consume a lot per dish (e.g. spice blends with salt)
+    if (typeof sodium === "number" && sodium >= 5000) {
+      pushUnique(reasons, `Heavily salted — sodium adds up if you cook with it daily`);
+    }
+
+    // Sugar in adjuncts only flagged if it's the dominant ingredient (very rare for masalas)
+    if (sugarG != null && sugarG >= 25) {
+      pushUnique(reasons, `Heavy on sugar (${sugarG}g per 100g) for a seasoning category`);
+    }
   }
 
-  if (typeof protein === "number" && !macrosBad) {
-    if (protein >= 15) pushUnique(reasons, `Good protein density (${protein}g per 100g)`);
-    else if (protein < 6) pushUnique(reasons, `Low protein (${protein}g per 100g)`);
+  // ── Non-adjunct macro reasoning ─────────────────────────────────
+  if (!isAdjunct && !macrosBad) {
+    if (sugarG != null) {
+      if (sugarG >= 18) pushUnique(reasons, `High sugar (${sugarG}g per 100g)`);
+      else if (sugarG >= 10) pushUnique(reasons, `Moderate sugar (${sugarG}g per 100g)`);
+      else if (sugarG <= 5 && (isSnack || isMeal)) pushUnique(reasons, `Relatively low sugar (${sugarG}g per 100g)`);
+    }
+
+    if (typeof protein === "number") {
+      if (protein >= 15 && !isTreat) {
+        pushUnique(reasons, `Good protein density (${protein}g per 100g)`);
+      } else if (protein >= 15 && isTreat) {
+        // Treats with high "protein density" — usually a marketing curiosity (protein chocolates etc.)
+        pushUnique(reasons, `Adds some protein (${protein}g per 100g) — but it's still a treat`);
+      } else if (protein < 6 && (role === "staple" || isMeal)) {
+        pushUnique(reasons, `Low protein for a staple (${protein}g per 100g)`);
+      }
+    }
+
+    if (typeof fiber === "number" && fiber >= 5 && !isTreat) {
+      pushUnique(reasons, `Decent fibre (${fiber}g per 100g)`);
+    }
+
+    if (typeof sodium === "number" && sodium >= 500) {
+      pushUnique(reasons, `High sodium (${sodium}mg per 100g)`);
+    }
+
+    if (typeof kcal === "number" && kcal >= 450 && !isAdjunct) {
+      pushUnique(reasons, `Calorie-dense (${kcal} kcal per 100g)`);
+    }
   }
 
-  if (typeof fiber === "number" && fiber >= 5 && !macrosBad) {
-    pushUnique(reasons, `Decent fibre (${fiber}g per 100g)`);
-  }
-
-  if (typeof sodium === "number" && sodium >= 500 && !macrosBad) {
-    pushUnique(reasons, `High sodium (${sodium}mg per 100g)`);
-  }
-
-  if (typeof kcal === "number" && kcal >= 450 && !macrosBad) {
-    pushUnique(reasons, `Calorie-dense (${kcal} kcal per 100g)`);
-  }
-
+  // ── Ingredient quality (matters for everything, especially adjuncts) ─
   const flagged = matchAdditives(opts.ingredients_raw).filter(
     (m) => m.tier === "moderate" || m.tier === "hazardous",
   );
@@ -95,6 +148,9 @@ export function explainScore(opts: {
         ? `Flagged additive: ${names[0]}`
         : `Flagged additives (${flagged.length}), including ${names.join(", ")}`,
     );
+  } else if (isAdjunct) {
+    // Clean adjuncts deserve credit
+    pushUnique(reasons, "No flagged additives — clean ingredients for a seasoning");
   }
 
   for (const c of opts.concerns ?? []) {
@@ -105,17 +161,23 @@ export function explainScore(opts: {
     }
   }
 
-  if (subs && subs.nutrition < 28) pushUnique(reasons, "Nutrition profile is below typical for this aisle");
+  // ── Subscore guidance (skipped for adjuncts since nutrition subscore is meaningless) ─
+  if (!isAdjunct) {
+    if (subs && subs.nutrition < 28) {
+      pushUnique(reasons, "Nutrition profile is below typical for this aisle");
+    }
+  }
   if (subs && subs.additives < 18) pushUnique(reasons, "Additives pulled the score down");
   if (opts.breakdown?.hard_capped) pushUnique(reasons, "A high-risk additive capped the top score");
 
+  // ── Marketing vs reality — applies to all ─
   const marketing =
     (opts.productName ?? "") +
     (typeof opts.breakdown === "object" && opts.breakdown && "notes" in opts.breakdown
       ? (opts.breakdown.notes ?? []).join(" ")
       : "");
   if (/protein|zero sugar|no added sugar|multigrain|healthy|diet/i.test(marketing)) {
-    if (typeof protein === "number" && protein < 10 && /protein/i.test(marketing)) {
+    if (typeof protein === "number" && protein < 10 && /protein/i.test(marketing) && !isAdjunct) {
       pushUnique(reasons, `Marketed as high protein, but only ${protein}g per 100g on the label`);
     }
     if (sugarG != null && sugarG > 12 && /zero sugar|no added sugar/i.test(marketing)) {
@@ -127,14 +189,26 @@ export function explainScore(opts: {
     pushUnique(reasons, `${labelForBand(opts.band)} overall for this category`);
   }
 
+  // ── Tradeoffs (closing line, role-aware) ─────────────────────────
   const tradeoffs: string[] = [];
-  if (opts.band === "excellent" || opts.band === "good") {
+  if (isAdjunct) {
+    tradeoffs.push("Judge a seasoning by its ingredient list, not its macros.");
+    if (flagged.length === 0) {
+      tradeoffs.push("This one's clean — fine to keep in your pantry.");
+    } else {
+      tradeoffs.push("Look for one without the flagged additives if it matters to you.");
+    }
+  } else if (opts.band === "excellent" || opts.band === "good") {
     tradeoffs.push("Works well as a regular buy if the price and taste suit you.");
     if (sugarG != null && sugarG > 8) {
       tradeoffs.push("Still a packaged item — portion size matters if you're cutting sugar.");
     }
   } else if (opts.band === "poor" || opts.band === "bad") {
-    tradeoffs.push("Fine once in a while — just don't treat it as your default staple.");
+    tradeoffs.push(
+      isTreat
+        ? "Fine as an occasional treat — just don't pretend it's a staple."
+        : "Fine once in a while — just don't treat it as your default staple.",
+    );
     tradeoffs.push("Check the swaps beside this score for similar options in the same aisle.");
   } else {
     tradeoffs.push("Mixed bag: fine for taste or convenience, not ideal as an everyday base.");
@@ -142,7 +216,7 @@ export function explainScore(opts: {
   }
 
   return {
-    reasons: reasons.slice(0, 3),
+    reasons: reasons.slice(0, 4),
     tradeoffs: tradeoffs.slice(0, 2),
   };
 }

@@ -134,6 +134,7 @@ export default async function ProductPage({
         productName: product.name,
         category: product.category,
         subcategory: product.subcategory,
+        role_cohort: score.role_cohort,
       })
     : null;
 
