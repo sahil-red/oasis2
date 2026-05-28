@@ -35,17 +35,37 @@ type QueueWaiter =
       reject: (e: Error) => void;
     };
 
-/** Ephemeral path — deleted after OCR (no .tmp/ocr-livetext cache). */
+/** Ephemeral path — deleted after OCR. With retries on transient network failure. */
 async function downloadImageTemp(imageUrl: string): Promise<string> {
   const hash = createHash("sha256").update(imageUrl.trim()).digest("hex").slice(0, 20);
   const tmpPath = join(tmpdir(), `scout-livetext-${hash}-${Date.now()}.jpg`);
-  const res = await fetch(imageUrl, {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; ScoutOCR/1.0)" },
-  });
-  if (!res.ok) throw new Error(`image fetch ${res.status} ${imageUrl.slice(0, 80)}`);
-  await mkdir(tmpdir(), { recursive: true });
-  await writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
-  return tmpPath;
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const res = await fetch(imageUrl, {
+        headers: { "user-agent": "Mozilla/5.0 (compatible; ScoutOCR/1.0)" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        lastErr = new Error(`image fetch ${res.status} ${imageUrl.slice(0, 80)}`);
+        // Retry only on 5xx + 429
+        if (res.status < 500 && res.status !== 429) throw lastErr;
+      } else {
+        await mkdir(tmpdir(), { recursive: true });
+        await writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+        return tmpPath;
+      }
+    } catch (e) {
+      lastErr = e;
+      // AbortError, network errors → retry
+    }
+    // Exponential backoff: 400ms, 1.2s, 3.6s
+    if (attempt < 4) {
+      await new Promise((r) => setTimeout(r, 400 * Math.pow(3, attempt - 1)));
+    }
+  }
+  throw lastErr ?? new Error(`image fetch failed ${imageUrl.slice(0, 80)}`);
 }
 
 async function removeTempFile(path: string): Promise<void> {

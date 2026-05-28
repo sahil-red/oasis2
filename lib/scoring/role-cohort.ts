@@ -6,14 +6,28 @@ export function inferRoleCohort(opts: {
   subcategory?: string | null;
 }): RoleCohort {
   const name = (opts.name ?? "").toLowerCase();
-  const cat = `${opts.category ?? ""} ${opts.subcategory ?? ""}`.toLowerCase();
-  const hay = `${name} ${cat}`;
+  const cat = (opts.category ?? "").toLowerCase();
+  const sub = (opts.subcategory ?? "").toLowerCase();
+  const hay = `${name} ${cat} ${sub}`;
 
+  // Plain bubbly water (soda water, sparkling water, club soda) — NOT treats.
+  // Must come before treat regex which would match `\bsoda\b`.
   if (
-    /\b(tea|chai|coffee|masala|spice|seasoning|hing|turmeric|coriander|chilli powder|garam|chaat masala|oil\b|ghee|vinegar|soy sauce|ketchup|chutney|pickle|achaar|essence|flavouring|flavoring)\b/i.test(
-      hay,
-    ) &&
-    !/\b(biscuit|cookie|chip|chocolate|noodle|dahi|milk|bread|paneer)\b/i.test(name)
+    /\b(soda water|sparkling water|carbonated water|club soda|seltzer|mineral water|drinking water|spring water)\b/i.test(name)
+  ) {
+    return "staple";
+  }
+
+  // Adjuncts: seasonings, oils, condiments, tea/coffee. Identified by NAME or
+  // SUBCATEGORY only — NOT category — because "Atta, Rice, Oil & Dals" contains
+  // the word "oil" and would falsely flag flour/rice/dal as adjuncts.
+  const adjunctNameRe =
+    /\b(tea|chai|coffee|masala|spice|seasoning|hing|turmeric|coriander|chilli powder|garam|chaat masala|essence|flavouring|flavoring|oil|ghee|vinegar|soy sauce|ketchup|chutney|pickle|achaar)\b/i;
+  const adjunctSubRe =
+    /\b(masala|spice|powder|paste|oil|ghee|vinegar|condiment|pickle|chutney|seasoning|tea|coffee)\b/i;
+  if (
+    (adjunctNameRe.test(name) || adjunctSubRe.test(sub)) &&
+    !/\b(biscuit|cookie|chip|chocolate|noodle|dahi|milk|bread|paneer|cake)\b/i.test(name)
   ) {
     return "adjunct";
   }
