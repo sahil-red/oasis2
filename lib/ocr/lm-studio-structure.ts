@@ -1,9 +1,22 @@
+import { Agent, fetch as undiciFetch } from "undici";
 import { formatIngredientsList } from "@/lib/ocr/format-ingredients";
 import { buildLmStructureUserPayload } from "@/lib/ocr/lm-ingredients-anchor";
 import { withLmStudioLock } from "@/lib/lm/studio-lock";
 
 const DEFAULT_BASE = "http://127.0.0.1:1234/v1";
 const DEFAULT_MODEL = "qwen2.5coder7b:2";
+
+// Cloud LM APIs need permissive TLS on some Macs (corporate cert chains, stale OpenSSL).
+// Local LM Studio (127.0.0.1) is HTTP, untouched.
+const cloudDispatcher = new Agent({
+  connect: { rejectUnauthorized: false, timeout: 20_000 },
+  bodyTimeout: 180_000,
+  headersTimeout: 60_000,
+});
+
+function isCloudUrl(url: string): boolean {
+  return url.startsWith("https://") && !url.includes("127.0.0.1") && !url.includes("localhost");
+}
 
 export const LM_STRUCTURE_SYSTEM_PROMPT = `You are a rigid data processing utility. Extract both ingredients and nutrition facts from the following raw text into a valid, flat JSON object.
 
@@ -46,6 +59,12 @@ export type LmStudioOptions = {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
+  /** Skip the cross-job file lock when caller orchestrates concurrency itself. */
+  bypassLock?: boolean;
+  /** Bearer token for cloud APIs (Groq, OpenAI-compatible providers). */
+  apiKey?: string;
+  /** Enable Retry-After / exponential backoff on 429 (cloud APIs). */
+  rateLimit?: boolean;
 };
 
 function lmEndpoint(baseUrl: string): string {
@@ -100,6 +119,12 @@ export function normalizeStructuredLabel(raw: Record<string, unknown>): Structur
 const LM_RETRY_SUFFIX =
   "\n\nCRITICAL: Output JSON with numeric literals only (e.g. 12.5). No formulas, parentheses, or arithmetic expressions.";
 
+type CallLmOpts = {
+  apiKey?: string;
+  /** Honor Retry-After (Groq) and exponential backoff on 429s. */
+  rateLimit?: boolean;
+};
+
 async function callLm(
   baseUrl: string,
   model: string,
@@ -108,6 +133,7 @@ async function callLm(
   signal: AbortSignal,
   userContent: string,
   jsonMode: boolean,
+  opts: CallLmOpts = {},
 ): Promise<string> {
   const body: Record<string, unknown> = {
     model,
@@ -121,36 +147,63 @@ async function callLm(
   };
   if (jsonMode) body.response_format = { type: "json_object" };
 
-  let res = await fetch(lmEndpoint(baseUrl), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal,
-    body: JSON.stringify(body),
-  });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.apiKey) headers["Authorization"] = `Bearer ${opts.apiKey}`;
+
+  const endpoint = lmEndpoint(baseUrl);
+  const useCloudFetch = isCloudUrl(endpoint);
+
+  async function send(currentBody: Record<string, unknown>): Promise<Response> {
+    if (useCloudFetch) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await undiciFetch(endpoint as any, {
+        method: "POST",
+        headers,
+        signal,
+        body: JSON.stringify(currentBody),
+        dispatcher: cloudDispatcher,
+      } as Parameters<typeof undiciFetch>[1]);
+      return res as unknown as Response;
+    }
+    return await fetch(endpoint, {
+      method: "POST",
+      headers,
+      signal,
+      body: JSON.stringify(currentBody),
+    });
+  }
+
+  // Up to 5 retries on 429 honoring Retry-After; any other error throws.
+  let res = await send(body);
+  if (opts.rateLimit) {
+    let attempt = 0;
+    while (res.status === 429 && attempt < 5) {
+      const retryAfter = Number(res.headers.get("retry-after")) || 0;
+      const wait = (retryAfter > 0 ? retryAfter : Math.pow(2, attempt)) * 1000;
+      await new Promise((r) => setTimeout(r, wait));
+      attempt++;
+      res = await send(body);
+    }
+  }
 
   if (!res.ok && jsonMode) {
     const errBody = await res.text().catch(() => "");
-    if (res.status === 400 && /response_format|json_object/i.test(errBody)) {
+    if (res.status === 400 && /response_format|json_object|json_schema|json_validate_failed/i.test(errBody)) {
       delete body.response_format;
-      res = await fetch(lmEndpoint(baseUrl), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal,
-        body: JSON.stringify(body),
-      });
+      res = await send(body);
     }
   }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`LM Studio ${res.status}: ${errText.slice(0, 300)}`);
+    throw new Error(`LM ${res.status}: ${errText.slice(0, 300)}`);
   }
 
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error("LM Studio returned empty content");
+  if (!content) throw new Error("LM returned empty content");
   return content;
 }
 
@@ -175,33 +228,40 @@ export async function structureLabelFromText(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    return await withLmStudioLock(async () => {
-      let content = await callLm(
+  const callOpts: CallLmOpts = { apiKey: opts.apiKey, rateLimit: opts.rateLimit };
+  const work = async () => {
+    let content = await callLm(
+      baseUrl,
+      model,
+      temperature,
+      maxTokens,
+      controller.signal,
+      payloadText,
+      true,
+      callOpts,
+    );
+
+    try {
+      return { structured: parseStructuredContent(content), rawResponse: content };
+    } catch {
+      content = await callLm(
         baseUrl,
         model,
         temperature,
         maxTokens,
         controller.signal,
-        payloadText,
+        payloadText + LM_RETRY_SUFFIX,
         true,
+        callOpts,
       );
+      return { structured: parseStructuredContent(content), rawResponse: content };
+    }
+  };
 
-      try {
-        return { structured: parseStructuredContent(content), rawResponse: content };
-      } catch {
-        content = await callLm(
-          baseUrl,
-          model,
-          temperature,
-          maxTokens,
-          controller.signal,
-          payloadText + LM_RETRY_SUFFIX,
-          true,
-        );
-        return { structured: parseStructuredContent(content), rawResponse: content };
-      }
-    }, { label: "ocr:structure" });
+  try {
+    return opts.bypassLock
+      ? await work()
+      : await withLmStudioLock(work, { label: "ocr:structure" });
   } finally {
     clearTimeout(timer);
   }

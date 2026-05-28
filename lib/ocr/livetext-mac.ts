@@ -170,11 +170,20 @@ class LivetextOcrServer {
   }
 }
 
-let server: LivetextOcrServer | null = null;
+// Pool of LiveText server processes — round-robin requests across them so
+// multiple OCR workers can run truly in parallel (a single Python server
+// serializes via its stdin/stdout queue).
+const POOL_SIZE = Math.max(1, Math.min(8, Number(process.env.LIVETEXT_WORKERS ?? 1)));
+let pool: LivetextOcrServer[] = [];
+let poolIdx = 0;
 
 function getServer(): LivetextOcrServer {
-  if (!server) server = new LivetextOcrServer();
-  return server;
+  if (pool.length === 0) {
+    pool = Array.from({ length: POOL_SIZE }, () => new LivetextOcrServer());
+  }
+  const s = pool[poolIdx % pool.length]!;
+  poolIdx++;
+  return s;
 }
 
 export async function livetextFromPath(imagePath: string): Promise<LivetextOcrResult> {
@@ -192,6 +201,8 @@ export async function livetextFromUrl(imageUrl: string): Promise<LivetextOcrResu
 }
 
 export async function shutdownLivetextOcr(): Promise<void> {
-  if (server?.proc) server.proc.kill();
-  server = null;
+  for (const s of pool) {
+    if (s.proc) s.proc.kill();
+  }
+  pool = [];
 }

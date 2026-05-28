@@ -27,6 +27,7 @@ import { validateStructuredLabel } from "@/lib/ocr/validate-structured-label";
 import { adminClient } from "@/lib/supabase/admin";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { csvRecordToRow, dedupeCsvRows, resolveCsvColumns } from "@/lib/zepto-import/csv-row";
+import { isPlatformNutritionComplete } from "@/lib/nutrition/completeness";
 import { scriptArgv } from "@/lib/util/script-argv";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
 
@@ -56,6 +57,13 @@ function parseArgs() {
       ocrConcurrency = Math.max(1, Math.min(8, Number(a.split("=")[1]) || 4));
     }
   }
+
+  // Multi-instance LM Studio: comma-separated model names on the same endpoint
+  // (one base URL, multiple models loaded in LM Studio). Falls back to single.
+  const modelsRaw =
+    process.env.LM_STUDIO_MODELS ?? process.env.LM_STUDIO_MODEL ?? "qwen2.5coder7b:2";
+  const models = modelsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+
   return {
     limit: Math.min(limit, MAX_BATCH),
     limitExplicit,
@@ -69,6 +77,7 @@ function parseArgs() {
     sku,
     nameQuery,
     ocrConcurrency,
+    models,
   };
 }
 
@@ -187,7 +196,7 @@ async function main() {
     work = work.slice(0, MAX_BATCH);
   }
 
-  const lmModel = process.env.LM_STUDIO_MODEL ?? "qwen2.5coder7b:2";
+  const lmModelsLabel = args.models.join(",");
   const supabase = args.persistDb ? adminClient() : null;
   const skuToId = new Map<string, string>();
 
@@ -249,7 +258,7 @@ async function main() {
   console.log(
     `[ocr:lm] batch=${work.length} raw_cache=${RAW_CACHE_DIR} export=${RESULTS_PATH}`,
   );
-  console.log(`[ocr:lm] model=${lmModel} persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
+  console.log(`[ocr:lm] models=${lmModelsLabel} (lm_consumers=${args.models.length}) persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
   console.log(`[ocr:lm] ocr_concurrency=${args.ocrConcurrency} skip_lm=${args.skipLm}`);
 
   // ── Producer-consumer pipeline ────────────────────────────────────────────
@@ -262,6 +271,7 @@ async function main() {
     imageUrl: string | null;
     ocrSource: "cache" | "livetext";
     error?: string;
+    csvComplete?: boolean;
   };
 
   const QUEUE_MAX = Math.max(args.ocrConcurrency * 2, 8);
@@ -276,14 +286,21 @@ async function main() {
 
   async function ocrWorker(): Promise<void> {
     while (true) {
-      // Backpressure: don't run ahead of the LM consumer
       while (queue.length >= QUEUE_MAX) {
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 50));
       }
       const row = pickNext();
       if (!row) break;
       const tSku = Date.now();
       const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
+
+      // FAST PATH: CSV already has complete nutrition + ingredients → skip OCR + LM entirely.
+      // The LM consumer will see this empty-text item and short-circuit to lm=skip.
+      if (isPlatformNutritionComplete(row.ingredients_raw, row.nutrition)) {
+        queue.push({ row, rawText: "", imageUrl: null, ocrSource: "cache", csvComplete: true });
+        continue;
+      }
+
       try {
         let rawText = args.forceOcr ? null : await readRawCache(row.zepto_sku);
         let ocrSource: "cache" | "livetext" = "cache";
@@ -313,18 +330,38 @@ async function main() {
     producersDone++;
   }
 
-  async function lmConsumer(): Promise<void> {
+  async function lmConsumer(modelName: string): Promise<void> {
     while (true) {
-      // Wait for items if queue empty + producers still running
       if (queue.length === 0) {
         if (producersDone >= args.ocrConcurrency) break;
         await new Promise((r) => setTimeout(r, 80));
         continue;
       }
       const item = queue.shift()!;
-      const { row, rawText, imageUrl, ocrSource, error } = item;
+      const { row, rawText, imageUrl, ocrSource, error, csvComplete } = item;
       const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
       const tSku = Date.now();
+
+      // CSV-complete fast path: skip LM, write minimal result so resume covers it.
+      if (csvComplete) {
+        lmSkipped++;
+        processed++;
+        if (!args.dryRun) {
+          out.write(`${JSON.stringify({
+            zepto_sku: row.zepto_sku,
+            name: row.name,
+            product_id: skuToId.get(row.zepto_sku) ?? null,
+            csv_complete: true,
+            lm_called: false,
+            lm_skip_reason: "csv_already_complete",
+            at: new Date().toISOString(),
+          })}\n`);
+        }
+        if (processed % 50 === 0) {
+          console.log(`[${processed}/${work.length}] csv-complete fast path (skipped OCR+LM)`);
+        }
+        continue;
+      }
 
       if (error) {
         errors++;
@@ -348,7 +385,14 @@ async function main() {
 
         if (plan.lm_called && !args.skipLm) {
           lmCalled++;
-          const lm = await structureLabelFromText(rawText);
+          const lm = await structureLabelFromText(rawText, {
+            model: modelName,
+            baseUrl: process.env.LM_STUDIO_BASE_URL,
+            apiKey: process.env.LM_STUDIO_API_KEY,
+            rateLimit: Boolean(process.env.LM_STUDIO_API_KEY), // cloud → handle 429
+            bypassLock: true,
+            maxTokens: 384,
+          });
           structured = lm.structured;
           lmRaw = lm.rawResponse;
           validation = validateStructuredLabel(structured);
@@ -373,7 +417,7 @@ async function main() {
           raw_text_chars: rawText.length,
           resolution,
           validation,
-          lm_model: plan.lm_called ? lmModel : null,
+          lm_model: plan.lm_called ? modelName : null,
           lm_called: plan.lm_called,
           at: new Date().toISOString(),
         };
@@ -418,8 +462,9 @@ async function main() {
         skuTimings.push(sec);
 
         // Concise per-SKU log (full block was too noisy with concurrent OCR)
+        const lmTag = plan.lm_called && !args.skipLm ? `lm=${modelName.split(":").pop() ?? "yes"}` : "lm=skip";
         console.log(
-          `[${processed}/${work.length}] ${label} ocr=${ocrSource} lm=${plan.lm_called && !args.skipLm ? "yes" : "skip"} nut=${resolution.nutrition_source} ing=${resolution.ingredients_source} (${sec.toFixed(1)}s)`,
+          `[${processed}/${work.length}] ${label} ocr=${ocrSource} ${lmTag} nut=${resolution.nutrition_source} ing=${resolution.ingredients_source} (${sec.toFixed(1)}s)`,
         );
       } catch (e) {
         errors++;
@@ -434,8 +479,8 @@ async function main() {
 
   try {
     const ocrWorkers = Array.from({ length: args.ocrConcurrency }, () => ocrWorker());
-    const lm = lmConsumer();
-    await Promise.all([...ocrWorkers, lm]);
+    const lmConsumers = args.models.map((m) => lmConsumer(m));
+    await Promise.all([...ocrWorkers, ...lmConsumers]);
   } catch (e) {
     fatalError = e;
     console.error("[ocr:lm] fatal:", e instanceof Error ? e.message : e);
