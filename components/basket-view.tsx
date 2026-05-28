@@ -325,7 +325,6 @@ export function BasketView() {
                     alt=""
                     fill
                     className="object-contain p-2"
-                    unoptimized
                   />
                 ) : null}
               </Link>

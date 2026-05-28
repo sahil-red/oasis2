@@ -131,7 +131,6 @@ export function BestInCohortChip({
                             fill
                             sizes="28px"
                             className="object-contain"
-                            unoptimized
                           />
                         ) : null}
                       </span>

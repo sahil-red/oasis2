@@ -16,8 +16,9 @@
   --color-warn: #b45309;
   --color-bad: #b91c1c;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  --font-display: "Instrument Serif", "Times New Roman", serif;
+  /* next/font sets --font-inter and --font-instrument on <html> in layout.tsx */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --font-display: var(--font-instrument), "Times New Roman", serif;
 }
 
 html.dark {

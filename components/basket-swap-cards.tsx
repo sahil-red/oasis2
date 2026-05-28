@@ -58,7 +58,6 @@ export function BasketSwapCards({
                   fill
                   className="object-contain p-3 transition duration-300 group-hover:scale-[1.02]"
                   sizes="200px"
-                  unoptimized
                 />
               ) : null}
               <div className="absolute right-2 top-2 rounded-lg bg-(--color-panel)/95 px-1 py-0.5 shadow-sm">

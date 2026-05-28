@@ -42,7 +42,6 @@ export function InsightProductCard({
             fill
             className="object-contain p-3 transition duration-300 group-hover:scale-[1.02]"
             sizes="(max-width: 640px) 50vw, 25vw"
-            unoptimized
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-sm text-(--color-fg-dim)">
@@ -109,7 +108,6 @@ export function InsightFeaturedCard({
             alt={product.name}
             fill
             className="object-contain p-4"
-            unoptimized
           />
         ) : null}
       </div>

@@ -23,7 +23,7 @@ export function InsightProductList({
           >
             <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
               {p.image_urls[0] ? (
-                <Image src={p.image_urls[0]} alt="" fill className="object-contain p-0.5" unoptimized />
+                <Image src={p.image_urls[0]} alt="" fill sizes="48px" className="object-contain p-0.5" />
               ) : null}
             </div>
             <div className="min-w-0 flex-1">

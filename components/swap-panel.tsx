@@ -82,7 +82,6 @@ export function SwapPanel({
                       alt=""
                       fill
                       className="object-contain p-1"
-                      unoptimized
                     />
                   ) : null}
                 </div>

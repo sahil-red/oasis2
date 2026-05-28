@@ -60,7 +60,6 @@ export function ProductGallery({
             className="object-contain p-3 transition duration-300 group-hover:scale-[1.01]"
             sizes="(max-width: 1024px) 100vw, 45vw"
             priority={index === 0}
-            unoptimized
           />
         </button>
 
@@ -103,7 +102,7 @@ export function ProductGallery({
                   : "border-transparent opacity-70 hover:opacity-100",
               )}
             >
-              <Image src={url} alt="" fill className="object-contain p-0.5" unoptimized />
+              <Image src={url} alt="" fill sizes="64px" className="object-contain p-0.5" />
             </button>
           ))}
         </div>

@@ -62,7 +62,6 @@ export const ProductCard = memo(function ProductCard({
                 fill
                 className="object-contain p-1.5 transition duration-300 ease-out group-hover:scale-[1.01]"
                 sizes="(max-width: 768px) 50vw, 20vw"
-                unoptimized
               />
             ) : (
               <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">

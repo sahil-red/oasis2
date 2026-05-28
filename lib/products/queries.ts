@@ -1289,6 +1289,75 @@ export async function getFeaturedSample(): Promise<ProductListItem | null> {
   return pick ?? null;
 }
 
+/**
+ * Homepage rails — 1 editorial hero + 3 curated rails. Single Supabase round-trip
+ * via direct join queries (server component, fast).
+ */
+export type HomeShelves = {
+  hero: ProductListItem | null;
+  dailyStaples: ProductListItem[];
+  skipWorthy: ProductListItem[];
+  bestValue: ProductListItem[];
+  totalScored: number;
+  catalogSize: number;
+};
+
+export async function getHomeShelves(): Promise<HomeShelves> {
+  const supabase = db();
+  const select = `${LIST_FIELDS}, core_scores!inner (${LIST_SCORE_FIELDS})`;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const baseQ = (verdict: string | null) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase as any)
+      .from("products")
+      .select(select)
+      .eq("platform", "zepto")
+      .eq("catalog_visible", true)
+      .not("image_urls", "is", null);
+    if (verdict) q = q.eq("core_scores.verdict", verdict);
+    return q;
+  };
+
+  const [staplesRes, skipsRes, valueRes, statsRes] = await Promise.all([
+    baseQ("daily_staple")
+      .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
+      .limit(8),
+    baseQ("skip")
+      .order("score", { referencedTable: "core_scores", ascending: true, nullsFirst: false })
+      .limit(8),
+    baseQ("good_choice")
+      .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
+      .limit(8),
+    Promise.all([
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("platform", "zepto"),
+      supabase.from("core_scores").select("product_id", { count: "exact", head: true }),
+    ]),
+  ]);
+
+  const staples = ((staplesRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
+  const skips = ((skipsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
+  const value = ((valueRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
+
+  // Pick a Skip product with brand + image as the editorial hero
+  const hero =
+    skips.find((p) => p.brand && p.image_urls.length > 0) ??
+    skips[0] ??
+    null;
+
+  // Filter hero out of the skip rail to avoid duplication
+  const skipRail = skips.filter((p) => p.id !== hero?.id).slice(0, 6);
+
+  return {
+    hero,
+    dailyStaples: staples.filter((p) => p.image_urls.length > 0).slice(0, 6),
+    skipWorthy: skipRail,
+    bestValue: value.filter((p) => p.image_urls.length > 0).slice(0, 6),
+    catalogSize: statsRes[0].count ?? 0,
+    totalScored: statsRes[1].count ?? 0,
+  };
+}
+
 /** Top N products in a cohort by absolute score — for "best in category" tooltip. */
 export async function getTopInCohort(
   cohortId: string,
