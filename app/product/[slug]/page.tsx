@@ -149,7 +149,6 @@ export default async function ProductPage({
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
           <div className="space-y-6">
             <ProductGallery images={product.image_urls} alt={product.name} />
-            <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
           </div>
 
           <div className="min-w-0">
@@ -227,6 +226,13 @@ export default async function ProductPage({
             </Suspense>
           </div>
         </div>
+
+        {/* ── Better picks (swaps) — full-width, prominent ─────────── */}
+        {swaps.length > 0 ? (
+          <section className="mt-14">
+            <SwapPanel current={product} suggestions={swaps} goal={goal} />
+          </section>
+        ) : null}
 
         {labelResolution ? (
           <div className="mt-12">

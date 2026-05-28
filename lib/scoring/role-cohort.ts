@@ -26,11 +26,15 @@ export function inferRoleCohort(opts: {
     return "snack";
   }
 
+  // "rice cakes", "oat cakes", "ragi cake", "fish cake" etc. are NOT desserts.
+  // Match the dessert sense of "cake" only when not preceded by a grain/savoury word.
+  const dessertCakeRe = /\b(?<!rice |oat |oats |ragi |bajra |jowar |multigrain |wholegrain |whole grain |fish |chicken |veg |paneer |corn )(cake|pastry|brownie|cupcake|muffin)s?\b/i;
   if (
-    /\b(chocolate|candy|ice cream|kulfi|toffee|sweet|dessert|cola|soda|juice|soft drink|cake|pastry|brownie)\b/i.test(
+    /\b(chocolate|candy|ice cream|kulfi|toffee|gummies|gummy|sweet treat|dessert|cola|soda|soft drink|sweetened|tetra juice|cold drink)\b/i.test(
       hay,
     ) ||
-    /\b(Sweet Tooth|Chocolates|Ice Cream|Dessert)\b/i.test(cat)
+    dessertCakeRe.test(name) ||
+    /\b(Sweet Tooth|Chocolates|Ice Cream|Desserts?)\b/i.test(cat)
   ) {
     return "treat";
   }

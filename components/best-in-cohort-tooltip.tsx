@@ -25,6 +25,7 @@ export function BestInCohortChip({
   rank,
   borderColor,
   fgColor,
+  labelOverride,
 }: {
   cohortId: string;
   subcategoryLabel: string;
@@ -32,6 +33,7 @@ export function BestInCohortChip({
   rank?: number;
   borderColor: string;
   fgColor: string;
+  labelOverride?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<TopItem[] | null>(null);
@@ -69,7 +71,7 @@ export function BestInCohortChip({
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
   }, []);
 
-  const label = subcategoryLabel ? `Best in ${subcategoryLabel}` : "Best in category";
+  const label = labelOverride ?? (subcategoryLabel ? `Best in ${subcategoryLabel}` : "Best in category");
 
   return (
     <span

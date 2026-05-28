@@ -134,12 +134,23 @@ export function VerdictBlock({
           {verdictTitle(verdict)}
         </span>
         {cohortSize != null && cohortSize >= 8 && relativeScore != null ? (
-          <span
-            className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tabular-nums"
-            style={{ borderColor: c.chipBorder, color: c.chipFg }}
-          >
-            Better than {relativeScore}%
-          </span>
+          cohortId && productId ? (
+            <BestInCohortChip
+              cohortId={cohortId}
+              subcategoryLabel={subcategory ?? ""}
+              productId={productId}
+              borderColor={c.chipBorder}
+              fgColor={c.chipFg}
+              labelOverride={`Better than ${relativeScore}%`}
+            />
+          ) : (
+            <span
+              className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tabular-nums"
+              style={{ borderColor: c.chipBorder, color: c.chipFg }}
+            >
+              Better than {relativeScore}%
+            </span>
+          )
         ) : null}
       </div>
 
