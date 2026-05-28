@@ -67,7 +67,7 @@ export const SUBLABEL_DESCRIPTIONS: Record<SublabelId, string> = {
   high_saturated_fat: ">4g saturated fat per serve",
   ultra_processed: "NOVA-4 share >40% by ingredient position",
   artificial_flavors: "Artificial flavor or color in ingredients",
-  best_in_category: "Top 5% of its category by absolute score (cohort ≥20)",
+  best_in_category: "Top 2% of its category by absolute score (cohort ≥30)",
   watch_serving_size: "Realistic serving exceeds declared",
   hazardous_additive: "Contains a banned or restricted additive",
   empty_calories: "≥100 kcal, ≤1g protein, 0g fiber per serve",
@@ -311,13 +311,12 @@ function matches(id: SublabelId, ctx: SublabelContext): boolean {
         rows.some((r) => r.role === "flavor" || r.role === "color")
       );
     case "best_in_category":
-      // Tightened: true distinction only (top 5%, meaningful cohort size).
-      // Was top-20% which fired on ~8% of catalog (~1,400 products).
-      // Now requires top-5% AND cohort ≥ 20 → expected ~1-2% of catalog.
+      // True distinction: top 2% in cohorts ≥ 30 only.
+      // History: 80%/8 → 8.3% catalog → 95%/20 → 4.6% catalog → 98%/30 → ~1.5% target
       return (
-        (ctx.relative ?? 0) >= 95 &&
+        (ctx.relative ?? 0) >= 98 &&
         ctx.absolute < 65 &&
-        (ctx.cohort_size ?? 0) >= 20
+        (ctx.cohort_size ?? 0) >= 30
       );
     case "watch_serving_size":
       return false;

@@ -209,20 +209,31 @@ async function main() {
 
   const dbPending: DbPendingRow[] = [];
 
+  let dbWritten = 0;
+  let dbFailed = 0;
   async function flushDbBatch(): Promise<void> {
     if (!supabase || dbPending.length === 0) return;
     const batch = dbPending.splice(0, DB_FLUSH_SIZE);
-    // Parallel-update with bounded concurrency. Supabase REST has no true bulk
-    // partial-update, so we issue concurrent UPDATE-by-id rather than serial.
     const CONC = 8;
     for (let i = 0; i < batch.length; i += CONC) {
       const slice = batch.slice(i, i + CONC);
       await Promise.all(slice.map(async ({ id, ...patch }) => {
-        const { error } = await supabase.from("products").update(patch).eq("id", id);
-        if (error) console.warn(`[ocr:lm] update ${id}: ${error.message}`);
+        try {
+          const { error } = await supabase.from("products").update(patch).eq("id", id);
+          if (error) {
+            dbFailed++;
+            if (dbFailed <= 3) console.warn(`[ocr:lm] db update ${id.slice(0, 8)}: ${error.message}`);
+          } else {
+            dbWritten++;
+          }
+        } catch (e) {
+          // Network blip — JSONL is source of truth, retry via ocr:lm:backfill-db
+          dbFailed++;
+          if (dbFailed <= 3) console.warn(`[ocr:lm] db net err ${id.slice(0, 8)}: ${(e as Error).message}`);
+        }
       }));
     }
-    console.log(`[ocr:lm] db update batch=${batch.length} (pending=${dbPending.length})`);
+    console.log(`[ocr:lm] db flush ${batch.length} (written=${dbWritten} failed=${dbFailed} queue=${dbPending.length})`);
   }
 
   const out = createWriteStream(RESULTS_PATH, { flags: "a" });
