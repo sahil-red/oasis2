@@ -541,235 +541,50 @@ export function CatalogView({
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
-        <div className="sticky top-14 z-40 -mx-5 border-b border-(--color-line)/50 bg-(--color-bg) px-5 py-3 md:-mx-6 md:px-6">
-          {showGoalHint ? (
-            <div className="rounded-lg border border-(--color-line) bg-(--color-bg-soft) px-3 py-3">
-              <p className="text-[14px] font-medium text-(--color-fg)">What are you shopping for?</p>
-              <p className="mt-0.5 text-[12px] leading-snug text-(--color-fg-muted)">
-                Tap a goal — rankings and colors update.
-              </p>
-              <div className="mt-2 space-y-2">
-                <GoalModePicker value={goal} onChange={pickGoal} />
-                <DietPicker value={diet} onChange={pickDiet} />
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <GoalModePicker value={goal} onChange={pickGoal} compact />
-              <DietPicker value={diet} onChange={pickDiet} compact />
-            </div>
-          )}
-        </div>
 
-        <div className="relative max-w-md transition-[max-width] duration-200 focus-within:max-w-xl md:max-w-sm">
-          <svg
-            className="pointer-events-none absolute left-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-(--color-fg-dim)"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            aria-hidden
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20L17 17" strokeLinecap="round" />
-          </svg>
-          <input
-            type="search"
-            value={state.q}
-            onChange={(e) => patch({ q: e.target.value })}
-            placeholder="Search products…"
-            autoComplete="off"
-            spellCheck={false}
-            className="w-full min-w-0 appearance-none rounded-lg border border-(--color-line) bg-(--color-bg-soft) py-2 pl-8 pr-3 text-[13px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-accent) focus:ring-1 focus:ring-(--color-accent)/30"
-          />
-        </div>
-
-        <div className="hidden flex-wrap items-center gap-2 md:flex">
-          <button
-            type="button"
-            onClick={() => patch({ category: "" })}
-            className={`rounded-full px-3.5 py-1.5 text-[13px] transition ${
-              !activeState.category
-                ? "bg-(--color-fg) font-semibold text-(--color-bg) shadow-sm"
-                : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-            }`}
-          >
-            All
-          </button>
-          {visibleCategories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => patch({ category: c })}
-              className={`rounded-full px-3.5 py-1.5 text-[13px] transition ${
-                activeState.category === c
-                  ? "bg-(--color-fg) font-semibold text-(--color-bg)"
-                  : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-          {hiddenCategoryCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setCategoriesExpanded((v) => !v)}
-              className="rounded-full border border-(--color-line) px-3.5 py-1.5 text-[13px] font-medium text-(--color-accent) transition hover:border-(--color-accent)"
-            >
-              {categoriesExpanded ? "Less ↑" : `More → (${hiddenCategoryCount})`}
-            </button>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 md:hidden">
-          <button
-            type="button"
-            onClick={() => patch({ category: "" })}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] ${
-              !activeState.category
-                ? "bg-(--color-fg) font-semibold text-(--color-bg)"
-                : "text-(--color-fg-muted)"
-            }`}
-          >
-            All
-          </button>
-          {(categoriesExpanded
-            ? filterOptions.categories
-            : filterOptions.categories.slice(0, 4)
-          ).map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => patch({ category: c })}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] ${
-                activeState.category === c
-                  ? "bg-(--color-fg) text-(--color-bg)"
-                  : "text-(--color-fg-muted)"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-          {filterOptions.categories.length > 4 ? (
-            <button
-              type="button"
-              onClick={() => setCategoriesExpanded((v) => !v)}
-              className="text-[12px] text-(--color-accent)"
-            >
-              {categoriesExpanded ? "Less" : "More →"}
-            </button>
-          ) : null}
-        </div>
-
-        {/* Verdict quick-filter strip */}
-        <div className="flex flex-wrap gap-1.5">
-          {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
-            const labels: Record<string, string> = {
-              daily_staple: "Daily staple",
-              good_choice: "Good choice",
-              occasional_treat: "Occasional treat",
-              skip: "Skip",
-            };
-            const colors: Record<string, { fg: string; bg: string; border: string }> = {
-              daily_staple: { fg: "#0f9e75", bg: "#0d2822", border: "#0f9e7540" },
-              good_choice: { fg: "#7ab830", bg: "#141e08", border: "#7ab83040" },
-              occasional_treat: { fg: "#e07030", bg: "#2b1600", border: "#e0703040" },
-              skip: { fg: "#d43030", bg: "#220808", border: "#d4303040" },
-            };
-            const c = colors[v]!;
-            const active = activeState.verdict === v;
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => patch({ verdict: active ? "" : v })}
-                className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
-                style={{
-                  borderColor: c.border,
-                  color: c.fg,
-                  backgroundColor: active ? c.bg : "transparent",
-                }}
+        {/* ── Sticky search + sort row ─────────────────────────────────── */}
+        <div className="sticky top-14 z-40 -mx-5 border-b border-(--color-line)/60 bg-(--color-bg)/95 px-5 py-3 backdrop-blur md:-mx-6 md:px-6">
+          <div className="flex items-center gap-3">
+            {/* search */}
+            <div className="relative flex-1 max-w-md">
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--color-fg-dim)"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                aria-hidden
               >
-                {labels[v]}
-              </button>
-            );
-          })}
-        </div>
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20L17 17" strokeLinecap="round" />
+              </svg>
+              <input
+                type="search"
+                value={state.q}
+                onChange={(e) => patch({ q: e.target.value })}
+                placeholder="Search by name or brand…"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full min-w-0 appearance-none rounded-full border border-(--color-line) bg-(--color-panel) py-2 pl-9 pr-3 text-[14px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+              />
+            </div>
 
-        {hasFilters ? (
-          <div className="flex flex-wrap gap-2">
-            {activeState.category ? (
-              <FilterChip label={activeState.category} onClear={() => patch({ category: "" })} />
-            ) : null}
-            {activeState.subcategory ? (
-              <FilterChip
-                label={activeState.subcategory}
-                onClear={() => patch({ subcategory: "" })}
-              />
-            ) : null}
-            {activeState.brand ? (
-              <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} />
-            ) : null}
-            {activeState.minScore > 0 ? (
-              <FilterChip
-                label={`Score ${activeState.minScore}+`}
-                onClear={() => patch({ minScore: 0 })}
-              />
-            ) : null}
-            {activeState.maxPrice > 0 ? (
-              <FilterChip
-                label={`Under ₹${activeState.maxPrice}`}
-                onClear={() => patch({ maxPrice: 0 })}
-              />
-            ) : null}
-            {activeState.grade ? (
-              <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} />
-            ) : null}
-            {activeState.sublabel ? (
-              <FilterChip
-                label={activeState.sublabel.replace(/_/g, " ")}
-                onClear={() => patch({ sublabel: "" })}
-              />
-            ) : null}
-            {activeState.verdict ? (
-              <FilterChip
-                label={activeState.verdict.replace(/_/g, " ")}
-                onClear={() => patch({ verdict: "" })}
-              />
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            {goalStripScrolledPast ? (
-              <span className="rounded-full border border-(--color-accent)/40 bg-(--color-accent-soft) px-2.5 py-0.5 text-[12px] font-medium text-(--color-accent)">
-                Goal active: {goalLabel}
-              </span>
-            ) : null}
-            {goal !== "balanced" ? (
-              <span className="text-sm text-(--color-fg-muted)">Best for {goalLabel}</span>
-            ) : null}
+            {/* sort */}
             <details className="group relative shrink-0">
-              <summary
-                className={`${catalogBarButtonClass} [&::-webkit-details-marker]:hidden`}
-              >
-                <span className="text-sm font-medium text-(--color-fg)">
-                  Sort: {sortBarLabel(activeState.sort)}
-                </span>
-                <ChevronDown className="h-4 w-4 text-(--color-fg-dim) transition group-open:rotate-180" />
+              <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-(--color-line) px-3.5 text-[13px] font-medium text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) [&::-webkit-details-marker]:hidden">
+                <span className="hidden sm:inline">Sort:</span>
+                <span className="text-(--color-fg)">{sortBarLabel(activeState.sort)}</span>
+                <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
               </summary>
-              <ul className="absolute left-0 top-full z-40 mt-1 min-w-[200px] overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel) py-1 shadow-lg">
+              <ul className="absolute right-0 top-full z-40 mt-1.5 min-w-[180px] overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel) py-1 shadow-xl">
                 {CATALOG_BAR_SORT_OPTIONS.map((o) => (
                   <li key={o.id}>
                     <button
                       type="button"
                       className={`w-full px-4 py-2 text-left text-sm transition hover:bg-(--color-bg-soft) ${
-                        activeState.sort === o.id
-                          ? "font-medium text-(--color-fg)"
-                          : "text-(--color-fg-muted)"
+                        activeState.sort === o.id ? "font-medium text-(--color-fg)" : "text-(--color-fg-muted)"
                       }`}
                       onClick={() => patch({ sort: o.id })}
                     >
@@ -779,29 +594,149 @@ export function CatalogView({
                 ))}
               </ul>
             </details>
+
+            {/* refreshing indicator */}
             {refreshing ? (
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border border-(--color-line-strong) border-t-transparent" />
+              <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border border-(--color-line-strong) border-t-transparent" />
             ) : null}
           </div>
-          <details
-            className="group shrink-0 rounded-xl border border-(--color-line) bg-(--color-bg-soft)/40 open:pb-4 md:min-w-[280px]"
-            open={hasFilters || undefined}
+
+          {/* Goal + diet, on the same sticky bar but smaller */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <GoalModePicker value={goal} onChange={pickGoal} compact />
+            <DietPicker value={diet} onChange={pickDiet} compact />
+          </div>
+        </div>
+
+        {/* ── Verdict pills: the headline filter ─────────────────────── */}
+        <div className="flex flex-wrap gap-2">
+          {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
+            const labels: Record<string, string> = {
+              daily_staple: "Daily staples",
+              good_choice: "Good choices",
+              occasional_treat: "Treats",
+              skip: "Skip",
+            };
+            const colors: Record<string, { fg: string; bg: string; border: string; activeBg: string }> = {
+              daily_staple: { fg: "#0f9e75", bg: "transparent", border: "#0f9e75", activeBg: "color-mix(in srgb, #0f9e75 14%, transparent)" },
+              good_choice: { fg: "#7ab830", bg: "transparent", border: "#7ab830", activeBg: "color-mix(in srgb, #7ab830 14%, transparent)" },
+              occasional_treat: { fg: "#e07030", bg: "transparent", border: "#e07030", activeBg: "color-mix(in srgb, #e07030 14%, transparent)" },
+              skip: { fg: "#d43030", bg: "transparent", border: "#d43030", activeBg: "color-mix(in srgb, #d43030 14%, transparent)" },
+            };
+            const c = colors[v]!;
+            const active = activeState.verdict === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => patch({ verdict: active ? "" : v })}
+                className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
+                style={{
+                  borderColor: c.border,
+                  color: c.fg,
+                  backgroundColor: active ? c.activeBg : c.bg,
+                }}
+              >
+                {labels[v]}
+              </button>
+            );
+          })}
+          <span className="hidden h-6 w-px bg-(--color-line) sm:inline-block" aria-hidden />
+          <button
+            type="button"
+            onClick={() => patch({ verdict: "" })}
+            className={`rounded-full px-3 py-1.5 text-[13px] transition ${
+              !activeState.verdict
+                ? "font-medium text-(--color-fg)"
+                : "text-(--color-fg-dim) hover:text-(--color-fg-muted)"
+            }`}
           >
-          <summary
-            className={`${catalogBarButtonClass} [&::-webkit-details-marker]:hidden`}
-          >
-            <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
-            <span className="text-sm font-medium text-(--color-fg)">
+            All
+          </button>
+        </div>
+
+        {/* ── Category chips: scrollable horizontal rail ───────────── */}
+        <div className="-mx-5 overflow-x-auto px-5 pb-1 scrollbar-none md:-mx-6 md:px-6">
+          <div className="flex w-max items-center gap-2">
+            <button
+              type="button"
+              onClick={() => patch({ category: "" })}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
+                !activeState.category
+                  ? "bg-(--color-fg) font-medium text-(--color-bg)"
+                  : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+              }`}
+            >
+              All aisles
+            </button>
+            {filterOptions.categories.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => patch({ category: c })}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
+                  activeState.category === c
+                    ? "bg-(--color-fg) font-medium text-(--color-bg)"
+                    : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Active filter chips ─────────────────────────────────────── */}
+        {hasFilters ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-(--color-fg-dim)">
+              Filters:
+            </span>
+            {activeState.subcategory ? (
+              <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} />
+            ) : null}
+            {activeState.brand ? (
+              <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} />
+            ) : null}
+            {activeState.minScore > 0 ? (
+              <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} />
+            ) : null}
+            {activeState.maxPrice > 0 ? (
+              <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} />
+            ) : null}
+            {activeState.grade ? (
+              <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} />
+            ) : null}
+            {activeState.sublabel ? (
+              <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} />
+            ) : null}
+            {activeState.q.trim() ? (
+              <FilterChip label={`"${activeState.q.trim()}"`} onClear={() => patch({ q: "" })} />
+            ) : null}
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline"
+            >
+              Clear all
+            </button>
+          </div>
+        ) : null}
+
+        {/* ── More filters drawer ─────────────────────────────────────── */}
+        <details
+          className="group rounded-xl border border-(--color-line) bg-(--color-panel) open:pb-4"
+          open={undefined}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2.5">
+              <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
+              <span className="text-[14px] font-medium text-(--color-fg)">More filters</span>
               {activeFilterCount > 0 ? (
-                <>
-                  Filters ·{" "}
-                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-accent) px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                    {activeFilterCount}
-                  </span>
-                </>
-              ) : (
-                "Filters"
-              )}
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-fg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-bg)">
+                  {activeFilterCount}
+                </span>
+              ) : null}
             </span>
             <ChevronDown className="h-4 w-4 text-(--color-fg-dim) transition group-open:rotate-180" />
           </summary>
@@ -925,7 +860,6 @@ export function CatalogView({
             </div>
           ) : null}
         </details>
-        </div>
       </div>
 
       {loading && items.length === 0 ? (

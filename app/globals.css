@@ -1,20 +1,22 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #ffffff;
-  --color-bg-soft: #f5f5f7;
-  --color-panel: #ffffff;
-  --color-panel-2: #f5f5f7;
-  --color-line: rgba(0, 0, 0, 0.08);
-  --color-line-strong: rgba(0, 0, 0, 0.14);
-  --color-fg: #1d1d1f;
-  --color-fg-muted: #6e6e73;
-  --color-fg-dim: #86868b;
-  --color-accent: #0071e3;
-  --color-accent-soft: rgba(0, 113, 227, 0.12);
+  /* Warm cream / paper light mode — easier on the eyes than pure white,
+     gives the site a hint of warmth without being yellow. */
+  --color-bg: #faf7f2;
+  --color-bg-soft: #f1ece2;
+  --color-panel: #fbf9f4;
+  --color-panel-2: #f1ece2;
+  --color-line: rgba(60, 40, 20, 0.10);
+  --color-line-strong: rgba(60, 40, 20, 0.18);
+  --color-fg: #1c1612;
+  --color-fg-muted: #5e544b;
+  --color-fg-dim: #8a7f74;
+  --color-accent: #b45309;
+  --color-accent-soft: rgba(180, 83, 9, 0.10);
   --color-good: #15803d;
   --color-warn: #b45309;
-  --color-bad: #b91c1c;
+  --color-bad: #991b1b;
 
   /* next/font sets --font-inter and --font-instrument on <html> in layout.tsx */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -53,9 +55,7 @@ body {
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(0, 113, 227, 0.04), transparent 60%),
-    var(--color-bg);
+  background: var(--color-bg);
   min-height: 100vh;
 }
 
@@ -128,9 +128,7 @@ html.dark .shimmer::after {
 }
 
 html.dark body {
-  background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(41, 151, 255, 0.08), transparent 60%),
-    var(--color-bg);
+  background: var(--color-bg);
 }
 
 /* Score / goal tiles: theme-aware tinted surfaces (avoid hard-coded white) */

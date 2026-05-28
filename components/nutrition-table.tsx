@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { roundNutrient } from "@/lib/products/pack-nutrition";
+import { useMemo } from "react";
 import { perServeFromNutrition } from "@/lib/scoring/per-serve";
 import { detectNutritionAnomalies, type NutritionContext } from "@/lib/nutrition/anomaly";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -11,24 +10,32 @@ const ROWS: {
   perServe: string;
   label: string;
   unit: string;
+  emphasis?: boolean;
 }[] = [
-  { key: "energy_kcal_100g", perServe: "energy_kcal", label: "Energy", unit: "kcal" },
-  { key: "protein_g_100g", perServe: "protein_g", label: "Protein", unit: "g" },
-  { key: "fat_g_100g", perServe: "fat_g", label: "Fat", unit: "g" },
-  { key: "saturated_fat_g_100g", perServe: "saturated_fat_g", label: "Saturated fat", unit: "g" },
-  { key: "trans_fat_g_100g", perServe: "trans_fat_g", label: "Trans fat", unit: "g" },
-  { key: "carbs_g_100g", perServe: "carbs_g", label: "Carbohydrates", unit: "g" },
-  { key: "sugar_g_100g", perServe: "sugar_g", label: "Sugar", unit: "g" },
-  { key: "added_sugar_g_100g", perServe: "added_sugar_g", label: "Added sugar", unit: "g" },
+  { key: "energy_kcal_100g", perServe: "energy_kcal", label: "Energy", unit: "kcal", emphasis: true },
+  { key: "protein_g_100g", perServe: "protein_g", label: "Protein", unit: "g", emphasis: true },
+  { key: "fat_g_100g", perServe: "fat_g", label: "Fat", unit: "g", emphasis: true },
+  { key: "saturated_fat_g_100g", perServe: "saturated_fat_g", label: "  of which saturated", unit: "g" },
+  { key: "trans_fat_g_100g", perServe: "trans_fat_g", label: "  of which trans", unit: "g" },
+  { key: "carbs_g_100g", perServe: "carbs_g", label: "Carbohydrates", unit: "g", emphasis: true },
+  { key: "sugar_g_100g", perServe: "sugar_g", label: "  of which sugars", unit: "g" },
+  { key: "added_sugar_g_100g", perServe: "added_sugar_g", label: "  added sugar", unit: "g" },
   { key: "fiber_g_100g", perServe: "fiber_g", label: "Fiber", unit: "g" },
   { key: "sodium_mg_100g", perServe: "sodium_mg", label: "Sodium", unit: "mg" },
+  { key: "calcium_mg_100g", perServe: "calcium_mg", label: "Calcium", unit: "mg" },
+  { key: "iron_mg_100g", perServe: "iron_mg", label: "Iron", unit: "mg" },
 ];
 
-type Basis = "serve" | "100g";
+function fmt(v: number | null | undefined): string {
+  if (v == null) return "—";
+  if (v === 0) return "0";
+  if (v < 0.1) return v.toFixed(2).replace(/\.?0+$/, "");
+  if (v < 10) return v.toFixed(1).replace(/\.0$/, "");
+  return Math.round(v).toString();
+}
 
 export function NutritionTable({
   nutrition,
-  netWeight,
   name,
   category,
   subcategory,
@@ -43,15 +50,10 @@ export function NutritionTable({
   const hasServe = perServe?.serving_g != null && perServe.serving_g > 0;
   const serveG = perServe?.serving_g ?? null;
 
-  const [basis, setBasis] = useState<Basis>(hasServe ? "serve" : "100g");
-
-  const ctx: NutritionContext | null = name
-    ? { name, category, subcategory }
-    : null;
+  const ctx: NutritionContext | null = name ? { name, category, subcategory } : null;
   const anomalies = ctx ? detectNutritionAnomalies(nutrition, ctx) : [];
   const critical = anomalies.filter((a) => a.severity === "critical");
   const warnings = anomalies.filter((a) => a.severity === "warning");
-
 
   function perServeValue(field: string): number | undefined {
     if (!perServe) return undefined;
@@ -60,8 +62,9 @@ export function NutritionTable({
   }
 
   const rows = ROWS.filter((r) => {
-    if (basis === "serve" && hasServe) return perServeValue(r.perServe) != null;
-    return nutrition[r.key] != null;
+    const has100 = nutrition[r.key] != null;
+    const hasServeVal = perServeValue(r.perServe) != null;
+    return has100 || hasServeVal;
   });
 
   if (!rows.length) {
@@ -70,126 +73,79 @@ export function NutritionTable({
     );
   }
 
-  const colLabel =
-    basis === "serve" && serveG ? `Per serving (${serveG}g)` : "Per 100g";
-
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <BasisButton
-          active={basis === "serve"}
-          disabled={!hasServe}
-          title={
-            hasServe
-              ? undefined
-              : "Serving size not available for this product"
-          }
-          onClick={() => hasServe && setBasis("serve")}
-        >
-          Per serve
-        </BasisButton>
-        <BasisButton active={basis === "100g"} onClick={() => setBasis("100g")}>
-          Per 100g
-        </BasisButton>
-      </div>
-      {!hasServe ? (
-        <p className="mb-3 mt-1.5 text-[11px] leading-snug text-(--color-fg-dim)">
-          Serving size unavailable — values shown per 100g
-        </p>
-      ) : (
-        <div className="mb-3" />
-      )}
-
       {critical.length > 0 ? (
-        <div className="mb-3 rounded-lg border border-red-200/90 bg-red-50/70 px-3 py-2.5 text-[13px] leading-snug text-red-950">
+        <div className="mb-3 rounded-xl border border-(--color-bad)/30 bg-(--color-bad)/[0.06] px-3.5 py-2.5 text-[13px] leading-snug text-(--color-bad)">
           <p className="font-medium">Nutrition data looks wrong</p>
-          <ul className="mt-1 list-inside list-disc text-red-900/90">
+          <ul className="mt-1 list-inside list-disc opacity-90">
             {critical.map((a) => (
               <li key={a.code}>{a.message}</li>
             ))}
           </ul>
         </div>
       ) : null}
-      {warnings.length > 0 ? (
-        <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 text-[13px] leading-snug text-amber-950">
-          <p className="font-medium">Nutrition data may be inaccurate</p>
-          <ul className="mt-1 list-inside list-disc text-amber-900/90">
-            {warnings.map((a) => (
-              <li key={a.code}>{a.message}</li>
-            ))}
-          </ul>
+      {warnings.length > 0 && critical.length === 0 ? (
+        <div className="mb-3 rounded-xl border border-(--color-warn)/30 bg-(--color-warn)/[0.06] px-3.5 py-2.5 text-[13px] leading-snug text-(--color-warn)">
+          {warnings.map((a) => a.message).join(" · ")}
         </div>
       ) : null}
-      <div className="overflow-hidden rounded-xl border border-(--color-line)">
-        <table className="w-full text-sm">
+
+      <div className="overflow-hidden rounded-2xl border border-(--color-line)">
+        <table className="w-full text-[13px]">
           <thead>
-            <tr className="border-b border-(--color-line) bg-(--color-panel) text-left text-xs uppercase tracking-wider text-(--color-fg-dim)">
-              <th className="px-4 py-3 font-normal">Nutrient</th>
-              <th className="px-4 py-3 font-normal text-right">{colLabel}</th>
+            <tr className="border-b border-(--color-line) bg-(--color-bg-soft) text-[10px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
+              <th className="px-4 py-3 text-left font-medium">Nutrient</th>
+              <th className="px-4 py-3 text-right font-medium tabular-nums">
+                {hasServe && serveG ? `Per serve (${serveG}g)` : "Per serve"}
+              </th>
+              <th className="px-4 py-3 text-right font-medium tabular-nums">Per 100g</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ key, perServe, label, unit }) => {
-              let value: number | null = null;
-              if (basis === "serve" && hasServe) {
-                value = perServeValue(perServe) ?? null;
-              } else {
-                value = nutrition[key] as number;
-              }
+            {rows.map(({ key, perServe: psKey, label, unit, emphasis }) => {
+              const per100 = nutrition[key] as number | undefined;
+              const ps = perServeValue(psKey);
               return (
-                <tr key={key} className="border-b border-(--color-line) last:border-0">
-                  <td className="px-4 py-2.5 text-(--color-fg-muted)">{label}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium text-(--color-fg)">
-                    {value} {unit}
+                <tr key={key} className="border-b border-(--color-line)/60 last:border-0">
+                  <td
+                    className={
+                      emphasis
+                        ? "px-4 py-2.5 text-(--color-fg)"
+                        : "px-4 py-2 pl-7 text-[12px] text-(--color-fg-muted)"
+                    }
+                  >
+                    {label}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg)">
+                    {hasServe ? (
+                      <>
+                        {fmt(ps)}
+                        {ps != null ? (
+                          <span className="ml-0.5 text-[10px] text-(--color-fg-dim)">{unit}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-(--color-fg-dim)">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg-muted)">
+                    {fmt(per100)}
+                    {per100 != null ? (
+                      <span className="ml-0.5 text-[10px] text-(--color-fg-dim)">{unit}</span>
+                    ) : null}
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {basis === "serve" ? (
-          <p className="border-t border-(--color-line) px-4 py-2 text-xs text-(--color-fg-dim)">
-            Serving size from label OCR or category default — used for V9 scoring.
-          </p>
-        ) : null}
-        {nutrition.source ? (
-          <p className="border-t border-(--color-line) px-4 py-2 text-xs text-(--color-fg-dim)">
-            Source: {nutrition.source}
+        {!hasServe ? (
+          <p className="border-t border-(--color-line) px-4 py-2 text-[11px] text-(--color-fg-dim)">
+            Serving size not on file — only per 100g shown
           </p>
         ) : null}
       </div>
     </div>
-  );
-}
-
-function BasisButton({
-  active,
-  onClick,
-  disabled,
-  title,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-  title?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={
-        active
-          ? "rounded-full border border-(--color-accent) bg-(--color-accent)/10 px-3 py-1 text-xs font-medium text-(--color-accent)"
-          : disabled
-            ? "cursor-not-allowed rounded-full border border-(--color-line) px-3 py-1 text-xs text-(--color-fg-dim) opacity-40"
-            : "rounded-full border border-(--color-line) px-3 py-1 text-xs text-(--color-fg-muted) hover:border-(--color-fg-dim)"
-      }
-    >
-      {children}
-    </button>
   );
 }

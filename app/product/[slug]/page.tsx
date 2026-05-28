@@ -22,7 +22,6 @@ import { VerdictBlock } from "@/components/verdict-chips";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { labelResolutionFromPayload } from "@/lib/products/label-resolution";
 import { CatalogBackLink } from "@/components/catalog-back-link";
-import { perServeFromNutrition } from "@/lib/scoring/per-serve";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { findAlternatives } from "@/lib/products/alternatives";
@@ -93,9 +92,6 @@ export default async function ProductPage({
   const subscores = score?.subscores as SubScores | undefined;
   const attrs = product.attributes ?? {};
   const attrEntries = Object.entries(attrs).filter(([k]) => !DETAIL_SKIP.has(k));
-  const perServeMeta = displayNutrition ? perServeFromNutrition(displayNutrition) : null;
-  const hasServing = perServeMeta?.serving_g != null && perServeMeta.serving_g > 0;
-
   const labelResolution = labelResolutionFromPayload(product.ocr_payload);
   const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
     product.ingredients_raw,
@@ -149,6 +145,10 @@ export default async function ProductPage({
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
           <div className="space-y-6">
             <ProductGallery images={product.image_urls} alt={product.name} />
+            {/* Swaps live under the photo, on the left — discoverable */}
+            {swaps.length > 0 ? (
+              <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
+            ) : null}
           </div>
 
           <div className="min-w-0">
@@ -227,13 +227,6 @@ export default async function ProductPage({
           </div>
         </div>
 
-        {/* ── Better picks (swaps) — full-width, prominent ─────────── */}
-        {swaps.length > 0 ? (
-          <section className="mt-14">
-            <SwapPanel current={product} suggestions={swaps} goal={goal} />
-          </section>
-        ) : null}
-
         {labelResolution ? (
           <div className="mt-12">
             <LabelChangeSummary labelResolution={labelResolution} />
@@ -258,9 +251,7 @@ export default async function ProductPage({
           <section>
             <h2 className="font-display text-2xl">Nutrition</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
-              {hasServing
-                ? `Per serve and per 100g — toggle below.`
-                : `Per 100g from the back label.`}
+              From the back label. Per serve where available.
             </p>
             <div className="mt-5">
               {displayNutrition ? (

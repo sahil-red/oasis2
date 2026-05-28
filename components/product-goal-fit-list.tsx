@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ScoreRing } from "@/components/score-ring";
+import { colorForScore } from "@/lib/utils";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
@@ -203,16 +203,19 @@ function ActiveGoalHero({
         };
 
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) to-(--color-bg-soft) p-5 shadow-sm">
+    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-5">
       <div className="flex items-start gap-5">
-        <ScoreRing
-          score={fit}
-          size={88}
-          stroke={6}
-          showLabel
-          subtitle={grade}
-          className="shrink-0"
-        />
+        <div className="flex shrink-0 flex-col items-start">
+          <span
+            className="font-display text-5xl leading-none tabular-nums"
+            style={{ color: colorForScore(fit) }}
+          >
+            {fit}
+          </span>
+          <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+            {grade}
+          </span>
+        </div>
         <div className="min-w-0 flex-1 pt-1">
           {variant === "goal" && label ? (
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">

@@ -2,41 +2,46 @@ import { VERDICT_LABELS, type VerdictId } from "@/lib/scoring/verdict";
 import { SUBLABEL_DISPLAY, type SublabelId } from "@/lib/scoring/sublabels";
 import { bandFromScore, labelForBand } from "@/lib/utils";
 
+/**
+ * Verdict colors — use `color-mix` so they adapt to both light cream and dark
+ * themes. The accent stays consistent; the background is a faint tint of the
+ * accent over the current panel color.
+ */
 export const VERDICT_COLORS: Record<
   VerdictId,
   { bg: string; fg: string; border: string; chipBg: string; chipBorder: string; chipFg: string }
 > = {
   daily_staple: {
-    bg: "#0d2822",
+    bg: "color-mix(in srgb, #0f9e75 10%, var(--color-panel))",
     fg: "#0f9e75",
-    border: "rgba(15,158,117,0.3)",
+    border: "color-mix(in srgb, #0f9e75 28%, transparent)",
     chipBg: "transparent",
     chipBorder: "#0f9e75",
     chipFg: "#0f9e75",
   },
   good_choice: {
-    bg: "#141e08",
-    fg: "#7ab830",
-    border: "rgba(122,184,48,0.3)",
+    bg: "color-mix(in srgb, #7ab830 10%, var(--color-panel))",
+    fg: "#5d8d22",
+    border: "color-mix(in srgb, #7ab830 28%, transparent)",
     chipBg: "transparent",
     chipBorder: "#7ab830",
-    chipFg: "#7ab830",
+    chipFg: "#5d8d22",
   },
   occasional_treat: {
-    bg: "#2b1600",
-    fg: "#e07030",
-    border: "rgba(224,112,48,0.3)",
+    bg: "color-mix(in srgb, #e07030 10%, var(--color-panel))",
+    fg: "#c25e1f",
+    border: "color-mix(in srgb, #e07030 28%, transparent)",
     chipBg: "transparent",
     chipBorder: "#e07030",
-    chipFg: "#e07030",
+    chipFg: "#c25e1f",
   },
   skip: {
-    bg: "#220808",
-    fg: "#d43030",
-    border: "rgba(212,48,48,0.3)",
+    bg: "color-mix(in srgb, #d43030 10%, var(--color-panel))",
+    fg: "#a02525",
+    border: "color-mix(in srgb, #d43030 28%, transparent)",
     chipBg: "transparent",
     chipBorder: "#d43030",
-    chipFg: "#d43030",
+    chipFg: "#a02525",
   },
 };
 

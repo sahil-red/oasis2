@@ -61,10 +61,7 @@ function ShowcaseCard({ product, eager }: { product: ProductListItem; eager: boo
       href={`/product/${product.slug}`}
       className="group/card relative block w-[200px] shrink-0 sm:w-[240px]"
     >
-      <div
-        className="relative aspect-[4/5] overflow-hidden rounded-2xl photo-frame ring-1 transition-transform duration-300 ease-out group-hover/card:scale-[1.02]"
-        style={c ? { borderTop: `2px solid ${c.chipBorder}`, "--ring-color": "rgba(255,255,255,0.06)" } as React.CSSProperties : undefined}
-      >
+      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl photo-frame transition-transform duration-300 ease-out group-hover/card:scale-[1.02]">
         {thumb ? (
           <Image
             src={thumb}

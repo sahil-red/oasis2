@@ -2,11 +2,9 @@
 
 import { ChevronDown } from "lucide-react";
 import { GradeLegend } from "@/components/grade-legend";
-import { ScoreRing } from "@/components/score-ring";
 import {
   bandFromScore,
   cn,
-  colorForGrade,
   colorForScore,
   labelForBand,
 } from "@/lib/utils";
@@ -214,14 +212,13 @@ export function ScoreSubscoresBlock({
   );
 }
 
-/** Full score block for PDP */
+/** Clean numeric score block — no ring, just typography. */
 export function ScorePanel({
   score,
   grade,
   band,
   subscores,
-  ruleVersion,
-  compact,
+  compact: _compact,
 }: ScoreCore & { ruleVersion?: number; compact?: boolean }) {
   const axes = subscores
     ? [
@@ -231,89 +228,42 @@ export function ScorePanel({
       ]
     : [];
 
-  if (compact) {
-    return (
-      <div className="overflow-hidden rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) to-(--color-bg-soft) p-4 shadow-sm">
-        <h2 className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-          Overall score
-        </h2>
-        <div className="mt-3 flex items-start gap-4">
-          <ScoreRing
-            score={score}
-            size={80}
-            stroke={6}
-            showLabel
-            subtitle={`Grade ${grade}`}
-            className="shrink-0"
-          />
-          <div className="min-w-0 flex-1 pt-0.5">
-            <BandChip band={band} />
-            {axes.length > 0 ? (
-              <dl className="mt-3 grid grid-cols-3 gap-1.5">
-                {axes.map(({ label, value, max }) => (
-                  <div
-                    key={label}
-                    className="rounded-lg border border-(--color-line) bg-(--color-panel) px-1.5 py-1.5 text-center"
-                  >
-                    <dt className="text-[9px] leading-tight text-(--color-fg-dim)">{label}</dt>
-                    <dd className="font-display text-sm leading-none tabular-nums text-(--color-fg)">
-                      {value}
-                      <span className="text-[9px] font-normal text-(--color-fg-dim)">/{max}</span>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-            <div className="mt-3">
-              <GradeLegend compact />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="overflow-hidden rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) via-(--color-bg-soft) to-(--color-panel) p-6 shadow-sm md:p-8">
-      <div className="flex flex-col gap-8 sm:flex-row sm:items-center">
-        <ScoreRing score={score} size={168} stroke={10} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <BandChip band={band} />
-            <span className="text-sm font-medium text-(--color-fg)">Grade {grade}</span>
-            {ruleVersion != null ? (
-              <span className="text-xs text-(--color-fg-dim)">v{ruleVersion}</span>
-            ) : null}
-          </div>
-          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-(--color-fg-muted)">
-            Based on the label: nutrition, flagged additives, and a few pack claims. See
-            &quot;Why this score?&quot; below for the short version.
+    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-6">
+      <div className="flex items-start gap-6">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
+            Score
           </p>
-          {axes.length > 0 ? (
-            <div className="mt-6 grid grid-cols-3 gap-2">
-              {axes.map(({ label, value, max }) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-(--color-line) bg-(--color-panel) px-3 py-2.5 text-center shadow-sm"
-                >
-                  <div className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
-                    {label}
-                  </div>
-                  <div
-                    className="mt-1 font-display text-2xl tabular-nums"
-                    style={{ color: colorForScore(Math.round((value / max) * 100)) }}
-                  >
-                    {value}
-                  </div>
-                  <div className="text-[10px] text-(--color-fg-dim)">/{max}</div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="mt-6 max-w-md">
-            <GradeLegend compact />
-          </div>
+          <p
+            className="font-display mt-2 text-6xl leading-none tabular-nums"
+            style={{ color: colorForScore(score) }}
+          >
+            {score}
+          </p>
+          <p className="mt-2 flex items-center gap-2 text-sm text-(--color-fg-muted)">
+            <BandChip band={band} />
+            <span>Grade {grade}</span>
+          </p>
         </div>
+        {axes.length > 0 ? (
+          <dl className="ml-auto grid grid-cols-3 gap-3 text-right">
+            {axes.map(({ label, value, max }) => (
+              <div key={label}>
+                <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+                  {label}
+                </dt>
+                <dd className="mt-1 text-xl tabular-nums text-(--color-fg)">
+                  {value}
+                  <span className="text-[10px] text-(--color-fg-dim)">/{max}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
+      <div className="mt-5">
+        <GradeLegend compact />
       </div>
     </div>
   );

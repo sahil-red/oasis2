@@ -369,14 +369,11 @@ type CatalogFilterRpc = {
   brands: string[];
 };
 
-/** Always offer these aisles in the UI even if visibility backfill is still catching up. */
-const PINNED_CATALOG_AISLES = [FRUITS_VEGETABLES_AISLE];
-
 function mergePinnedCategories(filters: CatalogFilters): CatalogFilters {
-  const rest = filters.categories
-    .filter((c) => !PINNED_CATALOG_AISLES.includes(c))
-    .sort((a, b) => a.localeCompare(b));
-  const categories = [...PINNED_CATALOG_AISLES, ...rest];
+  // F&V removed — Zepto's "Fruits & Vegetables" aisle has only 1 actual product;
+  // packaged dry fruits / nuts come through other aisles. Re-add when fresh
+  // produce data lands on the platform.
+  const categories = [...filters.categories].sort((a, b) => a.localeCompare(b));
   return { ...filters, categories };
 }
 

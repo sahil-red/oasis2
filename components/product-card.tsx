@@ -11,11 +11,18 @@ import type { VerdictId } from "@/lib/scoring/verdict";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 
+const VERDICT_SHORT: Record<VerdictId, string> = {
+  daily_staple: "Staple",
+  good_choice: "Good",
+  occasional_treat: "Treat",
+  skip: "Skip",
+};
+
 export const ProductCard = memo(function ProductCard({
   product,
   goalFit,
   hrefQuery = "",
-  onSublabelClick,
+  onSublabelClick: _onSublabelClick,
 }: {
   product: ProductListItem | CatalogGridItem;
   goalFit?: number;
@@ -41,48 +48,55 @@ export const ProductCard = memo(function ProductCard({
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
 
   return (
-    <article
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-(--color-line) transition-all duration-200 hover:border-(--color-line-strong) hover:-translate-y-0.5"
-      style={vc ? { borderLeftColor: vc.chipBorder, borderLeftWidth: 3 } : undefined}
-    >
-      {/* image */}
-      <div className="relative aspect-square shrink-0 overflow-visible">
-        <div className="relative h-full w-full overflow-hidden photo-frame">
-          <Link
-            href={href}
-            className="absolute inset-0 z-0 block"
-            tabIndex={-1}
-            aria-hidden
-            onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+    <article className="group flex h-full flex-col">
+      {/* image — verdict label as floating chip on top-left, score on top-right */}
+      <Link
+        href={href}
+        className="relative block aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
+        onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+      >
+        {thumb ? (
+          <Image
+            src={thumb}
+            alt={displayName}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">
+            No image
+          </div>
+        )}
+
+        {/* verdict pill, top-left */}
+        {verdict && vc ? (
+          <span
+            className="absolute left-2.5 top-2.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
+            style={{
+              backgroundColor: vc.bg,
+              color: vc.fg,
+              borderColor: vc.border,
+            }}
           >
-            {thumb ? (
-              <Image
-                src={thumb}
-                alt={displayName}
-                fill
-                className="object-contain p-1.5 transition duration-300 ease-out group-hover:scale-[1.01]"
-                sizes="(max-width: 768px) 50vw, 20vw"
-              />
-            ) : (
-              <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">
-                No image
-              </div>
-            )}
-          </Link>
-        </div>
+            {VERDICT_SHORT[verdict]}
+          </span>
+        ) : null}
+
+        {/* score badge, top-right (subtle, not screaming) */}
         {goalFit != null ? (
-          <div className="absolute -right-1 -top-1 z-10">
+          <div className="absolute right-2 top-2">
             <GoalFitBadge fit={goalFit} />
           </div>
         ) : core ? (
-          <div className="absolute -right-1 -top-1 z-10">
+          <div className="absolute right-2 top-2">
             <ScoreBadge score={core.score} grade={core.grade} verdict={verdict} />
           </div>
         ) : null}
-      </div>
+      </Link>
 
       {/* content */}
-      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+      <div className="mt-3 flex flex-1 flex-col gap-1.5 px-0.5">
         <Link
           href={href}
           className="block flex-1"
@@ -95,32 +109,22 @@ export const ProductCard = memo(function ProductCard({
           ) : (
             <span className="block h-[13px]" aria-hidden />
           )}
-          <h3 className="line-clamp-2 text-[13px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
+          <h3 className="line-clamp-2 mt-0.5 text-[13.5px] font-medium leading-snug text-(--color-fg) group-hover:underline group-hover:underline-offset-2">
             {displayName}
           </h3>
+
+          {/* chips — subtle, monochrome, no verdict color */}
+          {chipLabels.length > 0 ? (
+            <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">
+              {chipLabels.slice(0, 2).join(" · ")}
+              {chipLabels.length > 2 ? ` · +${chipLabels.length - 2}` : ""}
+            </p>
+          ) : null}
         </Link>
 
-        {/* chips — clickable to filter */}
-        {chipLabels.length > 0 && vc ? (
-          <div className="flex flex-wrap gap-1">
-            {chipLabels.slice(0, 3).map((label, i) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => onSublabelClick?.(sublabelIds![i]!)}
-                className="rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-tight tracking-wide transition hover:opacity-80"
-                style={{ borderColor: vc.chipBorder, color: vc.chipFg }}
-                title={onSublabelClick ? `Filter: ${label}` : label}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         {/* price row */}
-        <div className="flex items-center justify-between gap-1 border-t border-(--color-line) pt-1.5">
-          <div>
+        <div className="flex items-center justify-between gap-2 pt-1.5">
+          <div className="min-w-0">
             {price != null ? (
               <span className="text-[14px] font-semibold tabular-nums text-(--color-fg)">
                 ₹{price}
