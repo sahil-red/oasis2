@@ -41,7 +41,7 @@ export function HomeRailCard({ product }: { product: ProductListItem }) {
       className="group flex h-full flex-col"
     >
       <div
-        className="relative aspect-square overflow-hidden rounded-2xl bg-[#1c1c1c] transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
+        className="relative aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
         style={c ? { borderTop: `2px solid ${c.chipBorder}` } : undefined}
       >
         {thumb ? (

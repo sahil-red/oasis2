@@ -42,12 +42,12 @@ export const ProductCard = memo(function ProductCard({
 
   return (
     <article
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.06] transition-all duration-200 hover:border-white/[0.18] hover:-translate-y-0.5"
+      className="group flex h-full flex-col overflow-hidden rounded-xl border border-(--color-line) transition-all duration-200 hover:border-(--color-line-strong) hover:-translate-y-0.5"
       style={vc ? { borderLeftColor: vc.chipBorder, borderLeftWidth: 3 } : undefined}
     >
       {/* image */}
       <div className="relative aspect-square shrink-0 overflow-visible">
-        <div className="relative h-full w-full overflow-hidden bg-[#1c1c1c]">
+        <div className="relative h-full w-full overflow-hidden photo-frame">
           <Link
             href={href}
             className="absolute inset-0 z-0 block"
@@ -119,7 +119,7 @@ export const ProductCard = memo(function ProductCard({
         ) : null}
 
         {/* price row */}
-        <div className="flex items-center justify-between gap-1 border-t border-white/[0.05] pt-1.5">
+        <div className="flex items-center justify-between gap-1 border-t border-(--color-line) pt-1.5">
           <div>
             {price != null ? (
               <span className="text-[14px] font-semibold tabular-nums text-(--color-fg)">

@@ -90,6 +90,31 @@ body {
   100% { transform: translateX(100%); }
 }
 
+/* Photo frame for product images — soft surface that adapts to theme. */
+.photo-frame {
+  background: var(--color-bg-soft);
+}
+
+html.dark .photo-frame {
+  background: #1c1c1e;
+}
+
+/* Continuous horizontal marquee for the homepage product showcase.
+   The list is duplicated server-side; we slide by 50% (one copy width). */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  width: max-content;
+  animation: marquee 60s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}
+
 .shimmer::after {
   content: "";
   position: absolute;

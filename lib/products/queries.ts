@@ -1290,14 +1290,15 @@ export async function getFeaturedSample(): Promise<ProductListItem | null> {
 }
 
 /**
- * Homepage rails — 1 editorial hero + 3 curated rails. Single Supabase round-trip
- * via direct join queries (server component, fast).
+ * Homepage data — diverse hero showcase + 3 curated rails. Server component, fast.
  */
 export type HomeShelves = {
-  hero: ProductListItem | null;
+  /** 6-card hero showcase mixing verdicts to communicate what the site does */
+  showcase: ProductListItem[];
   dailyStaples: ProductListItem[];
   skipWorthy: ProductListItem[];
   bestValue: ProductListItem[];
+  occasionalTreats: ProductListItem[];
   totalScored: number;
   catalogSize: number;
 };
@@ -1319,14 +1320,17 @@ export async function getHomeShelves(): Promise<HomeShelves> {
     return q;
   };
 
-  const [staplesRes, skipsRes, valueRes, statsRes] = await Promise.all([
+  const [staplesRes, skipsRes, valueRes, treatsRes, statsRes] = await Promise.all([
     baseQ("daily_staple")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
-      .limit(8),
+      .limit(10),
     baseQ("skip")
       .order("score", { referencedTable: "core_scores", ascending: true, nullsFirst: false })
-      .limit(8),
+      .limit(10),
     baseQ("good_choice")
+      .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
+      .limit(10),
+    baseQ("occasional_treat")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
       .limit(8),
     Promise.all([
@@ -1335,24 +1339,27 @@ export async function getHomeShelves(): Promise<HomeShelves> {
     ]),
   ]);
 
-  const staples = ((staplesRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
-  const skips = ((skipsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
-  const value = ((valueRes.data ?? []) as Record<string, unknown>[]).map(mapListRow);
+  const staples = ((staplesRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
+  const skips = ((skipsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
+  const value = ((valueRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
+  const treats = ((treatsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
 
-  // Pick a Skip product with brand + image as the editorial hero
-  const hero =
-    skips.find((p) => p.brand && p.image_urls.length > 0) ??
-    skips[0] ??
-    null;
-
-  // Filter hero out of the skip rail to avoid duplication
-  const skipRail = skips.filter((p) => p.id !== hero?.id).slice(0, 6);
+  // Diverse showcase: 2 staples + 2 skips + 1 good + 1 treat — communicates scope
+  const showcase = [
+    staples[0],
+    skips[0],
+    value[0],
+    staples[1],
+    skips[1],
+    treats[0] ?? value[1],
+  ].filter((p): p is ProductListItem => Boolean(p));
 
   return {
-    hero,
-    dailyStaples: staples.filter((p) => p.image_urls.length > 0).slice(0, 6),
-    skipWorthy: skipRail,
-    bestValue: value.filter((p) => p.image_urls.length > 0).slice(0, 6),
+    showcase,
+    dailyStaples: staples.slice(0, 6),
+    skipWorthy: skips.slice(0, 6),
+    bestValue: value.slice(0, 6),
+    occasionalTreats: treats.slice(0, 6),
     catalogSize: statsRes[0].count ?? 0,
     totalScored: statsRes[1].count ?? 0,
   };

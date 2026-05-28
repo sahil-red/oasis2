@@ -90,12 +90,12 @@ export function BestInCohortChip({
       {open ? (
         <div
           role="tooltip"
-          className="absolute left-0 top-full z-50 mt-2 w-80 rounded-xl border border-white/10 bg-[#0e0e10] p-3 shadow-2xl"
+          className="absolute left-0 top-full z-50 mt-2 w-80 rounded-xl border border-(--color-line) bg-(--color-panel) p-3 shadow-2xl"
           onMouseEnter={show}
           onMouseLeave={scheduleHide}
         >
-          <div className="mb-2 flex items-center justify-between border-b border-white/10 pb-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
+          <div className="mb-2 flex items-center justify-between border-b border-(--color-line) pb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-(--color-fg-dim)">
               Top in {subcategoryLabel || "category"}
             </p>
             {rank ? (
@@ -109,7 +109,7 @@ export function BestInCohortChip({
           </div>
 
           {loading && !items ? (
-            <p className="py-4 text-center text-xs text-white/40">Loading top picks…</p>
+            <p className="py-4 text-center text-xs text-(--color-fg-dim)">Loading top picks…</p>
           ) : items?.length ? (
             <ol className="space-y-1.5">
               {items.map((p, i) => {
@@ -118,12 +118,12 @@ export function BestInCohortChip({
                   <li key={p.id}>
                     <Link
                       href={`/product/${p.slug}`}
-                      className={`flex items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-white/[0.05] ${isSelf ? "bg-white/[0.04]" : ""}`}
+                      className={`flex items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-(--color-bg-soft) ${isSelf ? "bg-(--color-bg-soft)" : ""}`}
                     >
-                      <span className="w-5 shrink-0 text-right text-[11px] font-bold tabular-nums text-white/40">
+                      <span className="w-5 shrink-0 text-right text-[11px] font-bold tabular-nums text-(--color-fg-dim)">
                         {i + 1}
                       </span>
-                      <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded bg-white/5">
+                      <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded bg-(--color-bg-soft)">
                         {p.image_url ? (
                           <Image
                             src={p.image_url}
@@ -136,11 +136,11 @@ export function BestInCohortChip({
                       </span>
                       <span className="min-w-0 flex-1">
                         {p.brand ? (
-                          <span className="block truncate text-[9px] uppercase tracking-wider text-white/40">
+                          <span className="block truncate text-[9px] uppercase tracking-wider text-(--color-fg-dim)">
                             {p.brand}
                           </span>
                         ) : null}
-                        <span className="block truncate text-[12px] text-white/85">{p.name}</span>
+                        <span className="block truncate text-[12px] text-(--color-fg)">{p.name}</span>
                       </span>
                       <span
                         className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
@@ -154,7 +154,7 @@ export function BestInCohortChip({
               })}
             </ol>
           ) : (
-            <p className="py-4 text-center text-xs text-white/40">No data</p>
+            <p className="py-4 text-center text-xs text-(--color-fg-dim)">No data</p>
           )}
         </div>
       ) : null}

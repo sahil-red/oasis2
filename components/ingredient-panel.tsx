@@ -13,7 +13,7 @@ import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 
 const RISK_DOT: Record<IngredientRisk, string> = {
   "risk-free": "bg-[#22c55e]",
-  unknown: "bg-white/20",
+  unknown: "bg-(--color-fg-dim)/40",
   limited: "bg-[#f59e0b]",
   moderate: "bg-[#f59e0b]",
   hazardous: "bg-[#ef4444]",
@@ -40,12 +40,12 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
   const isProbiotic = item.tierLabel === "Probiotic" || item.tierLabel.startsWith("Probiotic");
 
   return (
-    <li className="border-b border-white/[0.05] last:border-0">
+    <li className="border-b border-(--color-line) last:border-0">
       <button
         type="button"
         className={cn(
           "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors",
-          hasWhy ? "hover:bg-white/[0.03] cursor-pointer" : "cursor-default",
+          hasWhy ? "hover:bg-(--color-bg-soft) cursor-pointer" : "cursor-default",
         )}
         onClick={() => hasWhy && setOpen((v) => !v)}
         disabled={!hasWhy}
@@ -83,7 +83,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
         ) : null}
       </button>
       {open && item.why ? (
-        <div className="border-t border-white/[0.05] bg-white/[0.02] px-4 py-3 pl-9">
+        <div className="border-t border-(--color-line) bg-(--color-bg-soft) px-4 py-3 pl-9">
           <p className="text-[13px] leading-relaxed text-(--color-fg-muted)">{item.why}</p>
         </div>
       ) : null}
@@ -119,7 +119,7 @@ export function IngredientPanel({
   return (
     <div className="space-y-3">
       {/* ── merged summary bar ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-[12px]">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-3 py-2.5 text-[12px]">
         {allClean ? (
           <span className="flex items-center gap-1.5 font-semibold text-[#4ade80]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
@@ -137,7 +137,7 @@ export function IngredientPanel({
           </span>
         )}
 
-        <span className="text-white/20">·</span>
+        <span className="text-(--color-fg-dim)/40">·</span>
 
         {/* total count */}
         <span className="text-(--color-fg-muted)">
@@ -147,7 +147,7 @@ export function IngredientPanel({
         {/* rated coverage */}
         {summary.rated > 0 ? (
           <>
-            <span className="text-white/20">·</span>
+            <span className="text-(--color-fg-dim)/40">·</span>
             <span className="text-(--color-fg-muted)">
               <span className="font-medium text-(--color-fg)">{ratedPct}%</span> intelligence-rated
             </span>
@@ -156,7 +156,7 @@ export function IngredientPanel({
       </div>
 
       {/* ── ingredient list ── */}
-      <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-(--color-panel)">
+      <div className="overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel)">
         <ul>
           {items.map((item) => (
             <IngredientRow key={item.key} item={item} />
@@ -175,7 +175,7 @@ export function IngredientPanel({
             {showFull ? "Hide" : "Show"} full label text
           </button>
           {showFull ? (
-            <p className="rounded-xl border border-white/[0.07] bg-(--color-panel) p-4 text-[13px] leading-relaxed text-(--color-fg-muted)">
+            <p className="rounded-xl border border-(--color-line) bg-(--color-panel) p-4 text-[13px] leading-relaxed text-(--color-fg-muted)">
               {ingredientsRaw}
             </p>
           ) : null}
