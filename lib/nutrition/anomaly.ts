@@ -9,7 +9,8 @@ export type NutritionAnomalyCode =
   | "sugar_exceeds_carbs"
   | "decimal_anomaly"
   | "kcal_protein_swap"
-  | "energy_high_low_protein";
+  | "energy_high_low_protein"
+  | "protein_carbs_swap";
 
 export type NutritionAnomaly = {
   code: NutritionAnomalyCode;
@@ -53,7 +54,7 @@ function isNoodlesOrInstantMeal(ctx: NutritionContext): boolean {
 }
 
 function isHighProteinCategory(ctx: NutritionContext): boolean {
-  return /\b(whey|protein powder|isolate|paneer|chicken|broiler|egg|fish|meat|mutton|soya chunk|tofu|greek yogurt|protein bar|mass gainer)\b/i.test(
+  return /\b(whey|protein powder|isolate|paneer|chicken|broiler|egg|fish|meat|mutton|soya chunk|soybean|tofu|tempeh|greek yogurt|protein bar|mass gainer|seitan|edamame|peanut butter|almond butter|cashew butter|nut butter|pumpkin seed|hemp seed|chia seed|flax seed|sesame seed|sunflower seed|watermelon seed|melon seed|peanuts?|almonds?|cashews?|walnuts?|pistachios?|hazelnuts?|brazil nuts?|pecans?|macadamia|pine nuts?|nuts? mix|trail mix|chana|chickpea|kabuli|kala chana|rajmah|rajma|kidney bean|black bean|moong|mung|urad|toor|tur|arhar|masoor|lentil|dal\b|dhal\b|pulses?\b|lobia|cowpea|black eyed|peas?\b|red gram|green gram|matki|moth bean|horse gram|kala channa|cheese|parmesan|cheddar|mozzarella|gouda|feta|halloumi|quark|cottage cheese|skyr|labneh|nutritional yeast|spirulina)\b/i.test(
     ctxText(ctx),
   );
 }
@@ -241,6 +242,27 @@ export function detectNutritionAnomalies(
     });
   }
 
+  // Column-swap heuristic: protein ↔ carbs. Common LM mistake when extracting
+  // nutrition tables — the model picks the right NUMBERS but the wrong COLUMN.
+  // Trigger when protein looks impossible-high AND carbs looks impossible-low
+  // for a non-protein-category product, AND swapping would make both plausible.
+  if (
+    typeof protein === "number" &&
+    typeof nutrition.carbs_g_100g === "number" &&
+    !isHighProteinCategory(ctx) &&
+    !isCookingOil(ctx) &&
+    protein > 35 &&
+    nutrition.carbs_g_100g < 25 &&
+    protein > nutrition.carbs_g_100g * 2
+  ) {
+    out.push({
+      code: "protein_carbs_swap",
+      severity: "critical",
+      message: `Protein (${protein}g) and carbs (${nutrition.carbs_g_100g}g) columns may be swapped`,
+      field: "protein_g_100g",
+    });
+  }
+
   for (const key of MACRO_KEYS) {
     const v = nutrition[key];
     if (typeof v === "number" && looksLikeDecimalError(v, nutrition, ctx)) {
@@ -281,7 +303,8 @@ export function nutritionMacrosUntrustworthy(
       a.code === "kcal_protein_swap" ||
       a.code === "decimal_anomaly" ||
       a.code === "sugar_exceeds_carbs" ||
-      a.code === "macro_mass_exceeds_100g",
+      a.code === "macro_mass_exceeds_100g" ||
+      a.code === "protein_carbs_swap",
   );
 }
 
@@ -291,11 +314,44 @@ function scaleMacro(n: ProductNutrition, key: (typeof MACRO_KEYS)[number], facto
   return { ...n, [key]: Math.round(v * factor * 1000) / 1000 };
 }
 
+/** Swap protein ↔ carbs in both per-100g AND any per-serve mirror fields. */
+function swapProteinCarbs(n: ProductNutrition): ProductNutrition {
+  const next = { ...n };
+  const p100 = next.protein_g_100g;
+  const c100 = next.carbs_g_100g;
+  if (typeof p100 === "number" && typeof c100 === "number") {
+    next.protein_g_100g = c100;
+    next.carbs_g_100g = p100;
+  }
+  // Also swap the per-serve mirror in extra (set by attachPerServeNutrition)
+  const extra = next.extra ? { ...next.extra } : null;
+  if (extra) {
+    const ps = extra.per_serve_protein_g;
+    const cs = extra.per_serve_carbs_g;
+    if (typeof ps === "number" && typeof cs === "number") {
+      extra.per_serve_protein_g = cs;
+      extra.per_serve_carbs_g = ps;
+    }
+    extra.nutrition_corrected = "protein_carbs_swap";
+    next.extra = extra;
+  }
+  return next;
+}
+
 export function tryCorrectNutrition(
   nutrition: ProductNutrition,
   ctx: NutritionContext,
 ): ProductNutrition | null {
   if (!nutritionHasCriticalAnomalies(nutrition, ctx)) return nutrition;
+
+  // Try a column swap first — fast, common, often the right answer
+  const swapAnomalies = detectNutritionAnomalies(nutrition, ctx);
+  if (swapAnomalies.some((a) => a.code === "protein_carbs_swap")) {
+    const swapped = swapProteinCarbs(nutrition);
+    if (!nutritionHasCriticalAnomalies(swapped, ctx)) {
+      return swapped;
+    }
+  }
 
   const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
   type Candidate = { n: ProductNutrition; mismatch: number; critical: boolean };

@@ -77,13 +77,24 @@ export function explainScore(opts: {
   if (!n || macroFields < 2 || macrosSparse) {
     pushUnique(reasons, "Not enough reliable nutrition on file to judge macros");
   } else if (macrosBad) {
-    const top = detectNutritionAnomalies(n, nutritionCtx).find(
-      (a) => a.field === "protein_g_100g" || a.severity === "critical",
-    );
-    pushUnique(
-      reasons,
-      top?.message ?? "Nutrition numbers look unreliable — don't trust protein/sugar claims here",
-    );
+    const all = detectNutritionAnomalies(n, nutritionCtx);
+    // Surface the swap diagnosis explicitly when present — it's a clearer story
+    // than the generic "untrustworthy"
+    const swap = all.find((a) => a.code === "protein_carbs_swap");
+    if (swap) {
+      pushUnique(
+        reasons,
+        "Label scan likely swapped the protein and carbs columns — values aren't reliable. We'll re-scan this on the next OCR pass.",
+      );
+    } else {
+      const top = all.find(
+        (a) => a.field === "protein_g_100g" || a.severity === "critical",
+      );
+      pushUnique(
+        reasons,
+        top?.message ?? "Nutrition numbers look unreliable — don't trust protein/sugar claims here",
+      );
+    }
   }
 
   // ── Adjunct path: focus on ingredients, not macro density ─────────
