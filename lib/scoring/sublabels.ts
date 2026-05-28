@@ -41,6 +41,44 @@ export type SublabelId =
   | "mostly_nova_4"
   | "hidden_sweetener";
 
+export const SUBLABEL_DESCRIPTIONS: Record<SublabelId, string> = {
+  clean_protein: "≥6g protein per serve, no problematic ingredients",
+  rich_in_fiber: "≥4g fiber per serve",
+  good_for_gut: "Probiotic or prebiotic ingredient (e.g. dahi, FOS)",
+  heart_friendly: "≤2g sat fat, ≤200mg sodium, ≥3g fiber per serve",
+  bone_support: "Calcium ≥200mg per serve",
+  good_for_bulking: "≥200 kcal AND ≥10g protein per serve",
+  low_glycemic: "≤3g sugar per serve, no refined starch in first 3 ingredients",
+  whole_food: "NOVA ≤1.5 average, ≤5 ingredients",
+  naturally_fermented: "Probiotic role, no artificial preservatives",
+  immune_boost: "Zinc, vitamin C, or vitamin D ≥15% RDA per serve",
+  healthy_snacking: "Snack with absolute score ≥68",
+  clean_carbs: "≥15g carbs from whole grain, ≤5g sugar per serve",
+  high_in_protein: "≥10g protein per serve",
+  mindful_portions: "Treat or snack with absolute ≥60 and ≤25g serving",
+  low_sodium: "≤120mg sodium per serve",
+  good_for_weight_loss: "≤150 kcal, ≥5g protein, ≥2g fiber per serve",
+  energy_dense: "≥300 kcal per serve with NOVA ≤2",
+  fortified_well: "≥3 micronutrients at ≥15% RDA per serve",
+  good_for_gym_goers: "≥10g protein per serve with NOVA ≤2",
+  high_in_sugar: ">10g sugar per serve",
+  calorie_dense: "≥250 kcal per serve, low protein and fiber",
+  refined_carbs_inside: "Maida, refined flour, or sugar in first 3 ingredients",
+  high_saturated_fat: ">4g saturated fat per serve",
+  ultra_processed: "NOVA-4 share >40% by ingredient position",
+  artificial_flavors: "Artificial flavor or color in ingredients",
+  best_in_category: "Top 5% of its category by absolute score (cohort ≥20)",
+  watch_serving_size: "Realistic serving exceeds declared",
+  hazardous_additive: "Contains a banned or restricted additive",
+  empty_calories: "≥100 kcal, ≤1g protein, 0g fiber per serve",
+  excessive_sodium: ">600mg sodium per serve",
+  very_high_in_sugar: ">20g sugar per serve",
+  trans_fat_present: ">0.2g trans fat per serve",
+  label_mismatch: "Marketing claim contradicts the actual nutrition panel",
+  mostly_nova_4: "NOVA-4 share >60% by ingredient position",
+  hidden_sweetener: "Synthetic sweetener present despite 'natural' claim",
+};
+
 export const SUBLABEL_DISPLAY: Record<SublabelId, string> = {
   clean_protein: "Clean protein",
   rich_in_fiber: "Rich in fiber",
@@ -91,6 +129,7 @@ export type SublabelContext = {
   role_cohort: RoleCohort;
   absolute: number;
   relative: number | null;
+  cohort_size?: number;
   hazardous?: boolean;
   label_mismatch?: boolean;
   /** Phase 4: active goal id for contextual chips */
@@ -272,7 +311,14 @@ function matches(id: SublabelId, ctx: SublabelContext): boolean {
         rows.some((r) => r.role === "flavor" || r.role === "color")
       );
     case "best_in_category":
-      return (ctx.relative ?? 0) >= 80 && ctx.absolute < 65;
+      // Tightened: true distinction only (top 5%, meaningful cohort size).
+      // Was top-20% which fired on ~8% of catalog (~1,400 products).
+      // Now requires top-5% AND cohort ≥ 20 → expected ~1-2% of catalog.
+      return (
+        (ctx.relative ?? 0) >= 95 &&
+        ctx.absolute < 65 &&
+        (ctx.cohort_size ?? 0) >= 20
+      );
     case "watch_serving_size":
       return false;
     case "hazardous_additive":

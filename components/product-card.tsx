@@ -42,8 +42,8 @@ export const ProductCard = memo(function ProductCard({
 
   return (
     <article
-      className="group flex h-full flex-col rounded-xl border border-white/[0.06] overflow-hidden"
-      style={vc ? { borderLeftColor: vc.chipBorder, borderLeftWidth: 2 } : undefined}
+      className="group flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.06] transition-all duration-200 hover:border-white/[0.18] hover:-translate-y-0.5"
+      style={vc ? { borderLeftColor: vc.chipBorder, borderLeftWidth: 3 } : undefined}
     >
       {/* image */}
       <div className="relative aspect-square shrink-0 overflow-visible">

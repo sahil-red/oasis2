@@ -212,6 +212,9 @@ export default async function ProductPage({
                   sublabelIds={score?.verdict_sublabels}
                   cohortSize={score?.cohort_size}
                   relativeScore={score?.relative_score}
+                  cohortId={score?.cohort_id ?? null}
+                  subcategory={product.subcategory}
+                  productId={product.id}
                 />
               </div>
             ) : null}

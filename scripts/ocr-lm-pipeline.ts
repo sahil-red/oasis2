@@ -44,6 +44,7 @@ function parseArgs() {
   let limitExplicit = false;
   let sku: string | null = null;
   let nameQuery: string | null = null;
+  let ocrConcurrency = 4;
   for (const a of argv) {
     if (a.startsWith("--limit=")) {
       limit = Number(a.split("=")[1]) || limit;
@@ -51,6 +52,9 @@ function parseArgs() {
     }
     if (a.startsWith("--sku=")) sku = a.split("=")[1]?.trim() || null;
     if (a.startsWith("--name=")) nameQuery = a.slice("--name=".length).trim() || null;
+    if (a.startsWith("--ocr-concurrency=")) {
+      ocrConcurrency = Math.max(1, Math.min(8, Number(a.split("=")[1]) || 4));
+    }
   }
   return {
     limit: Math.min(limit, MAX_BATCH),
@@ -61,8 +65,10 @@ function parseArgs() {
     forceOcr: argv.includes("--force-ocr"),
     persistDb: argv.includes("--persist-db"),
     dryRun: argv.includes("--dry-run"),
+    skipLm: argv.includes("--skip-lm"),
     sku,
     nameQuery,
+    ocrConcurrency,
   };
 }
 
@@ -206,9 +212,15 @@ async function main() {
   async function flushDbBatch(): Promise<void> {
     if (!supabase || dbPending.length === 0) return;
     const batch = dbPending.splice(0, DB_FLUSH_SIZE);
-    for (const { id, ...patch } of batch) {
-      const { error } = await supabase.from("products").update(patch).eq("id", id);
-      if (error) throw error;
+    // Parallel-update with bounded concurrency. Supabase REST has no true bulk
+    // partial-update, so we issue concurrent UPDATE-by-id rather than serial.
+    const CONC = 8;
+    for (let i = 0; i < batch.length; i += CONC) {
+      const slice = batch.slice(i, i + CONC);
+      await Promise.all(slice.map(async ({ id, ...patch }) => {
+        const { error } = await supabase.from("products").update(patch).eq("id", id);
+        if (error) console.warn(`[ocr:lm] update ${id}: ${error.message}`);
+      }));
     }
     console.log(`[ocr:lm] db update batch=${batch.length} (pending=${dbPending.length})`);
   }
@@ -227,159 +239,192 @@ async function main() {
     `[ocr:lm] batch=${work.length} raw_cache=${RAW_CACHE_DIR} export=${RESULTS_PATH}`,
   );
   console.log(`[ocr:lm] model=${lmModel} persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
+  console.log(`[ocr:lm] ocr_concurrency=${args.ocrConcurrency} skip_lm=${args.skipLm}`);
 
-  try {
-  for (let i = 0; i < work.length; i++) {
-    const row = work[i]!;
-    const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
-    const tSku = Date.now();
+  // ── Producer-consumer pipeline ────────────────────────────────────────────
+  // OCR (CPU/network) and LM (GPU) run in parallel via a bounded queue.
+  // Multiple OCR workers feed the queue; one LM worker drains it.
 
-    try {
-      let rawText = args.forceOcr ? null : await readRawCache(row.zepto_sku);
-      let ocrSource: "cache" | "livetext" = "cache";
-      let imageUrl: string | null = null;
+  type OcrItem = {
+    row: typeof work[0];
+    rawText: string;
+    imageUrl: string | null;
+    ocrSource: "cache" | "livetext";
+    error?: string;
+  };
 
-      if (rawText) {
-        cacheHits++;
-      } else if (!args.dryRun) {
-        const best = await livetextBestLabel(row.image_urls);
-        if (!best) throw new Error("no OCR text from any image");
-        rawText = best.text;
-        imageUrl = best.imageUrl;
-        ocrSource = "livetext";
-        await writeRawCache(row.zepto_sku, rawText);
-      } else {
-        throw new Error("dry-run: missing raw cache");
+  const QUEUE_MAX = Math.max(args.ocrConcurrency * 2, 8);
+  const queue: OcrItem[] = [];
+  let nextSkuIdx = 0;
+  let producersDone = 0;
+
+  function pickNext(): typeof work[0] | null {
+    if (nextSkuIdx >= work.length) return null;
+    return work[nextSkuIdx++]!;
+  }
+
+  async function ocrWorker(): Promise<void> {
+    while (true) {
+      // Backpressure: don't run ahead of the LM consumer
+      while (queue.length >= QUEUE_MAX) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      const row = pickNext();
+      if (!row) break;
+      const tSku = Date.now();
+      const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
+      try {
+        let rawText = args.forceOcr ? null : await readRawCache(row.zepto_sku);
+        let ocrSource: "cache" | "livetext" = "cache";
+        let imageUrl: string | null = null;
+        if (rawText) {
+          cacheHits++;
+        } else if (!args.dryRun) {
+          const best = await livetextBestLabel(row.image_urls);
+          if (!best) throw new Error("no OCR text from any image");
+          rawText = best.text;
+          imageUrl = best.imageUrl;
+          ocrSource = "livetext";
+          await writeRawCache(row.zepto_sku, rawText);
+        } else {
+          throw new Error("dry-run: missing raw cache");
+        }
+        queue.push({ row, rawText, imageUrl, ocrSource });
+        const elapsed = ((Date.now() - tSku) / 1000).toFixed(1);
+        if (process.env.OCR_VERBOSE) {
+          console.log(`[ocr] ${label} (${ocrSource}, ${elapsed}s)`);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        queue.push({ row, rawText: "", imageUrl: null, ocrSource: "livetext", error: msg });
+      }
+    }
+    producersDone++;
+  }
+
+  async function lmConsumer(): Promise<void> {
+    while (true) {
+      // Wait for items if queue empty + producers still running
+      if (queue.length === 0) {
+        if (producersDone >= args.ocrConcurrency) break;
+        await new Promise((r) => setTimeout(r, 80));
+        continue;
+      }
+      const item = queue.shift()!;
+      const { row, rawText, imageUrl, ocrSource, error } = item;
+      const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
+      const tSku = Date.now();
+
+      if (error) {
+        errors++;
+        console.error(`[ocr:lm] ${row.zepto_sku.slice(0, 8)} ${label} OCR ERROR: ${error}`);
+        if (!args.dryRun) {
+          out.write(`${JSON.stringify({ zepto_sku: row.zepto_sku, name: row.name, error, at: new Date().toISOString() })}\n`);
+        }
+        continue;
       }
 
-      const plan = planLabelResolution(
-        row.ingredients_raw,
-        row.nutrition as ProductNutrition | null,
-        rawText,
-      );
+      try {
+        const plan = planLabelResolution(
+          row.ingredients_raw,
+          row.nutrition as ProductNutrition | null,
+          rawText,
+        );
 
-      let structured = null;
-      let validation = null;
-      let lmRaw: string | undefined;
+        let structured = null;
+        let validation = null;
+        let lmRaw: string | undefined;
 
-      if (plan.lm_called) {
-        lmCalled++;
-        const lm = await structureLabelFromText(rawText);
-        structured = lm.structured;
-        lmRaw = lm.rawResponse;
-        validation = validateStructuredLabel(structured);
-      } else {
-        lmSkipped++;
-      }
+        if (plan.lm_called && !args.skipLm) {
+          lmCalled++;
+          const lm = await structureLabelFromText(rawText);
+          structured = lm.structured;
+          lmRaw = lm.rawResponse;
+          validation = validateStructuredLabel(structured);
+        } else {
+          lmSkipped++;
+        }
 
-      const resolution = resolveLabelFields({
-        csvIngredients: row.ingredients_raw,
-        csvNutrition: row.nutrition as ProductNutrition | null,
-        rawText,
-        structured,
-        productName: row.name,
-      });
+        const resolution = resolveLabelFields({
+          csvIngredients: row.ingredients_raw,
+          csvNutrition: row.nutrition as ProductNutrition | null,
+          rawText,
+          structured,
+          productName: row.name,
+        });
 
-      const result: PipelineResult = {
-        zepto_sku: row.zepto_sku,
-        name: row.name,
-        product_id: skuToId.get(row.zepto_sku) ?? null,
-        image_url: imageUrl,
-        ocr_source: ocrSource,
-        raw_text_chars: rawText.length,
-        resolution,
-        validation,
-        lm_model: plan.lm_called ? lmModel : null,
-        lm_called: plan.lm_called,
-        at: new Date().toISOString(),
-      };
+        const result: PipelineResult = {
+          zepto_sku: row.zepto_sku,
+          name: row.name,
+          product_id: skuToId.get(row.zepto_sku) ?? null,
+          image_url: imageUrl,
+          ocr_source: ocrSource,
+          raw_text_chars: rawText.length,
+          resolution,
+          validation,
+          lm_model: plan.lm_called ? lmModel : null,
+          lm_called: plan.lm_called,
+          at: new Date().toISOString(),
+        };
 
-      if (!args.dryRun) {
-        out.write(
-          `${JSON.stringify({
-            ...result,
-            lm_raw: lmRaw,
+        if (!args.dryRun) {
+          out.write(`${JSON.stringify({ ...result, lm_raw: lmRaw, label_resolution: { nutrition_source: resolution.nutrition_source, ingredients_source: resolution.ingredients_source, lm_called: resolution.lm_called, lm_skip_reason: resolution.lm_skip_reason, compare: resolution.compare } })}\n`);
+        }
+
+        const productId = skuToId.get(row.zepto_sku);
+        if (supabase && !args.dryRun && productId) {
+          const ocrPayload = {
+            backend: "livetext",
             label_resolution: {
               nutrition_source: resolution.nutrition_source,
               ingredients_source: resolution.ingredients_source,
               lm_called: resolution.lm_called,
               lm_skip_reason: resolution.lm_skip_reason,
               compare: resolution.compare,
+              validation,
+              resolved_at: result.at,
             },
-          })}\n`,
-        );
-      }
-
-      const productId = skuToId.get(row.zepto_sku);
-      if (supabase && !args.dryRun && productId) {
-        const ocrPayload = {
-          backend: "livetext",
-          label_resolution: {
-            nutrition_source: resolution.nutrition_source,
-            ingredients_source: resolution.ingredients_source,
-            lm_called: resolution.lm_called,
-            lm_skip_reason: resolution.lm_skip_reason,
-            compare: resolution.compare,
-            validation,
-            resolved_at: result.at,
-          },
-          regex_payload: resolution.regex_payload,
-          serving_size: resolution.serving_size,
-          raw_text: rawText,
-          confidence: resolution.regex_payload.confidence,
-        };
-
-        dbPending.push({
-          id: productId,
-          ocr_payload: ocrPayload,
-          ocr_image_url: imageUrl,
-          ocr_status: "success",
-          ocr_attempted_at: result.at,
-          updated_at: result.at,
-          ...(resolution.ingredients_raw
-            ? { ingredients_raw: resolution.ingredients_raw }
-            : {}),
-          ...(resolution.nutrition ? { nutrition: resolution.nutrition } : {}),
-        });
-
-        if (dbPending.length >= DB_FLUSH_SIZE) {
-          await flushDbBatch();
+            regex_payload: resolution.regex_payload,
+            serving_size: resolution.serving_size,
+            raw_text: rawText,
+            confidence: resolution.regex_payload.confidence,
+          };
+          dbPending.push({
+            id: productId,
+            ocr_payload: ocrPayload,
+            ocr_image_url: imageUrl,
+            ocr_status: "success",
+            ocr_attempted_at: result.at,
+            updated_at: result.at,
+            ...(resolution.ingredients_raw ? { ingredients_raw: resolution.ingredients_raw } : {}),
+            ...(resolution.nutrition ? { nutrition: resolution.nutrition } : {}),
+          });
+          if (dbPending.length >= DB_FLUSH_SIZE) await flushDbBatch();
         }
-      }
 
-      processed++;
-      const sec = (Date.now() - tSku) / 1000;
-      skuTimings.push(sec);
+        processed++;
+        const sec = (Date.now() - tSku) / 1000;
+        skuTimings.push(sec);
 
-      console.log(`\n── ${i + 1}/${work.length} ${label} ──`);
-      console.log(
-        `  ocr=${ocrSource} lm=${plan.lm_called ? "yes" : "SKIP"} nut=${resolution.nutrition_source} ing=${resolution.ingredients_source} (${sec.toFixed(2)}s)`,
-      );
-      console.log(
-        `  compare: nutrition=${plan.compare.nutrition} ingredients=${plan.compare.ingredients}`,
-      );
-      if (resolution.lm_skip_reason) {
-        console.log(`  skip: ${resolution.lm_skip_reason}`);
-      }
-      if (validation) {
-        console.log(`  llm_confidence=${validation.confidence} score=${validation.score}`);
-      }
-    } catch (e) {
-      errors++;
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[ocr:lm] ${i + 1}/${work.length} ${label} ERROR: ${msg}`);
-      if (!args.dryRun) {
-        out.write(
-          `${JSON.stringify({
-            zepto_sku: row.zepto_sku,
-            name: row.name,
-            error: msg,
-            at: new Date().toISOString(),
-          })}\n`,
+        // Concise per-SKU log (full block was too noisy with concurrent OCR)
+        console.log(
+          `[${processed}/${work.length}] ${label} ocr=${ocrSource} lm=${plan.lm_called && !args.skipLm ? "yes" : "skip"} nut=${resolution.nutrition_source} ing=${resolution.ingredients_source} (${sec.toFixed(1)}s)`,
         );
+      } catch (e) {
+        errors++;
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[ocr:lm] LM ERROR ${label}: ${msg}`);
+        if (!args.dryRun) {
+          out.write(`${JSON.stringify({ zepto_sku: row.zepto_sku, name: row.name, error: msg, at: new Date().toISOString() })}\n`);
+        }
       }
     }
   }
+
+  try {
+    const ocrWorkers = Array.from({ length: args.ocrConcurrency }, () => ocrWorker());
+    const lm = lmConsumer();
+    await Promise.all([...ocrWorkers, lm]);
   } catch (e) {
     fatalError = e;
     console.error("[ocr:lm] fatal:", e instanceof Error ? e.message : e);

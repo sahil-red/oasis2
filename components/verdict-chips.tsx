@@ -1,6 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
+import {
+  SUBLABEL_DESCRIPTIONS,
+  SUBLABEL_DISPLAY,
+  type SublabelId,
+} from "@/lib/scoring/sublabels";
 import {
   VERDICT_COLORS,
   sublabelChipLabels,
@@ -59,22 +65,29 @@ export function VerdictSublabelChips({
   const chipBorder = c?.chipBorder ?? "#64748b";
   const chipFg = c?.chipFg ?? "#94a3b8";
 
+  // Map label back to sublabel id for tooltip lookup
+  const idsForTooltip = (sublabelIds ?? []).slice(0, max);
+
   return (
     <div className={cn("flex flex-wrap items-center gap-1", className)}>
-      {labels.map((label) => (
-        <span
-          key={label}
-          className="inline-flex items-center truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-snug tracking-wide"
-          style={{
-            borderColor: chipBorder,
-            color: chipFg,
-            background: "transparent",
-          }}
-          title={label}
-        >
-          {label}
-        </span>
-      ))}
+      {labels.map((label, i) => {
+        const id = idsForTooltip[i] as SublabelId | undefined;
+        const tooltip = (id && SUBLABEL_DESCRIPTIONS[id]) || label;
+        return (
+          <span
+            key={label}
+            className="inline-flex items-center truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-snug tracking-wide"
+            style={{
+              borderColor: chipBorder,
+              color: chipFg,
+              background: "transparent",
+            }}
+            title={tooltip}
+          >
+            {label}
+          </span>
+        );
+      })}
       {overflow > 0 ? (
         <span
           className="shrink-0 rounded-full border border-white/20 px-1.5 py-0.5 text-[10px] font-medium text-(--color-fg-dim)"
@@ -91,16 +104,21 @@ export function VerdictBlock({
   sublabelIds,
   cohortSize,
   relativeScore,
+  cohortId,
+  subcategory,
+  productId,
   className,
 }: {
   verdict: VerdictId;
   sublabelIds?: string[] | null;
   cohortSize?: number | null;
   relativeScore?: number | null;
+  cohortId?: string | null;
+  subcategory?: string | null;
+  productId?: string;
   className?: string;
 }) {
   const c = VERDICT_COLORS[verdict];
-  const allLabels = sublabelChipLabels(sublabelIds);
 
   return (
     <div
@@ -125,23 +143,42 @@ export function VerdictBlock({
         ) : null}
       </div>
 
-      {/* chips */}
-      {allLabels.length > 0 ? (
+      {/* chips with tooltip explanations */}
+      {sublabelIds && sublabelIds.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
-          {allLabels.map((label) => (
-            <span
-              key={label}
-              className="rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-tight"
-              style={{ borderColor: c.chipBorder, color: c.chipFg }}
-            >
-              {label}
-            </span>
-          ))}
+          {sublabelIds.map((id) => {
+            const label = SUBLABEL_DISPLAY[id as SublabelId] ?? id;
+            const explanation = SUBLABEL_DESCRIPTIONS[id as SublabelId];
+
+            // "Best in category" → hoverable cohort top-N
+            if (id === "best_in_category" && cohortId && productId) {
+              return (
+                <BestInCohortChip
+                  key={id}
+                  cohortId={cohortId}
+                  subcategoryLabel={subcategory ?? ""}
+                  productId={productId}
+                  borderColor={c.chipBorder}
+                  fgColor={c.chipFg}
+                />
+              );
+            }
+
+            return (
+              <span
+                key={id}
+                className="rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-tight"
+                style={{ borderColor: c.chipBorder, color: c.chipFg }}
+                title={explanation ?? label}
+              >
+                {label}
+              </span>
+            );
+          })}
         </div>
       ) : null}
 
-      {/* cohort full text below chips if chips present */}
-      {cohortSize != null && cohortSize >= 8 && relativeScore != null && allLabels.length > 0 ? (
+      {cohortSize != null && cohortSize >= 8 && relativeScore != null && sublabelIds && sublabelIds.length > 0 ? (
         <p className="text-[11px]" style={{ color: c.fg, opacity: 0.7 }}>
           Better than {relativeScore}% of similar products ({cohortSize} in category)
         </p>

@@ -97,6 +97,7 @@ export function computeCoreScoreV9(input: {
     role_cohort: abs.role_cohort,
     absolute: abs.absolute,
     relative,
+    cohort_size,
     hazardous: abs.hazardous,
     label_mismatch: abs.label_mismatch,
   };

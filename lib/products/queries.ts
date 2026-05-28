@@ -1289,6 +1289,36 @@ export async function getFeaturedSample(): Promise<ProductListItem | null> {
   return pick ?? null;
 }
 
+/** Top N products in a cohort by absolute score — for "best in category" tooltip. */
+export async function getTopInCohort(
+  cohortId: string,
+  limit = 10,
+): Promise<Array<{ id: string; name: string; brand: string | null; slug: string; score: number; absolute_score: number; image_url: string | null }>> {
+  const supabase = db();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("core_scores")
+    .select("score, absolute_score, products!inner(id, name, brand, slug, image_urls)")
+    .eq("cohort_id", cohortId)
+    .order("absolute_score", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error || !data) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((row) => {
+    const p = row.products;
+    const images = (p.image_urls as string[] | null) ?? [];
+    return {
+      id: p.id as string,
+      name: p.name as string,
+      brand: (p.brand as string | null) ?? null,
+      slug: p.slug as string,
+      score: row.score as number,
+      absolute_score: row.absolute_score as number,
+      image_url: images[0] ?? null,
+    };
+  });
+}
+
 export async function countCatalog(): Promise<{
   total: number;
   scored: number;
