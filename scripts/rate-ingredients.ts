@@ -37,6 +37,7 @@ import {
 } from "@/lib/scoring/normalize-ingredient-name";
 import { scriptArgv } from "@/lib/util/script-argv";
 import { withRetry } from "@/lib/util/retry";
+import { validateLmRating, getKnownIngredient } from "@/lib/scoring/ingredient-known";
 
 loadEnv({ path: ".env.local" });
 
@@ -273,8 +274,20 @@ async function main() {
       console.warn(`[rate:ingredients] parsed ${rows.length}/${batch.length} rows`);
     }
 
+    let autoCorrections = 0;
     for (const row of rows) {
       row.normalized_name = normalizeIngredientName(row.normalized_name);
+      // Apply known-ingredient override + post-LLM validation rules
+      const validated = validateLmRating(row.normalized_name, row);
+      row.nova_class = validated.nova_class;
+      row.concern_tier = validated.concern_tier;
+      row.role = validated.role;
+      row.concern_reasons = validated.concern_reasons;
+      row.intrinsic_quality = validated.intrinsic_quality;
+      if (validated.corrected) autoCorrections++;
+    }
+    if (autoCorrections > 0 && args.verbose) {
+      console.warn(`[rate:ingredients] auto-corrected ${autoCorrections}/${rows.length} rows via validation rules`);
     }
 
     if (!args.dryRun && rows.length) {
