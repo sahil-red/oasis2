@@ -42,12 +42,15 @@ export type CatalogSearchParams = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
   sort?: string;
   goal?: string;
   diet?: string;
+  sublabel?: string;
+  verdict?: string;
   page?: number;
   limit?: number;
 };
@@ -69,12 +72,15 @@ export async function getCachedCatalogSearch(
     usecase: params.usecase ?? "",
     brand: params.brand ?? "",
     scored: params.scored ?? "",
+    labelResolved: params.labelResolved ?? "",
     min: minRaw ?? "",
     maxprice: maxRaw ?? "",
     grade: params.grade ?? "",
     sort: params.sort ?? "",
     goal,
     diet,
+    sublabel: params.sublabel ?? "",
+    verdict: params.verdict ?? "",
     page,
     limit,
   });
@@ -90,12 +96,15 @@ export async function getCachedCatalogSearch(
         page,
         limit,
         onlyScored: params.scored === "1",
+        onlyLabelResolved: params.labelResolved === "1",
         minScore: minRaw ? Number(minRaw) : 0,
         maxPrice: maxRaw ? Number(maxRaw) : 0,
         grade: parseGrade(params.grade),
         sort: sortFromParam(params.sort ?? undefined),
         goal,
         diet,
+        sublabel: params.sublabel,
+        verdict: params.verdict,
       }),
     ["catalog-search", cacheKey],
     { revalidate: 300 },

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { cn, colorForGrade, gradeFromScore } from "@/lib/utils";
 
@@ -37,14 +37,20 @@ export function ScoreRing({
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  const [animatedScore, setAnimatedScore] = useState(0);
+  const reduceMotion = useReducedMotion();
+  const [animatedScore, setAnimatedScore] = useState(reduceMotion ? score : 0);
 
   useEffect(() => {
-    const id = window.setTimeout(() => setAnimatedScore(score), 120 + delay);
+    if (reduceMotion) {
+      setAnimatedScore(score);
+      return;
+    }
+    const id = window.setTimeout(() => setAnimatedScore(score), delay);
     return () => window.clearTimeout(id);
-  }, [score, delay]);
+  }, [score, delay, reduceMotion]);
 
   const dashOffset = circumference * (1 - animatedScore / 100);
+  const animDuration = reduceMotion ? 0 : 0.75;
   const labels = labelClasses(size);
 
   return (
@@ -57,7 +63,7 @@ export function ScoreRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(0,0,0,0.08)"
+          stroke="var(--color-line)"
           strokeWidth={stroke}
           fill="none"
         />
@@ -70,10 +76,14 @@ export function ScoreRing({
           strokeLinecap="round"
           fill="none"
           strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
+          initial={reduceMotion ? false : { strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: dashOffset }}
-          transition={{ duration: 1.4, delay: delay / 1000, ease: [0.22, 1, 0.36, 1] }}
-          style={{ filter: `drop-shadow(0 0 12px ${color}33)` }}
+          transition={{
+            duration: animDuration,
+            delay: reduceMotion ? 0 : delay / 1000,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          style={{ filter: `drop-shadow(0 0 10px color-mix(in srgb, ${color} 35%, transparent))` }}
         />
       </svg>
       {showLabel ? (

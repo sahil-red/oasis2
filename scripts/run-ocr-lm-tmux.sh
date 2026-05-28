@@ -22,7 +22,7 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 fi
 
 tmux new-session -d -s "$SESSION" -c "$ROOT" \
-  "pnpm ocr:lm -- --all --resume --persist-db 2>&1 | tee -a $LOG"
+  "caffeinate -dims pnpm ocr:lm -- --all --resume --persist-db 2>&1 | tee -a $LOG"
 
 echo "Started tmux session: $SESSION"
 echo "  attach: tmux attach -t $SESSION"

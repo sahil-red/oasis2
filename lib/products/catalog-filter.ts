@@ -11,6 +11,7 @@ import {
   productUsecase,
 } from "@/lib/products/catalog-meta";
 import { sortFromParam, type CatalogSort } from "@/lib/products/catalog-sort";
+import { productHasLabelValueChange } from "@/lib/products/label-resolution";
 import type { CatalogFilters, ProductListItem } from "@/lib/products/queries";
 import type { Grade } from "@/lib/supabase/types";
 
@@ -21,10 +22,16 @@ export type CatalogFilterState = {
   usecase: string;
   brand: string;
   onlyScored: boolean;
+  /** Products where label read disagreed with Zepto CSV (nutrition or ingredients). */
+  onlyLabelResolved: boolean;
   minScore: number;
   maxPrice: number;
   grade: Grade | "";
   sort: CatalogSort;
+  /** Filter by a persisted sublabel chip id e.g. "high_in_protein" */
+  sublabel: string;
+  /** Filter by persisted verdict e.g. "daily_staple" */
+  verdict: string;
 };
 
 /** True when SQL count must reflect filters — otherwise meta.stats.scored is enough. */
@@ -39,9 +46,12 @@ export function hasActiveCatalogFilters(
       state.usecase ||
       state.brand ||
       state.onlyScored ||
+      state.onlyLabelResolved ||
       state.minScore > 0 ||
       state.maxPrice > 0 ||
       state.grade ||
+      state.sublabel ||
+      state.verdict ||
       diet !== "any",
   );
 }
@@ -54,6 +64,7 @@ export function filterCatalogProducts(
   const q = state.q.trim().toLowerCase();
 
   return products.filter((p) => {
+    if (state.onlyLabelResolved && !productHasLabelValueChange(p.ocr_payload)) return false;
     if (state.onlyScored && !p.core_scores) return false;
     if (state.minScore > 0) {
       const s = p.core_scores?.score;
@@ -120,10 +131,13 @@ export function parseCatalogParams(params: {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
   sort?: string;
+  sublabel?: string;
+  verdict?: string;
 }): CatalogFilterState {
   const minRaw = params.min ? Number(params.min) : 0;
   const maxRaw = params.maxprice ? Number(params.maxprice) : 0;
@@ -140,10 +154,13 @@ export function parseCatalogParams(params: {
     usecase: params.usecase ?? "",
     brand: params.brand ?? "",
     onlyScored: params.scored === "1",
+    onlyLabelResolved: params.labelResolved === "1",
     minScore: Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0,
     maxPrice: Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : 0,
     grade,
     sort: sortFromParam(params.sort),
+    sublabel: params.sublabel ?? "",
+    verdict: params.verdict ?? "",
   };
 }
 
@@ -159,12 +176,15 @@ export function catalogParamsToSearch(
   if (state.usecase) p.set("usecase", state.usecase);
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
+  if (state.onlyLabelResolved) p.set("labelResolved", "1");
   if (state.minScore > 0) p.set("min", String(state.minScore));
   if (state.maxPrice > 0) p.set("maxprice", String(state.maxPrice));
   if (state.grade) p.set("grade", state.grade);
   if (state.sort !== "score-desc") p.set("sort", state.sort);
   if (goal && goal !== "balanced") p.set("goal", goal);
   if (opts?.diet && opts.diet !== "any") p.set("diet", opts.diet);
+  if (state.sublabel) p.set("sublabel", state.sublabel);
+  if (state.verdict) p.set("verdict", state.verdict);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -186,6 +206,7 @@ export function catalogReturnHref(params: {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;

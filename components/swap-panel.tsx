@@ -17,6 +17,8 @@ export function SwapPanel({
   compact?: boolean;
   goal?: GoalId;
 }) {
+  if (suggestions.length === 0) return null;
+
   const curSugar =
     current.nutrition?.sugar_g_100g ?? current.nutrition?.added_sugar_g_100g;
 
@@ -58,12 +60,7 @@ export function SwapPanel({
         )}
       </p>
 
-      {suggestions.length === 0 ? (
-        <p className={cn("text-(--color-fg-dim)", compact ? "mt-2 text-xs" : "mt-4 text-sm")}>
-          No stronger alternatives in catalog yet.
-        </p>
-      ) : (
-        <ul className={cn(compact ? "mt-3 space-y-2" : "mt-5 space-y-3")}>
+      <ul className={cn(compact ? "mt-3 space-y-2" : "mt-5 space-y-3")}>
           {suggestions.map(({ product, goalFit, deltas }) => (
             <li key={product.id}>
               <Link
@@ -75,7 +72,7 @@ export function SwapPanel({
               >
                 <div
                   className={cn(
-                    "relative shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)",
+                    "relative shrink-0 overflow-hidden rounded-lg bg-[#1a1a1a] shadow-[inset_0_0_16px_rgba(0,0,0,0.4)]",
                     compact ? "h-11 w-11" : "h-16 w-16",
                   )}
                 >
@@ -123,8 +120,7 @@ export function SwapPanel({
               </Link>
             </li>
           ))}
-        </ul>
-      )}
+      </ul>
     </section>
   );
 }

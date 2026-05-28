@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { GradeLegend } from "@/components/grade-legend";
 import { ScoreRing } from "@/components/score-ring";
 import {
@@ -9,14 +10,9 @@ import {
   colorForScore,
   labelForBand,
 } from "@/lib/utils";
+import { catalogTierStyle } from "@/lib/scoring/verdict-display";
+import type { VerdictId } from "@/lib/scoring/verdict";
 import type { Grade, ScoreBand, SubScores } from "@/lib/supabase/types";
-
-const BAND_STYLES: Record<ScoreBand, string> = {
-  excellent: "bg-emerald-50 text-emerald-900 ring-emerald-200",
-  good: "bg-lime-50 text-lime-900 ring-lime-200",
-  poor: "bg-amber-50 text-amber-900 ring-amber-200",
-  bad: "bg-red-50 text-red-900 ring-red-200",
-};
 
 interface ScoreCore {
   score: number;
@@ -25,28 +21,46 @@ interface ScoreCore {
   subscores?: SubScores;
 }
 
-/** Score on catalog cards — large number, green→red by value */
-export function ScoreBadge({
-  score,
-  grade,
-  className,
-}: Pick<ScoreCore, "score" | "grade"> & { className?: string }) {
-  const color = colorForGrade(grade);
+function BandChip({ band, className }: { band: ScoreBand; className?: string }) {
   return (
     <span
+      data-band={band}
       className={cn(
-        "font-display text-[32px] font-semibold leading-none tracking-tight tabular-nums",
-        "drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)]",
+        "score-band-chip inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wider",
         className,
       )}
-      style={{ color }}
     >
-      {score}
+      {labelForBand(band)}
     </span>
   );
 }
 
-/** Goal-mode fit (0–100) — same green→red scale as Core score */
+/** Catalog card score — tier-colored bar + tint, score only (no verdict word). */
+export function ScoreBadge({
+  score,
+  grade: _grade,
+  verdict,
+  className,
+}: Pick<ScoreCore, "score" | "grade"> & {
+  verdict?: VerdictId | null;
+  className?: string;
+}) {
+  const { fill } = catalogTierStyle(score, verdict);
+  return (
+    <div
+      className={cn(
+        "flex h-12 min-w-12 items-center justify-center rounded-[10px] px-2.5 font-display text-[22px] font-bold leading-none tabular-nums text-white shadow-lg",
+        className,
+      )}
+      style={{ backgroundColor: fill }}
+      title={`Score ${score}`}
+    >
+      {score}
+    </div>
+  );
+}
+
+/** Goal-mode fit (0–100) — same scale as Core score */
 export function GoalFitBadge({
   fit,
   className,
@@ -59,24 +73,26 @@ export function GoalFitBadge({
   const color = colorForScore(fit);
   const band = bandFromScore(fit);
   const sizeClass =
-    size === "card"
-      ? "text-[32px]"
-      : size === "sm"
-        ? "text-xl"
-        : "text-2xl";
+    size === "card" ? "text-[28px]" : size === "sm" ? "text-xl" : "text-2xl";
   return (
-    <span
+    <div
       className={cn(
-        "font-display font-semibold leading-none tabular-nums",
-        "drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)]",
-        sizeClass,
+        "flex flex-col items-end gap-0.5 rounded-xl border border-(--color-line) bg-(--color-panel)/92 px-2 py-1 shadow-sm backdrop-blur-md",
         className,
       )}
-      style={{ color }}
       title={labelForBand(band)}
+      style={{ boxShadow: `0 4px 14px color-mix(in srgb, ${color} 20%, transparent)` }}
     >
-      {fit}
-    </span>
+      <span
+        className={cn("font-display font-semibold leading-none tabular-nums", sizeClass)}
+        style={{ color }}
+      >
+        {fit}
+      </span>
+      <span className="text-[8px] font-medium uppercase tracking-wider text-(--color-fg-dim)">
+        fit
+      </span>
+    </div>
   );
 }
 
@@ -86,33 +102,22 @@ export function GoalFitChip({ fit, label }: { fit: number; label: string }) {
   const color = colorForScore(fit);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span
-        className="font-display text-3xl font-semibold tabular-nums"
-        style={{ color }}
-      >
+      <span className="font-display text-3xl font-semibold tabular-nums" style={{ color }}>
         {fit}
       </span>
-      <span
-        className={cn(
-          "rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
-          BAND_STYLES[band],
-        )}
-      >
-        {label}
-      </span>
-      <span className="text-sm text-(--color-fg-dim)">for your goal</span>
+      <BandChip band={band} />
+      <span className="text-sm text-(--color-fg-dim)">for {label}</span>
     </div>
   );
 }
 
-/** Score pillars (points earned, not raw counts) + A–F legend. */
+/** Score pillars + A–F legend. */
 export function ScoreSubscoresBlock({
   subscores,
   flaggedAdditiveCount = 0,
   className,
 }: {
   subscores?: SubScores;
-  /** Moderate + hazardous additive matches on the ingredient list. */
   flaggedAdditiveCount?: number;
   className?: string;
 }) {
@@ -161,30 +166,41 @@ export function ScoreSubscoresBlock({
   ];
 
   return (
-    <details className={cn("group rounded-xl border border-(--color-line) bg-(--color-panel)", className)}>
-      <summary className="cursor-pointer list-none px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-medium text-(--color-fg)">Label breakdown</span>
-          <span className="text-[12px] text-(--color-fg-dim) group-open:hidden">Nutrition · additives · pack</span>
-          <span className="hidden text-[12px] text-(--color-fg-dim) group-open:inline">Hide</span>
+    <details
+      className={cn(
+        "group overflow-hidden rounded-2xl border border-(--color-line) border-t-(--color-line) bg-(--color-panel) shadow-sm",
+        className,
+      )}
+    >
+      <summary className="cursor-pointer list-none border-t border-(--color-line) px-4 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold text-(--color-fg)">
+              Label breakdown
+            </span>
+            <span className="mt-0.5 block text-[12px] text-(--color-fg-dim) group-open:hidden">
+              Nutrition · Ingredients · Claims
+            </span>
+          </span>
+          <ChevronDown className="h-5 w-5 shrink-0 text-(--color-fg-dim) transition group-open:rotate-180" />
         </span>
       </summary>
-      <div className="space-y-3 border-t border-(--color-line) px-4 pb-4 pt-3">
+      <div className="space-y-3 border-t border-(--color-line) bg-(--color-bg-soft)/50 px-4 pb-4 pt-3">
         <dl className="space-y-3">
           {pillars.map((p) => (
             <div key={p.key}>
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-[13px] font-medium text-(--color-fg)">{p.title}</dt>
                 <dd
-                  className="text-[12px] font-medium"
+                  className="text-[12px] font-semibold tabular-nums"
                   style={{ color: colorForScore(p.pct) }}
                 >
                   {p.label}
                 </dd>
               </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-(--color-bg-soft)">
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-(--color-line)/40">
                 <div
-                  className="h-full rounded-full transition-[width]"
+                  className="h-full rounded-full transition-[width] duration-500 ease-out"
                   style={{ width: `${p.pct}%`, backgroundColor: colorForScore(p.pct) }}
                 />
               </div>
@@ -217,34 +233,27 @@ export function ScorePanel({
 
   if (compact) {
     return (
-      <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
+      <div className="overflow-hidden rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) to-(--color-bg-soft) p-4 shadow-sm">
         <h2 className="text-[10px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
           Overall score
         </h2>
-        <div className="mt-2 flex items-start gap-3">
+        <div className="mt-3 flex items-start gap-4">
           <ScoreRing
             score={score}
-            size={72}
+            size={80}
             stroke={6}
             showLabel
             subtitle={`Grade ${grade}`}
             className="shrink-0"
           />
           <div className="min-w-0 flex-1 pt-0.5">
-            <span
-              className={cn(
-                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset",
-                BAND_STYLES[band],
-              )}
-            >
-              {labelForBand(band)}
-            </span>
+            <BandChip band={band} />
             {axes.length > 0 ? (
-              <dl className="mt-2 grid grid-cols-3 gap-1.5">
+              <dl className="mt-3 grid grid-cols-3 gap-1.5">
                 {axes.map(({ label, value, max }) => (
                   <div
                     key={label}
-                    className="rounded-md border border-(--color-line) bg-(--color-panel) px-1 py-1 text-center"
+                    className="rounded-lg border border-(--color-line) bg-(--color-panel) px-1.5 py-1.5 text-center"
                   >
                     <dt className="text-[9px] leading-tight text-(--color-fg-dim)">{label}</dt>
                     <dd className="font-display text-sm leading-none tabular-nums text-(--color-fg)">
@@ -265,19 +274,12 @@ export function ScorePanel({
   }
 
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-6 md:p-8">
+    <div className="overflow-hidden rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) via-(--color-bg-soft) to-(--color-panel) p-6 shadow-sm md:p-8">
       <div className="flex flex-col gap-8 sm:flex-row sm:items-center">
         <ScoreRing score={score} size={168} stroke={10} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wider ring-1 ring-inset",
-                BAND_STYLES[band],
-              )}
-            >
-              {labelForBand(band)}
-            </span>
+            <BandChip band={band} />
             <span className="text-sm font-medium text-(--color-fg)">Grade {grade}</span>
             {ruleVersion != null ? (
               <span className="text-xs text-(--color-fg-dim)">v{ruleVersion}</span>
@@ -292,12 +294,15 @@ export function ScorePanel({
               {axes.map(({ label, value, max }) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-(--color-line) bg-(--color-panel) px-3 py-2.5 text-center"
+                  className="rounded-xl border border-(--color-line) bg-(--color-panel) px-3 py-2.5 text-center shadow-sm"
                 >
                   <div className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
                     {label}
                   </div>
-                  <div className="mt-1 font-display text-2xl tabular-nums text-(--color-fg)">
+                  <div
+                    className="mt-1 font-display text-2xl tabular-nums"
+                    style={{ color: colorForScore(Math.round((value / max) * 100)) }}
+                  >
                     {value}
                   </div>
                   <div className="text-[10px] text-(--color-fg-dim)">/{max}</div>

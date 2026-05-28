@@ -1,11 +1,21 @@
+import { formatIngredientsList } from "@/lib/ocr/format-ingredients";
+import { buildLmStructureUserPayload } from "@/lib/ocr/lm-ingredients-anchor";
+import { withLmStudioLock } from "@/lib/lm/studio-lock";
+
 const DEFAULT_BASE = "http://127.0.0.1:1234/v1";
 const DEFAULT_MODEL = "qwen2.5coder7b:2";
 
-export const LM_STRUCTURE_SYSTEM_PROMPT = `You are a rigid data processing utility. Extract ingredients and nutrition from label OCR text into valid JSON only. No markdown, preamble, or explanations. Use null for missing fields.
+export const LM_STRUCTURE_SYSTEM_PROMPT = `You are a rigid data processing utility. Extract both ingredients and nutrition facts from the following raw text into a valid, flat JSON object.
+
+CRITICAL INGREDIENT RULES:
+1. The "ingredients" field must contain the literal, technical, comma-separated list of raw materials (e.g., "milk solids, active lactic culture, sugar").
+2. NEVER use the product name, marketing titles, front-of-pack descriptors, or brand names (like "Probiotic Dahi", "Potato Chips", or "Mango Juice") as the ingredients list.
+3. If you see a prominent product title and a separate technical ingredients list, completely ignore the product title and extract ONLY the technical list.
+4. Do not output markdown backticks, conversational preamble, or explanations. If a data item is missing, mark it null.
 
 All nutrition numbers must be normalized per 100g (or per 100ml for liquids). If the label only shows per-serving values, convert them to per 100g using the serving size before outputting.
 
-JSON schema (flat):
+JSON Target Schema:
 {
   "serving_size": string or null,
   "calories_100g": number or null,
@@ -83,7 +93,7 @@ export function normalizeStructuredLabel(raw: Record<string, unknown>): Structur
     sugar_g_100g: coerceNumber(raw.sugar_g_100g) ?? coerceNumber(raw.sugar_g),
     sodium_mg_100g:
       coerceNumber(raw.sodium_mg_100g) ?? coerceNumber(raw.sodium_mg),
-    ingredients: coerceString(raw.ingredients),
+    ingredients: formatIngredientsList(coerceString(raw.ingredients)),
   };
 }
 
@@ -97,26 +107,43 @@ async function callLm(
   maxTokens: number,
   signal: AbortSignal,
   userContent: string,
+  jsonMode: boolean,
 ): Promise<string> {
-  const res = await fetch(lmEndpoint(baseUrl), {
+  const body: Record<string, unknown> = {
+    model,
+    temperature,
+    max_tokens: maxTokens,
+    stream: false,
+    messages: [
+      { role: "system", content: LM_STRUCTURE_SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
+
+  let res = await fetch(lmEndpoint(baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     signal,
-    body: JSON.stringify({
-      model,
-      temperature,
-      max_tokens: maxTokens,
-      stream: false,
-      messages: [
-        { role: "system", content: LM_STRUCTURE_SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
 
+  if (!res.ok && jsonMode) {
+    const errBody = await res.text().catch(() => "");
+    if (res.status === 400 && /response_format|json_object/i.test(errBody)) {
+      delete body.response_format;
+      res = await fetch(lmEndpoint(baseUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify(body),
+      });
+    }
+  }
+
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`LM Studio ${res.status}: ${body.slice(0, 300)}`);
+    const errText = await res.text().catch(() => "");
+    throw new Error(`LM Studio ${res.status}: ${errText.slice(0, 300)}`);
   }
 
   const data = (await res.json()) as {
@@ -139,39 +166,42 @@ export async function structureLabelFromText(
 ): Promise<{ structured: StructuredLabel; rawResponse: string }> {
   const baseUrl = opts.baseUrl ?? process.env.LM_STUDIO_BASE_URL ?? DEFAULT_BASE;
   const model = opts.model ?? process.env.LM_STUDIO_MODEL ?? DEFAULT_MODEL;
-  const temperature = opts.temperature ?? 0.1;
+  const temperature = opts.temperature ?? 0;
   const maxTokens = opts.maxTokens ?? 512;
   const timeoutMs = opts.timeoutMs ?? 120_000;
 
-  const payloadText =
-    rawText.length > 14_000 ? `${rawText.slice(0, 14_000)}\n[truncated]` : rawText;
+  const payloadText = buildLmStructureUserPayload(rawText);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    let content = await callLm(
-      baseUrl,
-      model,
-      temperature,
-      maxTokens,
-      controller.signal,
-      payloadText,
-    );
-
-    try {
-      return { structured: parseStructuredContent(content), rawResponse: content };
-    } catch {
-      content = await callLm(
+    return await withLmStudioLock(async () => {
+      let content = await callLm(
         baseUrl,
         model,
         temperature,
         maxTokens,
         controller.signal,
-        payloadText + LM_RETRY_SUFFIX,
+        payloadText,
+        true,
       );
-      return { structured: parseStructuredContent(content), rawResponse: content };
-    }
+
+      try {
+        return { structured: parseStructuredContent(content), rawResponse: content };
+      } catch {
+        content = await callLm(
+          baseUrl,
+          model,
+          temperature,
+          maxTokens,
+          controller.signal,
+          payloadText + LM_RETRY_SUFFIX,
+          true,
+        );
+        return { structured: parseStructuredContent(content), rawResponse: content };
+      }
+    }, { label: "ocr:structure" });
   } finally {
     clearTimeout(timer);
   }

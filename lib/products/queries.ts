@@ -116,6 +116,8 @@ const GRID_LIST_FIELDS =
 const GOAL_LIST_FIELDS =
   "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
 
+const LABEL_FILTER_EXTRA = ", ocr_payload";
+
 /** Drop multi-KB attribute blobs from catalog JSON (Vercel cache limit is 2MB). */
 const CATALOG_ATTR_KEYS = [
   "Diet Preference",
@@ -165,7 +167,11 @@ function slimListItemForCatalog(row: ProductListItem): ProductListItem {
 }
 
 /** Lighter join for grids — omits heavy subscores/concerns JSON. */
-const LIST_SCORE_FIELDS = "score, grade, band";
+const LIST_SCORE_FIELDS =
+  "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size";
+
+/** PDP join — includes V9 verdict + cohort fields for chips and percentile line. */
+const DETAIL_SCORE_FIELDS = `${LIST_SCORE_FIELDS}, absolute_score, role_cohort, serving_g_effective, cohort_id`;
 
 export type ProductListItem = Pick<
   Product,
@@ -187,8 +193,19 @@ export type ProductListItem = Pick<
 > & {
   core_scores: Pick<
     CoreScore,
-    "score" | "grade" | "band" | "subscores" | "concerns" | "computed_at"
+    | "score"
+    | "grade"
+    | "band"
+    | "verdict"
+    | "verdict_sublabels"
+    | "relative_score"
+    | "cohort_size"
+    | "subscores"
+    | "concerns"
+    | "computed_at"
   > | null;
+  /** Present when catalog filters need label-resolution metadata. */
+  ocr_payload?: Record<string, unknown> | null;
 };
 
 export type ProductDetail = Product & {
@@ -220,7 +237,16 @@ export type CatalogGridItem = Pick<
   | "mrp_inr"
   | "image_urls"
 > & {
-  core_scores: Pick<CoreScore, "score" | "grade" | "band"> | null;
+  core_scores: Pick<
+    CoreScore,
+    | "score"
+    | "grade"
+    | "band"
+    | "verdict"
+    | "verdict_sublabels"
+    | "relative_score"
+    | "cohort_size"
+  > | null;
 };
 
 export type CatalogSearchResult = {
@@ -255,6 +281,10 @@ function toGridItem(row: ProductListItem): CatalogGridItem {
           score: row.core_scores.score,
           grade: row.core_scores.grade,
           band: row.core_scores.band,
+          verdict: row.core_scores.verdict ?? null,
+          verdict_sublabels: row.core_scores.verdict_sublabels ?? [],
+          relative_score: row.core_scores.relative_score ?? null,
+          cohort_size: row.core_scores.cohort_size ?? null,
         }
       : null,
   };
@@ -307,8 +337,29 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     image_urls: (row.image_urls as string[]) ?? [],
     nutrition: (row.nutrition as ProductNutrition | null) ?? null,
     ingredients_raw: (row.ingredients_raw as string | null) ?? null,
+    ocr_payload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
     core_scores: core,
   };
+}
+
+function catalogListFields(
+  variant: "grid" | "goal" | "full",
+  state: CatalogFilterState,
+): string {
+  const base =
+    variant === "goal" ? GOAL_LIST_FIELDS : variant === "full" ? LIST_FIELDS : GRID_LIST_FIELDS;
+  if (state.onlyLabelResolved && !base.includes("ocr_payload")) {
+    return `${base}${LABEL_FILTER_EXTRA}`;
+  }
+  return base;
+}
+
+/** PostgREST filter: LM pipeline updated nutrition and/or ingredients. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyLabelResolvedDbFilter(q: any): any {
+  return q.or(
+    "ocr_payload->label_resolution->compare->>nutrition.eq.different,ocr_payload->label_resolution->compare->>ingredients.eq.different",
+  );
 }
 
 type CatalogFilterRpc = {
@@ -458,6 +509,8 @@ function applyDbSort(q: any, sort: CatalogSort): any {
       return q.order("price_inr", { ascending: true, nullsFirst: false });
     case "price-desc":
       return q.order("price_inr", { ascending: false, nullsFirst: false });
+    case "newest-desc":
+      return q.order("updated_at", { ascending: false, nullsFirst: false });
     case "name-asc":
       return q.order("name", { ascending: true });
     case "protein-desc":
@@ -512,8 +565,7 @@ function buildCatalogDbQuery(
   variant: "grid" | "goal" | "full" = "grid",
   sqlVisible = true,
 ) {
-  const fields =
-    variant === "goal" ? GOAL_LIST_FIELDS : variant === "full" ? LIST_FIELDS : GRID_LIST_FIELDS;
+  const fields = catalogListFields(variant, state);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase as any)
     .from("products")
@@ -521,9 +573,12 @@ function buildCatalogDbQuery(
     .eq("platform", "zepto");
   if (sqlVisible) q = q.eq("catalog_visible", true);
 
+  if (state.onlyLabelResolved) q = applyLabelResolvedDbFilter(q);
   if (state.onlyScored) q = q.not("core_scores", "is", null);
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
+  if (state.verdict) q = q.eq("core_scores.verdict", state.verdict);
+  if (state.sublabel) q = q.contains("core_scores.verdict_sublabels", [state.sublabel]);
   if (state.brand) q = q.eq("brand", state.brand);
   q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);
@@ -597,6 +652,8 @@ function mapScoreSortedRow(row: Record<string, unknown>): ProductListItem {
 function applyScoreCatalogFilters(q: any, state: CatalogFilterState): any {
   if (state.grade) q = q.eq("grade", state.grade);
   if (state.minScore > 0) q = q.gte("score", state.minScore);
+  if (state.verdict) q = q.eq("verdict", state.verdict);
+  if (state.sublabel) q = q.contains("verdict_sublabels", [state.sublabel]);
   if (state.brand) q = q.eq("products.brand", state.brand);
   q = applyCategoryFilter(q, state, "products");
   if (state.subcategory) q = q.eq("products.subcategory", state.subcategory);
@@ -698,9 +755,12 @@ async function countCatalogMatches(
     .eq("platform", "zepto");
   if (sqlVisible) q = q.eq("catalog_visible", true);
 
+  if (state.onlyLabelResolved) q = applyLabelResolvedDbFilter(q);
   if (!scoreJoin && state.onlyScored) q = q.not("core_scores", "is", null);
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
+  if (state.verdict) q = q.eq("core_scores.verdict", state.verdict);
+  if (state.sublabel) q = q.contains("core_scores.verdict_sublabels", [state.sublabel]);
   if (state.brand) q = q.eq("brand", state.brand);
   q = applyCategoryFilter(q, state);
   if (state.subcategory) q = q.eq("subcategory", state.subcategory);
@@ -731,13 +791,13 @@ async function paginateCatalogSql(opts: {
   const { page, limit, state, diet, variant = "grid" } = opts;
   const sqlVisible = await catalogHasVisibleColumn();
 
-  if (diet !== "any" || !sqlVisible) {
+  if (diet !== "any" || !sqlVisible || state.onlyLabelResolved) {
     return paginateCatalogWithClientFilter({
       page,
       limit,
       state,
       diet,
-      variant: sqlVisible ? variant : "full",
+      variant: sqlVisible ? (state.onlyLabelResolved ? "full" : variant) : "full",
     });
   }
 
@@ -899,10 +959,13 @@ function parseSearchState(opts: {
   usecase?: string;
   brand?: string;
   onlyScored?: boolean;
+  onlyLabelResolved?: boolean;
   minScore?: number;
   maxPrice?: number;
   grade?: Grade | "";
   sort?: CatalogSort;
+  sublabel?: string;
+  verdict?: string;
 }): CatalogFilterState {
   return {
     q: opts.q?.trim() ?? "",
@@ -911,10 +974,13 @@ function parseSearchState(opts: {
     usecase: opts.usecase ?? "",
     brand: opts.brand ?? "",
     onlyScored: opts.onlyScored ?? false,
+    onlyLabelResolved: opts.onlyLabelResolved ?? false,
     minScore: opts.minScore ?? 0,
     maxPrice: opts.maxPrice ?? 0,
     grade: opts.grade ?? "",
     sort: opts.sort ?? "score-desc",
+    sublabel: opts.sublabel ?? "",
+    verdict: opts.verdict ?? "",
   };
 }
 
@@ -927,12 +993,15 @@ export async function searchCatalogGrid(opts: {
   page?: number;
   limit?: number;
   onlyScored?: boolean;
+  onlyLabelResolved?: boolean;
   minScore?: number;
   maxPrice?: number;
   grade?: Grade | "";
   sort?: CatalogSort;
   goal?: GoalId;
   diet?: DietMode;
+  sublabel?: string;
+  verdict?: string;
 }): Promise<CatalogSearchResult> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(120, Math.max(1, opts.limit ?? 96));
@@ -1148,7 +1217,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       net_weight, price_inr, mrp_inr, image_urls, product_url, barcode,
       ingredients_raw, nutrition, attributes, raw_payload, scraped_at, updated_at,
       platform, ocr_status, ocr_payload, ocr_image_url,
-      core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at)
+      core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at, ${DETAIL_SCORE_FIELDS})
     `,
     )
     .eq("slug", slug)

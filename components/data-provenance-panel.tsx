@@ -6,31 +6,38 @@ const KIND_STYLE: Record<
 > = {
   csv: {
     dot: "bg-sky-500",
-    badge: "text-sky-800 bg-sky-50 ring-sky-200",
+    badge:
+      "text-sky-800 bg-sky-50 ring-sky-200 dark:text-sky-200 dark:bg-sky-950/50 dark:ring-sky-800/50",
   },
   reference: {
     dot: "bg-violet-500",
-    badge: "text-violet-800 bg-violet-50 ring-violet-200",
+    badge:
+      "text-violet-800 bg-violet-50 ring-violet-200 dark:text-violet-200 dark:bg-violet-950/50 dark:ring-violet-800/50",
   },
   produce: {
     dot: "bg-emerald-500",
-    badge: "text-emerald-800 bg-emerald-50 ring-emerald-200",
+    badge:
+      "text-emerald-800 bg-emerald-50 ring-emerald-200 dark:text-emerald-200 dark:bg-emerald-950/50 dark:ring-emerald-800/50",
   },
   ocr: {
     dot: "bg-amber-500",
-    badge: "text-amber-900 bg-amber-50 ring-amber-200",
+    badge:
+      "text-amber-900 bg-amber-50 ring-amber-200 dark:text-amber-100 dark:bg-amber-950/50 dark:ring-amber-800/50",
   },
   platform: {
     dot: "bg-slate-500",
-    badge: "text-slate-800 bg-slate-50 ring-slate-200",
+    badge:
+      "text-slate-800 bg-slate-50 ring-slate-200 dark:text-slate-200 dark:bg-slate-900/60 dark:ring-slate-700/50",
   },
   llm: {
     dot: "bg-rose-500",
-    badge: "text-rose-800 bg-rose-50 ring-rose-200",
+    badge:
+      "text-rose-800 bg-rose-50 ring-rose-200 dark:text-rose-200 dark:bg-rose-950/50 dark:ring-rose-800/50",
   },
   missing: {
-    dot: "bg-neutral-300",
-    badge: "text-neutral-600 bg-neutral-50 ring-neutral-200",
+    dot: "bg-neutral-300 dark:bg-neutral-600",
+    badge:
+      "text-neutral-600 bg-neutral-50 ring-neutral-200 dark:text-neutral-300 dark:bg-neutral-900/60 dark:ring-neutral-700/50",
   },
 };
 

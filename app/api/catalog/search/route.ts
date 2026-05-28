@@ -15,12 +15,15 @@ export async function GET(req: NextRequest) {
     page: sp.has("page") ? Number(sp.get("page")) : 1,
     limit: sp.has("limit") ? Number(sp.get("limit")) : 96,
     scored: sp.get("scored") ?? undefined,
+    labelResolved: sp.get("labelResolved") ?? undefined,
     min: sp.get("min") ?? undefined,
     maxprice: sp.get("maxprice") ?? undefined,
     grade: sp.get("grade") ?? undefined,
     sort: sp.get("sort") ?? undefined,
     goal: sp.get("goal") ?? undefined,
     diet: sp.get("diet") ?? undefined,
+    sublabel: sp.get("sublabel") ?? undefined,
+    verdict: sp.get("verdict") ?? undefined,
   });
 
   return NextResponse.json(result, {

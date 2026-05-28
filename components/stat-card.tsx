@@ -8,6 +8,7 @@ interface StatCardProps {
   value: string;
   caption: string;
   tone?: "good" | "warn" | "bad" | "neutral";
+  showDot?: boolean;
   delay?: number;
   className?: string;
 }
@@ -31,6 +32,7 @@ export function StatCard({
   value,
   caption,
   tone = "neutral",
+  showDot = true,
   delay = 0,
   className,
 }: StatCardProps) {
@@ -46,11 +48,15 @@ export function StatCard({
       )}
     >
       <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-(--color-fg-muted)">
-        <span className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[tone])} />
+        {showDot ? (
+          <span className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[tone])} />
+        ) : null}
         {label}
       </div>
       <div className={cn("font-display mt-3 text-4xl", TONE_VALUE[tone])}>{value}</div>
-      <div className="mt-1 text-sm text-(--color-fg-muted)">{caption}</div>
+      {caption ? (
+        <div className="mt-1 text-sm text-(--color-fg-muted)">{caption}</div>
+      ) : null}
     </motion.div>
   );
 }

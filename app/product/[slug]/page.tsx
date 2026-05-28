@@ -10,7 +10,6 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
 import { ScorePending, ScoreSubscoresBlock } from "@/components/score-display";
-import { ScoreWhyPanel } from "@/components/score-why-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
@@ -21,16 +20,22 @@ import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { DataProvenancePanel } from "@/components/data-provenance-panel";
+import { LabelChangeSummary } from "@/components/label-change-summary";
+import { VerdictBlock } from "@/components/verdict-chips";
+import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
+import { labelResolutionFromPayload } from "@/lib/products/label-resolution";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { buildAnalysisHighlights } from "@/lib/products/analysis";
+import { perServeFromNutrition } from "@/lib/scoring/per-serve";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
+import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 import { matchAdditives } from "@/lib/scoring/rules";
 import type { SubScores } from "@/lib/supabase/types";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 const DETAIL_SKIP = new Set([
   "Description",
@@ -83,7 +88,7 @@ export default async function ProductPage({
   });
   const productForGoals = displayNutrition ? { ...product, nutrition: displayNutrition } : product;
 
-  const swapPool = await getProductsForSwaps(product, 200);
+  const swapPool = await getProductsForSwaps(product, 96);
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
   const goalRows = buildProductGoalRows(productForGoals);
   const overallGoal = buildOverallGoalSummary(productForGoals);
@@ -99,7 +104,17 @@ export default async function ProductPage({
     subscores,
     4,
   );
+  const perServeMeta = displayNutrition ? perServeFromNutrition(displayNutrition) : null;
+  const hasServing =
+    perServeMeta?.serving_g != null && perServeMeta.serving_g > 0;
+  const quickAnalysisBasisNote = hasServing
+    ? "Values per serve"
+    : "Values per 100g · serving size unavailable";
 
+  const labelResolution = labelResolutionFromPayload(product.ocr_payload);
+  const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
+    product.ingredients_raw,
+  );
   const provenance = buildProductProvenance({
     nutrition: product.nutrition,
     ingredients_raw: product.ingredients_raw,
@@ -108,6 +123,19 @@ export default async function ProductPage({
     ocr_status: product.ocr_status,
     ocr_payload: product.ocr_payload,
   });
+
+  const verdict = score
+    ? resolveProductVerdict({
+        verdict: score.verdict,
+        score: score.absolute_score ?? score.score,
+        name: product.name,
+        category: product.category,
+        subcategory: product.subcategory,
+        hazardous: Boolean(
+          (score.breakdown as { hard_capped?: boolean } | null)?.hard_capped,
+        ),
+      })
+    : null;
 
   const scoreWhy = score
     ? explainScore({
@@ -137,6 +165,7 @@ export default async function ProductPage({
 
             {score ? (
               <ScoreSubscoresBlock
+                className="mt-8"
                 subscores={subscores}
                 flaggedAdditiveCount={matchAdditives(product.ingredients_raw).filter(
                   (m) => m.tier === "moderate" || m.tier === "hazardous",
@@ -176,21 +205,29 @@ export default async function ProductPage({
               </p>
             ) : null}
             <ProductGoalToolbar slug={product.slug} name={product.name} />
+            {verdict ? (
+              <div className="mt-4">
+                <VerdictBlock
+                  verdict={verdict}
+                  sublabelIds={score?.verdict_sublabels}
+                  cohortSize={score?.cohort_size}
+                  relativeScore={score?.relative_score}
+                />
+              </div>
+            ) : null}
             <Suspense fallback={null}>
               <ProductGoalFitList
                 rows={goalRows}
                 overall={overallGoal}
                 scoreReasons={scoreWhy?.reasons}
+                inPractice={scoreWhy}
+                scoreSublabelIds={score?.verdict_sublabels}
+                scoreVerdict={verdict}
+                scoreSubscores={subscores}
               />
             </Suspense>
           </div>
         </div>
-
-        {scoreWhy ? (
-          <div className="mt-8">
-            <ScoreWhyPanel explanation={scoreWhy} />
-          </div>
-        ) : null}
 
         <div className="mt-8 space-y-8">
           {highlights.length > 0 ? (
@@ -198,12 +235,21 @@ export default async function ProductPage({
               <h2 className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">
                 Quick analysis
               </h2>
+              <p className="mt-1.5 text-[11px] text-(--color-fg-dim)">
+                {quickAnalysisBasisNote}
+              </p>
               <div className="mt-4">
                 <AnalysisGrid highlights={highlights} />
               </div>
             </section>
           ) : null}
         </div>
+
+        {labelResolution ? (
+          <div className="mt-10">
+            <LabelChangeSummary labelResolution={labelResolution} />
+          </div>
+        ) : null}
 
         <div className="mt-12 grid gap-10 lg:grid-cols-2 lg:items-start">
           <section>
@@ -212,7 +258,10 @@ export default async function ProductPage({
               Flagged additives highlighted — tap a row for detail.
             </p>
             <div className="mt-5">
-              <IngredientPanel ingredientsRaw={product.ingredients_raw} />
+              <IngredientPanel
+                ingredientsRaw={product.ingredients_raw}
+                intelligenceRows={ingredientIntelligence}
+              />
             </div>
           </section>
 

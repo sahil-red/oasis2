@@ -8,13 +8,16 @@
  *   pnpm score -- --dry-run
  *   pnpm score -- --force                # re-score all (batched upserts)
  *   pnpm score -- --only-unscored        # skip rows already on current rule_version
+ *   pnpm score -- --label-resolved --force  # LM-updated label fields only
  */
 
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
+import { productHasLabelValueChange } from "@/lib/products/label-resolution";
 import {
   persistCoreScoresBatch,
   purgeOutdatedCoreScores,
+  SCORING_ENGINE,
   SCORING_RULE_VERSION,
   type ScoreableProduct,
 } from "@/lib/scoring/persist-core";
@@ -34,6 +37,7 @@ function parseArgs() {
     withDetail: argv.includes("--with-detail"),
     force: argv.includes("--force"),
     onlyUnscored: argv.includes("--only-unscored"),
+    labelResolved: argv.includes("--label-resolved"),
   };
 }
 
@@ -41,22 +45,31 @@ async function main() {
   const args = parseArgs();
   const supabase = adminClient();
   const started = Date.now();
+  console.log(
+    `[05-compute-scores] engine=${SCORING_ENGINE} rule_version=${SCORING_RULE_VERSION}`,
+  );
 
   if (args.force && !args.dryRun) {
     const purged = await purgeOutdatedCoreScores(supabase);
     if (purged) console.log(`[05-compute-scores] purged ${purged} outdated core_scores rows`);
   }
 
-  let query: any = supabase
-    .from("products")
-    .select(
-      "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )",
-    )
-    .not("nutrition", "is", null);
+  const selectFields = args.labelResolved
+    ? "id, name, category, subcategory, ingredients_raw, nutrition, attributes, ocr_payload, core_scores ( rule_version )"
+    : "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )";
+
+  let query: any = supabase.from("products").select(selectFields).not("nutrition", "is", null);
 
   if (args.withDetail) {
     query = query.not("raw_payload", "is", null);
     console.log("[05-compute-scores] --with-detail: PDP-scraped products only.");
+  }
+
+  if (args.labelResolved) {
+    query = query.not("ocr_payload", "is", null);
+    console.log(
+      "[05-compute-scores] --label-resolved: label ≠ CSV (compare different), client filter.",
+    );
   }
 
   const pageSize = args.limit ?? 1000;
@@ -82,6 +95,16 @@ async function main() {
 
     const toScore: ScoreableProduct[] = [];
     for (const row of rows) {
+      if (
+        args.labelResolved &&
+        !productHasLabelValueChange(
+          row.ocr_payload as Record<string, unknown> | null | undefined,
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
       const rel = row.core_scores as
         | { rule_version: number }
         | { rule_version: number }[]
@@ -126,7 +149,7 @@ async function main() {
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(
-    `[05-compute-scores] done. fetched=${totalFetched} scored=${scored} skipped=${skipped} no_nutrition=${noNutrition} rule_version=${SCORING_RULE_VERSION} (${elapsed}s)`,
+    `[05-compute-scores] done. fetched=${totalFetched} scored=${scored} skipped=${skipped} no_nutrition=${noNutrition} engine=${SCORING_ENGINE} rule_version=${SCORING_RULE_VERSION} (${elapsed}s)`,
   );
 }
 

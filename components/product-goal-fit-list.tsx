@@ -1,32 +1,40 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ScoreRing } from "@/components/score-ring";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { scorePresentation } from "@/lib/goals/verdict";
-import { cn, colorForScore, type Grade } from "@/lib/utils";
-
-function fitTileSurface(fit: number): { backgroundColor: string; borderColor: string } {
-  const c = colorForScore(fit);
-  return {
-    backgroundColor: `color-mix(in srgb, ${c} 16%, white)`,
-    borderColor: `color-mix(in srgb, ${c} 42%, #e8e4df)`,
-  };
-}
+import { ScoreWhyPanel } from "@/components/score-why-panel";
+import { pdpScoreHeroCopy } from "@/lib/products/pdp-score-hero-copy";
+import { gradeLetterTileSurface } from "@/lib/score/surfaces";
+import type { VerdictId } from "@/lib/scoring/verdict";
+import { cn, type Grade } from "@/lib/utils";
+import type { ScoreExplanation } from "@/lib/products/score-explain";
+import type { SubScores } from "@/lib/supabase/types";
 
 export function ProductGoalFitList({
   rows,
   overall,
   scoreReasons,
+  inPractice,
+  scoreSublabelIds,
+  scoreVerdict,
+  scoreSubscores,
 }: {
   rows: GoalFitRow[];
   overall: { fit: number; grade: Grade; reasons: string[] } | null;
   /** Full "Why this score?" bullets — shown in the default (overall) hero only. */
   scoreReasons?: string[];
+  /** Human "In practice" copy — rendered below score card, above goal grid. */
+  inPractice?: ScoreExplanation | null;
+  scoreSublabelIds?: string[] | null;
+  scoreVerdict?: VerdictId | null;
+  scoreSubscores?: SubScores;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const active = (searchParams.get("goal") ?? "balanced") as GoalId;
 
@@ -37,7 +45,7 @@ export function ProductGoalFitList({
     else p.set("goal", id);
     p.delete("allow_eggs");
     const q = p.toString();
-    window.location.href = q ? `${pathname}?${q}` : pathname;
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   };
 
   const profileLabel = (id: GoalId) =>
@@ -121,12 +129,19 @@ export function ProductGoalFitList({
           fit={activeRow.fit}
           grade={activeRow.grade}
           reasons={activeRow.reasons}
+          sublabelIds={activeRow.variant === "overall" ? scoreSublabelIds : undefined}
+          verdict={activeRow.variant === "overall" ? scoreVerdict : undefined}
+          subscores={activeRow.variant === "overall" ? scoreSubscores : undefined}
         />
       ) : (
         <p className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)">
           Score pending — goal fit will appear once nutrition is available.
         </p>
       )}
+
+      {inPractice?.tradeoffs.length ? (
+        <ScoreWhyPanel explanation={inPractice} className="mt-4" />
+      ) : null}
 
       {gridGoals.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 shadow-sm">
@@ -159,6 +174,9 @@ function ActiveGoalHero({
   fit,
   grade,
   reasons,
+  sublabelIds,
+  verdict,
+  subscores,
 }: {
   variant: "overall" | "goal";
   label?: string;
@@ -166,11 +184,26 @@ function ActiveGoalHero({
   fit: number;
   grade: Grade;
   reasons: string[];
+  sublabelIds?: string[] | null;
+  verdict?: VerdictId | null;
+  subscores?: SubScores;
 }) {
-  const bullets = reasons.filter(Boolean).slice(0, variant === "overall" ? 3 : 2);
+  const allReasons = reasons.filter(Boolean).slice(0, variant === "overall" ? 3 : 2);
+  const heroCopy =
+    variant === "overall"
+      ? pdpScoreHeroCopy({
+          reasons: allReasons,
+          sublabelIds,
+          verdict,
+          subscores,
+        })
+      : {
+          positive: allReasons.find((r) => r.length > 0) ?? null,
+          caveat: null as string | null,
+        };
 
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-linear-to-br from-white to-(--color-bg-soft) p-5 shadow-sm">
+    <div className="rounded-2xl border border-(--color-line) bg-linear-to-br from-(--color-panel) to-(--color-bg-soft) p-5 shadow-sm">
       <div className="flex items-start gap-5">
         <ScoreRing
           score={fit}
@@ -191,20 +224,20 @@ function ActiveGoalHero({
               {caption}
             </p>
           ) : null}
-          {bullets.length > 0 ? (
-            <ul
+          {heroCopy.positive ? (
+            <p
               className={cn(
-                "space-y-1.5 text-[14px] leading-snug text-(--color-fg-muted)",
-                variant === "goal" && (label || caption) ? "mt-2.5" : "mt-0",
+                "text-[15px] font-medium leading-snug text-(--color-fg)",
+                variant === "goal" && (label || caption) ? "mt-2" : "mt-0",
               )}
             >
-              {bullets.map((r) => (
-                <li key={r} className="flex gap-2">
-                  <span className="text-(--color-fg-dim)">·</span>
-                  <span>{r}</span>
-                </li>
-              ))}
-            </ul>
+              {heroCopy.positive}
+            </p>
+          ) : null}
+          {heroCopy.caveat ? (
+            <p className="mt-2 text-[13px] leading-snug text-(--color-fg-dim)">
+              {heroCopy.caveat}
+            </p>
           ) : null}
         </div>
       </div>
@@ -229,7 +262,7 @@ function GoalFitTile({
 }) {
   const pres = scorePresentation(fit);
   const grade = gradeOverride ?? pres.grade;
-  const surface = fitTileSurface(fit);
+  const surface = gradeLetterTileSurface(grade);
 
   return (
     <li>
@@ -238,21 +271,27 @@ function GoalFitTile({
         onClick={onSelect}
         aria-pressed={active}
         className={cn(
-          "flex h-[88px] w-full flex-col justify-between rounded-xl border px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-sm",
-          active && "ring-2 ring-(--color-fg)/20",
+          "score-tile-surface flex min-h-[120px] w-full flex-col justify-between rounded-xl border py-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md",
+          active && "ring-2 ring-white/30",
         )}
-        style={surface}
+        style={{
+          backgroundColor: surface.backgroundColor,
+          borderColor: surface.borderColor,
+          padding: "14px 12px",
+        }}
       >
         <span className="flex items-start justify-between gap-2">
-          <span className="text-[12px] font-medium leading-tight text-(--color-fg)">{label}</span>
+          <span className="pr-2 text-[12px] font-semibold leading-tight text-white/90">
+            {label}
+          </span>
           <span
-            className="font-display text-xl font-semibold leading-none tabular-nums"
-            style={{ color: colorForScore(fit) }}
+            className="shrink-0 font-display text-[34px] font-bold leading-none"
+            style={{ color: surface.letterColor }}
           >
             {grade}
           </span>
         </span>
-        <span className="line-clamp-2 text-[11.5px] leading-tight text-(--color-fg-muted)">
+        <span className="mt-2 line-clamp-2 min-h-[2.5rem] text-[11.5px] leading-[1.35] text-white/75">
           {caption}
         </span>
       </button>

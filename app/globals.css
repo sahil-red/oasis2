@@ -107,6 +107,61 @@ html.dark body {
     var(--color-bg);
 }
 
+/* Score / goal tiles: theme-aware tinted surfaces (avoid hard-coded white) */
+.score-tile-surface {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.score-band-chip {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.score-band-chip[data-band="excellent"] {
+  background: color-mix(in srgb, var(--color-good) 12%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-fg));
+  border-color: color-mix(in srgb, var(--color-good) 28%, var(--color-line));
+}
+
+.score-band-chip[data-band="good"] {
+  background: color-mix(in srgb, #84cc16 12%, var(--color-panel));
+  color: color-mix(in srgb, #65a30d 90%, var(--color-fg));
+  border-color: color-mix(in srgb, #84cc16 28%, var(--color-line));
+}
+
+.score-band-chip[data-band="poor"] {
+  background: color-mix(in srgb, var(--color-warn) 12%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-warn) 90%, var(--color-fg));
+  border-color: color-mix(in srgb, var(--color-warn) 28%, var(--color-line));
+}
+
+.score-band-chip[data-band="bad"] {
+  background: color-mix(in srgb, var(--color-bad) 12%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-bad) 90%, var(--color-fg));
+  border-color: color-mix(in srgb, var(--color-bad) 28%, var(--color-line));
+}
+
+html.dark .score-band-chip[data-band="excellent"] {
+  background: color-mix(in srgb, var(--color-good) 18%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 70%, white);
+}
+
+html.dark .score-band-chip[data-band="good"] {
+  background: color-mix(in srgb, #a3e635 14%, var(--color-panel));
+  color: color-mix(in srgb, #bef264 75%, white);
+}
+
+html.dark .score-band-chip[data-band="poor"] {
+  background: color-mix(in srgb, var(--color-warn) 16%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-warn) 80%, white);
+}
+
+html.dark .score-band-chip[data-band="bad"] {
+  background: color-mix(in srgb, var(--color-bad) 16%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-bad) 80%, white);
+}
+
 .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;

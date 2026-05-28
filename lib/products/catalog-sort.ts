@@ -5,14 +5,24 @@ export type CatalogSort =
   | "score-asc"
   | "price-asc"
   | "price-desc"
+  | "newest-desc"
   | "name-asc"
   | "protein-desc";
+
+/** Options shown in the catalog toolbar sort dropdown. */
+export const CATALOG_BAR_SORT_OPTIONS: { id: CatalogSort; label: string }[] = [
+  { id: "score-desc", label: "Score" },
+  { id: "price-asc", label: "Price: Low to High" },
+  { id: "price-desc", label: "Price: High to Low" },
+  { id: "newest-desc", label: "Newest" },
+];
 
 export const CATALOG_SORT_OPTIONS: { id: CatalogSort; label: string }[] = [
   { id: "score-desc", label: "Score (high → low)" },
   { id: "score-asc", label: "Score (low → high)" },
   { id: "price-asc", label: "Price (low → high)" },
   { id: "price-desc", label: "Price (high → low)" },
+  { id: "newest-desc", label: "Newest" },
   { id: "protein-desc", label: "Protein (high → low)" },
   { id: "name-asc", label: "Name (A → Z)" },
 ];
@@ -30,6 +40,11 @@ export function compareCatalogItems(a: ProductListItem, b: ProductListItem, sort
       return (a.price_inr ?? Number.MAX_SAFE_INTEGER) - (b.price_inr ?? Number.MAX_SAFE_INTEGER);
     case "price-desc":
       return (b.price_inr ?? -1) - (a.price_inr ?? -1);
+    case "newest-desc": {
+      const au = (a as { updated_at?: string }).updated_at ?? "";
+      const bu = (b as { updated_at?: string }).updated_at ?? "";
+      return bu.localeCompare(au);
+    }
     case "name-asc":
       return a.name.localeCompare(b.name);
     case "protein-desc":

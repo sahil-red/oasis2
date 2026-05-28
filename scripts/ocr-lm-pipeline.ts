@@ -9,13 +9,14 @@
  *   pnpm ocr:lm -- --all --resume --persist-db
  */
 import { createReadStream, createWriteStream } from "node:fs";
+import { finished } from "node:stream/promises";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import { hasLabelKeywords, labelSignalScore } from "@/lib/ocr/label-signals";
-import { livetextFromUrl, shutdownLivetextOcr } from "@/lib/ocr/livetext-mac";
+import { livetextBestLabel } from "@/lib/ocr/livetext-best-label";
+import { shutdownLivetextOcr } from "@/lib/ocr/livetext-mac";
 import { structureLabelFromText } from "@/lib/ocr/lm-studio-structure";
 import {
   planLabelResolution,
@@ -26,6 +27,7 @@ import { validateStructuredLabel } from "@/lib/ocr/validate-structured-label";
 import { adminClient } from "@/lib/supabase/admin";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { csvRecordToRow, dedupeCsvRows, resolveCsvColumns } from "@/lib/zepto-import/csv-row";
+import { scriptArgv } from "@/lib/util/script-argv";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
 
 loadEnv({ path: ".env.local" });
@@ -37,19 +39,30 @@ const RESULTS_PATH = resolve(OUT_DIR, "results.jsonl");
 const DB_FLUSH_SIZE = 50;
 
 function parseArgs() {
-  const argv = process.argv.slice(2);
+  const argv = scriptArgv();
   let limit = 100;
+  let limitExplicit = false;
+  let sku: string | null = null;
+  let nameQuery: string | null = null;
   for (const a of argv) {
-    if (a.startsWith("--limit=")) limit = Number(a.split("=")[1]) || limit;
+    if (a.startsWith("--limit=")) {
+      limit = Number(a.split("=")[1]) || limit;
+      limitExplicit = true;
+    }
+    if (a.startsWith("--sku=")) sku = a.split("=")[1]?.trim() || null;
+    if (a.startsWith("--name=")) nameQuery = a.slice("--name=".length).trim() || null;
   }
   return {
     limit: Math.min(limit, MAX_BATCH),
+    limitExplicit,
     all: argv.includes("--all"),
     resume: argv.includes("--resume"),
     fresh: argv.includes("--fresh"),
     forceOcr: argv.includes("--force-ocr"),
     persistDb: argv.includes("--persist-db"),
     dryRun: argv.includes("--dry-run"),
+    sku,
+    nameQuery,
   };
 }
 
@@ -94,58 +107,6 @@ async function writeRawCache(sku: string, text: string): Promise<void> {
   await writeFile(rawCachePath(sku), text, "utf8");
 }
 
-async function livetextBestLabel(urls: string[]): Promise<{
-  text: string;
-  imageUrl: string;
-} | null> {
-  const ordered = [...urls].reverse();
-  let best: { text: string; imageUrl: string; score: number } | null = null;
-  let lastErr: string | null = null;
-  let emptyFrames = 0;
-  let ocrFailures = 0;
-
-  for (const url of ordered) {
-    try {
-      const { full_text } = await livetextFromUrl(url);
-      if (!full_text.trim()) {
-        emptyFrames++;
-        continue;
-      }
-      if (!hasLabelKeywords(full_text)) continue;
-      const score = labelSignalScore(full_text);
-      if (!best || score > best.score) {
-        best = { text: full_text, imageUrl: url, score };
-      }
-      if (score >= 6) break;
-    } catch (e) {
-      ocrFailures++;
-      lastErr = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  if (best) return { text: best.text, imageUrl: best.imageUrl };
-
-  for (const url of ordered) {
-    try {
-      const { full_text } = await livetextFromUrl(url);
-      if (full_text.trim()) return { text: full_text, imageUrl: url };
-      emptyFrames++;
-    } catch (e) {
-      ocrFailures++;
-      lastErr = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  if (lastErr) {
-    throw new Error(
-      `livetext failed on ${ordered.length} image(s): ${lastErr} (empty=${emptyFrames} errors=${ocrFailures})`,
-    );
-  }
-  throw new Error(
-    `no OCR text from any image (${ordered.length} frames, all empty — likely front-of-pack only)`,
-  );
-}
-
 type DbPendingRow = {
   id: string;
   ingredients_raw?: string | null;
@@ -187,15 +148,37 @@ async function main() {
   );
 
   let work = parsed.filter((r) => r.image_urls.length > 0);
-  const done = args.resume && !args.fresh ? await loadDoneSkus() : new Set<string>();
+
+  if (args.sku) {
+    work = work.filter((r) => r.zepto_sku === args.sku);
+    if (!work.length) throw new Error(`[ocr:lm] SKU not found in CSV: ${args.sku}`);
+  } else if (args.nameQuery) {
+    const q = args.nameQuery.toLowerCase();
+    work = work.filter((r) => r.name.toLowerCase().includes(q));
+    if (!work.length) throw new Error(`[ocr:lm] no CSV rows match --name=${args.nameQuery}`);
+  }
+
+  const done =
+    args.sku || args.nameQuery || args.fresh
+      ? new Set<string>()
+      : args.resume
+        ? await loadDoneSkus()
+        : new Set<string>();
   if (done.size) {
     work = work.filter((r) => !done.has(r.zepto_sku));
     console.log(`[ocr:lm] resume: skipping ${done.size} SKUs already in results`);
   }
-  if (!args.all) {
+  if (args.sku || args.nameQuery) {
+    work = work.slice(0, 1);
+  } else if (!args.all) {
     work = work.slice(0, args.limit);
-  } else if (args.limit < MAX_BATCH) {
+  } else if (args.limitExplicit) {
     work = work.slice(0, args.limit);
+    console.log(`[ocr:lm] --all with --limit=${args.limit}`);
+  }
+  if (work.length > MAX_BATCH) {
+    console.warn(`[ocr:lm] capping batch at ${MAX_BATCH} SKUs`);
+    work = work.slice(0, MAX_BATCH);
   }
 
   const lmModel = process.env.LM_STUDIO_MODEL ?? "qwen2.5coder7b:2";
@@ -223,13 +206,16 @@ async function main() {
   async function flushDbBatch(): Promise<void> {
     if (!supabase || dbPending.length === 0) return;
     const batch = dbPending.splice(0, DB_FLUSH_SIZE);
-    const { error } = await supabase.from("products").upsert(batch, { onConflict: "id" });
-    if (error) throw error;
-    console.log(`[ocr:lm] db upsert batch=${batch.length} (pending=${dbPending.length})`);
+    for (const { id, ...patch } of batch) {
+      const { error } = await supabase.from("products").update(patch).eq("id", id);
+      if (error) throw error;
+    }
+    console.log(`[ocr:lm] db update batch=${batch.length} (pending=${dbPending.length})`);
   }
 
   const out = createWriteStream(RESULTS_PATH, { flags: "a" });
   let processed = 0;
+  let fatalError: unknown = null;
   let lmSkipped = 0;
   let lmCalled = 0;
   let cacheHits = 0;
@@ -242,6 +228,7 @@ async function main() {
   );
   console.log(`[ocr:lm] model=${lmModel} persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
 
+  try {
   for (let i = 0; i < work.length; i++) {
     const row = work[i]!;
     const label = `${row.name.slice(0, 40)} (${row.zepto_sku.slice(0, 8)}…)`;
@@ -290,6 +277,7 @@ async function main() {
         csvNutrition: row.nutrition as ProductNutrition | null,
         rawText,
         structured,
+        productName: row.name,
       });
 
       const result: PipelineResult = {
@@ -392,9 +380,19 @@ async function main() {
       }
     }
   }
-
-  await flushDbBatch();
-  out.end();
+  } catch (e) {
+    fatalError = e;
+    console.error("[ocr:lm] fatal:", e instanceof Error ? e.message : e);
+  } finally {
+    try {
+      await flushDbBatch();
+    } catch (e) {
+      console.error("[ocr:lm] db flush failed:", e instanceof Error ? e.message : e);
+      if (!fatalError) fatalError = e;
+    }
+    out.end();
+    await finished(out);
+  }
 
   const elapsedMin = (Date.now() - tRun) / 60000;
   const avgSku =
@@ -409,6 +407,7 @@ async function main() {
     `  ocr_text_cache_hits=${cacheHits} elapsed=${elapsedMin.toFixed(2)}min (~${perMin.toFixed(1)}/min) avg_sku=${avgSku.toFixed(2)}s`,
   );
   console.log(`  export: ${RESULTS_PATH}`);
+  if (fatalError) process.exit(1);
 }
 
 main()

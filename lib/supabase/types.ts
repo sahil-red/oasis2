@@ -116,6 +116,23 @@ export interface IngredientConcern {
   created_at: string;
 }
 
+export type VerdictId = "daily_staple" | "good_choice" | "occasional_treat" | "skip";
+
+export type RoleCohort = "staple" | "snack" | "treat" | "meal_replacement" | "adjunct";
+
+export interface IngredientIntelligence {
+  normalized_name: string;
+  display_name: string | null;
+  nova_class: number | null;
+  role: string | null;
+  concern_tier: "innocuous" | "watchful" | "problematic" | "hazardous";
+  concern_reasons: string[];
+  intrinsic_quality: number | null;
+  synonyms: string[];
+  model: string | null;
+  rated_at: string;
+}
+
 export interface CoreScore {
   product_id: string;
   score: number;
@@ -126,6 +143,15 @@ export interface CoreScore {
   breakdown: ScoreBreakdown;
   rule_version: number;
   computed_at: string;
+  /** V9 fields (nullable until backfill) */
+  absolute_score?: number | null;
+  relative_score?: number | null;
+  verdict?: VerdictId | null;
+  verdict_sublabels?: string[];
+  role_cohort?: RoleCohort | null;
+  serving_g_effective?: number | null;
+  cohort_id?: string | null;
+  cohort_size?: number | null;
 }
 
 /** Yuka-style decomposition. Each value is on its own scale and summed to 100. */

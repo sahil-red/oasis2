@@ -29,8 +29,8 @@ export function GoalModePicker({
             className={cn(
               "rounded-full px-2.5 py-1.5 text-[12px] transition",
               value === g.id
-                ? "bg-(--color-fg) text-(--color-bg)"
-                : "bg-(--color-bg-soft) text-(--color-fg-muted) hover:text-(--color-fg)",
+                ? "bg-(--color-accent) font-semibold text-white shadow-sm"
+                : "border border-(--color-line) bg-transparent text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)",
             )}
           >
             <span className="font-medium">{g.label}</span>

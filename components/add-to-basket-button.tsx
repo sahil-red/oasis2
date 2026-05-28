@@ -36,10 +36,7 @@ export function AddToBasketButton({
   if (size === "icon") {
     return (
       <div
-        className={cn(
-          "flex items-center gap-0.5 rounded-full border border-(--color-line) bg-(--color-panel)/95 p-0.5 shadow-sm backdrop-blur-sm",
-          className,
-        )}
+        className={cn("flex shrink-0 items-center gap-1", className)}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
@@ -53,11 +50,11 @@ export function AddToBasketButton({
                 e.stopPropagation();
                 decrementBasket(slug);
               }}
-              className="grid h-7 w-7 place-items-center rounded-full text-(--color-fg-muted) hover:bg-(--color-bg-soft) hover:text-(--color-fg)"
+              className="grid h-8 w-8 place-items-center rounded-full bg-[#2a2a2e] text-white/80 hover:bg-[#35353a] hover:text-white"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
-            <span className="min-w-[1.25rem] text-center text-xs font-semibold tabular-nums">
+            <span className="min-w-[1.25rem] text-center text-xs font-semibold tabular-nums text-(--color-fg)">
               {qty}
             </span>
           </>
@@ -70,9 +67,9 @@ export function AddToBasketButton({
             e.stopPropagation();
             addToBasket(slug, name);
           }}
-          className="grid h-7 w-7 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) hover:opacity-90"
+          className="grid h-8 w-8 place-items-center rounded-full bg-[#2a2a2e] text-white shadow-sm hover:bg-[#35353a]"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-4 w-4" strokeWidth={2.25} />
         </button>
       </div>
     );

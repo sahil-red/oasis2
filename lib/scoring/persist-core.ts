@@ -2,9 +2,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { countNutritionFields } from "@/lib/nutrition/completeness";
 import { nutritionHasCriticalAnomalies } from "@/lib/nutrition/anomaly";
 import { computeCoreScore, type CoreScoreResult } from "@/lib/scoring/core";
+import type { CoreScoreV9Result } from "@/lib/scoring/core-v9";
+import {
+  computeCoreScoreV9ForRow,
+  preloadV9ForProducts,
+  type V9Preload,
+} from "@/lib/scoring/v9-batch";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
-export const SCORING_RULE_VERSION = Number(process.env.SCORING_RULE_VERSION ?? 8);
+export const SCORING_ENGINE = (process.env.SCORING_ENGINE ?? "v8").toLowerCase();
+
+export const SCORING_RULE_VERSION = Number(
+  process.env.SCORING_RULE_VERSION ?? (SCORING_ENGINE === "v9" ? 9 : 8),
+);
 
 export type ScoreableProduct = {
   id: string;
@@ -21,12 +31,46 @@ type CoreScoreUpsert = {
   score: number;
   grade: CoreScoreResult["grade"];
   band: CoreScoreResult["band"];
-  subscores: CoreScoreResult["subscores"];
+  subscores: { nutrition: number; additives: number; labels: number };
   concerns: CoreScoreResult["concerns"];
-  breakdown: CoreScoreResult["breakdown"];
+  breakdown: Record<string, unknown>;
   rule_version: number;
   computed_at: string;
+  absolute_score?: number | null;
+  relative_score?: number | null;
+  verdict?: string | null;
+  verdict_sublabels?: string[];
+  role_cohort?: string | null;
+  serving_g_effective?: number | null;
+  cohort_id?: string | null;
+  cohort_size?: number | null;
 };
+
+function v9ToUpsert(row: ScoreableProduct, result: CoreScoreV9Result): CoreScoreUpsert {
+  return {
+    product_id: row.id,
+    score: result.score,
+    grade: result.grade,
+    band: result.band,
+    subscores: {
+      nutrition: result.subscores.nutrition,
+      additives: result.subscores.ingredient,
+      labels: result.subscores.labels,
+    },
+    concerns: result.concerns,
+    breakdown: result.breakdown,
+    rule_version: SCORING_RULE_VERSION,
+    computed_at: new Date().toISOString(),
+    absolute_score: result.absolute_score,
+    relative_score: result.relative_score,
+    verdict: result.verdict,
+    verdict_sublabels: result.verdict_sublabels,
+    role_cohort: result.role_cohort,
+    serving_g_effective: result.serving_g_effective,
+    cohort_id: result.cohort_id,
+    cohort_size: result.cohort_size,
+  };
+}
 
 export function hasScoreableNutrition(
   nutrition: ProductNutrition | Record<string, unknown> | null,
@@ -37,7 +81,25 @@ export function hasScoreableNutrition(
   return true;
 }
 
-export function buildCoreScoreUpsert(row: ScoreableProduct): CoreScoreUpsert | null {
+export function buildCoreScoreUpsert(
+  row: ScoreableProduct,
+  v9?: { preload: V9Preload },
+): CoreScoreUpsert | null {
+  if (SCORING_ENGINE === "v9" && v9?.preload) {
+    if (!hasScoreableNutrition(row.nutrition)) return null;
+    if (
+      row.nutrition &&
+      nutritionHasCriticalAnomalies(row.nutrition, {
+        name: row.name ?? "",
+        category: row.category,
+        subcategory: row.subcategory,
+      })
+    ) {
+      return null;
+    }
+    const result = computeCoreScoreV9ForRow(row, v9.preload);
+    return v9ToUpsert(row, result);
+  }
   if (!hasScoreableNutrition(row.nutrition)) return null;
 
   if (
@@ -80,9 +142,29 @@ export async function persistCoreScoresBatch(
   rows: ScoreableProduct[],
   opts: { dryRun?: boolean } = {},
 ): Promise<{ scored: number; no_nutrition: number }> {
+  const scoreable = rows.filter((r) => {
+    if (!hasScoreableNutrition(r.nutrition)) return false;
+    if (
+      r.nutrition &&
+      nutritionHasCriticalAnomalies(r.nutrition, {
+        name: r.name ?? "",
+        category: r.category,
+        subcategory: r.subcategory,
+      })
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  let v9Preload: V9Preload | undefined;
+  if (SCORING_ENGINE === "v9" && scoreable.length) {
+    v9Preload = await preloadV9ForProducts(supabase, scoreable);
+  }
+
   const payloads: CoreScoreUpsert[] = [];
   for (const row of rows) {
-    const payload = buildCoreScoreUpsert(row);
+    const payload = buildCoreScoreUpsert(row, v9Preload ? { preload: v9Preload } : undefined);
     if (payload) payloads.push(payload);
   }
 

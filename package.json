@@ -33,7 +33,13 @@
     "audit:catalog": "tsx scripts/audit-catalog-readiness.ts",
     "ocr:setup": "python3 -m venv ocr-pipeline/.venv && ocr-pipeline/.venv/bin/pip install -r ocr-pipeline/requirements.txt",
     "ocr:bench": "ocr-pipeline/.venv/bin/python ocr-pipeline/benchmark.py",
-    "ocr:lm": "tsx scripts/ocr-lm-pipeline.ts"
+    "ocr:lm": "tsx scripts/ocr-lm-pipeline.ts",
+    "ocr:lm:backfill-db": "tsx scripts/backfill-lm-pipeline-to-db.ts",
+    "backfill:per-serve": "tsx scripts/backfill-per-serve-nutrition.ts",
+    "rate:ingredients": "tsx scripts/rate-ingredients.ts",
+    "audit:ingredient-sku-coverage": "tsx scripts/audit-ingredient-sku-coverage.ts",
+    "score:v9:diff": "tsx scripts/score-v9-diff.ts",
+    "lm:status": "tsx scripts/lm-run-status.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
@@ -49,6 +55,7 @@
     "react-dom": "^19.2.6",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0",
+    "undici": "^6.26.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

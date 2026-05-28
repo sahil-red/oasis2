@@ -37,9 +37,11 @@ export function AnalysisGrid({
               </span>
             ) : null}
             <span className="inline-flex items-center gap-1 align-middle whitespace-nowrap">
-              <span
-                className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[h.tone]}`}
-              />
+              {h.label !== "Energy" ? (
+                <span
+                  className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[h.tone]}`}
+                />
+              ) : null}
               <span className="font-medium">{h.label}</span>{" "}
               <span className={cn("font-semibold tabular-nums", TONE_VALUE[h.tone])}>
                 {h.value}
@@ -60,6 +62,7 @@ export function AnalysisGrid({
           value={h.value}
           caption={h.caption}
           tone={h.tone}
+          showDot={h.label !== "Energy"}
           delay={i * 60}
           className="!rounded-xl !p-4"
         />

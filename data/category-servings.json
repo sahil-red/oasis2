@@ -1,0 +1,34 @@
+{
+  "_comment": "Default realistic serving (grams) when label/OCR serving is missing. ml ≈ g.",
+  "fallback_g": 100,
+  "by_role_cohort": {
+    "adjunct": 5,
+    "snack": 30,
+    "treat": 25,
+    "meal_replacement": 40,
+    "staple": 100
+  },
+  "rules": [
+    { "name_regex": "\\b(tea|chai|green tea|black tea|herbal tea|instant tea)\\b", "serving_g": 2 },
+    { "name_regex": "\\b(coffee|instant coffee|filter coffee|espresso)\\b", "serving_g": 2 },
+    { "name_regex": "\\b(coriander|dhania|turmeric|haldi|chilli powder|red chilli|masala powder|garam masala|kitchen king|chaat masala|hing|asafoetida|jeera|cumin|mustard seed|fenugreek|methi|cardamom|elaichi|clove|laung|pepper powder|black pepper)\\b", "serving_g": 2 },
+    { "name_regex": "\\b(spice|masala|seasoning|herb)\\b", "serving_g": 5 },
+    { "name_regex": "\\b(oil|ghee|vanaspati|mct)\\b", "serving_g": 10 },
+    { "name_regex": "\\b(sauce|ketchup|chutney|pickle|achaar|dip|spread)\\b", "serving_g": 15 },
+    { "name_regex": "\\b(biscuit|cookie|cracker|rusk)\\b", "serving_g": 20 },
+    { "name_regex": "\\b(chip|chips|crisp|namkeen|bhujia|kurkure|wafer)\\b", "serving_g": 30 },
+    { "name_regex": "\\b(chocolate|candy|toffee|lollipop)\\b", "serving_g": 25 },
+    { "name_regex": "\\b(soft drink|cola|soda|juice|nimbooz|energy drink)\\b", "serving_g": 250 },
+    { "name_regex": "\\b(milk|doodh)\\b", "serving_g": 200 },
+    { "name_regex": "\\b(dahi|yogurt|curd|lassi)\\b", "serving_g": 100 },
+    { "name_regex": "\\b(paneer|cheese)\\b", "serving_g": 50 },
+    { "name_regex": "\\b(egg|anda)\\b", "serving_g": 50 },
+    { "name_regex": "\\b(bread|pav|roti|chapati)\\b", "serving_g": 40 },
+    { "name_regex": "\\b(noodle|pasta|instant noodle|maggi)\\b", "serving_g": 70 },
+    { "name_regex": "\\b(ready to eat|rte|meal|biryani)\\b", "serving_g": 120 },
+    { "name_regex": "\\b(protein bar|energy bar)\\b", "serving_g": 40 },
+    { "name_regex": "\\b(protein powder|whey|isolate)\\b", "serving_g": 30 },
+    { "category_regex": "Fruits\\s*&\\s*Vegetables", "serving_g": 150 },
+    { "category_regex": "Atta|Flour|Rice|Dal|Pulses", "serving_g": 60 }
+  ]
+}

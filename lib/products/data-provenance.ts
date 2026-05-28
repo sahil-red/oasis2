@@ -189,6 +189,13 @@ function inferIngredientsProvenance(input: ProvenanceInput): FieldProvenance {
       detail: "Structured from pack image when CSV disagreed with OCR",
     };
   }
+  if (resolution?.ingredients_source === "ocr") {
+    return {
+      kind: "ocr",
+      label: "Label OCR (regex)",
+      detail: "Technical ingredients line read from pack image",
+    };
+  }
 
   const ocr = ocrPayload(input);
   if (

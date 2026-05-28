@@ -6,6 +6,8 @@ import {
   type OcrCompareSummary,
 } from "@/lib/ocr/compare-platform";
 import { ocrNutritionToProduct } from "@/lib/nutrition/from-ocr";
+import { resolveIngredientsText } from "@/lib/ocr/ingredients-quality";
+import { mergeNutrition } from "@/lib/grocery/parse-nutrition-block";
 import {
   countNutritionFields,
   hasIngredients,
@@ -20,7 +22,7 @@ import type { OcrNutrition, OcrPayload } from "@/lib/ocr/types";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Where the canonical value shown on the site came from. */
-export type LabelFieldSource = "csv" | "llm" | "missing";
+export type LabelFieldSource = "csv" | "llm" | "ocr" | "missing";
 
 export type LabelFieldResolution = {
   nutrition_source: LabelFieldSource;
@@ -157,6 +159,7 @@ export function resolveLabelFields(input: {
   csvNutrition: ProductNutrition | null;
   rawText: string;
   structured?: StructuredLabel | null;
+  productName?: string | null;
 }): LabelFieldResolution {
   const plan = planLabelResolution(
     input.csvIngredients,
@@ -181,12 +184,19 @@ export function resolveLabelFields(input: {
   if (!needs_ingredients_lm && (ingStatus === "match" || ingStatus === "existing_only")) {
     ingredients_source = "csv";
     ingredients_raw = input.csvIngredients;
-  } else if (input.structured?.ingredients) {
-    ingredients_source = "llm";
-    ingredients_raw = input.structured.ingredients;
-  } else if (csvHasIng) {
-    ingredients_source = "csv";
-    ingredients_raw = input.csvIngredients;
+  } else {
+    const resolved = resolveIngredientsText({
+      structuredIngredients: input.structured?.ingredients,
+      rawText: input.rawText,
+      csvIngredients: input.csvIngredients,
+      productName: input.productName,
+    });
+    ingredients_source = resolved.source;
+    ingredients_raw = resolved.text;
+    if (!ingredients_raw && csvHasIng) {
+      ingredients_source = "csv";
+      ingredients_raw = input.csvIngredients;
+    }
   }
 
   if (!needs_nutrition_lm && (nutStatus === "match" || nutStatus === "existing_only")) {
@@ -196,9 +206,16 @@ export function resolveLabelFields(input: {
     const fromLm = structuredToProductNutrition(input.structured);
     if (fromLm) {
       nutrition_source = "llm";
+      const merged =
+        csvHasNut && input.csvNutrition
+          ? mergeNutrition(input.csvNutrition, fromLm)
+          : fromLm;
       nutrition = {
-        ...fromLm,
-        extra: { ...(fromLm.extra ?? {}), nutrition_source: "llm" },
+        ...(merged ?? fromLm),
+        extra: {
+          ...((merged ?? fromLm).extra ?? {}),
+          nutrition_source: "llm",
+        },
       };
       serving_size = input.structured.serving_size ?? serving_size;
     }

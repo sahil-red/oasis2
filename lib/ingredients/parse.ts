@@ -20,8 +20,8 @@ export interface ParsedIngredient {
 }
 
 const TIER_LABELS: Record<IngredientRisk, string> = {
-  "risk-free": "No impact",
-  unknown: "Not in database",
+  "risk-free": "Neutral",
+  unknown: "Neutral",
   limited: "Limited risk",
   moderate: "Moderate risk",
   hazardous: "High risk",

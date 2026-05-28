@@ -13,20 +13,20 @@ export interface AnalysisHighlight {
 }
 
 function toneForSugar(g: number): HighlightTone {
-  if (g >= 22) return "bad";
-  if (g >= 10) return "warn";
+  if (g > 12) return "bad";
+  if (g > 5) return "warn";
   return "good";
 }
 
 function toneForSodium(mg: number): HighlightTone {
-  if (mg >= 600) return "bad";
-  if (mg >= 300) return "warn";
+  if (mg > 500) return "bad";
+  if (mg > 200) return "warn";
   return "good";
 }
 
-function toneForAdditives(flagged: number, sub?: number): HighlightTone {
-  if (flagged > 0 || (sub != null && sub < 20)) return "bad";
-  if (sub != null && sub < 28) return "warn";
+function toneForAdditives(count: number): HighlightTone {
+  if (count >= 3) return "bad";
+  if (count >= 1) return "warn";
   return "good";
 }
 
@@ -43,12 +43,13 @@ export function buildAnalysisHighlights(
   const kcal = nutrition?.energy_kcal_100g;
   const flagged = parseIngredientsForDisplay(ingredients_raw).filter((i) => i.flagged).length;
   const additiveHits = matchAdditives(ingredients_raw).length;
+  const additiveCount = Math.max(flagged, additiveHits);
 
   if (typeof sugar === "number") {
     out.push({
       label: "Sugar",
       value: `${sugar}g`,
-      caption: sugar >= 22 ? "High per 100g" : sugar >= 10 ? "Moderate per 100g" : "Lower per 100g",
+      caption: "",
       tone: toneForSugar(sugar),
     });
   }
@@ -57,39 +58,24 @@ export function buildAnalysisHighlights(
     out.push({
       label: "Sodium",
       value: `${sodium}mg`,
-      caption: sodium >= 600 ? "High per 100g" : "Per 100g",
+      caption: "",
       tone: toneForSodium(sodium),
     });
   }
 
-  const addScore = subscores?.additives;
   out.push({
     label: "Additives",
-    value: flagged > 0 ? String(flagged) : additiveHits > 0 ? String(additiveHits) : "0",
-    caption:
-      flagged > 0
-        ? `${flagged} flagged ingredient${flagged > 1 ? "s" : ""}`
-        : additiveHits > 0
-          ? "Matches in rules table"
-          : "No flagged additives",
-    tone: toneForAdditives(flagged || additiveHits, addScore),
+    value: String(additiveCount),
+    caption: "",
+    tone: toneForAdditives(additiveCount),
   });
 
   if (typeof kcal === "number" && out.length < max) {
     out.push({
       label: "Energy",
       value: `${kcal}`,
-      caption: "kcal per 100g",
-      tone: kcal >= 450 ? "warn" : "neutral",
-    });
-  }
-
-  if (subscores && out.length < max) {
-    out.push({
-      label: "Nutrition",
-      value: `${subscores.nutrition}`,
-      caption: "of 60 pts",
-      tone: subscores.nutrition >= 40 ? "good" : subscores.nutrition >= 25 ? "warn" : "bad",
+      caption: "",
+      tone: "neutral",
     });
   }
 
