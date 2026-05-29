@@ -12,14 +12,18 @@
  */
 import { createReadStream, createWriteStream } from "node:fs";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { finished } from "node:stream/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
-import { runAppleRawOcr, type AppleRawOcrProduct } from "@/lib/ocr/apple-raw";
+import {
+  runAppleRawOcr,
+  type AppleOcrVariantMode,
+  type AppleRawOcrProduct,
+} from "@/lib/ocr/apple-raw";
 import { shutdownVisionOcr } from "@/lib/ocr/vision-mac";
 import { csvRecordToRow, dedupeCsvRows, resolveCsvColumns } from "@/lib/zepto-import/csv-row";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
@@ -32,6 +36,8 @@ const PRODUCT_DIR = resolve(OUT_DIR, "products");
 const TEMP_DIR = resolve(process.cwd(), ".tmp/apple-ocr-raw");
 const RESULTS_PATH = resolve(OUT_DIR, "results.jsonl");
 const DB_FLUSH_SIZE = 20;
+const DB_WRITE_CONCURRENCY = 6;
+const DB_WRITE_RETRIES = 3;
 const MAX_BATCH = 50_000;
 
 type Args = {
@@ -46,6 +52,9 @@ type Args = {
   productConcurrency: number;
   imageConcurrency: number;
   recognitionLevel: "fast" | "accurate";
+  variantMode: AppleOcrVariantMode;
+  minConfidence: number;
+  minTextChars: number;
 };
 
 type PendingDbRow = {
@@ -63,9 +72,12 @@ function parseArgs(): Args {
   let limitExplicit = false;
   let sku: string | null = null;
   let nameQuery: string | null = null;
-  let productConcurrency = 2;
-  let imageConcurrency = 2;
+  let productConcurrency = 4;
+  let imageConcurrency = 4;
   let recognitionLevel: "fast" | "accurate" = "accurate";
+  let variantMode: AppleOcrVariantMode = "adaptive";
+  let minConfidence = 0.85;
+  let minTextChars = 40;
 
   for (const arg of argv) {
     if (arg.startsWith("--limit=")) {
@@ -83,6 +95,12 @@ function parseArgs(): Args {
       recognitionLevel = "fast";
     } else if (arg === "--accurate") {
       recognitionLevel = "accurate";
+    } else if (arg === "--all-variants") {
+      variantMode = "all";
+    } else if (arg.startsWith("--min-confidence=")) {
+      minConfidence = Math.max(0, Math.min(1, Number(arg.split("=")[1]) || minConfidence));
+    } else if (arg.startsWith("--min-text-chars=")) {
+      minTextChars = Math.max(0, Number(arg.split("=")[1]) || minTextChars);
     }
   }
 
@@ -98,6 +116,9 @@ function parseArgs(): Args {
     productConcurrency,
     imageConcurrency,
     recognitionLevel,
+    variantMode,
+    minConfidence,
+    minTextChars,
   };
 }
 
@@ -113,6 +134,10 @@ function csvInputPath(): string {
 
 function safeSku(sku: string): string {
   return sku.replace(/[^\w.-]/g, "_");
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function loadDoneSkus(): Promise<Set<string>> {
@@ -229,20 +254,48 @@ async function main() {
   let processed = 0;
   let errors = 0;
   let dbWritten = 0;
+  let dbFailed = 0;
+
+  async function updateRowWithRetry(row: PendingDbRow): Promise<void> {
+    if (!supabase) return;
+    const { id, ...patch } = row;
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= DB_WRITE_RETRIES; attempt++) {
+      try {
+        const { error } = await supabase.from("products").update(patch).eq("id", id);
+        if (!error) {
+          dbWritten++;
+          return;
+        }
+        lastError = error;
+      } catch (e) {
+        lastError = e;
+      }
+      if (attempt < DB_WRITE_RETRIES) {
+        await sleep(500 * Math.pow(2, attempt - 1));
+      }
+    }
+    dbFailed++;
+    const message =
+      lastError instanceof Error
+        ? lastError.message
+        : typeof lastError === "object" && lastError && "message" in lastError
+          ? String((lastError as { message?: unknown }).message)
+          : String(lastError);
+    console.warn(`[apple-ocr-raw] db write failed ${id.slice(0, 8)} after ${DB_WRITE_RETRIES} attempts: ${message}`);
+  }
 
   async function flushDb(): Promise<void> {
     if (!supabase || !pending.length) return;
     const batch = pending.splice(0, DB_FLUSH_SIZE);
-    for (const { id, ...patch } of batch) {
-      const { error } = await supabase.from("products").update(patch).eq("id", id);
-      if (error) throw error;
-      dbWritten++;
+    for (let i = 0; i < batch.length; i += DB_WRITE_CONCURRENCY) {
+      await Promise.all(batch.slice(i, i + DB_WRITE_CONCURRENCY).map(updateRowWithRetry));
     }
-    console.log(`[apple-ocr-raw] db flush ${batch.length} (written=${dbWritten})`);
+    console.log(`[apple-ocr-raw] db flush ${batch.length} (written=${dbWritten} failed=${dbFailed})`);
   }
 
   console.log(
-    `[apple-ocr-raw] products=${work.length} recognition=${args.recognitionLevel} product_concurrency=${args.productConcurrency} image_concurrency=${args.imageConcurrency} persist_db=${args.persistDb}`,
+    `[apple-ocr-raw] products=${work.length} recognition=${args.recognitionLevel} variant_mode=${args.variantMode} product_concurrency=${args.productConcurrency} image_concurrency=${args.imageConcurrency} persist_db=${args.persistDb}`,
   );
 
   async function worker(): Promise<void> {
@@ -258,6 +311,9 @@ async function main() {
           tempDir: join(TEMP_DIR, safeSku(row.zepto_sku)),
           recognitionLevel: args.recognitionLevel,
           imageConcurrency: args.imageConcurrency,
+          variantMode: args.variantMode,
+          minConfidence: args.minConfidence,
+          minTextChars: args.minTextChars,
         });
         const productJsonPath = resolve(PRODUCT_DIR, `${safeSku(row.zepto_sku)}.json`);
         await writeFile(
@@ -308,7 +364,7 @@ async function main() {
         processed++;
         const seconds = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
-          `[${processed}/${work.length}] ${label} images=${raw.image_count} chars=${raw.combined_text.length} (${seconds}s)`,
+          `[${processed}/${work.length}] ${label} images=${raw.image_count} low_conf=${raw.low_confidence_image_count} chars=${raw.combined_text.length} (${seconds}s)`,
         );
       } catch (e) {
         errors++;
@@ -338,7 +394,7 @@ async function main() {
   }
 
   console.log(
-    `[apple-ocr-raw] done processed=${processed} errors=${errors} db_written=${dbWritten} export=${RESULTS_PATH}`,
+    `[apple-ocr-raw] done processed=${processed} errors=${errors} db_written=${dbWritten} db_failed=${dbFailed} export=${RESULTS_PATH}`,
   );
 }
 

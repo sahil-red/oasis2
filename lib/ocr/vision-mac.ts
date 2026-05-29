@@ -115,10 +115,16 @@ class VisionOcrServer {
   }
 }
 
-let server: VisionOcrServer | null = null;
+const POOL_SIZE = Math.max(1, Math.min(8, Number(process.env.OCR_VISION_WORKERS ?? 2)));
+let pool: VisionOcrServer[] = [];
+let poolIdx = 0;
 
 function getServer(): VisionOcrServer {
-  if (!server) server = new VisionOcrServer();
+  if (pool.length === 0) {
+    pool = Array.from({ length: POOL_SIZE }, () => new VisionOcrServer());
+  }
+  const server = pool[poolIdx % pool.length]!;
+  poolIdx++;
   return server;
 }
 
@@ -183,6 +189,9 @@ export function visionPipelineReady(): boolean {
 }
 
 export async function shutdownVisionOcr(): Promise<void> {
-  if (server?.proc) server.proc.kill();
-  server = null;
+  for (const server of pool) {
+    if (server.proc) server.proc.kill();
+  }
+  pool = [];
+  poolIdx = 0;
 }
