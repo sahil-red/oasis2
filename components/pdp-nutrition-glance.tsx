@@ -53,6 +53,16 @@ export function PdpNutritionGlance({
       unit: "g",
     },
     {
+      label: "Carbs",
+      per100: nutrition.carbs_g_100g,
+      perServe: perServe?.carbs_g,
+      perPack:
+        packGrams && nutrition.carbs_g_100g != null
+          ? scaleFromPer100g(nutrition.carbs_g_100g, packGrams)
+          : null,
+      unit: "g",
+    },
+    {
       label: "Sugar",
       per100: nutrition.sugar_g_100g ?? nutrition.added_sugar_g_100g,
       perServe: perServe?.sugar_g,
