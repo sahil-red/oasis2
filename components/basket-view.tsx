@@ -68,6 +68,7 @@ export function BasketView() {
   const [swapsBySlug, setSwapsBySlug] = useState<Record<string, SwapSuggestion[]>>({});
   const [swapsLoading, setSwapsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
   const [goal, setGoal] = useState<GoalId>("balanced");
   const [diet, setDiet] = useState<DietMode>("any");
 
@@ -82,18 +83,23 @@ export function BasketView() {
         if (!cancelled) {
           setCatalog([]);
           setSwapsBySlug({});
+          setFetchFailed(false);
           setLoading(false);
         }
         return;
       }
       setLoading(true);
+      setFetchFailed(false);
       try {
         const res = await fetch(`/api/products?slugs=${slugs.map(encodeURIComponent).join(",")}`);
         if (!res.ok) throw new Error("fetch failed");
         const data = (await res.json()) as ProductListItem[];
         if (!cancelled) setCatalog(data);
       } catch {
-        if (!cancelled) setCatalog([]);
+        if (!cancelled) {
+          setCatalog([]);
+          setFetchFailed(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -165,6 +171,11 @@ export function BasketView() {
       .filter(Boolean) as { product: ProductListItem; qty: number }[];
   }, [entries, catalog]);
 
+  const unresolvedEntries = useMemo(() => {
+    const loaded = new Set(catalog.map((p) => p.slug));
+    return entries.filter((e) => !loaded.has(e.slug));
+  }, [entries, catalog]);
+
   const analysis = useMemo(() => analyzeBasket(lines, goal), [lines, goal]);
   const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
   const swapCount = Object.values(swapsBySlug).reduce((n, s) => n + s.length, 0);
@@ -178,22 +189,82 @@ export function BasketView() {
   }
 
   if (lines.length === 0) {
+    const hasStoredItems = entries.length > 0;
+
     return (
-      <div className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-8 py-20 text-center">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-violet-400/15 blur-3xl" />
-        <Sparkles className="mx-auto h-8 w-8 text-violet-600" strokeWidth={1.5} />
-        <p className="mt-4 text-lg font-medium text-(--color-fg)">Your cart is empty</p>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-(--color-fg-muted)">
-          Add items from the catalog — we&apos;ll show same-aisle swaps and one-tap replacements
-          here, like on Insights.
-        </p>
-        <Link
-          href="/search"
-          className="mt-8 inline-flex items-center gap-2 rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) hover:opacity-90"
-        >
-          Browse catalog
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+      <div className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-8 py-20 text-center dark:border-violet-800/50 dark:from-violet-950/35 dark:via-(--color-panel) dark:to-emerald-950/25">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/10" />
+        <Sparkles
+          className="mx-auto h-8 w-8 text-violet-600 dark:text-violet-300"
+          strokeWidth={1.5}
+        />
+        {hasStoredItems ? (
+          <>
+            <p className="mt-4 text-lg font-medium text-(--color-fg)">
+              {fetchFailed ? "Couldn\u2019t load your cart" : "Some items couldn\u2019t be loaded"}
+            </p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-(--color-fg-muted)">
+              {fetchFailed
+                ? "We saved your cart locally but couldn\u2019t reach the catalog. Check your connection and try again."
+                : `${unresolvedEntries.length} saved item${unresolvedEntries.length === 1 ? "" : "s"} no longer match our catalog.`}
+            </p>
+            {unresolvedEntries.length > 0 && !fetchFailed ? (
+              <ul className="mx-auto mt-6 max-w-md space-y-2 text-left">
+                {unresolvedEntries.map((e) => (
+                  <li
+                    key={e.slug}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-(--color-line) bg-(--color-panel)/80 px-4 py-3"
+                  >
+                    <span className="min-w-0 truncate text-sm text-(--color-fg)">
+                      {e.name ?? e.slug}
+                      {e.qty > 1 ? ` × ${e.qty}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFromBasket(e.slug)}
+                      className="shrink-0 text-sm text-(--color-fg-dim) hover:text-(--color-bad)"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              {fetchFailed ? (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event("scout-basket"))}
+                  className="inline-flex items-center gap-2 rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) hover:opacity-90"
+                >
+                  Retry
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => clearBasket()}
+                className="inline-flex items-center gap-2 rounded-full border border-(--color-line) px-5 py-2.5 text-sm font-medium text-(--color-fg) hover:bg-(--color-bg-soft)"
+              >
+                Clear cart
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-4 text-lg font-medium text-(--color-fg)">Your cart is empty</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-(--color-fg-muted)">
+              Add items from the catalog — we&apos;ll show same-aisle swaps and one-tap replacements
+              here, like on Insights.
+            </p>
+            <Link
+              href="/search"
+              className="mt-8 inline-flex items-center gap-2 rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) hover:opacity-90"
+            >
+              Browse catalog
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </>
+        )}
       </div>
     );
   }
@@ -223,11 +294,37 @@ export function BasketView() {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-5 py-5 sm:px-6">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
+      {unresolvedEntries.length > 0 ? (
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-medium">
+            {unresolvedEntries.length} saved item{unresolvedEntries.length === 1 ? "" : "s"}{" "}
+            couldn&apos;t be loaded
+          </p>
+          <ul className="mt-2 space-y-1">
+            {unresolvedEntries.map((e) => (
+              <li key={e.slug} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-amber-900/90 dark:text-amber-200/90">
+                  {e.name}
+                  {e.qty > 1 ? ` × ${e.qty}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeFromBasket(e.slug)}
+                  className="shrink-0 text-xs text-amber-800/80 hover:text-(--color-bad) dark:text-amber-300/80"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <section className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-5 py-5 sm:px-6 dark:border-violet-800/50 dark:from-violet-950/35 dark:via-(--color-panel) dark:to-emerald-950/25">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-500/10" />
         <div className="relative flex flex-wrap items-start justify-between gap-5">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-800/80">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-800/80 dark:text-violet-300/80">
               Cart verdict · {analysis.goalLabel}
             </p>
             <p className="mt-1 font-display text-3xl tabular-nums sm:text-4xl">
@@ -260,14 +357,17 @@ export function BasketView() {
             </p>
           </div>
         </div>
-        <div className="relative mt-5 grid gap-2 border-t border-violet-200/60 pt-4 sm:grid-cols-3">
+        <div className="relative mt-5 grid gap-2 border-t border-violet-200/60 pt-4 dark:border-violet-800/40 sm:grid-cols-3">
           {[
             ["Best move", primarySummary],
             ["Watch", watchSummary],
             ["Improve", improveSummary],
           ].map(([label, body]) => (
-            <div key={label} className="rounded-xl bg-(--color-panel)/75 px-3 py-3 ring-1 ring-violet-100">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-violet-800/80">
+            <div
+              key={label}
+              className="rounded-xl bg-(--color-panel)/75 px-3 py-3 ring-1 ring-violet-100 dark:ring-violet-800/40"
+            >
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-violet-800/80 dark:text-violet-300/80">
                 {label}
               </p>
               <p className="mt-1 text-[13px] leading-snug text-(--color-fg-muted)">{body}</p>
@@ -276,7 +376,7 @@ export function BasketView() {
         </div>
       </section>
 
-      <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-white px-4 py-4 sm:px-5">
+      <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-white px-4 py-4 dark:border-emerald-800/50 dark:from-emerald-950/30 dark:to-(--color-panel) sm:px-5">
         <div className="grid gap-4 sm:grid-cols-3">
           <MetricBar
             label="Protein share"
@@ -322,7 +422,7 @@ export function BasketView() {
                 {product.image_urls[0] ? (
                   <Image
                     src={product.image_urls[0]}
-                    alt=""
+                    alt={product.name}
                     fill
                     className="object-contain p-2"
                   />
@@ -381,7 +481,7 @@ export function BasketView() {
                 type="button"
                 aria-label="Remove from cart"
                 onClick={() => removeFromBasket(product.slug)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-(--color-fg-dim) hover:bg-red-50 hover:text-(--color-bad)"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-(--color-fg-dim) hover:bg-red-50 hover:text-(--color-bad) dark:hover:bg-red-950/40"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

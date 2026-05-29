@@ -50,7 +50,7 @@ export function AddToBasketButton({
                 e.stopPropagation();
                 decrementBasket(slug);
               }}
-              className="grid h-8 w-8 place-items-center rounded-full bg-[#2a2a2e] text-white/80 hover:bg-[#35353a] hover:text-white"
+              className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) hover:opacity-90"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
@@ -67,7 +67,7 @@ export function AddToBasketButton({
             e.stopPropagation();
             addToBasket(slug, name);
           }}
-          className="grid h-8 w-8 place-items-center rounded-full bg-[#2a2a2e] text-white shadow-sm hover:bg-[#35353a]"
+          className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) shadow-sm hover:opacity-90"
         >
           <Plus className="h-4 w-4" strokeWidth={2.25} />
         </button>
