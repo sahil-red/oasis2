@@ -1,12 +1,12 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { colorForScore } from "@/lib/utils";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { scorePresentation } from "@/lib/goals/verdict";
-import { cn, type Grade } from "@/lib/utils";
+import { scoreTileSurface } from "@/lib/score/surfaces";
+import { bandFromScore, cn, type Grade } from "@/lib/utils";
 
 export function ProductGoalFitList({
   rows,
@@ -88,33 +88,23 @@ export function ProductGoalFitList({
   return (
     <section className="mt-6">
       <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-(--color-line) pb-4">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-              Goal fit
+              All goals at a glance
             </p>
             {activeGoal ? (
-              <p className="mt-1 text-[13px] leading-snug text-(--color-fg-muted)">
+              <p className="mt-1.5 text-[13px] leading-snug text-(--color-fg-muted)">
                 {activeGoal.caption}
               </p>
             ) : null}
           </div>
           {activeGoal ? (
-            <div className="flex items-baseline gap-2">
-              <span
-                className="font-display text-4xl leading-none tabular-nums"
-                style={{ color: colorForScore(activeGoal.fit) }}
-              >
-                {activeGoal.fit}
-              </span>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-(--color-fg-dim)">
-                {activeGoal.grade}
-              </span>
-            </div>
+            <ScorePill fit={activeGoal.fit} grade={activeGoal.grade} size="lg" />
           ) : null}
         </div>
 
-        <ul className="mt-4 space-y-1">
+        <ul className="mt-3 space-y-0.5">
           {gridGoals.map((g) => (
             <GoalFitRow
               key={g.id}
@@ -131,6 +121,47 @@ export function ProductGoalFitList({
   );
 }
 
+function ScorePill({
+  fit,
+  grade,
+  size = "sm",
+}: {
+  fit: number;
+  grade: Grade;
+  size?: "sm" | "lg";
+}) {
+  const band = bandFromScore(fit);
+  const surface = scoreTileSurface(fit);
+  const large = size === "lg";
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <span
+        data-band={band}
+        className={cn(
+          "score-band-chip rounded-md font-semibold uppercase tracking-wide",
+          large ? "px-2 py-1 text-[11px]" : "px-1.5 py-0.5 text-[10px]",
+        )}
+      >
+        {grade}
+      </span>
+      <span
+        className={cn(
+          "flex items-center justify-center rounded-xl border font-display tabular-nums leading-none",
+          large ? "h-12 min-w-[3.25rem] text-3xl" : "h-9 min-w-[2.75rem] text-lg",
+        )}
+        style={{
+          backgroundColor: surface.backgroundColor,
+          borderColor: surface.borderColor,
+          color: surface.accentColor,
+        }}
+      >
+        {fit}
+      </span>
+    </div>
+  );
+}
+
 function GoalFitRow({
   label,
   fit,
@@ -144,6 +175,9 @@ function GoalFitRow({
   active: boolean;
   onSelect: () => void;
 }) {
+  const band = bandFromScore(fit);
+  const surface = scoreTileSurface(fit);
+
   return (
     <li>
       <button
@@ -151,29 +185,48 @@ function GoalFitRow({
         onClick={onSelect}
         aria-pressed={active}
         className={cn(
-          "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition",
+          "group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition",
           active
-            ? "bg-(--color-accent-soft) ring-1 ring-(--color-accent)/25"
-            : "hover:bg-(--color-bg-soft)",
+            ? "bg-(--color-bg-soft) ring-1 ring-(--color-line-strong)"
+            : "hover:bg-(--color-bg-soft)/70",
         )}
       >
         <span
           className={cn(
-            "min-w-[5.5rem] text-[13px] font-medium",
-            active ? "text-(--color-fg)" : "text-(--color-fg-muted)",
+            "min-w-0 flex-1 px-1 text-[13px] font-medium",
+            active
+              ? "text-(--color-fg)"
+              : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
           )}
         >
           {label}
         </span>
-        <span className="flex-1" aria-hidden />
         <span
-          className="w-8 text-center text-[10px] font-semibold uppercase tracking-wider text-(--color-fg-dim)"
+          data-band={band}
+          className={cn(
+            "score-band-chip shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            !active && "opacity-80",
+          )}
         >
           {grade}
         </span>
         <span
-          className="min-w-[2.25rem] text-right font-display text-xl tabular-nums leading-none"
-          style={{ color: colorForScore(fit) }}
+          className={cn(
+            "flex h-9 w-11 shrink-0 items-center justify-center rounded-lg border font-display text-lg tabular-nums leading-none transition",
+          )}
+          style={
+            active
+              ? {
+                  backgroundColor: surface.backgroundColor,
+                  borderColor: surface.borderColor,
+                  color: surface.accentColor,
+                }
+              : {
+                  backgroundColor: "var(--color-panel)",
+                  borderColor: "var(--color-line)",
+                  color: "var(--color-fg-muted)",
+                }
+          }
         >
           {fit}
         </span>
