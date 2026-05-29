@@ -21,6 +21,8 @@ import { VerdictBlock } from "@/components/verdict-chips";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
+import { PdpSourceDataPanel } from "@/components/pdp-source-data-panel";
+import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
@@ -96,6 +98,14 @@ export default async function ProductPage({
   const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
     product.ingredients_raw,
   );
+  const provenance = buildProductProvenance({
+    nutrition: product.nutrition,
+    ingredients_raw: product.ingredients_raw,
+    platform: product.platform,
+    data_source: product.data_source,
+    ocr_status: product.ocr_status,
+    ocr_payload: product.ocr_payload,
+  });
   const verdict = score
     ? resolveProductVerdict({
         verdict: score.verdict,
@@ -229,24 +239,48 @@ export default async function ProductPage({
           ) : null}
         </div>
 
-        {attrEntries.length > 0 ? (
+        {attrEntries.length > 0 || provenance || score?.cohort_size ? (
           <details className="mt-16 border-t border-(--color-line) pt-8 group">
             <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim) hover:text-(--color-fg)">
               Product details
             </summary>
-            <dl className="mt-6 grid gap-2 sm:grid-cols-2">
-              {attrEntries.map(([key, value]) => (
-                <div
-                  key={key}
-                  className="rounded-xl bg-(--color-bg-soft) px-4 py-3 ring-1 ring-(--color-line)"
-                >
-                  <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
-                    {key}
-                  </dt>
-                  <dd className="mt-1 text-sm text-(--color-fg)">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="mt-6 space-y-10">
+              {provenance || score?.cohort_size ? (
+                <section>
+                  <h3 className="text-sm font-semibold text-(--color-fg)">Source data</h3>
+                  <p className="mt-1 text-[12px] text-(--color-fg-muted)">
+                    Where nutrition, ingredients, and scoring inputs came from.
+                  </p>
+                  <div className="mt-4">
+                    <PdpSourceDataPanel
+                      provenance={provenance}
+                      cohortSize={score?.cohort_size}
+                      relativeScore={score?.relative_score}
+                      roleCohort={score?.role_cohort ?? null}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
+              {attrEntries.length > 0 ? (
+                <section>
+                  <h3 className="text-sm font-semibold text-(--color-fg)">Pack details</h3>
+                  <dl className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {attrEntries.map(([key, value]) => (
+                      <div
+                        key={key}
+                        className="rounded-xl bg-(--color-bg-soft) px-4 py-3 ring-1 ring-(--color-line)"
+                      >
+                        <dt className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+                          {key}
+                        </dt>
+                        <dd className="mt-1 text-sm text-(--color-fg)">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              ) : null}
+            </div>
           </details>
         ) : null}
       </div>

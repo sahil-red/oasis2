@@ -10,6 +10,7 @@ export type NutritionAnomalyCode =
   | "decimal_anomaly"
   | "kcal_protein_swap"
   | "energy_high_low_protein"
+  | "energy_per_serve_misread"
   | "protein_carbs_swap";
 
 export type NutritionAnomaly = {
@@ -242,6 +243,22 @@ export function detectNutritionAnomalies(
     });
   }
 
+  if (
+    typeof protein === "number" &&
+    isHighProteinCategory(ctx) &&
+    typeof energy === "number" &&
+    energy > 0 &&
+    energy < 55 &&
+    protein >= 4
+  ) {
+    out.push({
+      code: "energy_per_serve_misread",
+      severity: "critical",
+      message: `${energy} kcal per 100g is too low for a protein food — likely per-serve misread`,
+      field: "energy_kcal_100g",
+    });
+  }
+
   // Column-swap heuristic: protein ↔ carbs. Common LM mistake when extracting
   // nutrition tables — the model picks the right NUMBERS but the wrong COLUMN.
   // Trigger when protein looks impossible-high AND carbs looks impossible-low
@@ -314,7 +331,6 @@ function scaleMacro(n: ProductNutrition, key: (typeof MACRO_KEYS)[number], facto
   return { ...n, [key]: Math.round(v * factor * 1000) / 1000 };
 }
 
-/** Swap protein ↔ carbs in both per-100g AND any per-serve mirror fields. */
 function swapProteinCarbs(n: ProductNutrition): ProductNutrition {
   const next = { ...n };
   const p100 = next.protein_g_100g;
@@ -338,11 +354,110 @@ function swapProteinCarbs(n: ProductNutrition): ProductNutrition {
   return next;
 }
 
+/** Energy column too low while macros look like per-100g (common CSV / pack-scale bug). */
+function tryFixLowEnergy(
+  nutrition: ProductNutrition,
+  ctx: NutritionContext,
+): ProductNutrition | null {
+  if (!isHighProteinCategory(ctx)) return null;
+  const energy = nutrition.energy_kcal_100g;
+  if (energy == null || energy >= 55) return null;
+
+  const implied = impliedKcal(nutrition);
+  const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
+  let best: { n: ProductNutrition; mismatch: number } | null = null;
+
+  for (const factor of [2, 100 / 30, 100 / 50, 100 / 40, 100 / 25, 100 / 35]) {
+    const trial = {
+      ...nutrition,
+      energy_kcal_100g: Math.round(energy * factor),
+    };
+    const mismatch = kcalMismatchRatio(trial) ?? 1;
+    if (mismatch < baseMismatch && (!best || mismatch < best.mismatch)) {
+      best = { n: trial, mismatch };
+    }
+  }
+
+  if (
+    implied != null &&
+    implied > energy * 1.35 &&
+    (!best || implied / energy > 2)
+  ) {
+    const trial = { ...nutrition, energy_kcal_100g: Math.round(implied) };
+    const mismatch = kcalMismatchRatio(trial) ?? 1;
+    if (mismatch <= 0.35) {
+      return {
+        ...trial,
+        extra: { ...nutrition.extra, nutrition_corrected: "energy_from_macros" },
+      };
+    }
+  }
+
+  if (best && best.mismatch <= 0.35) {
+    return {
+      ...best.n,
+      extra: { ...nutrition.extra, nutrition_corrected: "energy_scaled" },
+    };
+  }
+
+  return null;
+}
+
+/** Per-serve values stored as per-100g (e.g. 31 kcal for a 30g tofu serve). */
+function tryScaleFromPerServe(
+  nutrition: ProductNutrition,
+  ctx: NutritionContext,
+): ProductNutrition | null {
+  if (!isHighProteinCategory(ctx)) return null;
+  const energy = nutrition.energy_kcal_100g;
+  if (energy == null || energy >= 55) return null;
+
+  const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
+  let best: { n: ProductNutrition; mismatch: number } | null = null;
+
+  for (const factor of [2, 100 / 30, 100 / 50, 100 / 40, 100 / 25, 100 / 35, 100 / 60]) {
+    let trial: ProductNutrition = { ...nutrition };
+    for (const key of MACRO_KEYS) {
+      trial = scaleMacro(trial, key, factor);
+    }
+    if (typeof trial.energy_kcal_100g === "number") {
+      trial = {
+        ...trial,
+        energy_kcal_100g: Math.round(trial.energy_kcal_100g * factor),
+      };
+    }
+    if (nutritionHasCriticalAnomalies(trial, ctx)) continue;
+    const mismatch = kcalMismatchRatio(trial) ?? 1;
+    if (mismatch <= baseMismatch && (!best || mismatch < best.mismatch)) {
+      best = { n: trial, mismatch };
+    }
+  }
+
+  if (!best) return null;
+  return {
+    ...best.n,
+    extra: {
+      ...best.n.extra,
+      nutrition_corrected: "per_serve_to_per_100g",
+    },
+  };
+}
+
 export function tryCorrectNutrition(
   nutrition: ProductNutrition,
   ctx: NutritionContext,
 ): ProductNutrition | null {
   if (!nutritionHasCriticalAnomalies(nutrition, ctx)) return nutrition;
+
+  const lowEnergyFixed = tryFixLowEnergy(nutrition, ctx);
+  if (lowEnergyFixed && !nutritionHasCriticalAnomalies(lowEnergyFixed, ctx)) {
+    return lowEnergyFixed;
+  }
+
+  const perServeScaled = tryScaleFromPerServe(nutrition, ctx);
+  if (perServeScaled && !nutritionHasCriticalAnomalies(perServeScaled, ctx)) {
+    return perServeScaled;
+  }
 
   // Try a column swap first — fast, common, often the right answer
   const swapAnomalies = detectNutritionAnomalies(nutrition, ctx);
@@ -374,6 +489,14 @@ export function tryCorrectNutrition(
     for (const cDiv of divisors) {
       for (const fDiv of divisors) {
         if (pDiv === 1 && cDiv === 1 && fDiv === 1) continue;
+        if (
+          isHighProteinCategory(ctx) &&
+          pDiv < 1 &&
+          typeof nutrition.protein_g_100g === "number" &&
+          nutrition.protein_g_100g * pDiv < 4
+        ) {
+          continue;
+        }
         let trial = nutrition;
         if (pDiv !== 1) trial = scaleMacro(trial, "protein_g_100g", pDiv);
         if (cDiv !== 1) trial = scaleMacro(trial, "carbs_g_100g", cDiv);

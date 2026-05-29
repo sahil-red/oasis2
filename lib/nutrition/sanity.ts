@@ -1,7 +1,6 @@
 import { mergeNutrition, parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
 import { nutritionHasCriticalAnomalies, sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
-import { parsePackGrams } from "@/lib/products/pack-nutrition";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Upper bounds for protein per 100g by product class (catch OCR / parser garbage). */
@@ -43,7 +42,6 @@ export function nutritionLooksImplausible(
 /** Prefer Blinkit "Nutrition Information" attribute when platform/OCR rows are wrong. */
 export function nutritionFromAttributes(
   attributes: Record<string, string> | null | undefined,
-  servingG?: number | null,
 ): ProductNutrition | null {
   if (!attributes) return null;
   let block: string | null = null;
@@ -59,7 +57,7 @@ export function nutritionFromAttributes(
     attributes["Nutritional Information"]?.trim() ??
     null;
   if (!block) return null;
-  return parseServingNutritionBlock(block, servingG ?? undefined);
+  return parseServingNutritionBlock(block);
 }
 
 export function reconcileNutrition(opts: {
@@ -70,8 +68,7 @@ export function reconcileNutrition(opts: {
   subcategory?: string | null;
   net_weight?: string | null;
 }): ProductNutrition | null {
-  const servingG = parsePackGrams(opts.net_weight);
-  const fromAttrs = nutritionFromAttributes(opts.attributes, servingG);
+  const fromAttrs = nutritionFromAttributes(opts.attributes);
   const ctx = { name: opts.name, category: opts.category, subcategory: opts.subcategory };
 
   const current = opts.nutrition;
@@ -90,9 +87,18 @@ export function reconcileNutrition(opts: {
   } else {
     const currentBad = nutritionHasCriticalAnomalies(current, ctx);
     const attrsBad = nutritionHasCriticalAnomalies(fromAttrs, ctx);
+    const attrsPackMisscaled =
+      !attrsBad &&
+      !currentBad &&
+      fromAttrs.energy_kcal_100g != null &&
+      current.energy_kcal_100g != null &&
+      fromAttrs.energy_kcal_100g < current.energy_kcal_100g * 0.55 &&
+      fromAttrs.energy_kcal_100g < 90;
 
     if (currentBad && attrsBad) {
       picked = null;
+    } else if (attrsPackMisscaled) {
+      picked = current;
     } else if (currentBad && !attrsBad) {
       picked = { ...fromAttrs, source: "platform" };
     } else if (!currentBad && attrsBad) {

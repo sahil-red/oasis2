@@ -87,12 +87,8 @@ function parseLineValue(raw: string): { value: number; unit: string } | null {
  * Blinkit often puts the full FSSAI table in a "Nutrition Information" attribute
  * as multiline per-serving text, while headline rows only list protein/kcal per 100g.
  *
- * Formats seen in the wild:
- * - `Protein: 11.52 g` (colon)
- * - `Protein (g)\t1.38` (tab — masala packs)
- * - `Energy( kcal)\t98.39`
- *
- * When no "per X g" header exists, pass `fallbackServingG` (e.g. pack net weight).
+ * When no "per X g" header exists, values are assumed **per 100g** (Zepto default).
+ * Do not pass pack net weight as a serving fallback — it wrongly scales per-100g tables.
  */
 export function parseServingNutritionBlock(
   text: string,
@@ -104,9 +100,21 @@ export function parseServingNutritionBlock(
   const serveMatch =
     /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(header) ?? /per\s*(\d+(?:\.\d+)?)\s*g/i.exec(text);
   let servingG = serveMatch ? Number.parseFloat(serveMatch[1]) : null;
-  if ((servingG == null || servingG <= 0) && fallbackServingG != null && fallbackServingG > 0) {
+
+  if (servingG == null && /per\s*100(?:\.\d+)?\s*g?m?\b/i.test(text)) {
+    servingG = 100;
+  }
+
+  // Only use explicit small serving hints — never whole pack weight.
+  if (
+    (servingG == null || servingG <= 0) &&
+    fallbackServingG != null &&
+    fallbackServingG > 0 &&
+    fallbackServingG <= 100
+  ) {
     servingG = fallbackServingG;
   }
+
   const toPer100 =
     servingG != null && servingG > 0 && servingG !== 100 ? 100 / servingG : 1;
 
