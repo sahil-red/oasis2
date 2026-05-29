@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -10,7 +11,9 @@ const PIPELINE_DIR = join(REPO_ROOT, "ocr-pipeline");
 const DEFAULT_VENV_PYTHON = join(PIPELINE_DIR, ".venv/bin/python");
 
 function pythonBin(): string {
-  return process.env.OCR_PIPELINE_PYTHON?.trim() || DEFAULT_VENV_PYTHON;
+  const fromEnv = process.env.OCR_PIPELINE_PYTHON?.trim();
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  return DEFAULT_VENV_PYTHON;
 }
 
 export type LivetextOcrResult = {
@@ -180,6 +183,7 @@ class LivetextOcrServer {
     } catch (e) {
       this.reset("livetext retry after failure");
       await this.ensureStarted();
+      if (!this.proc?.stdin) throw new Error("livetext server not running after retry");
       return new Promise<LivetextOcrResult>((resolve, reject) => {
         this.queue.push({ kind: "ocr", resolve, reject });
         this.proc!.stdin.write(`${JSON.stringify({ path: imagePath })}\n`, (err) => {

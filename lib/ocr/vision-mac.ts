@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { access } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -28,7 +29,9 @@ export type VisionOcrResult = {
 };
 
 function pythonBin(): string {
-  return process.env.OCR_PIPELINE_PYTHON?.trim() || DEFAULT_VENV_PYTHON;
+  const fromEnv = process.env.OCR_PIPELINE_PYTHON?.trim();
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  return DEFAULT_VENV_PYTHON;
 }
 
 function recognitionLevel(): "fast" | "accurate" {
@@ -119,12 +122,20 @@ function getServer(): VisionOcrServer {
   return server;
 }
 
+/** Raw Apple Vision OCR for a local file. No regex parsing or field extraction. */
+export async function visionRawFromPath(
+  imagePath: string,
+  level: "fast" | "accurate" = recognitionLevel(),
+): Promise<VisionOcrResult> {
+  return getServer().ocrPath(imagePath, level);
+}
+
 /** OCR a local file via the warm Vision worker (no OpenCV, no double read). */
 export async function visionOcrFromPath(imagePath: string): Promise<{
   payload: OcrPayload;
   raw: VisionOcrResult;
 }> {
-  const raw = await getServer().ocrPath(imagePath, recognitionLevel());
+  const raw = await visionRawFromPath(imagePath);
   return toPayload(raw);
 }
 

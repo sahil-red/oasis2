@@ -34,6 +34,7 @@ yarn-error.log*
 ocr-paddle/.venv/
 ocr-pipeline/.venv/
 ocr-paddle/**/__pycache__/
+ocr-pipeline/**/__pycache__/
 eng.traineddata
 
 # scraper artifacts
