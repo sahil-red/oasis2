@@ -144,6 +144,9 @@ export default async function ProductPage({
                 nutrition={displayNutrition}
                 netWeight={product.net_weight}
                 priceInr={price}
+                name={product.name}
+                category={product.category}
+                subcategory={product.subcategory}
               />
             ) : null}
             {swaps.length > 0 ? (
