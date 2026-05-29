@@ -1300,9 +1300,33 @@ export type HomeShelves = {
   catalogSize: number;
 };
 
+/** Pool size per verdict rail — ~7× the display count for daily rotation. */
+const HOME_POOL_LIMIT = 70;
+const HOME_RAIL_COUNT = 6;
+
+function homeDaySeed(): number {
+  return Math.floor(Date.now() / 86_400_000);
+}
+
+function hashSeed(id: string, seed: number): number {
+  let h = seed >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (Math.imul(31, h) + id.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+/** Deterministic shuffle — changes daily, stable within a day for caching. */
+function seededPick<T extends { id: string }>(items: T[], count: number, seed: number): T[] {
+  return [...items]
+    .sort((a, b) => hashSeed(a.id, seed) - hashSeed(b.id, seed))
+    .slice(0, count);
+}
+
 export async function getHomeShelves(): Promise<HomeShelves> {
   const supabase = db();
   const select = `${LIST_FIELDS}, core_scores!inner (${LIST_SCORE_FIELDS})`;
+  const seed = homeDaySeed();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const baseQ = (verdict: string | null) => {
@@ -1320,43 +1344,56 @@ export async function getHomeShelves(): Promise<HomeShelves> {
   const [staplesRes, skipsRes, valueRes, treatsRes, statsRes] = await Promise.all([
     baseQ("daily_staple")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
-      .limit(10),
+      .limit(HOME_POOL_LIMIT),
     baseQ("skip")
       .order("score", { referencedTable: "core_scores", ascending: true, nullsFirst: false })
-      .limit(10),
+      .limit(HOME_POOL_LIMIT),
     baseQ("good_choice")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
-      .limit(10),
+      .limit(HOME_POOL_LIMIT),
     baseQ("occasional_treat")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
-      .limit(8),
+      .limit(HOME_POOL_LIMIT),
     Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }).eq("platform", "zepto"),
       supabase.from("core_scores").select("product_id", { count: "exact", head: true }),
     ]),
   ]);
 
-  const staples = ((staplesRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
-  const skips = ((skipsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
-  const value = ((valueRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
-  const treats = ((treatsRes.data ?? []) as Record<string, unknown>[]).map(mapListRow).filter(p => p.image_urls.length > 0 && p.brand);
+  const filterReady = (p: ProductListItem) => p.image_urls.length > 0 && p.brand;
+  const staples = ((staplesRes.data ?? []) as Record<string, unknown>[])
+    .map(mapListRow)
+    .filter(filterReady);
+  const skips = ((skipsRes.data ?? []) as Record<string, unknown>[])
+    .map(mapListRow)
+    .filter(filterReady);
+  const value = ((valueRes.data ?? []) as Record<string, unknown>[])
+    .map(mapListRow)
+    .filter(filterReady);
+  const treats = ((treatsRes.data ?? []) as Record<string, unknown>[])
+    .map(mapListRow)
+    .filter(filterReady);
 
-  // Diverse showcase: 2 staples + 2 skips + 1 good + 1 treat — communicates scope
+  const pickStaples = seededPick(staples, HOME_RAIL_COUNT + 2, seed + 1);
+  const pickSkips = seededPick(skips, HOME_RAIL_COUNT + 2, seed + 2);
+  const pickValue = seededPick(value, HOME_RAIL_COUNT + 2, seed + 3);
+  const pickTreats = seededPick(treats, HOME_RAIL_COUNT + 2, seed + 4);
+
   const showcase = [
-    staples[0],
-    skips[0],
-    value[0],
-    staples[1],
-    skips[1],
-    treats[0] ?? value[1],
+    pickStaples[0],
+    pickSkips[0],
+    pickValue[0],
+    pickStaples[1],
+    pickSkips[1],
+    pickTreats[0] ?? pickValue[1],
   ].filter((p): p is ProductListItem => Boolean(p));
 
   return {
     showcase,
-    dailyStaples: staples.slice(0, 6),
-    skipWorthy: skips.slice(0, 6),
-    bestValue: value.slice(0, 6),
-    occasionalTreats: treats.slice(0, 6),
+    dailyStaples: pickStaples.slice(0, HOME_RAIL_COUNT),
+    skipWorthy: pickSkips.slice(0, HOME_RAIL_COUNT),
+    bestValue: pickValue.slice(0, HOME_RAIL_COUNT),
+    occasionalTreats: pickTreats.slice(0, HOME_RAIL_COUNT),
     catalogSize: statsRes[0].count ?? 0,
     totalScored: statsRes[1].count ?? 0,
   };

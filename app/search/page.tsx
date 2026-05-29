@@ -13,12 +13,15 @@ type SearchParams = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
   sort?: string;
   goal?: string;
   diet?: string;
+  sublabel?: string;
+  verdict?: string;
 };
 
 /** Shell renders immediately; catalog JSON loads client-side from cached API. */

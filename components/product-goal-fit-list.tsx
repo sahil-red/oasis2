@@ -6,32 +6,15 @@ import { writeStoredGoal } from "@/lib/goals/storage";
 import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { scorePresentation } from "@/lib/goals/verdict";
-import { ScoreWhyPanel } from "@/components/score-why-panel";
-import { pdpScoreHeroCopy } from "@/lib/products/pdp-score-hero-copy";
 import { gradeLetterTileSurface } from "@/lib/score/surfaces";
-import type { VerdictId } from "@/lib/scoring/verdict";
 import { cn, type Grade } from "@/lib/utils";
-import type { ScoreExplanation } from "@/lib/products/score-explain";
-import type { SubScores } from "@/lib/supabase/types";
 
 export function ProductGoalFitList({
   rows,
   overall,
-  scoreReasons,
-  inPractice,
-  scoreSublabelIds,
-  scoreVerdict,
-  scoreSubscores,
 }: {
   rows: GoalFitRow[];
   overall: { fit: number; grade: Grade; reasons: string[] } | null;
-  /** Full "Why this score?" bullets — shown in the default (overall) hero only. */
-  scoreReasons?: string[];
-  /** Human "In practice" copy — rendered below score card, above goal grid. */
-  inPractice?: ScoreExplanation | null;
-  scoreSublabelIds?: string[] | null;
-  scoreVerdict?: VerdictId | null;
-  scoreSubscores?: SubScores;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -58,10 +41,7 @@ export function ProductGoalFitList({
             variant: "overall" as const,
             fit: overall.fit,
             grade: overall.grade,
-            reasons:
-              scoreReasons && scoreReasons.length > 0
-                ? scoreReasons.slice(0, 3)
-                : overall.reasons.slice(0, 3),
+            caption: overall.reasons[0] ?? "Nutrition + ingredients",
           }
         : null
       : (() => {
@@ -73,7 +53,6 @@ export function ProductGoalFitList({
             label: profileLabel(row.id),
             fit: row.fit,
             grade: pres.grade,
-            reasons: row.reasons,
             caption: row.primaryMetric,
           };
         })();
@@ -94,7 +73,7 @@ export function ProductGoalFitList({
       label: "Overall",
       fit: overall.fit,
       grade: overall.grade,
-      caption: scoreReasons?.[0] ?? overall.reasons[0] ?? "Nutrition + ingredients",
+      caption: overall.reasons[0] ?? "Nutrition + ingredients",
     });
   }
   // Keep tile order stable instead of resorting by fit — humans read tiles
@@ -125,23 +104,15 @@ export function ProductGoalFitList({
         <ActiveGoalHero
           variant={activeRow.variant}
           label={"label" in activeRow ? activeRow.label : undefined}
-          caption={"caption" in activeRow ? activeRow.caption : undefined}
+          caption={activeRow.caption}
           fit={activeRow.fit}
           grade={activeRow.grade}
-          reasons={activeRow.reasons}
-          sublabelIds={activeRow.variant === "overall" ? scoreSublabelIds : undefined}
-          verdict={activeRow.variant === "overall" ? scoreVerdict : undefined}
-          subscores={activeRow.variant === "overall" ? scoreSubscores : undefined}
         />
       ) : (
         <p className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)">
           Score pending — goal fit will appear once nutrition is available.
         </p>
       )}
-
-      {inPractice?.tradeoffs.length ? (
-        <ScoreWhyPanel explanation={inPractice} className="mt-4" />
-      ) : null}
 
       {gridGoals.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 shadow-sm">
@@ -173,35 +144,13 @@ function ActiveGoalHero({
   caption,
   fit,
   grade,
-  reasons,
-  sublabelIds,
-  verdict,
-  subscores,
 }: {
   variant: "overall" | "goal";
   label?: string;
   caption?: string;
   fit: number;
   grade: Grade;
-  reasons: string[];
-  sublabelIds?: string[] | null;
-  verdict?: VerdictId | null;
-  subscores?: SubScores;
 }) {
-  const allReasons = reasons.filter(Boolean).slice(0, variant === "overall" ? 3 : 2);
-  const heroCopy =
-    variant === "overall"
-      ? pdpScoreHeroCopy({
-          reasons: allReasons,
-          sublabelIds,
-          verdict,
-          subscores,
-        })
-      : {
-          positive: allReasons.find((r) => r.length > 0) ?? null,
-          caveat: null as string | null,
-        };
-
   return (
     <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-5">
       <div className="flex items-start gap-5">
@@ -222,24 +171,14 @@ function ActiveGoalHero({
               {label}
             </p>
           ) : null}
-          {variant === "goal" && caption ? (
-            <p className={cn("text-[15px] font-medium text-(--color-fg)", label ? "mt-1" : "")}>
-              {caption}
-            </p>
-          ) : null}
-          {heroCopy.positive ? (
+          {caption ? (
             <p
               className={cn(
-                "text-[15px] font-medium leading-snug text-(--color-fg)",
-                variant === "goal" && (label || caption) ? "mt-2" : "mt-0",
+                "text-[14px] leading-snug text-(--color-fg-muted)",
+                variant === "goal" && label ? "mt-1" : "",
               )}
             >
-              {heroCopy.positive}
-            </p>
-          ) : null}
-          {heroCopy.caveat ? (
-            <p className="mt-2 text-[13px] leading-snug text-(--color-fg-dim)">
-              {heroCopy.caveat}
+              {caption}
             </p>
           ) : null}
         </div>

@@ -288,8 +288,20 @@ export function CatalogView({
       setGoal(next.goal);
       setDiet(next.diet);
     };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const next = syncFromParams(paramsFromLocation());
+      setState(next.state);
+      setGoal(next.goal);
+      setDiet(next.diet);
+      skipInitialSearch.current = false;
+    };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   useEffect(() => {
@@ -352,6 +364,8 @@ export function CatalogView({
       activeState.maxPrice,
       activeState.grade,
       activeState.sort,
+      activeState.sublabel,
+      activeState.verdict,
       goal,
       diet,
     ],

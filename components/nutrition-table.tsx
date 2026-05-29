@@ -1,6 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
+import {
+  formatPackLabel,
+  parsePackGrams,
+  scaleFromPer100g,
+} from "@/lib/products/pack-nutrition";
 import { perServeFromNutrition } from "@/lib/scoring/per-serve";
 import { detectNutritionAnomalies, type NutritionContext } from "@/lib/nutrition/anomaly";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -36,6 +41,7 @@ function fmt(v: number | null | undefined): string {
 
 export function NutritionTable({
   nutrition,
+  netWeight,
   name,
   category,
   subcategory,
@@ -47,8 +53,11 @@ export function NutritionTable({
   subcategory?: string | null;
 }) {
   const perServe = useMemo(() => perServeFromNutrition(nutrition), [nutrition]);
+  const packGrams = useMemo(() => parsePackGrams(netWeight), [netWeight]);
+  const packLabel = formatPackLabel(netWeight, packGrams);
   const hasServe = perServe?.serving_g != null && perServe.serving_g > 0;
   const serveG = perServe?.serving_g ?? null;
+  const hasPack = packGrams != null && packGrams > 0;
 
   const ctx: NutritionContext | null = name ? { name, category, subcategory } : null;
   const anomalies = ctx ? detectNutritionAnomalies(nutrition, ctx) : [];
@@ -61,10 +70,16 @@ export function NutritionTable({
     return typeof v === "number" ? v : undefined;
   }
 
+  function perPackValue(per100: number | null | undefined): number | undefined {
+    if (per100 == null || !hasPack || packGrams == null) return undefined;
+    return scaleFromPer100g(per100, packGrams);
+  }
+
   const rows = ROWS.filter((r) => {
     const has100 = nutrition[r.key] != null;
     const hasServeVal = perServeValue(r.perServe) != null;
-    return has100 || hasServeVal;
+    const hasPackVal = perPackValue(nutrition[r.key] as number | undefined) != null;
+    return has100 || hasServeVal || hasPackVal;
   });
 
   if (!rows.length) {
@@ -96,16 +111,22 @@ export function NutritionTable({
           <thead>
             <tr className="border-b border-(--color-line) bg-(--color-bg-soft) text-[10px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
               <th className="px-4 py-3 text-left font-medium">Nutrient</th>
-              <th className="px-4 py-3 text-right font-medium tabular-nums">
+              <th className="px-3 py-3 text-right font-medium tabular-nums">Per 100g</th>
+              <th className="px-3 py-3 text-right font-medium tabular-nums">
                 {hasServe && serveG ? `Per serve (${serveG}g)` : "Per serve"}
               </th>
-              <th className="px-4 py-3 text-right font-medium tabular-nums">Per 100g</th>
+              {hasPack ? (
+                <th className="px-3 py-3 text-right font-medium tabular-nums">
+                  Whole pack ({packLabel})
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
             {rows.map(({ key, perServe: psKey, label, unit, emphasis }) => {
               const per100 = nutrition[key] as number | undefined;
               const ps = perServeValue(psKey);
+              const pack = perPackValue(per100);
               return (
                 <tr key={key} className="border-b border-(--color-line)/60 last:border-0">
                   <td
@@ -117,7 +138,13 @@ export function NutritionTable({
                   >
                     {label}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg)">
+                  <td className="px-3 py-2.5 text-right tabular-nums text-(--color-fg-muted)">
+                    {fmt(per100)}
+                    {per100 != null ? (
+                      <span className="ml-0.5 text-[10px] text-(--color-fg-dim)">{unit}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-(--color-fg)">
                     {hasServe ? (
                       <>
                         {fmt(ps)}
@@ -129,20 +156,26 @@ export function NutritionTable({
                       <span className="text-(--color-fg-dim)">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-(--color-fg-muted)">
-                    {fmt(per100)}
-                    {per100 != null ? (
-                      <span className="ml-0.5 text-[10px] text-(--color-fg-dim)">{unit}</span>
-                    ) : null}
-                  </td>
+                  {hasPack ? (
+                    <td className="px-3 py-2.5 text-right tabular-nums text-(--color-fg)">
+                      {fmt(pack)}
+                      {pack != null ? (
+                        <span className="ml-0.5 text-[10px] text-(--color-fg-dim)">{unit}</span>
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {!hasServe ? (
+        {!hasServe && !hasPack ? (
           <p className="border-t border-(--color-line) px-4 py-2 text-[11px] text-(--color-fg-dim)">
-            Serving size not on file — only per 100g shown
+            Serving size and pack weight not on file — only per 100g shown
+          </p>
+        ) : !hasServe ? (
+          <p className="border-t border-(--color-line) px-4 py-2 text-[11px] text-(--color-fg-dim)">
+            Serving size not on file — per-serve column empty where unknown
           </p>
         ) : null}
       </div>

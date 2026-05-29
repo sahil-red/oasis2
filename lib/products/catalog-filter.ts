@@ -213,6 +213,8 @@ export function catalogReturnHref(params: {
   sort?: string;
   goal?: string;
   diet?: string;
+  sublabel?: string;
+  verdict?: string;
 }): string {
   const state = parseCatalogParams(params);
   const goal = params.goal ? goalFromParam(params.goal) : "balanced";

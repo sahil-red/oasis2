@@ -3,10 +3,12 @@ import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { NutritionTable } from "@/components/nutrition-table";
 import { ProteinQualityNote } from "@/components/protein-quality-note";
+import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
+import { ProductTakePanel } from "@/components/product-take-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
@@ -17,10 +19,8 @@ import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { DataProvenancePanel } from "@/components/data-provenance-panel";
-import { LabelChangeSummary } from "@/components/label-change-summary";
 import { VerdictBlock } from "@/components/verdict-chips";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
-import { labelResolutionFromPayload } from "@/lib/products/label-resolution";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
@@ -56,10 +56,13 @@ export default async function ProductPage({
     usecase?: string;
     brand?: string;
     scored?: string;
+    labelResolved?: string;
     min?: string;
     maxprice?: string;
     grade?: string;
     sort?: string;
+    sublabel?: string;
+    verdict?: string;
   }>;
 }) {
   const { slug } = await params;
@@ -92,7 +95,6 @@ export default async function ProductPage({
   const subscores = score?.subscores as SubScores | undefined;
   const attrs = product.attributes ?? {};
   const attrEntries = Object.entries(attrs).filter(([k]) => !DETAIL_SKIP.has(k));
-  const labelResolution = labelResolutionFromPayload(product.ocr_payload);
   const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
     product.ingredients_raw,
   );
@@ -141,11 +143,48 @@ export default async function ProductPage({
       <div className="mx-auto max-w-6xl px-6 pb-24 pt-6">
         <CatalogBackLink params={sp} />
 
-        {/* ── Hero: image + name + verdict ─────────────────────────── */}
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
-          <div className="space-y-6">
+          <div className="space-y-5">
             <ProductGallery images={product.image_urls} alt={product.name} />
-            {/* Swaps live under the photo, on the left — discoverable */}
+            {displayNutrition ? (
+              <PdpNutritionGlance
+                nutrition={displayNutrition}
+                netWeight={product.net_weight}
+                priceInr={price}
+              />
+            ) : null}
+            {provenance ? (
+              <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+                  Data on file
+                </p>
+                <dl className="mt-2 space-y-1.5 text-[12px]">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-(--color-fg-muted)">Nutrition</dt>
+                    <dd className="text-right font-medium text-(--color-fg)">
+                      {provenance.nutrition.label}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-(--color-fg-muted)">Ingredients</dt>
+                    <dd className="text-right font-medium text-(--color-fg)">
+                      {provenance.ingredients.label}
+                    </dd>
+                  </div>
+                  {score?.cohort_size ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-(--color-fg-muted)">Scored vs aisle</dt>
+                      <dd className="text-right font-medium tabular-nums text-(--color-fg)">
+                        {score.relative_score != null
+                          ? `Top ${Math.max(1, Math.round(100 - score.relative_score))}%`
+                          : null}
+                        {score.cohort_size ? ` · ${score.cohort_size} products` : null}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
+            ) : null}
             {swaps.length > 0 ? (
               <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
             ) : null}
@@ -193,47 +232,14 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            {/* "Why" prose — short, opinionated, no math */}
-            {scoreWhy && scoreWhy.reasons.length > 0 ? (
-              <section className="mt-6">
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
-                  Why
-                </p>
-                <ul className="mt-3 space-y-2 text-[14px] leading-relaxed text-(--color-fg)">
-                  {scoreWhy.reasons.slice(0, 4).map((r, i) => (
-                    <li key={i} className="flex gap-2.5">
-                      <span
-                        className="mt-2 h-1 w-1 shrink-0 rounded-full bg-(--color-fg-dim)"
-                        aria-hidden
-                      />
-                      <span>{r}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+            {scoreWhy ? <ProductTakePanel explanation={scoreWhy} className="mt-5" /> : null}
 
             <Suspense fallback={null}>
-              <ProductGoalFitList
-                rows={goalRows}
-                overall={overallGoal}
-                scoreReasons={scoreWhy?.reasons}
-                inPractice={scoreWhy}
-                scoreSublabelIds={score?.verdict_sublabels}
-                scoreVerdict={verdict}
-                scoreSubscores={subscores}
-              />
+              <ProductGoalFitList rows={goalRows} overall={overallGoal} />
             </Suspense>
           </div>
         </div>
 
-        {labelResolution ? (
-          <div className="mt-12">
-            <LabelChangeSummary labelResolution={labelResolution} />
-          </div>
-        ) : null}
-
-        {/* ── Ingredients + Nutrition (the data) ─────────────────────── */}
         <div className="mt-14 grid gap-12 lg:grid-cols-2 lg:items-start">
           <section>
             <h2 className="font-display text-2xl">Ingredients</h2>
@@ -251,7 +257,7 @@ export default async function ProductPage({
           <section>
             <h2 className="font-display text-2xl">Nutrition</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
-              From the back label. Per serve where available.
+              Per 100g, per serve, and scaled to the full pack where we know the weight.
             </p>
             <div className="mt-5">
               {displayNutrition ? (
@@ -278,7 +284,6 @@ export default async function ProductPage({
           </section>
         </div>
 
-        {/* ── Quiet footer: details + provenance ─────────────────────── */}
         {(attrEntries.length > 0 || provenance) ? (
           <details className="mt-16 border-t border-(--color-line) pt-8 group">
             <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim) hover:text-(--color-fg)">

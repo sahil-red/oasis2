@@ -11,12 +11,15 @@ type Params = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
   sort?: string;
   goal?: string;
   diet?: string;
+  sublabel?: string;
+  verdict?: string;
 };
 
 export function CatalogLoader({

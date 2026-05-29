@@ -13,12 +13,15 @@ type CatalogParams = {
   usecase?: string;
   brand?: string;
   scored?: string;
+  labelResolved?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
   sort?: string;
   goal?: string;
   diet?: string;
+  sublabel?: string;
+  verdict?: string;
 };
 
 export function saveCatalogReturnUrl(href: string): void {
