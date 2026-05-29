@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
-import { NutritionTable } from "@/components/nutrition-table";
 import { ProteinQualityNote } from "@/components/protein-quality-note";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
@@ -19,7 +18,7 @@ import { explainScore } from "@/lib/products/score-explain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { DataProvenancePanel } from "@/components/data-provenance-panel";
-import { VerdictBlock } from "@/components/verdict-chips";
+import { VerdictBlock, mergePdpSublabelIds } from "@/components/verdict-chips";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
@@ -136,6 +135,10 @@ export default async function ProductPage({
       })
     : null;
 
+  const pdpSublabels = score
+    ? mergePdpSublabelIds(score.verdict_sublabels, score.breakdown, 8)
+    : [];
+
   return (
     <main className="min-h-screen">
       <SiteNav />
@@ -152,38 +155,6 @@ export default async function ProductPage({
                 netWeight={product.net_weight}
                 priceInr={price}
               />
-            ) : null}
-            {provenance ? (
-              <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-                  Data on file
-                </p>
-                <dl className="mt-2 space-y-1.5 text-[12px]">
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-(--color-fg-muted)">Nutrition</dt>
-                    <dd className="text-right font-medium text-(--color-fg)">
-                      {provenance.nutrition.label}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-(--color-fg-muted)">Ingredients</dt>
-                    <dd className="text-right font-medium text-(--color-fg)">
-                      {provenance.ingredients.label}
-                    </dd>
-                  </div>
-                  {score?.cohort_size ? (
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-(--color-fg-muted)">Scored vs aisle</dt>
-                      <dd className="text-right font-medium tabular-nums text-(--color-fg)">
-                        {score.relative_score != null
-                          ? `Top ${Math.max(1, Math.round(100 - score.relative_score))}%`
-                          : null}
-                        {score.cohort_size ? ` · ${score.cohort_size} products` : null}
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-              </div>
             ) : null}
             {swaps.length > 0 ? (
               <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
@@ -222,7 +193,7 @@ export default async function ProductPage({
               <div className="mt-5">
                 <VerdictBlock
                   verdict={verdict}
-                  sublabelIds={score?.verdict_sublabels}
+                  sublabelIds={pdpSublabels}
                   cohortSize={score?.cohort_size}
                   relativeScore={score?.relative_score}
                   cohortId={score?.cohort_id ?? null}
@@ -240,7 +211,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-14 grid gap-12 lg:grid-cols-2 lg:items-start">
+        <div className="mt-14">
           <section>
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -254,34 +225,15 @@ export default async function ProductPage({
             </div>
           </section>
 
-          <section>
-            <h2 className="font-display text-2xl">Nutrition</h2>
-            <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
-              Per 100g, per serve, and scaled to the full pack where we know the weight.
-            </p>
-            <div className="mt-5">
-              {displayNutrition ? (
-                <>
-                  <NutritionTable
-                    nutrition={displayNutrition}
-                    netWeight={product.net_weight}
-                    name={product.name}
-                    category={product.category}
-                    subcategory={product.subcategory}
-                  />
-                  <ProteinQualityNote
-                    nutrition={displayNutrition}
-                    name={product.name}
-                    category={product.category}
-                  />
-                </>
-              ) : (
-                <p className="text-sm text-(--color-fg-muted)">
-                  Not on the label yet — back labels are still being scanned.
-                </p>
-              )}
+          {displayNutrition ? (
+            <div className="mt-6">
+              <ProteinQualityNote
+                nutrition={displayNutrition}
+                name={product.name}
+                category={product.category}
+              />
             </div>
-          </section>
+          ) : null}
         </div>
 
         {(attrEntries.length > 0 || provenance) ? (

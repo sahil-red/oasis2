@@ -62,10 +62,9 @@ export function VerdictSublabelChips({
 
   const overflow = showOverflow ? Math.max(0, allLabels.length - max) : 0;
   const c = verdict ? VERDICT_COLORS[verdict] : null;
-  const chipBorder = c?.chipBorder ?? "#64748b";
-  const chipFg = c?.chipFg ?? "#94a3b8";
+  const chipBorder = c?.chipBorder ?? "var(--color-line-strong)";
+  const chipFg = c?.chipFg ?? "var(--color-fg-muted)";
 
-  // Map label back to sublabel id for tooltip lookup
   const idsForTooltip = (sublabelIds ?? []).slice(0, max);
 
   return (
@@ -89,13 +88,56 @@ export function VerdictSublabelChips({
         );
       })}
       {overflow > 0 ? (
-        <span
-          className="shrink-0 rounded-full border border-white/20 px-1.5 py-0.5 text-[10px] font-medium text-(--color-fg-dim)"
-        >
+        <span className="shrink-0 rounded-full border border-(--color-line) px-1.5 py-0.5 text-[10px] font-medium text-(--color-fg-dim)">
           +{overflow}
         </span>
       ) : null}
     </div>
+  );
+}
+
+function SublabelChip({
+  id,
+  borderColor,
+  fgColor,
+  cohortId,
+  productId,
+  subcategory,
+}: {
+  id: SublabelId;
+  borderColor: string;
+  fgColor: string;
+  cohortId?: string | null;
+  productId?: string;
+  subcategory?: string | null;
+}) {
+  const label = SUBLABEL_DISPLAY[id] ?? id;
+  const explanation = SUBLABEL_DESCRIPTIONS[id];
+
+  if (id === "best_in_category" && cohortId && productId) {
+    return (
+      <BestInCohortChip
+        cohortId={cohortId}
+        subcategoryLabel={subcategory ?? ""}
+        productId={productId}
+        borderColor={borderColor}
+        fgColor={fgColor}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="cursor-help rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-tight"
+      style={{
+        borderColor,
+        color: fgColor,
+        backgroundColor: `color-mix(in srgb, ${borderColor} 10%, var(--color-panel))`,
+      }}
+      title={explanation ?? label}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -119,22 +161,32 @@ export function VerdictBlock({
   className?: string;
 }) {
   const c = VERDICT_COLORS[verdict];
+  const showCohort =
+    cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
 
   return (
     <div
-      className={cn("rounded-xl border p-4 space-y-3", className)}
+      className={cn("space-y-3 rounded-xl border p-4", className)}
       style={{ backgroundColor: c.bg, borderColor: c.border }}
     >
-      {/* header row */}
-      <div className="flex items-center justify-between gap-3">
-        <span
-          className="text-base font-bold tracking-tight"
-          style={{ color: c.fg }}
-        >
-          {verdictTitle(verdict)}
-        </span>
-        {cohortSize != null && cohortSize >= 8 && relativeScore != null ? (
-          cohortId && productId ? (
+      <p className="text-base font-bold tracking-tight" style={{ color: c.fg }}>
+        {verdictTitle(verdict)}
+      </p>
+
+      {(sublabelIds?.length ?? 0) > 0 || showCohort ? (
+        <div className="flex flex-wrap gap-1.5">
+          {sublabelIds?.map((id) => (
+            <SublabelChip
+              key={id}
+              id={id as SublabelId}
+              borderColor={c.chipBorder}
+              fgColor={c.chipFg}
+              cohortId={cohortId}
+              productId={productId}
+              subcategory={subcategory}
+            />
+          ))}
+          {showCohort ? (
             <BestInCohortChip
               cohortId={cohortId}
               subcategoryLabel={subcategory ?? ""}
@@ -143,60 +195,39 @@ export function VerdictBlock({
               fgColor={c.chipFg}
               labelOverride={`Better than ${relativeScore}%`}
             />
-          ) : (
-            <span
-              className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tabular-nums"
-              style={{ borderColor: c.chipBorder, color: c.chipFg }}
-            >
-              Better than {relativeScore}%
-            </span>
-          )
-        ) : null}
-      </div>
-
-      {/* chips with tooltip explanations */}
-      {sublabelIds && sublabelIds.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {sublabelIds.map((id) => {
-            const label = SUBLABEL_DISPLAY[id as SublabelId] ?? id;
-            const explanation = SUBLABEL_DESCRIPTIONS[id as SublabelId];
-
-            // "Best in category" → hoverable cohort top-N
-            if (id === "best_in_category" && cohortId && productId) {
-              return (
-                <BestInCohortChip
-                  key={id}
-                  cohortId={cohortId}
-                  subcategoryLabel={subcategory ?? ""}
-                  productId={productId}
-                  borderColor={c.chipBorder}
-                  fgColor={c.chipFg}
-                />
-              );
-            }
-
-            return (
-              <span
-                key={id}
-                className="rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-tight"
-                style={{ borderColor: c.chipBorder, color: c.chipFg }}
-                title={explanation ?? label}
-              >
-                {label}
-              </span>
-            );
-          })}
+          ) : null}
         </div>
       ) : null}
 
-      {cohortSize != null && cohortSize >= 8 && relativeScore != null && sublabelIds && sublabelIds.length > 0 ? (
-        <p className="text-[11px]" style={{ color: c.fg, opacity: 0.7 }}>
-          Better than {relativeScore}% of similar products ({cohortSize} in category)
+      {showCohort ? (
+        <p className="text-[11px] leading-snug" style={{ color: c.fg, opacity: 0.72 }}>
+          Ranked against {cohortSize} similar products in this aisle — hover tags for detail.
         </p>
       ) : null}
     </div>
   );
 }
 
-// Re-export accent helper used elsewhere
 export { tierAccentForVerdict };
+
+/** Merge persisted sublabels with scoring candidates for richer PDP chips. */
+export function mergePdpSublabelIds(
+  verdictSublabels: string[] | null | undefined,
+  breakdown: unknown,
+  max = 8,
+): string[] {
+  const stored = verdictSublabels ?? [];
+  const candidates =
+    breakdown && typeof breakdown === "object" && "sublabel_candidates" in breakdown
+      ? ((breakdown as { sublabel_candidates?: string[] }).sublabel_candidates ?? [])
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of [...stored, ...candidates]) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= max) break;
+  }
+  return out;
+}
