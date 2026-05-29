@@ -58,6 +58,12 @@ export function PdpNutritionGlance({
         </div>
       ) : null}
 
+      {typeof nutrition.extra?.nutrition_gap_fill === "string" ? (
+        <p className="mt-3 text-[11px] leading-snug text-(--color-fg-muted)">
+          Some values missing on the pack label — gaps filled from a paneer reference table.
+        </p>
+      ) : null}
+
       <div className="mt-3">
         <NutritionFactsTable nutrition={nutrition} netWeight={netWeight} />
       </div>

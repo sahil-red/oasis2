@@ -68,3 +68,21 @@ assert(
 );
 
 console.log("All nutrition scale checks passed.");
+
+const akshaya = reconcileNutrition({
+  nutrition: {
+    source: "label",
+    fat_g_100g: 80,
+    sugar_g_100g: 0.09,
+    sodium_mg_100g: 17.4,
+  },
+  attributes: null,
+  name: "Akshayakalpa Organic Malai Paneer",
+  category: "Dairy, Bread & Eggs",
+  subcategory: "Paneer & Cream",
+});
+assert((akshaya?.energy_kcal_100g ?? 0) > 100, "Akshayakalpa should get energy from gap fill");
+assert((akshaya?.protein_g_100g ?? 0) > 10, "Akshayakalpa should get protein from gap fill");
+assert(akshaya?.fat_g_100g === 8, "Akshayakalpa fat should be decimal-corrected to 8g");
+
+console.log("Akshayakalpa paneer gap-fill checks passed.");

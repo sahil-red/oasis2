@@ -73,16 +73,16 @@ function nutritionTooSimilar(
 }
 
 function shelfRelated(current: ProductListItem, candidate: ProductListItem): boolean {
+  const curSub = current.subcategory?.trim().toLowerCase() ?? "";
+  const candSub = candidate.subcategory?.trim().toLowerCase() ?? "";
+  if (curSub && candSub) {
+    return curSub === candSub;
+  }
   const curShelf = productShelf(current)?.toLowerCase() ?? "";
   const candShelf = productShelf(candidate)?.toLowerCase() ?? "";
   if (curShelf && candShelf) {
     if (curShelf === candShelf) return true;
     if (curShelf.includes(candShelf) || candShelf.includes(curShelf)) return true;
-  }
-  const curSub = current.subcategory?.toLowerCase() ?? "";
-  const candSub = candidate.subcategory?.toLowerCase() ?? "";
-  if (curSub && candSub && (curSub === candSub || curSub.includes(candSub) || candSub.includes(curSub))) {
-    return true;
   }
   return nameOverlap(current.name, candidate.name) >= 0.35;
 }
@@ -189,6 +189,13 @@ export function findAlternatives(
     if (p.id === current.id) return false;
     if (!p.core_scores && goal === "balanced") return false;
     if (aisle && productAisle(p) !== aisle) return false;
+    if (
+      current.subcategory?.trim() &&
+      p.subcategory?.trim() &&
+      p.subcategory.trim().toLowerCase() !== current.subcategory.trim().toLowerCase()
+    ) {
+      return false;
+    }
     if (!shelfRelated(current, p)) return false;
     if (nutritionTooSimilar(current.nutrition, p.nutrition)) return false;
     if (brandKey(p) === curBrand && nameOverlap(current.name, p.name) > 0.4) return false;

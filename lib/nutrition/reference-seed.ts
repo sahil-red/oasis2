@@ -232,6 +232,8 @@ const REFERENCE_FILL_ALLOWLIST = [
   "Chicken, Meat & Fish",
   "Eggs",
   "Paneer & Cheese",
+  "Paneer & Cream",
+  "Fresh Paneer",
   "Sprouts",
 ];
 
@@ -258,7 +260,12 @@ export function matchReferenceFood(
 ): ReferenceMatch | null {
   const normalized = normalizeProductName(name);
   if (!normalized) return null;
-  if (isPackagedProduceLike(name, opts?.subcategory)) return null;
+
+  // Only block reference fill for packaged items miscategorized as produce — not dairy paneer/tofu.
+  if (isPackagedProduceLike(name, opts?.subcategory)) {
+    const aisle = `${opts?.category ?? ""} ${opts?.subcategory ?? ""}`.toLowerCase();
+    if (/fruit|vegetable|produce|herb|sprout|salad|greens/.test(aisle)) return null;
+  }
 
   // HARD GUARD: only match raw-food categories. Packaged/branded products must
   // get nutrition from OCR/OpenFoodFacts/CSV, never from raw reference data.

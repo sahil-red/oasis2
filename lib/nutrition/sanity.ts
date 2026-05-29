@@ -1,6 +1,10 @@
-import { mergeNutrition, parseServingNutritionBlock } from "@/lib/grocery/parse-nutrition-block";
+import { mergeNutrition, parseServingNutritionBlock, fillMissingNutritionFields } from "@/lib/grocery/parse-nutrition-block";
 import { nutritionHasCriticalAnomalies, sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
+import {
+  matchReferenceFood,
+  referenceToNutrition,
+} from "@/lib/nutrition/reference-seed";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 /** Upper bounds for protein per 100g by product class (catch OCR / parser garbage). */
@@ -58,6 +62,62 @@ export function nutritionFromAttributes(
     null;
   if (!block) return null;
   return parseServingNutritionBlock(block);
+}
+
+function isPaneerLike(ctx: {
+  name: string;
+  category: string | null;
+  subcategory?: string | null;
+}): boolean {
+  const blob = `${ctx.name} ${ctx.category ?? ""} ${ctx.subcategory ?? ""}`.toLowerCase();
+  return /\bpaneer\b|paneer & cream|fresh paneer|malai paneer|tofu paneer/.test(blob);
+}
+
+/** Common label OCR: 80g fat instead of 8.0g on paneer packs. */
+function tryFixPaneerLabelErrors(
+  nutrition: ProductNutrition,
+  ctx: { name: string; category: string | null; subcategory?: string | null },
+): ProductNutrition {
+  if (!isPaneerLike(ctx)) return nutrition;
+  const fat = nutrition.fat_g_100g;
+  if (typeof fat !== "number" || fat <= 45) return nutrition;
+  const scaled = Math.round(fat * 10) / 100;
+  if (scaled < 5 || scaled > 35) return nutrition;
+  return {
+    ...nutrition,
+    fat_g_100g: scaled,
+    extra: {
+      ...(nutrition.extra ?? {}),
+      nutrition_corrected: "paneer_fat_decimal",
+    },
+  };
+}
+
+function supplementSparseNutrition(
+  nutrition: ProductNutrition | null,
+  ctx: { name: string; category: string | null; subcategory?: string | null },
+): ProductNutrition | null {
+  const ref = matchReferenceFood(ctx.name, {
+    category: ctx.category,
+    subcategory: ctx.subcategory,
+    minConfidence: 0.55,
+  });
+  if (!ref) return nutrition;
+
+  const refNutrition = referenceToNutrition(ref.entry, ref);
+  if (!nutrition) return refNutrition;
+
+  if (!nutritionIsSparse(nutrition)) return nutrition;
+
+  const filled = fillMissingNutritionFields(nutrition, refNutrition);
+  return {
+    ...filled,
+    extra: {
+      ...(filled.extra ?? {}),
+      nutrition_gap_fill: ref.entry.id,
+      nutrition_gap_fill_note: "Missing label fields filled from IFCT paneer reference",
+    },
+  };
 }
 
 export function reconcileNutrition(opts: {
@@ -119,5 +179,7 @@ export function reconcileNutrition(opts: {
     }
   }
 
-  return sanitizeNutrition(picked, ctx);
+  const fixed = picked ? tryFixPaneerLabelErrors(picked, ctx) : null;
+  const sanitized = sanitizeNutrition(fixed, ctx);
+  return supplementSparseNutrition(sanitized, ctx);
 }

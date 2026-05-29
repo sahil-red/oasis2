@@ -240,3 +240,21 @@ export function mergeNutrition(
   }
   return merged;
 }
+
+/** Fill only missing canonical fields from a fallback (e.g. reference paneer for sparse OCR). */
+export function fillMissingNutritionFields(
+  primary: ProductNutrition,
+  fallback: ProductNutrition,
+): ProductNutrition {
+  const merged: ProductNutrition = {
+    source: primary.source ?? fallback.source ?? "platform",
+    extra: { ...(fallback.extra ?? {}), ...(primary.extra ?? {}) },
+  };
+  for (const key of CANONICAL_KEYS) {
+    const p = primary[key];
+    const b = fallback[key];
+    if (p != null && Number.isFinite(p)) merged[key] = p;
+    else if (b != null && Number.isFinite(b)) merged[key] = b;
+  }
+  return merged;
+}

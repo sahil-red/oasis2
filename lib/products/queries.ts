@@ -1175,7 +1175,7 @@ export async function getAllCatalogProducts(opts?: {
 
 /** Same-aisle pool for PDP swaps — avoids loading the full catalog. */
 export async function getProductsForSwaps(
-  current: Pick<ProductListItem, "id" | "category" | "super_category">,
+  current: Pick<ProductListItem, "id" | "category" | "super_category" | "subcategory">,
   limit = 200,
 ): Promise<ProductListItem[]> {
   const supabase = db();
@@ -1189,6 +1189,7 @@ export async function getProductsForSwaps(
     .limit(limit);
 
   if (aisle) query = query.eq("category", aisle);
+  if (current.subcategory?.trim()) query = query.eq("subcategory", current.subcategory.trim());
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
