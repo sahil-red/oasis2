@@ -32,6 +32,9 @@ import { scriptArgv } from "@/lib/util/script-argv";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
 
 loadEnv({ path: ".env.local" });
+if (!process.env.LM_STUDIO_API_KEY && process.env.GROQ_API_KEY) {
+  process.env.LM_STUDIO_API_KEY = process.env.GROQ_API_KEY;
+}
 
 const MAX_BATCH = 50_000;
 const RAW_CACHE_DIR = resolve(process.cwd(), ".cache/ocr_raw");
@@ -63,6 +66,10 @@ function parseArgs() {
   const modelsRaw =
     process.env.LM_STUDIO_MODELS ?? process.env.LM_STUDIO_MODEL ?? "qwen2.5coder7b:2";
   const models = modelsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  const lmConcurrency = Math.max(
+    1,
+    Math.min(32, Number(process.env.LM_CONCURRENCY ?? 0) || models.length),
+  );
 
   return {
     limit: Math.min(limit, MAX_BATCH),
@@ -78,6 +85,7 @@ function parseArgs() {
     nameQuery,
     ocrConcurrency,
     models,
+    lmConcurrency,
   };
 }
 
@@ -196,7 +204,13 @@ async function main() {
     work = work.slice(0, MAX_BATCH);
   }
 
-  const lmModelsLabel = args.models.join(",");
+  const isCloudLm = Boolean(process.env.LM_STUDIO_API_KEY);
+  const fastModel =
+    process.env.LM_STUDIO_FAST_MODEL ??
+    args.models.find((m) => /8b-instant|3\.1-8b/i.test(m)) ??
+    args.models[0];
+  const lmWorkers = isCloudLm ? args.lmConcurrency : args.models.length;
+  const lmModelsLabel = isCloudLm ? `${fastModel}×${lmWorkers}` : args.models.join(",");
   const supabase = args.persistDb ? adminClient() : null;
   const skuToId = new Map<string, string>();
 
@@ -258,7 +272,7 @@ async function main() {
   console.log(
     `[ocr:lm] batch=${work.length} raw_cache=${RAW_CACHE_DIR} export=${RESULTS_PATH}`,
   );
-  console.log(`[ocr:lm] models=${lmModelsLabel} (lm_consumers=${args.models.length}) persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
+  console.log(`[ocr:lm] models=${lmModelsLabel} (lm_workers=${lmWorkers}) persist_db=${args.persistDb} db_batch=${DB_FLUSH_SIZE}`);
   console.log(`[ocr:lm] ocr_concurrency=${args.ocrConcurrency} skip_lm=${args.skipLm}`);
 
   // ── Producer-consumer pipeline ────────────────────────────────────────────
@@ -392,6 +406,7 @@ async function main() {
             rateLimit: Boolean(process.env.LM_STUDIO_API_KEY), // cloud → handle 429
             bypassLock: true,
             maxTokens: 384,
+            timeoutMs: isCloudLm ? 45_000 : 120_000,
           });
           structured = lm.structured;
           lmRaw = lm.rawResponse;
@@ -467,8 +482,44 @@ async function main() {
           `[${processed}/${work.length}] ${label} ocr=${ocrSource} ${lmTag} nut=${resolution.nutrition_source} ing=${resolution.ingredients_source} (${sec.toFixed(1)}s)`,
         );
       } catch (e) {
-        errors++;
         const msg = e instanceof Error ? e.message : String(e);
+        const regexFallback = resolveLabelFields({
+          csvIngredients: row.ingredients_raw,
+          csvNutrition: row.nutrition as ProductNutrition | null,
+          rawText,
+          structured: null,
+          productName: row.name,
+        });
+        const recovered =
+          regexFallback.ingredients_raw ||
+          regexFallback.nutrition ||
+          regexFallback.regex_payload.ingredients.length > 0;
+
+        if (recovered) {
+          processed++;
+          const sec = (Date.now() - tSku) / 1000;
+          skuTimings.push(sec);
+          console.warn(
+            `[${processed}/${work.length}] ${label} lm=failed→regex nut=${regexFallback.nutrition_source} ing=${regexFallback.ingredients_source} (${sec.toFixed(1)}s)`,
+          );
+          if (!args.dryRun) {
+            out.write(
+              `${JSON.stringify({
+                zepto_sku: row.zepto_sku,
+                name: row.name,
+                product_id: skuToId.get(row.zepto_sku) ?? null,
+                lm_called: false,
+                lm_error: msg,
+                lm_fallback: "regex",
+                resolution: regexFallback,
+                at: new Date().toISOString(),
+              })}\n`,
+            );
+          }
+          continue;
+        }
+
+        errors++;
         console.error(`[ocr:lm] LM ERROR ${label}: ${msg}`);
         if (!args.dryRun) {
           out.write(`${JSON.stringify({ zepto_sku: row.zepto_sku, name: row.name, error: msg, at: new Date().toISOString() })}\n`);
@@ -479,7 +530,9 @@ async function main() {
 
   try {
     const ocrWorkers = Array.from({ length: args.ocrConcurrency }, () => ocrWorker());
-    const lmConsumers = args.models.map((m) => lmConsumer(m));
+    const lmModelForWorker = (i: number) =>
+      isCloudLm ? fastModel : args.models[i % args.models.length]!;
+    const lmConsumers = Array.from({ length: lmWorkers }, (_, i) => lmConsumer(lmModelForWorker(i)));
     await Promise.all([...ocrWorkers, ...lmConsumers]);
   } catch (e) {
     fatalError = e;

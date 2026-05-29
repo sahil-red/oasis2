@@ -46,9 +46,12 @@ function fieldNeedsLm(
   csvPresent: boolean,
 ): boolean {
   if (status === "match" || status === "existing_only") return false;
-  if (!csvPresent) return hasRawText;
+  // LiveText regex already extracted OCR fields — LLM would only duplicate work.
+  if (status === "ocr_adds") return false;
+  if (!csvPresent) return hasRawText && status === "both_missing";
   if (status === "both_missing") return hasRawText;
-  return true;
+  // Only pay for LM when CSV and OCR regex genuinely disagree.
+  return status === "different";
 }
 
 function structuredToOcrNutrition(structured: StructuredLabel): OcrNutrition | null {
@@ -219,6 +222,16 @@ export function resolveLabelFields(input: {
       };
       serving_size = input.structured.serving_size ?? serving_size;
     }
+  } else if (regex_payload.nutrition_per_100g) {
+    const fromOcr = ocrNutritionToProduct(regex_payload.nutrition_per_100g);
+    if (countNutritionFields(fromOcr) >= 2) {
+      nutrition_source = "ocr";
+      nutrition = {
+        ...fromOcr,
+        source: "label",
+        extra: { ...(fromOcr.extra ?? {}), nutrition_source: "ocr_regex" },
+      };
+    }
   } else if (csvHasNut) {
     nutrition_source = "csv";
     nutrition = input.csvNutrition;
@@ -233,10 +246,13 @@ export function resolveLabelFields(input: {
 
   let lm_skip_reason: string | undefined;
   if (!lm_called) {
-    lm_skip_reason =
-      ingStatus === "match" && nutStatus === "match"
-        ? "ocr_regex_matches_csv"
-        : "csv_sufficient_no_mismatch";
+    if (ingStatus === "match" && nutStatus === "match") {
+      lm_skip_reason = "ocr_regex_matches_csv";
+    } else if (ingStatus === "ocr_adds" || nutStatus === "ocr_adds") {
+      lm_skip_reason = "ocr_regex_adds_fields";
+    } else {
+      lm_skip_reason = "csv_sufficient_no_mismatch";
+    }
   }
 
   return {
