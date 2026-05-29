@@ -369,3 +369,25 @@ export function pickVerdictSublabels(
 export function sublabelsToDisplay(ids: SublabelId[]): string[] {
   return ids.map((id) => SUBLABEL_DISPLAY[id] ?? id);
 }
+
+/** Merge persisted sublabels with scoring candidates for richer PDP chips. */
+export function mergePdpSublabelIds(
+  verdictSublabels: string[] | null | undefined,
+  breakdown: unknown,
+  max = 8,
+): string[] {
+  const stored = verdictSublabels ?? [];
+  const candidates =
+    breakdown && typeof breakdown === "object" && "sublabel_candidates" in breakdown
+      ? ((breakdown as { sublabel_candidates?: string[] }).sublabel_candidates ?? [])
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of [...stored, ...candidates]) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= max) break;
+  }
+  return out;
+}
