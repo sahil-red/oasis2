@@ -108,9 +108,9 @@ export function ProductGoalFitList({
           ) : null}
         </div>
 
-        <ul className="mt-3 space-y-2.5">
+        <ul className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {gridGoals.map((g) => (
-            <GoalFitRow
+            <GoalFitTile
               key={g.id}
               label={g.label}
               fit={g.fit}
@@ -166,10 +166,10 @@ function ScorePill({
   );
 }
 
-function GoalFitRow({
+function GoalFitTile({
   label,
   fit,
-  grade: _grade,
+  grade,
   active,
   onSelect,
 }: {
@@ -188,50 +188,52 @@ function GoalFitRow({
         onClick={onSelect}
         aria-pressed={active}
         className={cn(
-          "group grid w-full grid-cols-[80px_minmax(0,1fr)_34px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition sm:grid-cols-[96px_minmax(0,1fr)_38px]",
+          "group flex h-full min-h-[104px] w-full flex-col justify-between rounded-xl border px-3 py-3 text-left transition",
           active
-            ? "bg-(--color-bg-soft) ring-1 ring-(--color-line-strong)"
-            : "hover:bg-(--color-bg-soft)/70",
+            ? "border-(--color-line-strong) bg-(--color-bg-soft) shadow-sm"
+            : "border-(--color-line) bg-(--color-bg-soft)/45 hover:bg-(--color-bg-soft)",
         )}
       >
-        <span
-          className={cn(
-            "min-w-0 px-1 text-[13px] font-medium",
-            active
-              ? "text-(--color-fg)"
-              : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
-          )}
-        >
-          {label}
-        </span>
-        <span className="h-1.5 min-w-0 overflow-hidden rounded-full bg-(--color-bg-soft)">
+        <span className="flex items-start justify-between gap-2">
           <span
-            className="block h-full rounded-full transition-[width]"
+            className={cn(
+              "min-w-0 text-[13px] font-medium",
+              active
+                ? "text-(--color-fg)"
+                : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
+            )}
+          >
+            {label}
+          </span>
+          <span
+            className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
             style={{
-              width: `${Math.max(2, Math.min(100, fit))}%`,
-              backgroundColor: surface.accentColor,
+              backgroundColor: surface.backgroundColor,
+              borderColor: surface.borderColor,
+              color: surface.accentColor,
             }}
-          />
+          >
+            {grade}
+          </span>
         </span>
         <span
-          className={cn(
-            "flex h-7 w-9 shrink-0 items-center justify-center rounded-lg border font-display text-[15px] tabular-nums leading-none transition",
-          )}
-          style={
-            active
-              ? {
-                  backgroundColor: surface.backgroundColor,
-                  borderColor: surface.borderColor,
-                  color: surface.accentColor,
-                }
-              : {
-                  backgroundColor: "var(--color-panel)",
-                  borderColor: "var(--color-line)",
-                  color: "var(--color-fg-muted)",
-                }
-          }
+          className="mt-3 flex items-end justify-between gap-3"
         >
-          {fit}
+          <span
+            className="font-display text-4xl tabular-nums leading-none"
+            style={{ color: surface.accentColor }}
+          >
+            {fit}
+          </span>
+          <span className="mb-1 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-(--color-panel)">
+            <span
+              className="block h-full rounded-full transition-[width]"
+              style={{
+                width: `${Math.max(2, Math.min(100, fit))}%`,
+                backgroundColor: surface.accentColor,
+              }}
+            />
+          </span>
         </span>
       </button>
     </li>

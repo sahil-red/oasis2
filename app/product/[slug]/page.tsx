@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { PdpLabelInsights } from "@/components/pdp-label-insights";
-import { PdpNutrientStrip } from "@/components/pdp-nutrient-strip";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
@@ -207,44 +206,38 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            {scoreWhy || deepseekDisplay?.why ? (
-              <ProductTakePanel
-                explanation={scoreWhy}
-                deepseekWhy={deepseekDisplay?.why}
-                className="mt-5"
-              />
-            ) : null}
-
-            <PdpNutrientStrip nutrition={displayNutrition} />
           </div>
         </div>
 
-        <div className="mt-10 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
-          <div className="flex min-w-0 flex-col gap-5">
-            {displayNutrition ? (
-              <PdpNutritionGlance
-                nutrition={displayNutrition}
-                netWeight={product.net_weight}
-                priceInr={price}
-                name={product.name}
-                category={product.category}
-                subcategory={product.subcategory}
-              />
-            ) : null}
-            <PdpLabelInsights deepseek={deepseekLabel} className="flex-1" />
-          </div>
-
+        <div className="mt-10 space-y-6">
           <Suspense fallback={null}>
             <ProductGoalFitList
               rows={goalRows}
               overall={overallGoal}
-              className="mt-0 h-full"
-              cardClassName="h-full"
+              className="mt-0"
             />
           </Suspense>
+
+          {scoreWhy || deepseekDisplay?.why ? (
+            <ProductTakePanel
+              explanation={scoreWhy}
+              deepseekWhy={deepseekDisplay?.why}
+            />
+          ) : null}
+
+          {swaps.length > 0 ? (
+            <SwapPanel
+              current={product}
+              suggestions={swaps}
+              compact
+              goal={goal}
+              title="Better alternatives"
+              description="Similar products that look stronger on score, macros, or ingredients."
+            />
+          ) : null}
         </div>
 
-        <div className="mt-8 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-start xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+        <div className="mt-12 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -258,10 +251,18 @@ export default async function ProductPage({
             </div>
           </section>
 
-          <aside className="min-w-0">
-            {swaps.length > 0 ? (
-              <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
+          <aside className="min-w-0 space-y-5">
+            {displayNutrition ? (
+              <PdpNutritionGlance
+                nutrition={displayNutrition}
+                netWeight={product.net_weight}
+                priceInr={price}
+                name={product.name}
+                category={product.category}
+                subcategory={product.subcategory}
+              />
             ) : null}
+            <PdpLabelInsights deepseek={deepseekLabel} />
           </aside>
         </div>
 
