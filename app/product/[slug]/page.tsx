@@ -23,7 +23,10 @@ import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { PdpSourceDataPanel } from "@/components/pdp-source-data-panel";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
-import { deepseekLabelFromPayload } from "@/lib/ocr/deepseek-promote";
+import {
+  deepseekDisplayFromPayload,
+  deepseekLabelFromPayload,
+} from "@/lib/ocr/deepseek-promote";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
@@ -109,6 +112,7 @@ export default async function ProductPage({
     ocr_payload: product.ocr_payload,
   });
   const deepseekLabel = deepseekLabelFromPayload(product.ocr_payload);
+  const deepseekDisplay = deepseekDisplayFromPayload(product.ocr_payload);
   const verdict = score
     ? resolveProductVerdict({
         verdict: score.verdict,
@@ -205,11 +209,18 @@ export default async function ProductPage({
                   cohortId={score?.cohort_id ?? null}
                   subcategory={product.subcategory}
                   productId={product.id}
+                  deepseekChips={deepseekDisplay?.chips}
                 />
               </div>
             ) : null}
 
-            {scoreWhy ? <ProductTakePanel explanation={scoreWhy} className="mt-5" /> : null}
+            {scoreWhy || deepseekDisplay?.why ? (
+              <ProductTakePanel
+                explanation={scoreWhy}
+                deepseekWhy={deepseekDisplay?.why}
+                className="mt-5"
+              />
+            ) : null}
 
             <Suspense fallback={null}>
               <ProductGoalFitList rows={goalRows} overall={overallGoal} />

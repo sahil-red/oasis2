@@ -42,6 +42,12 @@ export type DeepseekPromotionResult = {
   patch: DeepseekPromotionPatch;
 };
 
+export type DeepseekDisplayFacts = {
+  chips: string[];
+  chipLabels: string[];
+  why: string | null;
+};
+
 const NUTRITION_KEYS: Array<keyof ProductNutrition> = [
   "energy_kcal_100g",
   "protein_g_100g",
@@ -361,4 +367,31 @@ export function deepseekLabelFromPayload(
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+}
+
+export function formatDeepseekChip(chip: string): string {
+  return chip
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+export function deepseekDisplayFromPayload(
+  ocrPayload: Record<string, unknown> | null | undefined,
+): DeepseekDisplayFacts | null {
+  const label = deepseekLabelFromPayload(ocrPayload);
+  if (!label) return null;
+  const chips = stringArray(label.chips);
+  const why = typeof label.why === "string" && label.why.trim() ? label.why.trim() : null;
+  if (!chips.length && !why) return null;
+  return {
+    chips,
+    chipLabels: chips.map(formatDeepseekChip),
+    why,
+  };
 }

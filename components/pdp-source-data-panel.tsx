@@ -1,4 +1,5 @@
 import type { FieldProvenance, ProductProvenance } from "@/lib/products/data-provenance";
+import { formatDeepseekChip } from "@/lib/ocr/deepseek-promote";
 
 type DeepseekFacts = Record<string, unknown>;
 
@@ -72,7 +73,7 @@ function DeepseekFactPanel({ facts }: { facts: DeepseekFacts }) {
   const model = typeof facts.model === "string" ? facts.model : null;
   const extractedAt = typeof facts.extracted_at === "string" ? facts.extracted_at : null;
   const validation = asRecord(facts.validation);
-  const chips = stringList(facts.chips);
+  const chips = stringList(facts.chips).map(formatDeepseekChip);
   const why = typeof facts.why === "string" ? facts.why : null;
   const marketingClaims = stringList(extracted?.marketing_claims);
   const contains = stringList(allergens?.contains);

@@ -1,11 +1,19 @@
 import type { ScoreExplanation } from "@/lib/products/score-explain";
 import { cn } from "@/lib/utils";
 
-/** Merge score reasons + tradeoffs into a short subjective blurb (max 3 lines). */
-function compressTake(explanation: ScoreExplanation): string[] {
+/** Merge DeepSeek label why + score reasons into a short subjective blurb. */
+function compressTake(
+  explanation: ScoreExplanation | null | undefined,
+  deepseekWhy?: string | null,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const line of [...explanation.reasons, ...explanation.tradeoffs]) {
+  const lines = [
+    deepseekWhy,
+    ...(explanation ? [...explanation.reasons, ...explanation.tradeoffs] : []),
+  ];
+  for (const line of lines) {
+    if (typeof line !== "string") continue;
     const trimmed = line.trim();
     if (!trimmed || seen.has(trimmed)) continue;
     seen.add(trimmed);
@@ -17,12 +25,14 @@ function compressTake(explanation: ScoreExplanation): string[] {
 
 export function ProductTakePanel({
   explanation,
+  deepseekWhy,
   className,
 }: {
-  explanation: ScoreExplanation;
+  explanation?: ScoreExplanation | null;
+  deepseekWhy?: string | null;
   className?: string;
 }) {
-  const lines = compressTake(explanation);
+  const lines = compressTake(explanation, deepseekWhy);
   if (!lines.length) return null;
 
   return (

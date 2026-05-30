@@ -21,6 +21,7 @@ import {
 import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
 import type { CoreScore, Grade, Product, ProductNutrition, ScoreBand } from "@/lib/supabase/types";
+import { deepseekDisplayFromPayload } from "@/lib/ocr/deepseek-promote";
 
 export { isCatalogSourceRow } from "@/lib/products/catalog-eligibility";
 
@@ -208,6 +209,8 @@ export type ProductListItem = Pick<
   > | null;
   /** Present when catalog filters need label-resolution metadata. */
   ocr_payload?: Record<string, unknown> | null;
+  deepseek_chips?: string[];
+  deepseek_why?: string | null;
 };
 
 export type ProductDetail = Product & {
@@ -249,6 +252,8 @@ export type CatalogGridItem = Pick<
     | "relative_score"
     | "cohort_size"
   > | null;
+  deepseek_chips?: string[];
+  deepseek_why?: string | null;
 };
 
 export type CatalogSearchResult = {
@@ -267,6 +272,7 @@ export type CatalogMeta = {
 };
 
 function toGridItem(row: ProductListItem): CatalogGridItem {
+  const deepseek = deepseekDisplayFromPayload(row.ocr_payload);
   return {
     id: row.id,
     slug: row.slug,
@@ -289,6 +295,8 @@ function toGridItem(row: ProductListItem): CatalogGridItem {
           cohort_size: row.core_scores.cohort_size ?? null,
         }
       : null,
+    deepseek_chips: deepseek?.chipLabels ?? [],
+    deepseek_why: deepseek?.why ?? null,
   };
 }
 

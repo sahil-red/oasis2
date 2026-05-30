@@ -14,6 +14,7 @@ import {
   verdictTitle,
 } from "@/lib/scoring/verdict-display";
 import type { VerdictId } from "@/lib/scoring/verdict";
+import { formatDeepseekChip } from "@/lib/ocr/deepseek-promote";
 
 export function VerdictBadge({
   verdict,
@@ -149,6 +150,7 @@ export function VerdictBlock({
   cohortId,
   subcategory,
   productId,
+  deepseekChips,
   className,
 }: {
   verdict: VerdictId;
@@ -158,11 +160,13 @@ export function VerdictBlock({
   cohortId?: string | null;
   subcategory?: string | null;
   productId?: string;
+  deepseekChips?: string[] | null;
   className?: string;
 }) {
   const c = VERDICT_COLORS[verdict];
   const showCohort =
     cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
+  const deepseekChipLabels = (deepseekChips ?? []).map(formatDeepseekChip).slice(0, 6);
 
   return (
     <div
@@ -196,6 +200,25 @@ export function VerdictBlock({
               labelOverride={`Better than ${relativeScore}%`}
             />
           ) : null}
+        </div>
+      ) : null}
+
+      {deepseekChipLabels.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 border-t border-current/10 pt-2">
+          {deepseekChipLabels.map((label) => (
+            <span
+              key={label}
+              className="rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-tight"
+              style={{
+                borderColor: c.chipBorder,
+                color: c.chipFg,
+                backgroundColor: "transparent",
+              }}
+              title="DeepSeek label extraction chip"
+            >
+              {label}
+            </span>
+          ))}
         </div>
       ) : null}
 

@@ -44,7 +44,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
       <button
         type="button"
         className={cn(
-          "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors",
+          "flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors",
           hasWhy ? "hover:bg-(--color-bg-soft) cursor-pointer" : "cursor-default",
         )}
         onClick={() => hasWhy && setOpen((v) => !v)}
@@ -83,8 +83,8 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
         ) : null}
       </button>
       {open && item.why ? (
-        <div className="border-t border-(--color-line) bg-(--color-bg-soft) px-4 py-3 pl-9">
-          <p className="text-[13px] leading-relaxed text-(--color-fg-muted)">{item.why}</p>
+        <div className="border-t border-(--color-line) bg-(--color-bg-soft) px-3.5 py-2.5 pl-8">
+          <p className="text-[12.5px] leading-relaxed text-(--color-fg-muted)">{item.why}</p>
         </div>
       ) : null}
     </li>
@@ -117,9 +117,9 @@ export function IngredientPanel({
   const concernCount = summary.flagged + watchfulCount;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* ── merged summary bar ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-3 py-2.5 text-[12px]">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-[12px]">
         {allClean ? (
           <span className="flex items-center gap-1.5 font-semibold text-[#4ade80]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
@@ -175,7 +175,7 @@ export function IngredientPanel({
             {showFull ? "Hide" : "Show"} full label text
           </button>
           {showFull ? (
-            <p className="rounded-xl border border-(--color-line) bg-(--color-panel) p-4 text-[13px] leading-relaxed text-(--color-fg-muted)">
+            <p className="rounded-xl border border-(--color-line) bg-(--color-panel) p-3 text-[12.5px] leading-relaxed text-(--color-fg-muted)">
               {ingredientsRaw}
             </p>
           ) : null}

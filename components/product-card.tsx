@@ -44,7 +44,12 @@ export const ProductCard = memo(function ProductCard({
   const href = `/product/${product.slug}${hrefQuery}`;
   const displayName = catalogCardDisplayName(product.name);
   const sublabelIds = goalFit == null ? (core?.verdict_sublabels as string[] | undefined) : undefined;
-  const chipLabels = sublabelChipLabels(sublabelIds);
+  const scoreChipLabels = sublabelChipLabels(sublabelIds);
+  const deepseekChipLabels =
+    "deepseek_chips" in product && Array.isArray(product.deepseek_chips)
+      ? product.deepseek_chips
+      : [];
+  const chipLabels = deepseekChipLabels.length ? deepseekChipLabels : scoreChipLabels;
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
 
   return (
