@@ -93,7 +93,7 @@ export default async function ProductPage({
 
   const swapPool = await getProductsForSwaps(product, 180);
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
-  const similarProducts = findSimilarProducts(product, swapPool, goal, 4, {
+  const similarProducts = findSimilarProducts(product, swapPool, goal, 6, {
     diet,
     excludeIds: new Set(swaps.map((s) => s.product.id)),
   });
@@ -230,7 +230,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,620px)_minmax(420px,1fr)] lg:items-start xl:grid-cols-[minmax(0,640px)_minmax(480px,1fr)]">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -255,7 +255,8 @@ export default async function ProductPage({
                 compact
                 goal={goal}
                 title="Similar products"
-                description="Close matches by flavour, brand, price, and score."
+                description="Comparable picks with different nutrition tradeoffs."
+                layout="grid"
               />
             ) : null}
             <PdpLabelInsights deepseek={deepseekLabel} />

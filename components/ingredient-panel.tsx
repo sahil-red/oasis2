@@ -117,9 +117,9 @@ export function IngredientPanel({
   const concernCount = summary.flagged + watchfulCount;
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2">
       {/* ── merged summary bar ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-[12px]">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-(--color-line) bg-(--color-bg-soft) px-2.5 py-1.5 text-[11.5px]">
         {allClean ? (
           <span className="flex items-center gap-1.5 font-semibold text-[#4ade80]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
@@ -156,7 +156,7 @@ export function IngredientPanel({
       </div>
 
       {/* ── ingredient list ── */}
-      <div className="overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel)">
+      <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
         <ul>
           {items.map((item) => (
             <IngredientRow key={item.key} item={item} />
@@ -170,7 +170,7 @@ export function IngredientPanel({
           <button
             type="button"
             onClick={() => setShowFull((v) => !v)}
-            className="text-[11px] text-(--color-fg-dim) underline underline-offset-4 hover:text-(--color-fg-muted)"
+            className="text-[10.5px] text-(--color-fg-dim) underline underline-offset-4 hover:text-(--color-fg-muted)"
           >
             {showFull ? "Hide" : "Show"} full label text
           </button>

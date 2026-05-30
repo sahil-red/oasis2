@@ -13,6 +13,7 @@ export function SwapPanel({
   goal = "balanced",
   title = "Swaps",
   description,
+  layout = "list",
 }: {
   current: ProductListItem;
   suggestions: SwapSuggestion[];
@@ -20,11 +21,13 @@ export function SwapPanel({
   goal?: GoalId;
   title?: string;
   description?: string;
+  layout?: "list" | "grid";
 }) {
   if (suggestions.length === 0) return null;
 
   const curSugar =
     current.nutrition?.sugar_g_100g ?? current.nutrition?.added_sugar_g_100g;
+  const grid = layout === "grid";
 
   return (
     <section
@@ -66,20 +69,32 @@ export function SwapPanel({
         )}
       </p>
 
-      <ul className={cn(compact ? "mt-3.5 space-y-2.5" : "mt-5 space-y-3")}>
+      <ul
+        className={cn(
+          grid
+            ? "mt-3.5 grid grid-cols-2 gap-2.5"
+            : compact
+              ? "mt-3.5 space-y-2.5"
+              : "mt-5 space-y-3",
+        )}
+      >
         {suggestions.map(({ product, goalFit, deltas }) => (
           <li key={product.id}>
             <Link
               href={`/product/${product.slug}`}
               className={cn(
                 "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
-                compact ? "gap-2.5 p-2.5" : "gap-3 rounded-xl p-3",
+                grid
+                  ? "h-full flex-col p-2.5"
+                  : compact
+                    ? "gap-2.5 p-2.5"
+                    : "gap-3 rounded-xl p-3",
               )}
             >
               <div
                 className={cn(
                   "relative shrink-0 overflow-hidden rounded-lg bg-[#1a1a1a] shadow-[inset_0_0_16px_rgba(0,0,0,0.4)]",
-                  compact ? "h-14 w-14" : "h-16 w-16",
+                  grid ? "h-24 w-full" : compact ? "h-14 w-14" : "h-16 w-16",
                 )}
               >
                 {product.image_urls[0] ? (
@@ -104,14 +119,19 @@ export function SwapPanel({
                   {deltas.join(" · ")}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-0.5">
+              <div
+                className={cn(
+                  "flex shrink-0 gap-0.5",
+                  grid ? "flex-row items-center justify-between" : "flex-col items-end",
+                )}
+              >
                 {goal !== "balanced" ? (
                   <GoalFitBadge fit={goalFit} size="sm" />
                 ) : product.core_scores ? (
                   <ScoreBadge
                     score={product.core_scores.score}
                     grade={product.core_scores.grade}
-                    className="!text-2xl"
+                    className={grid ? "!h-9 !min-w-9 !rounded-lg !text-lg" : "!text-2xl"}
                   />
                 ) : (
                   <GoalFitBadge fit={goalFit} size="sm" />

@@ -105,6 +105,25 @@ function flavourOverlap(a: string, b: string): string[] {
   return shared.filter((token) => FLAVOUR_TOKENS.has(token));
 }
 
+function additiveCount(raw: string | null | undefined): number {
+  if (!raw?.trim()) return 0;
+  const text = raw.toLowerCase();
+  const patterns = [
+    /\bins\s*\d{3,4}[a-z]?\b/g,
+    /\be\s*\d{3,4}[a-z]?\b/g,
+    /artificial/g,
+    /colour|color/g,
+    /emulsif/g,
+    /flavour|flavor/g,
+    /preservative/g,
+    /stabili[sz]er/g,
+    /acidity regulator/g,
+    /raising agent/g,
+    /antioxidant/g,
+  ];
+  return patterns.reduce((sum, pattern) => sum + (text.match(pattern)?.length ?? 0), 0);
+}
+
 function nutritionTooSimilar(
   a: ProductNutrition | null,
   b: ProductNutrition | null,
@@ -329,22 +348,49 @@ function similarityScore(current: ProductListItem, p: ProductListItem): number {
 
 function buildSimilarityReasons(current: ProductListItem, p: ProductListItem): string[] {
   const reasons: string[] = [];
-  const flavours = flavourOverlap(current.name, p.name);
-  if (current.brand && p.brand === current.brand) reasons.push("Same brand");
-  if (flavours.length) reasons.push(`Similar ${flavours.slice(0, 2).join("/")}`);
-  else if (nameOverlap(current.name, p.name) >= 0.25) reasons.push("Similar name");
-  if (p.price_inr != null && current.price_inr != null) {
-    const diff = p.price_inr - current.price_inr;
-    if (Math.abs(diff) <= Math.max(50, current.price_inr * 0.35)) {
-      reasons.push(diff === 0 ? "Same price" : `₹${p.price_inr}`);
-    }
+  const curSugar = sugar(current.nutrition);
+  const pSugar = sugar(p.nutrition);
+  const curCarbs = current.nutrition?.carbs_g_100g ?? null;
+  const pCarbs = p.nutrition?.carbs_g_100g ?? null;
+  const curProtein = current.nutrition?.protein_g_100g ?? null;
+  const pProtein = p.nutrition?.protein_g_100g ?? null;
+  const curKcal = current.nutrition?.energy_kcal_100g ?? null;
+  const pKcal = p.nutrition?.energy_kcal_100g ?? null;
+  const curSat = current.nutrition?.saturated_fat_g_100g ?? null;
+  const pSat = p.nutrition?.saturated_fat_g_100g ?? null;
+  const curSodium = current.nutrition?.sodium_mg_100g ?? null;
+  const pSodium = p.nutrition?.sodium_mg_100g ?? null;
+  const curAdditives = additiveCount(current.ingredients_raw);
+  const pAdditives = additiveCount(p.ingredients_raw);
+
+  if (curSugar != null && pSugar != null && pSugar <= curSugar - 1) {
+    reasons.push(`−${(curSugar - pSugar).toFixed(1)}g sugar`);
+  }
+  if (curCarbs != null && pCarbs != null && pCarbs <= curCarbs - 5) {
+    reasons.push(`−${Math.round(curCarbs - pCarbs)}g carbs`);
+  }
+  if (curKcal != null && pKcal != null && pKcal <= curKcal - 25) {
+    reasons.push(`−${Math.round(curKcal - pKcal)} kcal`);
+  }
+  if (curProtein != null && pProtein != null && pProtein >= curProtein + 1.5) {
+    reasons.push(`+${(pProtein - curProtein).toFixed(1)}g protein`);
+  }
+  if (curSat != null && pSat != null && pSat <= curSat - 1) {
+    reasons.push(`−${(curSat - pSat).toFixed(1)}g sat fat`);
+  }
+  if (curSodium != null && pSodium != null && pSodium <= curSodium - 80) {
+    reasons.push("Lower sodium");
+  }
+  if (pAdditives === 0 && p.ingredients_raw?.trim()) {
+    reasons.push("No obvious additives");
+  } else if (curAdditives > 0 && pAdditives < curAdditives) {
+    reasons.push("Fewer additives");
   }
   if (p.core_scores?.score != null && current.core_scores?.score != null) {
     const diff = p.core_scores.score - current.core_scores.score;
-    if (Math.abs(diff) <= 8) reasons.push(`Similar score ${p.core_scores.score}`);
-    else reasons.push(diff > 0 ? `Score +${diff}` : `Score ${p.core_scores.score}`);
+    if (diff >= 4) reasons.push(`Score +${diff}`);
   }
-  if (!reasons.length && p.subcategory) reasons.push(p.subcategory);
+  if (!reasons.length && p.core_scores?.score != null) reasons.push(`Health score ${p.core_scores.score}`);
   return reasons.slice(0, 3);
 }
 
