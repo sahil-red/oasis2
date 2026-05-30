@@ -160,7 +160,7 @@ export type DeepseekExtractOptions = {
 };
 
 type ChatResponse = {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{ finish_reason?: string; message?: { content?: string } }>;
   error?: { message?: string };
   usage?: {
     prompt_tokens?: number;
@@ -173,8 +173,9 @@ type ChatResponse = {
 
 export const DEEPSEEK_LABEL_SYSTEM_PROMPT = `
 You are a strict food-label extraction engine for Indian grocery products.
-Return exactly one valid minified JSON object. Do not output markdown, comments, prose, or whitespace outside JSON strings.
-Use sparse JSON: include every value you extracted, but omit keys whose value would be null, [], or {}. The TypeScript normalizer will fill absent keys with null/empty defaults.
+Return exactly one valid compact JSON object. Do not output markdown, comments, prose, or whitespace outside JSON strings.
+Validity is more important than compactness. Use sparse JSON where safe: include every value you extracted, but omit keys whose value would be null, [], or {}. The TypeScript normalizer will fill absent keys with null/empty defaults.
+Do not explain your reasoning. Output the final JSON only.
 
 MISSION
 Extract every useful fact printed on the package from the OCR text provided.
@@ -711,8 +712,13 @@ async function callDeepseek(
       throw new Error(`DeepSeek ${res.status}: ${message.slice(0, 1000)}`);
     }
     const parsed = JSON.parse(body) as ChatResponse;
-    const content = parsed.choices?.[0]?.message?.content;
-    if (!content) throw new Error("DeepSeek returned no message content");
+    const choice = parsed.choices?.[0];
+    const content = choice?.message?.content;
+    if (!content) {
+      throw new Error(
+        `DeepSeek returned no message content; finish_reason=${choice?.finish_reason ?? "unknown"} usage=${JSON.stringify(parsed.usage ?? null)}`,
+      );
+    }
     return { content, usage: (parsed.usage ?? null) as DeepseekUsage };
   } finally {
     clearTimeout(timer);
@@ -730,7 +736,7 @@ export async function extractLabelWithDeepseek(params: {
     apiKey: params.opts?.apiKey ?? process.env.DEEPSEEK_API_KEY ?? "",
     model: params.opts?.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL,
     temperature: params.opts?.temperature ?? 0,
-    maxTokens: params.opts?.maxTokens ?? 2500,
+    maxTokens: params.opts?.maxTokens ?? 6000,
     timeoutMs: params.opts?.timeoutMs ?? 120_000,
   };
   if (!opts.apiKey) throw new Error("Missing DEEPSEEK_API_KEY");
