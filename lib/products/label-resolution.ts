@@ -37,3 +37,13 @@ export function productHasLabelValueChange(
   }
   return productHasLabelLmUpdate(ocr_payload);
 }
+
+export function productHasDeepseekLabel(
+  ocr_payload: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!ocr_payload || typeof ocr_payload !== "object") return false;
+  const label = ocr_payload.deepseek_label;
+  if (!label || typeof label !== "object" || Array.isArray(label)) return false;
+  const schema = (label as Record<string, unknown>).schema_version;
+  return schema != null;
+}

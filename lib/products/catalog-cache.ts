@@ -43,6 +43,7 @@ export type CatalogSearchParams = {
   brand?: string;
   scored?: string;
   labelResolved?: string;
+  deepseek?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
@@ -73,6 +74,7 @@ export async function getCachedCatalogSearch(
     brand: params.brand ?? "",
     scored: params.scored ?? "",
     labelResolved: params.labelResolved ?? "",
+    deepseek: params.deepseek ?? "",
     min: minRaw ?? "",
     maxprice: maxRaw ?? "",
     grade: params.grade ?? "",
@@ -97,6 +99,7 @@ export async function getCachedCatalogSearch(
         limit,
         onlyScored: params.scored === "1",
         onlyLabelResolved: params.labelResolved === "1",
+        onlyDeepseek: params.deepseek === "1",
         minScore: minRaw ? Number(minRaw) : 0,
         maxPrice: maxRaw ? Number(maxRaw) : 0,
         grade: parseGrade(params.grade),

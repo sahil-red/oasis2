@@ -59,6 +59,7 @@ function ocrPayload(input: ProvenanceInput): (OcrPayload & {
   applied?: boolean;
   gate_reason?: string;
   label_resolution?: LabelResolutionMeta;
+  deepseek_label?: Record<string, unknown>;
 }) | null {
   const p = input.ocr_payload;
   if (!p || typeof p !== "object") return null;
@@ -66,6 +67,7 @@ function ocrPayload(input: ProvenanceInput): (OcrPayload & {
     applied?: boolean;
     gate_reason?: string;
     label_resolution?: LabelResolutionMeta;
+    deepseek_label?: Record<string, unknown>;
   };
 }
 
@@ -123,6 +125,24 @@ function inferNutritionProvenance(input: ProvenanceInput): FieldProvenance {
       kind: "llm",
       label: "Label LLM (Qwen)",
       detail: "Structured from pack image when CSV disagreed with OCR",
+    };
+  }
+  if (resolution?.nutrition_source === "deepseek") {
+    const ocr = ocrPayload(input);
+    const deepseek = ocr?.deepseek_label as Record<string, unknown> | undefined;
+    const confidence = deepseek?.confidence as Record<string, unknown> | undefined;
+    return {
+      kind: "llm",
+      label: "DeepSeek label extraction",
+      detail: "Promoted from full-pack OCR audit",
+      confidence:
+        confidence?.nutrition === "high"
+          ? 0.9
+          : confidence?.nutrition === "medium"
+            ? 0.65
+            : confidence?.nutrition === "low"
+              ? 0.35
+              : undefined,
     };
   }
 
@@ -187,6 +207,24 @@ function inferIngredientsProvenance(input: ProvenanceInput): FieldProvenance {
       kind: "llm",
       label: "Label LLM (Qwen)",
       detail: "Structured from pack image when CSV disagreed with OCR",
+    };
+  }
+  if (resolution?.ingredients_source === "deepseek") {
+    const ocr = ocrPayload(input);
+    const deepseek = ocr?.deepseek_label as Record<string, unknown> | undefined;
+    const confidence = deepseek?.confidence as Record<string, unknown> | undefined;
+    return {
+      kind: "llm",
+      label: "DeepSeek label extraction",
+      detail: "Ingredient list promoted from full-pack OCR audit",
+      confidence:
+        confidence?.ingredients === "high"
+          ? 0.9
+          : confidence?.ingredients === "medium"
+            ? 0.65
+            : confidence?.ingredients === "low"
+              ? 0.35
+              : undefined,
     };
   }
   if (resolution?.ingredients_source === "ocr") {

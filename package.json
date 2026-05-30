@@ -35,6 +35,7 @@
     "ocr:bench": "ocr-pipeline/.venv/bin/python ocr-pipeline/benchmark.py",
     "ocr:apple:raw": "tsx scripts/apple-ocr-raw.ts",
     "label:deepseek": "tsx scripts/deepseek-label-extract.ts",
+    "label:deepseek:promote": "tsx scripts/promote-deepseek-labels.ts",
     "ocr:lm": "tsx scripts/ocr-lm-pipeline.ts",
     "ocr:lm:backfill-db": "tsx scripts/backfill-lm-pipeline-to-db.ts",
     "backfill:per-serve": "tsx scripts/backfill-per-serve-nutrition.ts",

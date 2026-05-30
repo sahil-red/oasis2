@@ -39,6 +39,7 @@ type Params = {
   brand?: string;
   scored?: string;
   labelResolved?: string;
+  deepseek?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
@@ -74,6 +75,7 @@ function countActiveFilters(state: CatalogFilterState): number {
   if (state.brand) n++;
   if (state.onlyScored) n++;
   if (state.onlyLabelResolved) n++;
+  if (state.onlyDeepseek) n++;
   if (state.minScore > 0) n++;
   if (state.maxPrice > 0) n++;
   if (state.grade) n++;
@@ -141,6 +143,7 @@ function buildSearchRequest(
     brand: activeState.brand || undefined,
     scored: activeState.onlyScored ? "1" : undefined,
     labelResolved: activeState.onlyLabelResolved ? "1" : undefined,
+    deepseek: activeState.onlyDeepseek ? "1" : undefined,
     min: activeState.minScore > 0 ? activeState.minScore : undefined,
     maxprice: activeState.maxPrice > 0 ? activeState.maxPrice : undefined,
     grade: activeState.grade || undefined,
@@ -164,6 +167,7 @@ function paramsFromLocation(): Params {
     brand: sp.get("brand") ?? undefined,
     scored: sp.get("scored") ?? undefined,
     labelResolved: sp.get("labelResolved") ?? undefined,
+    deepseek: sp.get("deepseek") ?? undefined,
     min: sp.get("min") ?? undefined,
     maxprice: sp.get("maxprice") ?? undefined,
     grade: sp.get("grade") ?? undefined,
@@ -343,6 +347,7 @@ export function CatalogView({
         brand: activeState.brand,
         onlyScored: activeState.onlyScored,
         onlyLabelResolved: activeState.onlyLabelResolved,
+        onlyDeepseek: activeState.onlyDeepseek,
         minScore: activeState.minScore,
         maxPrice: activeState.maxPrice,
         grade: activeState.grade,
@@ -360,6 +365,7 @@ export function CatalogView({
       activeState.brand,
       activeState.onlyScored,
       activeState.onlyLabelResolved,
+      activeState.onlyDeepseek,
       activeState.minScore,
       activeState.maxPrice,
       activeState.grade,
@@ -503,6 +509,7 @@ export function CatalogView({
       activeState.brand ||
       activeState.onlyScored ||
       activeState.onlyLabelResolved ||
+      activeState.onlyDeepseek ||
       activeState.minScore > 0 ||
       activeState.maxPrice > 0 ||
       activeState.grade ||
@@ -520,6 +527,7 @@ export function CatalogView({
       brand: "",
       onlyScored: false,
       onlyLabelResolved: false,
+      onlyDeepseek: false,
       minScore: 0,
       maxPrice: 0,
       grade: "",
@@ -721,6 +729,15 @@ export function CatalogView({
             {activeState.grade ? (
               <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} />
             ) : null}
+            {activeState.onlyDeepseek ? (
+              <FilterChip label="DeepSeek label extracted" onClear={() => patch({ onlyDeepseek: false })} />
+            ) : null}
+            {activeState.onlyLabelResolved ? (
+              <FilterChip label="Label ≠ CSV" onClear={() => patch({ onlyLabelResolved: false })} />
+            ) : null}
+            {activeState.onlyScored ? (
+              <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} />
+            ) : null}
             {activeState.sublabel ? (
               <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} />
             ) : null}
@@ -858,6 +875,16 @@ export function CatalogView({
                   className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
                 />
                 Label ≠ CSV
+              </label>
+
+              <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
+                <input
+                  type="checkbox"
+                  checked={activeState.onlyDeepseek}
+                  onChange={(e) => patch({ onlyDeepseek: e.target.checked })}
+                  className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
+                />
+                DeepSeek label extracted
               </label>
             </div>
           </div>

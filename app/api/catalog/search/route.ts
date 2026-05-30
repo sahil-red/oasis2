@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     limit: sp.has("limit") ? Number(sp.get("limit")) : 96,
     scored: sp.get("scored") ?? undefined,
     labelResolved: sp.get("labelResolved") ?? undefined,
+    deepseek: sp.get("deepseek") ?? undefined,
     min: sp.get("min") ?? undefined,
     maxprice: sp.get("maxprice") ?? undefined,
     grade: sp.get("grade") ?? undefined,

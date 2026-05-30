@@ -11,7 +11,10 @@ import {
   productUsecase,
 } from "@/lib/products/catalog-meta";
 import { sortFromParam, type CatalogSort } from "@/lib/products/catalog-sort";
-import { productHasLabelValueChange } from "@/lib/products/label-resolution";
+import {
+  productHasDeepseekLabel,
+  productHasLabelValueChange,
+} from "@/lib/products/label-resolution";
 import type { CatalogFilters, ProductListItem } from "@/lib/products/queries";
 import type { Grade } from "@/lib/supabase/types";
 
@@ -24,6 +27,8 @@ export type CatalogFilterState = {
   onlyScored: boolean;
   /** Products where label read disagreed with Zepto CSV (nutrition or ingredients). */
   onlyLabelResolved: boolean;
+  /** Products with a promoted DeepSeek label extraction. */
+  onlyDeepseek: boolean;
   minScore: number;
   maxPrice: number;
   grade: Grade | "";
@@ -47,6 +52,7 @@ export function hasActiveCatalogFilters(
       state.brand ||
       state.onlyScored ||
       state.onlyLabelResolved ||
+      state.onlyDeepseek ||
       state.minScore > 0 ||
       state.maxPrice > 0 ||
       state.grade ||
@@ -65,6 +71,7 @@ export function filterCatalogProducts(
 
   return products.filter((p) => {
     if (state.onlyLabelResolved && !productHasLabelValueChange(p.ocr_payload)) return false;
+    if (state.onlyDeepseek && !productHasDeepseekLabel(p.ocr_payload)) return false;
     if (state.onlyScored && !p.core_scores) return false;
     if (state.minScore > 0) {
       const s = p.core_scores?.score;
@@ -132,6 +139,7 @@ export function parseCatalogParams(params: {
   brand?: string;
   scored?: string;
   labelResolved?: string;
+  deepseek?: string;
   min?: string;
   maxprice?: string;
   grade?: string;
@@ -155,6 +163,7 @@ export function parseCatalogParams(params: {
     brand: params.brand ?? "",
     onlyScored: params.scored === "1",
     onlyLabelResolved: params.labelResolved === "1",
+    onlyDeepseek: params.deepseek === "1",
     minScore: Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0,
     maxPrice: Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : 0,
     grade,
@@ -177,6 +186,7 @@ export function catalogParamsToSearch(
   if (state.brand) p.set("brand", state.brand);
   if (state.onlyScored) p.set("scored", "1");
   if (state.onlyLabelResolved) p.set("labelResolved", "1");
+  if (state.onlyDeepseek) p.set("deepseek", "1");
   if (state.minScore > 0) p.set("min", String(state.minScore));
   if (state.maxPrice > 0) p.set("maxprice", String(state.maxPrice));
   if (state.grade) p.set("grade", state.grade);
@@ -207,6 +217,7 @@ export function catalogReturnHref(params: {
   brand?: string;
   scored?: string;
   labelResolved?: string;
+  deepseek?: string;
   min?: string;
   maxprice?: string;
   grade?: string;

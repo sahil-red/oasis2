@@ -23,6 +23,7 @@ import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { PdpSourceDataPanel } from "@/components/pdp-source-data-panel";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
+import { deepseekLabelFromPayload } from "@/lib/ocr/deepseek-promote";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { findAlternatives } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
@@ -57,6 +58,7 @@ export default async function ProductPage({
     brand?: string;
     scored?: string;
     labelResolved?: string;
+    deepseek?: string;
     min?: string;
     maxprice?: string;
     grade?: string;
@@ -106,6 +108,7 @@ export default async function ProductPage({
     ocr_status: product.ocr_status,
     ocr_payload: product.ocr_payload,
   });
+  const deepseekLabel = deepseekLabelFromPayload(product.ocr_payload);
   const verdict = score
     ? resolveProductVerdict({
         verdict: score.verdict,
@@ -257,6 +260,7 @@ export default async function ProductPage({
                       cohortSize={score?.cohort_size}
                       relativeScore={score?.relative_score}
                       roleCohort={score?.role_cohort ?? null}
+                      deepseek={deepseekLabel}
                     />
                   </div>
                 </section>

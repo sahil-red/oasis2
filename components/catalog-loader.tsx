@@ -12,6 +12,7 @@ type Params = {
   brand?: string;
   scored?: string;
   labelResolved?: string;
+  deepseek?: string;
   min?: string;
   maxprice?: string;
   grade?: string;

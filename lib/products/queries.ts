@@ -51,6 +51,7 @@ async function countEligibleCatalogProducts(
     !state.subcategory &&
     !state.usecase &&
     !state.brand &&
+    !state.onlyDeepseek &&
     !state.minScore &&
     !state.grade &&
     !state.maxPrice &&
@@ -87,6 +88,7 @@ async function countEligibleCatalogProducts(
     !state.subcategory &&
     !state.usecase &&
     !state.brand &&
+    !state.onlyDeepseek &&
     !state.minScore &&
     !state.grade &&
     !state.maxPrice &&
@@ -348,7 +350,7 @@ function catalogListFields(
 ): string {
   const base =
     variant === "goal" ? GOAL_LIST_FIELDS : variant === "full" ? LIST_FIELDS : GRID_LIST_FIELDS;
-  if (state.onlyLabelResolved && !base.includes("ocr_payload")) {
+  if ((state.onlyLabelResolved || state.onlyDeepseek) && !base.includes("ocr_payload")) {
     return `${base}${LABEL_FILTER_EXTRA}`;
   }
   return base;
@@ -795,13 +797,13 @@ async function paginateCatalogSql(opts: {
   const { page, limit, state, diet, variant = "grid" } = opts;
   const sqlVisible = await catalogHasVisibleColumn();
 
-  if (diet !== "any" || !sqlVisible || state.onlyLabelResolved) {
+  if (diet !== "any" || !sqlVisible || state.onlyLabelResolved || state.onlyDeepseek) {
     return paginateCatalogWithClientFilter({
       page,
       limit,
       state,
       diet,
-      variant: sqlVisible ? (state.onlyLabelResolved ? "full" : variant) : "full",
+      variant: sqlVisible ? (state.onlyLabelResolved || state.onlyDeepseek ? "full" : variant) : "full",
     });
   }
 
@@ -964,6 +966,7 @@ function parseSearchState(opts: {
   brand?: string;
   onlyScored?: boolean;
   onlyLabelResolved?: boolean;
+  onlyDeepseek?: boolean;
   minScore?: number;
   maxPrice?: number;
   grade?: Grade | "";
@@ -979,6 +982,7 @@ function parseSearchState(opts: {
     brand: opts.brand ?? "",
     onlyScored: opts.onlyScored ?? false,
     onlyLabelResolved: opts.onlyLabelResolved ?? false,
+    onlyDeepseek: opts.onlyDeepseek ?? false,
     minScore: opts.minScore ?? 0,
     maxPrice: opts.maxPrice ?? 0,
     grade: opts.grade ?? "",
@@ -998,6 +1002,7 @@ export async function searchCatalogGrid(opts: {
   limit?: number;
   onlyScored?: boolean;
   onlyLabelResolved?: boolean;
+  onlyDeepseek?: boolean;
   minScore?: number;
   maxPrice?: number;
   grade?: Grade | "";

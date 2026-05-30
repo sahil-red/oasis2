@@ -13,7 +13,10 @@
 
 import { config as loadEnv } from "dotenv";
 import { adminClient } from "@/lib/supabase/admin";
-import { productHasLabelValueChange } from "@/lib/products/label-resolution";
+import {
+  productHasDeepseekLabel,
+  productHasLabelValueChange,
+} from "@/lib/products/label-resolution";
 import {
   persistCoreScoresBatch,
   purgeOutdatedCoreScores,
@@ -28,16 +31,20 @@ loadEnv({ path: ".env.local" });
 function parseArgs() {
   const argv = process.argv.slice(2);
   let limit: number | null = null;
+  let skus: string[] = [];
   for (const a of argv) {
     if (a.startsWith("--limit=")) limit = Number(a.split("=")[1]);
+    if (a.startsWith("--sku=")) skus = a.slice("--sku=".length).split(",").map((s) => s.trim()).filter(Boolean);
   }
   return {
     limit,
+    skus,
     dryRun: argv.includes("--dry-run"),
     withDetail: argv.includes("--with-detail"),
     force: argv.includes("--force"),
     onlyUnscored: argv.includes("--only-unscored"),
     labelResolved: argv.includes("--label-resolved"),
+    deepseek: argv.includes("--deepseek"),
   };
 }
 
@@ -54,11 +61,15 @@ async function main() {
     if (purged) console.log(`[05-compute-scores] purged ${purged} outdated core_scores rows`);
   }
 
-  const selectFields = args.labelResolved
+  const selectFields = args.labelResolved || args.deepseek
     ? "id, name, category, subcategory, ingredients_raw, nutrition, attributes, ocr_payload, core_scores ( rule_version )"
     : "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )";
 
   let query: any = supabase.from("products").select(selectFields).not("nutrition", "is", null);
+  if (args.skus.length) {
+    query = query.in("zepto_sku", args.skus);
+    console.log(`[05-compute-scores] --sku: ${args.skus.length} SKU(s).`);
+  }
 
   if (args.withDetail) {
     query = query.not("raw_payload", "is", null);
@@ -72,7 +83,15 @@ async function main() {
     );
   }
 
-  const pageSize = args.limit ?? 1000;
+  if (args.deepseek && !args.skus.length) {
+    console.log("[05-compute-scores] --deepseek: DeepSeek-promoted products only, client filter.");
+  } else if (args.deepseek) {
+    console.log("[05-compute-scores] --deepseek: validating supplied DeepSeek SKU(s).");
+  }
+
+  const pageSize = args.deepseek && !args.skus.length ? 1000 : args.limit ?? 1000;
+  const deepseekTarget = args.deepseek && !args.skus.length ? args.limit : null;
+  let deepseekSelected = 0;
   let scored = 0;
   let skipped = 0;
   let noNutrition = 0;
@@ -94,6 +113,7 @@ async function main() {
     totalFetched += rows.length;
 
     const toScore: ScoreableProduct[] = [];
+    let reachedDeepseekTarget = false;
     for (const row of rows) {
       if (
         args.labelResolved &&
@@ -103,6 +123,25 @@ async function main() {
       ) {
         skipped++;
         continue;
+      }
+      if (
+        args.deepseek &&
+        !productHasDeepseekLabel(
+          row.ocr_payload as Record<string, unknown> | null | undefined,
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+      if (deepseekTarget != null && deepseekSelected >= deepseekTarget) {
+        reachedDeepseekTarget = true;
+        break;
+      }
+      if (args.deepseek && !args.skus.length) {
+        deepseekSelected++;
+        if (deepseekTarget != null && deepseekSelected >= deepseekTarget) {
+          reachedDeepseekTarget = true;
+        }
       }
 
       const rel = row.core_scores as
@@ -128,6 +167,7 @@ async function main() {
         nutrition: row.nutrition as ProductNutrition | null,
         attributes: (row.attributes ?? null) as Record<string, string> | null,
       });
+      if (reachedDeepseekTarget) break;
     }
 
     if (toScore.length) {
@@ -143,7 +183,8 @@ async function main() {
       `[05-compute-scores] progress fetched=${totalFetched} scored=${scored} skipped=${skipped} no_nutrition=${noNutrition} (${elapsed}s)`,
     );
 
-    if (args.limit || rows.length < pageSize) break;
+    if (reachedDeepseekTarget || rows.length < pageSize) break;
+    if (args.limit && !(args.deepseek && !args.skus.length)) break;
     offset += pageSize;
   }
 
