@@ -1,5 +1,3 @@
-import type { DeepseekDisplayFacts } from "@/lib/ocr/deepseek-promote";
-
 type DeepseekFacts = Record<string, unknown>;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -28,12 +26,10 @@ function FactLine({ label, value }: { label: string; value: string | null | unde
 
 export function PdpLabelInsights({
   deepseek,
-  display,
 }: {
   deepseek: DeepseekFacts | null;
-  display: DeepseekDisplayFacts | null;
 }) {
-  if (!deepseek && !display) return null;
+  if (!deepseek) return null;
 
   const extracted = asRecord(deepseek?.extracted);
   const allergens = asRecord(extracted?.allergens);
@@ -54,39 +50,18 @@ export function PdpLabelInsights({
     .filter(Boolean)
     .join(" · ");
   const hasFacts = Boolean(allergenText || storageText || claims.length);
+  if (!hasFacts) return null;
 
   return (
     <section className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4">
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
-        Label insights
+        Other information
       </p>
-
-      {display?.chipLabels.length ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {display.chipLabels.slice(0, 7).map((chip) => (
-            <span
-              key={chip}
-              className="rounded-full border border-(--color-line-strong) px-2.5 py-1 text-[11px] font-semibold leading-tight text-(--color-fg-muted)"
-            >
-              {chip}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {display?.why ? (
-        <p className="mt-3 text-[13px] leading-relaxed text-(--color-fg-muted)">
-          {display.why}
-        </p>
-      ) : null}
-
-      {hasFacts ? (
-        <div className="mt-4 space-y-3">
-          <FactLine label="Allergens" value={allergenText || null} />
-          <FactLine label="Storage" value={storageText} />
-          <FactLine label="Claims" value={claims.join(", ")} />
-        </div>
-      ) : null}
+      <div className="mt-4 space-y-3">
+        <FactLine label="Allergens" value={allergenText || null} />
+        <FactLine label="Storage" value={storageText} />
+        <FactLine label="Claims" value={claims.join(", ")} />
+      </div>
     </section>
   );
 }

@@ -12,6 +12,8 @@ export type SwapSuggestion = {
   deltas: string[];
 };
 
+export type SimilarProductSuggestion = SwapSuggestion;
+
 function sugar(n: ProductNutrition | null): number | null {
   const s = n?.sugar_g_100g ?? n?.added_sugar_g_100g;
   return typeof s === "number" ? s : null;
@@ -38,9 +40,48 @@ function nameTokens(name: string): Set<string> {
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, " ")
       .split(/\s+/)
-      .filter((t) => t.length > 2),
+      .filter((t) => t.length > 2 && !SIMILAR_STOPWORDS.has(t)),
   );
 }
+
+const SIMILAR_STOPWORDS = new Set([
+  "and",
+  "with",
+  "the",
+  "pack",
+  "combo",
+  "free",
+  "fresh",
+  "classic",
+  "premium",
+]);
+
+const FLAVOUR_TOKENS = new Set([
+  "almond",
+  "blueberry",
+  "butterscotch",
+  "caramel",
+  "cheese",
+  "chilli",
+  "chocolate",
+  "coffee",
+  "cream",
+  "dark",
+  "elaichi",
+  "fruit",
+  "garlic",
+  "hazelnut",
+  "jeera",
+  "mango",
+  "mint",
+  "orange",
+  "paneer",
+  "pista",
+  "pistachio",
+  "rose",
+  "strawberry",
+  "vanilla",
+]);
 
 function nameOverlap(a: string, b: string): number {
   const ta = nameTokens(a);
@@ -49,6 +90,19 @@ function nameOverlap(a: string, b: string): number {
   let shared = 0;
   for (const t of ta) if (tb.has(t)) shared++;
   return shared / Math.max(ta.size, tb.size);
+}
+
+function tokenIntersection(a: Set<string>, b: Set<string>): string[] {
+  const out: string[] = [];
+  for (const token of a) {
+    if (b.has(token)) out.push(token);
+  }
+  return out;
+}
+
+function flavourOverlap(a: string, b: string): string[] {
+  const shared = tokenIntersection(nameTokens(a), nameTokens(b));
+  return shared.filter((token) => FLAVOUR_TOKENS.has(token));
 }
 
 function nutritionTooSimilar(
@@ -247,5 +301,86 @@ export function findAlternatives(
     }
   }
 
+  return picked;
+}
+
+function similarityScore(current: ProductListItem, p: ProductListItem): number {
+  const curTokens = nameTokens(current.name);
+  const candTokens = nameTokens(p.name);
+  const shared = tokenIntersection(curTokens, candTokens);
+  const flavours = shared.filter((token) => FLAVOUR_TOKENS.has(token));
+  let score = 0;
+
+  if (current.brand && p.brand && current.brand === p.brand) score += 18;
+  if (current.subcategory && p.subcategory === current.subcategory) score += 14;
+  if (productShelf(current) && productShelf(p) === productShelf(current)) score += 8;
+  score += nameOverlap(current.name, p.name) * 34;
+  score += Math.min(20, flavours.length * 10);
+
+  if (current.price_inr != null && p.price_inr != null) {
+    const denom = Math.max(current.price_inr, p.price_inr, 1);
+    score += Math.max(0, 16 * (1 - Math.abs(current.price_inr - p.price_inr) / denom));
+  }
+  if (current.core_scores?.score != null && p.core_scores?.score != null) {
+    score += Math.max(0, 16 * (1 - Math.abs(current.core_scores.score - p.core_scores.score) / 40));
+  }
+  return score;
+}
+
+function buildSimilarityReasons(current: ProductListItem, p: ProductListItem): string[] {
+  const reasons: string[] = [];
+  const flavours = flavourOverlap(current.name, p.name);
+  if (current.brand && p.brand === current.brand) reasons.push("Same brand");
+  if (flavours.length) reasons.push(`Similar ${flavours.slice(0, 2).join("/")}`);
+  else if (nameOverlap(current.name, p.name) >= 0.25) reasons.push("Similar name");
+  if (p.price_inr != null && current.price_inr != null) {
+    const diff = p.price_inr - current.price_inr;
+    if (Math.abs(diff) <= Math.max(50, current.price_inr * 0.35)) {
+      reasons.push(diff === 0 ? "Same price" : `₹${p.price_inr}`);
+    }
+  }
+  if (p.core_scores?.score != null && current.core_scores?.score != null) {
+    const diff = p.core_scores.score - current.core_scores.score;
+    if (Math.abs(diff) <= 8) reasons.push(`Similar score ${p.core_scores.score}`);
+    else reasons.push(diff > 0 ? `Score +${diff}` : `Score ${p.core_scores.score}`);
+  }
+  if (!reasons.length && p.subcategory) reasons.push(p.subcategory);
+  return reasons.slice(0, 3);
+}
+
+export function findSimilarProducts(
+  current: ProductListItem,
+  catalog: ProductListItem[],
+  goal: GoalId,
+  limit = 4,
+  opts?: { diet?: DietMode; excludeIds?: Set<string> },
+): SimilarProductSuggestion[] {
+  const diet: DietMode = opts?.diet ?? "any";
+  const excludeIds = opts?.excludeIds ?? new Set<string>();
+  const candidates = catalog
+    .filter((p) => p.id !== current.id && !excludeIds.has(p.id))
+    .filter((p) => isDietCompatible(diet, p).ok)
+    .map((p) => ({
+      p,
+      score: similarityScore(current, p),
+      goalFit: computeGoalFit(goal, goalFitInputs(p)).fit,
+    }))
+    .filter(({ score }) => score >= 26)
+    .sort((a, b) => b.score - a.score);
+
+  const picked: SimilarProductSuggestion[] = [];
+  const brandCounts = new Map<string, number>();
+  for (const { p, goalFit } of candidates) {
+    const brand = brandKey(p);
+    if ((brandCounts.get(brand) ?? 0) >= 2) continue;
+    if (picked.some((x) => nameOverlap(x.product.name, p.name) > 0.72)) continue;
+    picked.push({
+      product: p,
+      goalFit,
+      deltas: buildSimilarityReasons(current, p),
+    });
+    brandCounts.set(brand, (brandCounts.get(brand) ?? 0) + 1);
+    if (picked.length >= limit) break;
+  }
   return picked;
 }

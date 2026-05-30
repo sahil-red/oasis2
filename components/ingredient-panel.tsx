@@ -44,7 +44,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
       <button
         type="button"
         className={cn(
-          "flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors",
+          "flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors",
           hasWhy ? "hover:bg-(--color-bg-soft) cursor-pointer" : "cursor-default",
         )}
         onClick={() => hasWhy && setOpen((v) => !v)}
@@ -52,7 +52,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
       >
         <span
           className={cn(
-            "mt-[5px] h-2 w-2 shrink-0 rounded-full",
+            "mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full",
             isProbiotic ? "bg-[#14b8a6]" : RISK_DOT[dotRisk],
           )}
           aria-hidden
@@ -66,14 +66,14 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
             {item.percent ? (
               <span className="text-[11px] text-(--color-fg-dim)">{item.percent}</span>
             ) : null}
-          </span>
-          <span
-            className={cn(
-              "mt-0.5 block text-[11px] font-medium",
-              isProbiotic ? "text-[#2dd4bf]" : RISK_TEXT[dotRisk],
-            )}
-          >
-            {item.tierLabel}
+            <span
+              className={cn(
+                "text-[11px] font-medium",
+                isProbiotic ? "text-[#2dd4bf]" : RISK_TEXT[dotRisk],
+              )}
+            >
+              {item.tierLabel}
+            </span>
           </span>
         </span>
         {hasWhy ? (
@@ -83,7 +83,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
         ) : null}
       </button>
       {open && item.why ? (
-        <div className="border-t border-(--color-line) bg-(--color-bg-soft) px-3.5 py-2.5 pl-8">
+        <div className="border-t border-(--color-line) bg-(--color-bg-soft) px-3 py-2 pl-7">
           <p className="text-[12.5px] leading-relaxed text-(--color-fg-muted)">{item.why}</p>
         </div>
       ) : null}

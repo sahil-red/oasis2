@@ -11,11 +11,15 @@ export function SwapPanel({
   suggestions,
   compact,
   goal = "balanced",
+  title = "Swaps",
+  description,
 }: {
   current: ProductListItem;
   suggestions: SwapSuggestion[];
   compact?: boolean;
   goal?: GoalId;
+  title?: string;
+  description?: string;
 }) {
   if (suggestions.length === 0) return null;
 
@@ -26,16 +30,16 @@ export function SwapPanel({
     <section
       className={cn(
         "rounded-xl border border-(--color-line) bg-(--color-bg-soft)",
-        compact ? "p-3" : "rounded-2xl p-6",
+        compact ? "p-4" : "rounded-2xl p-6",
       )}
     >
       <h2
         className={cn(
           "font-display text-(--color-fg)",
-          compact ? "text-base" : "text-2xl",
+          compact ? "text-lg" : "text-2xl",
         )}
       >
-        Swaps
+        {title}
       </h2>
       <p
         className={cn(
@@ -43,7 +47,9 @@ export function SwapPanel({
           compact ? "mt-1 text-xs line-clamp-2" : "mt-2 text-sm",
         )}
       >
-        {curSugar != null ? (
+        {description ? (
+          description
+        ) : curSugar != null ? (
           <>
             Lower sugar & better macros in{" "}
             <strong className="text-(--color-fg)">{current.subcategory ?? "this aisle"}</strong>
@@ -60,20 +66,20 @@ export function SwapPanel({
         )}
       </p>
 
-      <ul className={cn(compact ? "mt-3 space-y-2" : "mt-5 space-y-3")}>
+      <ul className={cn(compact ? "mt-3.5 space-y-2.5" : "mt-5 space-y-3")}>
         {suggestions.map(({ product, goalFit, deltas }) => (
           <li key={product.id}>
             <Link
               href={`/product/${product.slug}`}
               className={cn(
                 "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
-                compact ? "p-2" : "gap-3 rounded-xl p-3",
+                compact ? "gap-2.5 p-2.5" : "gap-3 rounded-xl p-3",
               )}
             >
               <div
                 className={cn(
                   "relative shrink-0 overflow-hidden rounded-lg bg-[#1a1a1a] shadow-[inset_0_0_16px_rgba(0,0,0,0.4)]",
-                  compact ? "h-11 w-11" : "h-16 w-16",
+                  compact ? "h-14 w-14" : "h-16 w-16",
                 )}
               >
                 {product.image_urls[0] ? (
@@ -91,7 +97,7 @@ export function SwapPanel({
                     {product.brand}
                   </p>
                 ) : null}
-                <p className="line-clamp-2 text-[13px] font-medium leading-snug text-(--color-fg)">
+                <p className="line-clamp-2 text-[13.5px] font-medium leading-snug text-(--color-fg)">
                   {product.name}
                 </p>
                 <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-dim)">

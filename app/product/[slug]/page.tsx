@@ -29,7 +29,7 @@ import {
   deepseekLabelFromPayload,
 } from "@/lib/ocr/deepseek-promote";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
-import { findAlternatives } from "@/lib/products/alternatives";
+import { findAlternatives, findSimilarProducts } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 import type { SubScores } from "@/lib/supabase/types";
@@ -91,8 +91,12 @@ export default async function ProductPage({
   });
   const productForGoals = displayNutrition ? { ...product, nutrition: displayNutrition } : product;
 
-  const swapPool = await getProductsForSwaps(product, 96);
+  const swapPool = await getProductsForSwaps(product, 180);
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
+  const similarProducts = findSimilarProducts(product, swapPool, goal, 4, {
+    diet,
+    excludeIds: new Set(swaps.map((s) => s.product.id)),
+  });
   const goalRows = buildProductGoalRows(productForGoals);
   const overallGoal = buildOverallGoalSummary(productForGoals);
   const dietBadge = productDietBadge(product);
@@ -241,10 +245,20 @@ export default async function ProductPage({
           </section>
 
           <aside className="space-y-4 lg:sticky lg:top-24">
-            <PdpLabelInsights deepseek={deepseekLabel} display={deepseekDisplay} />
             {swaps.length > 0 ? (
               <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
             ) : null}
+            {similarProducts.length > 0 ? (
+              <SwapPanel
+                current={product}
+                suggestions={similarProducts}
+                compact
+                goal={goal}
+                title="Similar products"
+                description="Close matches by flavour, brand, price, and score."
+              />
+            ) : null}
+            <PdpLabelInsights deepseek={deepseekLabel} />
             {displayNutrition ? (
               <ProteinQualityNote
                 nutrition={displayNutrition}
