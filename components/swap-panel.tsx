@@ -33,13 +33,13 @@ export function SwapPanel({
     <section
       className={cn(
         "rounded-xl border border-(--color-line) bg-(--color-bg-soft)",
-        compact ? "p-4" : "rounded-2xl p-6",
+        compact ? "p-5" : "rounded-2xl p-6",
       )}
     >
       <h2
         className={cn(
           "font-display text-(--color-fg)",
-          compact ? "text-lg" : "text-2xl",
+          compact ? "text-xl" : "text-2xl",
         )}
       >
         {title}
@@ -72,9 +72,9 @@ export function SwapPanel({
       <ul
         className={cn(
           grid
-            ? "mt-3.5 grid grid-cols-2 gap-2.5"
+            ? "mt-4 grid grid-cols-2 gap-3.5"
             : compact
-              ? "mt-3.5 space-y-2.5"
+              ? "mt-4 space-y-3"
               : "mt-5 space-y-3",
         )}
       >
@@ -85,16 +85,16 @@ export function SwapPanel({
               className={cn(
                 "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
                 grid
-                  ? "h-full flex-col p-2.5"
+                  ? "h-full flex-col rounded-xl p-3"
                   : compact
-                    ? "gap-2.5 p-2.5"
+                    ? "gap-3 p-3"
                     : "gap-3 rounded-xl p-3",
               )}
             >
               <div
                 className={cn(
-                  "relative shrink-0 overflow-hidden rounded-lg bg-[#1a1a1a] shadow-[inset_0_0_16px_rgba(0,0,0,0.4)]",
-                  grid ? "h-24 w-full" : compact ? "h-14 w-14" : "h-16 w-16",
+                  "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-(--color-bg)",
+                  grid ? "h-32 w-full" : compact ? "h-16 w-16" : "h-16 w-16",
                 )}
               >
                 {product.image_urls[0] ? (
@@ -102,7 +102,7 @@ export function SwapPanel({
                     src={product.image_urls[0]}
                     alt=""
                     fill
-                    className="object-contain p-1"
+                    className={cn("object-contain", grid ? "p-3" : "p-2")}
                   />
                 ) : null}
               </div>
@@ -112,7 +112,12 @@ export function SwapPanel({
                     {product.brand}
                   </p>
                 ) : null}
-                <p className="line-clamp-2 text-[13.5px] font-medium leading-snug text-(--color-fg)">
+                <p
+                  className={cn(
+                    "font-medium leading-snug text-(--color-fg)",
+                    grid ? "line-clamp-2 text-[14px]" : "line-clamp-2 text-[13.5px]",
+                  )}
+                >
                   {product.name}
                 </p>
                 <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-dim)">

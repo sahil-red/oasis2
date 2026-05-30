@@ -230,7 +230,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,620px)_minmax(420px,1fr)] lg:items-start xl:grid-cols-[minmax(0,640px)_minmax(480px,1fr)]">
+        <div className="mt-14 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-start xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -242,9 +242,12 @@ export default async function ProductPage({
                 intelligenceRows={ingredientIntelligence}
               />
             </div>
+            <div className="mt-4">
+              <PdpLabelInsights deepseek={deepseekLabel} />
+            </div>
           </section>
 
-          <aside className="space-y-4 lg:sticky lg:top-24">
+          <aside className="space-y-5 lg:sticky lg:top-24">
             {swaps.length > 0 ? (
               <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
             ) : null}
@@ -259,7 +262,6 @@ export default async function ProductPage({
                 layout="grid"
               />
             ) : null}
-            <PdpLabelInsights deepseek={deepseekLabel} />
             {displayNutrition ? (
               <ProteinQualityNote
                 nutrition={displayNutrition}
