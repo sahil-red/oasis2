@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { ProteinQualityNote } from "@/components/protein-quality-note";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
+import { PdpLabelInsights } from "@/components/pdp-label-insights";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
@@ -166,9 +167,6 @@ export default async function ProductPage({
                 subcategory={product.subcategory}
               />
             ) : null}
-            {swaps.length > 0 ? (
-              <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
-            ) : null}
           </div>
 
           <div className="min-w-0">
@@ -228,8 +226,8 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-14">
-          <section>
+        <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
               Tap any flagged ingredient for the why behind it.
@@ -242,15 +240,19 @@ export default async function ProductPage({
             </div>
           </section>
 
-          {displayNutrition ? (
-            <div className="mt-6">
+          <aside className="space-y-4 lg:sticky lg:top-24">
+            <PdpLabelInsights deepseek={deepseekLabel} display={deepseekDisplay} />
+            {swaps.length > 0 ? (
+              <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
+            ) : null}
+            {displayNutrition ? (
               <ProteinQualityNote
                 nutrition={displayNutrition}
                 name={product.name}
                 category={product.category}
               />
-            </div>
-          ) : null}
+            ) : null}
+          </aside>
         </div>
 
         {attrEntries.length > 0 || provenance || score?.cohort_size ? (
