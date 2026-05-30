@@ -91,7 +91,7 @@ export function ProductGoalFitList({
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-(--color-line) pb-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-              All goals at a glance
+              Goals at a glance
             </p>
             {activeGoal ? (
               <p className="mt-1.5 text-[13px] leading-snug text-(--color-fg-muted)">
@@ -104,7 +104,7 @@ export function ProductGoalFitList({
           ) : null}
         </div>
 
-        <ul className="mt-3 space-y-0.5">
+        <ul className="mt-3 space-y-2.5">
           {gridGoals.map((g) => (
             <GoalFitRow
               key={g.id}
@@ -165,7 +165,7 @@ function ScorePill({
 function GoalFitRow({
   label,
   fit,
-  grade,
+  grade: _grade,
   active,
   onSelect,
 }: {
@@ -175,7 +175,6 @@ function GoalFitRow({
   active: boolean;
   onSelect: () => void;
 }) {
-  const band = bandFromScore(fit);
   const surface = scoreTileSurface(fit);
 
   return (
@@ -185,7 +184,7 @@ function GoalFitRow({
         onClick={onSelect}
         aria-pressed={active}
         className={cn(
-          "group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition",
+          "group grid w-full grid-cols-[80px_minmax(0,1fr)_34px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition sm:grid-cols-[96px_minmax(0,1fr)_38px]",
           active
             ? "bg-(--color-bg-soft) ring-1 ring-(--color-line-strong)"
             : "hover:bg-(--color-bg-soft)/70",
@@ -193,7 +192,7 @@ function GoalFitRow({
       >
         <span
           className={cn(
-            "min-w-0 flex-1 px-1 text-[13px] font-medium",
+            "min-w-0 px-1 text-[13px] font-medium",
             active
               ? "text-(--color-fg)"
               : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
@@ -201,18 +200,18 @@ function GoalFitRow({
         >
           {label}
         </span>
-        <span
-          data-band={band}
-          className={cn(
-            "score-band-chip shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            !active && "opacity-80",
-          )}
-        >
-          {grade}
+        <span className="h-1.5 min-w-0 overflow-hidden rounded-full bg-(--color-bg-soft)">
+          <span
+            className="block h-full rounded-full transition-[width]"
+            style={{
+              width: `${Math.max(2, Math.min(100, fit))}%`,
+              backgroundColor: surface.accentColor,
+            }}
+          />
         </span>
         <span
           className={cn(
-            "flex h-9 w-11 shrink-0 items-center justify-center rounded-lg border font-display text-lg tabular-nums leading-none transition",
+            "flex h-7 w-9 shrink-0 items-center justify-center rounded-lg border font-display text-[15px] tabular-nums leading-none transition",
           )}
           style={
             active

@@ -4,6 +4,7 @@ import { IngredientPanel } from "@/components/ingredient-panel";
 import { ProteinQualityNote } from "@/components/protein-quality-note";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { PdpLabelInsights } from "@/components/pdp-label-insights";
+import { PdpNutrientStrip } from "@/components/pdp-nutrient-strip";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
@@ -205,6 +206,7 @@ export default async function ProductPage({
               <div className="mt-5">
                 <VerdictBlock
                   verdict={verdict}
+                  score={score?.score}
                   sublabelIds={pdpSublabels}
                   cohortSize={score?.cohort_size}
                   relativeScore={score?.relative_score}
@@ -223,6 +225,8 @@ export default async function ProductPage({
                 className="mt-5"
               />
             ) : null}
+
+            <PdpNutrientStrip nutrition={displayNutrition} />
 
             <Suspense fallback={null}>
               <ProductGoalFitList rows={goalRows} overall={overallGoal} />

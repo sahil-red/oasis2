@@ -144,6 +144,7 @@ function SublabelChip({
 
 export function VerdictBlock({
   verdict,
+  score,
   sublabelIds,
   cohortSize,
   relativeScore,
@@ -154,6 +155,7 @@ export function VerdictBlock({
   className,
 }: {
   verdict: VerdictId;
+  score?: number | null;
   sublabelIds?: string[] | null;
   cohortSize?: number | null;
   relativeScore?: number | null;
@@ -173,9 +175,29 @@ export function VerdictBlock({
       className={cn("space-y-3 rounded-xl border p-4", className)}
       style={{ backgroundColor: c.bg, borderColor: c.border }}
     >
-      <p className="text-base font-bold tracking-tight" style={{ color: c.fg }}>
-        {verdictTitle(verdict)}
-      </p>
+      <div className="flex items-start gap-4">
+        {score != null ? (
+          <div
+            className="flex h-16 min-w-16 items-center justify-center rounded-xl border bg-(--color-panel)/70 px-3 font-display text-4xl font-semibold tabular-nums leading-none"
+            style={{ color: c.fg, borderColor: c.border }}
+          >
+            {score}
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: c.fg }}>
+            Overall health score
+          </p>
+          <p className="mt-1 text-base font-bold tracking-tight text-(--color-fg)">
+            {verdictTitle(verdict)}
+          </p>
+          {showCohort ? (
+            <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-muted)">
+              Better than {relativeScore}% in this category
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       {(sublabelIds?.length ?? 0) > 0 || showCohort ? (
         <div className="flex flex-wrap gap-1.5">
@@ -223,8 +245,8 @@ export function VerdictBlock({
       ) : null}
 
       {showCohort ? (
-        <p className="text-[11px] leading-snug" style={{ color: c.fg, opacity: 0.72 }}>
-          Ranked against {cohortSize} similar products in this aisle — hover tags for detail.
+        <p className="text-[11px] leading-snug text-(--color-fg-muted)">
+          Ranked against {cohortSize} similar products in this aisle.
         </p>
       ) : null}
     </div>
