@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 type DeepseekFacts = Record<string, unknown>;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -26,8 +28,10 @@ function FactLine({ label, value }: { label: string; value: string | null | unde
 
 export function PdpLabelInsights({
   deepseek,
+  className,
 }: {
   deepseek: DeepseekFacts | null;
+  className?: string;
 }) {
   if (!deepseek) return null;
 
@@ -53,7 +57,7 @@ export function PdpLabelInsights({
   if (!hasFacts) return null;
 
   return (
-    <section className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4">
+    <section className={cn("rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-4", className)}>
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
         Other information
       </p>

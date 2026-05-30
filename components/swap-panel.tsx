@@ -14,6 +14,7 @@ export function SwapPanel({
   title = "Swaps",
   description,
   layout = "list",
+  gridColumns = 3,
 }: {
   current: ProductListItem;
   suggestions: SwapSuggestion[];
@@ -22,6 +23,7 @@ export function SwapPanel({
   title?: string;
   description?: string;
   layout?: "list" | "grid";
+  gridColumns?: 3 | 4;
 }) {
   if (suggestions.length === 0) return null;
 
@@ -72,7 +74,9 @@ export function SwapPanel({
       <ul
         className={cn(
           grid
-            ? "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"
+            ? gridColumns === 4
+              ? "mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"
+              : "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"
             : compact
               ? "mt-4 space-y-3"
               : "mt-5 space-y-3",
@@ -94,7 +98,13 @@ export function SwapPanel({
               <div
                 className={cn(
                   "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
-                  grid ? "h-24 w-full xl:h-28" : compact ? "h-16 w-16" : "h-16 w-16",
+                  grid
+                    ? gridColumns === 4
+                      ? "h-28 w-full xl:h-32"
+                      : "h-24 w-full xl:h-28"
+                    : compact
+                      ? "h-16 w-16"
+                      : "h-16 w-16",
                 )}
               >
                 {product.image_urls[0] ? (

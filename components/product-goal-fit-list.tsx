@@ -11,9 +11,13 @@ import { bandFromScore, cn, type Grade } from "@/lib/utils";
 export function ProductGoalFitList({
   rows,
   overall,
+  className,
+  cardClassName,
 }: {
   rows: GoalFitRow[];
   overall: { fit: number; grade: Grade; reasons: string[] } | null;
+  className?: string;
+  cardClassName?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -79,15 +83,15 @@ export function ProductGoalFitList({
 
   if (!gridGoals.length) {
     return (
-      <p className="mt-6 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)">
+      <p className={cn("mt-6 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)", className)}>
         Score pending — goal fit will appear once nutrition is available.
       </p>
     );
   }
 
   return (
-    <section className="mt-6">
-      <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5">
+    <section className={cn("mt-6", className)}>
+      <div className={cn("rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5", cardClassName)}>
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-(--color-line) pb-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">

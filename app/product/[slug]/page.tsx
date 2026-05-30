@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
-import { ProteinQualityNote } from "@/components/protein-quality-note";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { PdpLabelInsights } from "@/components/pdp-label-insights";
 import { PdpNutrientStrip } from "@/components/pdp-nutrient-strip";
@@ -94,7 +93,7 @@ export default async function ProductPage({
 
   const swapPool = await getProductsForSwaps(product, 180);
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
-  const similarProducts = findSimilarProducts(product, swapPool, goal, 6, {
+  const similarProducts = findSimilarProducts(product, swapPool, goal, 8, {
     diet,
     excludeIds: new Set(swaps.map((s) => s.product.id)),
   });
@@ -162,16 +161,6 @@ export default async function ProductPage({
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
           <div className="space-y-5">
             <ProductGallery images={product.image_urls} alt={product.name} />
-            {displayNutrition ? (
-              <PdpNutritionGlance
-                nutrition={displayNutrition}
-                netWeight={product.net_weight}
-                priceInr={price}
-                name={product.name}
-                category={product.category}
-                subcategory={product.subcategory}
-              />
-            ) : null}
           </div>
 
           <div className="min-w-0">
@@ -227,14 +216,35 @@ export default async function ProductPage({
             ) : null}
 
             <PdpNutrientStrip nutrition={displayNutrition} />
-
-            <Suspense fallback={null}>
-              <ProductGoalFitList rows={goalRows} overall={overallGoal} />
-            </Suspense>
           </div>
         </div>
 
-        <div className="mt-14 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-start xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+        <div className="mt-10 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-5">
+            {displayNutrition ? (
+              <PdpNutritionGlance
+                nutrition={displayNutrition}
+                netWeight={product.net_weight}
+                priceInr={price}
+                name={product.name}
+                category={product.category}
+                subcategory={product.subcategory}
+              />
+            ) : null}
+            <PdpLabelInsights deepseek={deepseekLabel} className="flex-1" />
+          </div>
+
+          <Suspense fallback={null}>
+            <ProductGoalFitList
+              rows={goalRows}
+              overall={overallGoal}
+              className="mt-0 h-full"
+              cardClassName="h-full"
+            />
+          </Suspense>
+        </div>
+
+        <div className="mt-8 grid gap-7 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:items-start xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -246,35 +256,29 @@ export default async function ProductPage({
                 intelligenceRows={ingredientIntelligence}
               />
             </div>
-            <div className="mt-4">
-              <PdpLabelInsights deepseek={deepseekLabel} />
-            </div>
           </section>
 
-          <aside className="space-y-5 lg:sticky lg:top-24">
+          <aside className="min-w-0">
             {swaps.length > 0 ? (
               <SwapPanel current={product} suggestions={swaps} compact goal={goal} />
             ) : null}
-            {similarProducts.length > 0 ? (
-              <SwapPanel
-                current={product}
-                suggestions={similarProducts}
-                compact
-                goal={goal}
-                title="Similar products"
-                description="Comparable picks with different nutrition tradeoffs."
-                layout="grid"
-              />
-            ) : null}
-            {displayNutrition ? (
-              <ProteinQualityNote
-                nutrition={displayNutrition}
-                name={product.name}
-                category={product.category}
-              />
-            ) : null}
           </aside>
         </div>
+
+        {similarProducts.length > 0 ? (
+          <div className="mt-7">
+            <SwapPanel
+              current={product}
+              suggestions={similarProducts}
+              compact
+              goal={goal}
+              title="Similar products"
+              description="Comparable picks with different nutrition tradeoffs."
+              layout="grid"
+              gridColumns={4}
+            />
+          </div>
+        ) : null}
 
         {attrEntries.length > 0 || provenance || score?.cohort_size ? (
           <details className="mt-16 border-t border-(--color-line) pt-8 group">
