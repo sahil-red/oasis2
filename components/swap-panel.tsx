@@ -72,7 +72,7 @@ export function SwapPanel({
       <ul
         className={cn(
           grid
-            ? "mt-4 grid grid-cols-2 gap-3.5"
+            ? "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"
             : compact
               ? "mt-4 space-y-3"
               : "mt-5 space-y-3",
@@ -85,7 +85,7 @@ export function SwapPanel({
               className={cn(
                 "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
                 grid
-                  ? "h-full flex-col rounded-xl p-3"
+                  ? "h-full flex-col rounded-xl p-2.5"
                   : compact
                     ? "gap-3 p-3"
                     : "gap-3 rounded-xl p-3",
@@ -94,7 +94,7 @@ export function SwapPanel({
               <div
                 className={cn(
                   "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-(--color-bg)",
-                  grid ? "h-32 w-full" : compact ? "h-16 w-16" : "h-16 w-16",
+                  grid ? "h-24 w-full xl:h-28" : compact ? "h-16 w-16" : "h-16 w-16",
                 )}
               >
                 {product.image_urls[0] ? (
@@ -115,12 +115,12 @@ export function SwapPanel({
                 <p
                   className={cn(
                     "font-medium leading-snug text-(--color-fg)",
-                    grid ? "line-clamp-2 text-[14px]" : "line-clamp-2 text-[13.5px]",
+                    grid ? "line-clamp-2 text-[13px]" : "line-clamp-2 text-[13.5px]",
                   )}
                 >
                   {product.name}
                 </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-dim)">
+                <p className={cn("mt-0.5 leading-snug text-(--color-fg-dim)", grid ? "text-[10.5px]" : "text-[11px]")}>
                   {deltas.join(" · ")}
                 </p>
               </div>
