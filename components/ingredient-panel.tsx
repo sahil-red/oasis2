@@ -35,6 +35,13 @@ function dotRiskForItem(item: IngredientDisplayItem): IngredientRisk {
   return item.risk;
 }
 
+function riskRank(item: IngredientDisplayItem): number {
+  if (item.risk === "hazardous") return 4;
+  if (item.risk === "moderate") return 3;
+  if (item.risk === "limited") return 2;
+  return 0;
+}
+
 function IngredientRow({ item }: { item: IngredientDisplayItem }) {
   const [open, setOpen] = useState(false);
   const hasWhy = Boolean(item.why);
@@ -113,17 +120,17 @@ export function IngredientPanel({
     );
   }
 
-  // Summary bar
-  const ratedPct = summary.total > 0 ? Math.round((summary.rated / summary.total) * 100) : 0;
   const watchfulCount = items.filter((i) => i.risk === "limited").length;
   const allClean = summary.flagged === 0 && summary.hazardous === 0 && watchfulCount === 0;
   const concernCount = summary.flagged + watchfulCount;
   const visibleItems = showAllIngredients ? items : items.slice(0, INITIAL_INGREDIENT_COUNT);
   const hiddenCount = Math.max(0, items.length - visibleItems.length);
+  const highestRiskItem = [...items].sort((a, b) => riskRank(b) - riskRank(a))[0];
+  const showRiskCallout = highestRiskItem && riskRank(highestRiskItem) > 0;
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-2 sm:grid-cols-3">
+      <div className="grid gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-2 sm:grid-cols-2">
         <SummaryTile label="Ingredients" value={summary.total.toString()} />
         <SummaryTile
           label={summary.hazardous > 0 ? "High risk" : "Flagged"}
@@ -136,12 +143,9 @@ export function IngredientPanel({
           }
           tone={allClean ? "good" : summary.hazardous > 0 ? "bad" : "watch"}
         />
-        <SummaryTile
-          label="Confidence"
-          value={summary.rated > 0 ? `${ratedPct}%` : "Scan"}
-          caption={summary.rated > 0 ? "rated" : "pending"}
-        />
       </div>
+
+      {showRiskCallout ? <RiskCallout item={highestRiskItem} /> : null}
 
       {/* ── ingredient list ── */}
       <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
@@ -220,6 +224,35 @@ function SummaryTile({
       </p>
       {caption ? (
         <p className="mt-1 text-[10.5px] text-(--color-fg-dim)">{caption}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function RiskCallout({ item }: { item: IngredientDisplayItem }) {
+  const bad = item.risk === "hazardous" || item.risk === "moderate";
+  const color = bad ? "var(--score-bad)" : "var(--score-poor)";
+  const why = item.why?.split(/(?<=[.!?])\s+/)[0]?.trim();
+
+  return (
+    <div
+      className="rounded-xl border px-3 py-2.5"
+      style={{
+        borderColor: `color-mix(in srgb, ${color} 38%, var(--color-line))`,
+        backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-panel))`,
+      }}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color }}>
+        Ingredient to notice
+      </p>
+      <p className="mt-1 text-sm font-semibold text-(--color-fg)">
+        {item.display}
+        <span className="ml-2 text-[11px] font-medium" style={{ color }}>
+          {item.tierLabel}
+        </span>
+      </p>
+      {why ? (
+        <p className="mt-1 text-[12.5px] leading-snug text-(--color-fg-muted)">{why}</p>
       ) : null}
     </div>
   );

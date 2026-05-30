@@ -6,11 +6,11 @@ import type { GoalFitRow } from "@/lib/goals/build-goal-rows";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { scorePresentation } from "@/lib/goals/verdict";
 import { scoreTileSurface } from "@/lib/score/surfaces";
-import { bandFromScore, cn, type Grade } from "@/lib/utils";
+import { cn, type Grade } from "@/lib/utils";
 
 export function ProductGoalFitList({
   rows,
-  overall,
+  overall: _overall,
   className,
   cardClassName,
 }: {
@@ -69,16 +69,8 @@ export function ProductGoalFitList({
     });
   }
 
-  const activeGoal =
-    active === "balanced" && overall
-      ? {
-          id: "balanced" as GoalId,
-          label: "Overall",
-          fit: overall.fit,
-          grade: overall.grade,
-          caption: overall.reasons[0] ?? "Nutrition + ingredients",
-        }
-      : gridGoals.find((g) => g.id === active);
+  const activeGoal = gridGoals.find((g) => g.id === active);
+  const goalSummary = summarizeGoals(gridGoals);
 
   if (!gridGoals.length) {
     return (
@@ -91,29 +83,28 @@ export function ProductGoalFitList({
   return (
     <section className={cn("mt-6", className)}>
       <div className={cn("rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5", cardClassName)}>
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-(--color-line) pb-4">
+        <div className="border-b border-(--color-line) pb-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
               Goals at a glance
             </p>
+            <p className="mt-1.5 text-[14px] font-medium leading-snug text-(--color-fg)">
+              {goalSummary}
+            </p>
             {activeGoal ? (
-              <p className="mt-1.5 text-[13px] leading-snug text-(--color-fg-muted)">
-                {activeGoal.caption}
+              <p className="mt-1 text-[12px] leading-snug text-(--color-fg-muted)">
+                Selected: {activeGoal.caption}
               </p>
             ) : null}
           </div>
-          {overall ? (
-            <ScorePill fit={overall.fit} grade={overall.grade} size="sm" />
-          ) : null}
         </div>
 
-        <ul className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="mt-3 grid gap-x-5 gap-y-1.5 sm:grid-cols-2">
           {gridGoals.map((g) => (
-            <GoalFitTile
+            <GoalFitRowCompact
               key={g.id}
               label={g.label}
               fit={g.fit}
-              grade={g.grade}
               active={active === g.id}
               onSelect={() => select(g.id)}
             />
@@ -124,57 +115,31 @@ export function ProductGoalFitList({
   );
 }
 
-function ScorePill({
-  fit,
-  grade,
-  size = "sm",
-}: {
-  fit: number;
-  grade: Grade;
-  size?: "sm" | "lg";
-}) {
-  const band = bandFromScore(fit);
-  const surface = scoreTileSurface(fit);
-  const large = size === "lg";
+function summarizeGoals(goals: Array<{ label: string; fit: number }>): string {
+  const sorted = [...goals].sort((a, b) => b.fit - a.fit);
+  const meaningful = sorted.filter((g) => g.fit >= 30).slice(0, 2);
+  const weak = sorted.filter((g) => g.fit <= 15).map((g) => g.label);
 
-  return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span
-        data-band={band}
-        className={cn(
-          "score-band-chip rounded-md font-semibold uppercase tracking-wide",
-          large ? "px-2 py-1 text-[11px]" : "px-1.5 py-0.5 text-[10px]",
-        )}
-      >
-        {grade}
-      </span>
-      <span
-        className={cn(
-          "flex items-center justify-center rounded-xl border font-display tabular-nums leading-none",
-          large ? "h-12 min-w-[3.25rem] text-3xl" : "h-9 min-w-[2.75rem] text-lg",
-        )}
-        style={{
-          backgroundColor: surface.backgroundColor,
-          borderColor: surface.borderColor,
-          color: surface.accentColor,
-        }}
-      >
-        {fit}
-      </span>
-    </div>
-  );
+  if (meaningful.length === 0) {
+    return `Weak fit across all listed goals; best is ${sorted[0]?.label ?? "none"} (${sorted[0]?.fit ?? 0}).`;
+  }
+
+  const strongText = meaningful.map((g) => `${g.label} (${g.fit})`).join(", ");
+  if (weak.length >= Math.max(3, goals.length - 2)) {
+    return `Only meaningful for ${strongText}; weak for ${weak.slice(0, 5).join(", ")}.`;
+  }
+
+  return `Best fit: ${strongText}; check the low scores before making it a regular buy.`;
 }
 
-function GoalFitTile({
+function GoalFitRowCompact({
   label,
   fit,
-  grade,
   active,
   onSelect,
 }: {
   label: string;
   fit: number;
-  grade: Grade;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -187,52 +152,36 @@ function GoalFitTile({
         onClick={onSelect}
         aria-pressed={active}
         className={cn(
-          "group flex h-full min-h-[104px] w-full flex-col justify-between rounded-xl border px-3 py-3 text-left transition",
+          "group grid w-full grid-cols-[84px_minmax(0,1fr)_38px] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition sm:grid-cols-[100px_minmax(0,1fr)_42px]",
           active
-            ? "border-(--color-line-strong) bg-(--color-bg-soft) shadow-sm"
-            : "border-(--color-line) bg-(--color-bg-soft)/45 hover:bg-(--color-bg-soft)",
+            ? "bg-(--color-bg-soft) ring-1 ring-(--color-line-strong)"
+            : "hover:bg-(--color-bg-soft)/70",
         )}
       >
-        <span className="flex items-start justify-between gap-2">
+        <span
+          className={cn(
+            "min-w-0 truncate text-[13px] font-medium",
+            active
+              ? "text-(--color-fg)"
+              : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
+          )}
+        >
+          {label}
+        </span>
+        <span className="h-1.5 min-w-0 overflow-hidden rounded-full bg-(--color-bg-soft)">
           <span
-            className={cn(
-              "min-w-0 text-[13px] font-medium",
-              active
-                ? "text-(--color-fg)"
-                : "text-(--color-fg-muted) group-hover:text-(--color-fg)",
-            )}
-          >
-            {label}
-          </span>
-          <span
-            className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            className="block h-full rounded-full transition-[width]"
             style={{
-              backgroundColor: surface.backgroundColor,
-              borderColor: surface.borderColor,
-              color: surface.accentColor,
+              width: `${Math.max(2, Math.min(100, fit))}%`,
+              backgroundColor: surface.accentColor,
             }}
-          >
-            {grade}
-          </span>
+          />
         </span>
         <span
-          className="mt-3 flex items-end justify-between gap-3"
+          className="text-right font-display text-xl tabular-nums leading-none"
+          style={{ color: surface.accentColor }}
         >
-          <span
-            className="font-display text-4xl tabular-nums leading-none"
-            style={{ color: surface.accentColor }}
-          >
-            {fit}
-          </span>
-          <span className="mb-1 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-(--color-panel)">
-            <span
-              className="block h-full rounded-full transition-[width]"
-              style={{
-                width: `${Math.max(2, Math.min(100, fit))}%`,
-                backgroundColor: surface.accentColor,
-              }}
-            />
-          </span>
+          {fit}
         </span>
       </button>
     </li>

@@ -101,6 +101,29 @@ export function SwapPanel({
               >
                 <div
                   className={cn(
+                    "shrink-0",
+                    grid ? "flex items-center justify-between gap-2" : "flex flex-col items-center gap-1",
+                  )}
+                >
+                  {goal !== "balanced" ? (
+                    <GoalFitBadge fit={goalFit} size="sm" />
+                  ) : product.core_scores ? (
+                    <ScoreBadge
+                      score={product.core_scores.score}
+                      grade={product.core_scores.grade}
+                      className={grid ? "!h-10 !min-w-10 !rounded-lg !text-xl" : "!text-3xl"}
+                    />
+                  ) : (
+                    <GoalFitBadge fit={goalFit} size="sm" />
+                  )}
+                  {grid && product.price_inr != null ? (
+                    <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">
+                      ₹{product.price_inr}
+                    </span>
+                  ) : null}
+                </div>
+                <div
+                  className={cn(
                     "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
                     grid
                       ? gridColumns === 4
@@ -143,29 +166,13 @@ export function SwapPanel({
                     </p>
                   ) : null}
                 </div>
-                <div
-                  className={cn(
-                    "flex shrink-0 gap-0.5",
-                    grid ? "flex-row items-center justify-between" : "flex-col items-end",
-                  )}
-                >
-                  {goal !== "balanced" ? (
-                    <GoalFitBadge fit={goalFit} size="sm" />
-                  ) : product.core_scores ? (
-                    <ScoreBadge
-                      score={product.core_scores.score}
-                      grade={product.core_scores.grade}
-                      className={grid ? "!h-9 !min-w-9 !rounded-lg !text-lg" : "!text-2xl"}
-                    />
-                  ) : (
-                    <GoalFitBadge fit={goalFit} size="sm" />
-                  )}
-                  {product.price_inr != null ? (
+                {!grid && product.price_inr != null ? (
+                  <div className="shrink-0 self-end">
                     <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">
                       ₹{product.price_inr}
                     </span>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
               </Link>
             </li>
           );

@@ -276,8 +276,8 @@ export default async function ProductPage({
               suggestions={similarProducts}
               compact
               goal={goal}
-              title="Similar products"
-              description="Comparable picks with different nutrition tradeoffs."
+              title="More in this aisle"
+              description="Discovery picks, not necessarily better swaps."
               layout="grid"
               gridColumns={4}
             />

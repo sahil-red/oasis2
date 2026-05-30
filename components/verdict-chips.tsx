@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
 import {
   SUBLABEL_DESCRIPTIONS,
   type SublabelId,
@@ -101,6 +102,9 @@ export function VerdictBlock({
   sublabelIds,
   cohortSize,
   relativeScore,
+  cohortId,
+  subcategory,
+  productId,
   deepseekChips,
   className,
 }: {
@@ -116,16 +120,18 @@ export function VerdictBlock({
   className?: string;
 }) {
   const c = VERDICT_COLORS[verdict];
-  const showCohort = cohortSize != null && cohortSize >= 8 && relativeScore != null;
+  const showCohort =
+    cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
   const topReasons = [
     ...sublabelChipLabels(sublabelIds),
     ...(deepseekChips ?? []).map(formatDeepseekChip),
   ].slice(0, 3);
-  const actionLabel: Record<VerdictId, string> = {
-    daily_staple: "Strong regular buy",
-    good_choice: "Recommended",
-    occasional_treat: "Occasional only",
-    skip: "Not recommended",
+  const reasonText = topReasons.length ? topReasons.slice(0, 2).join(", ") : verdictTitle(verdict);
+  const verdictSentence: Record<VerdictId, string> = {
+    daily_staple: `${reasonText} — strong regular buy.`,
+    good_choice: `${reasonText} — a good pick for this aisle.`,
+    occasional_treat: `${reasonText} — fine occasionally, not daily.`,
+    skip: `${reasonText} — not worth it.`,
   };
 
   return (
@@ -146,35 +152,23 @@ export function VerdictBlock({
           <p className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: c.fg }}>
             Overall health score
           </p>
-          <p className="mt-1 text-xl font-black uppercase tracking-tight text-(--color-fg)">
-            {actionLabel[verdict]}
-          </p>
-          <p className="mt-0.5 text-[12px] font-semibold tracking-tight" style={{ color: c.fg }}>
-            {verdictTitle(verdict)}
+          <p className="mt-1 text-[15px] font-semibold leading-snug text-(--color-fg)">
+            {verdictSentence[verdict]}
           </p>
           {showCohort ? (
-            <p className="mt-0.5 text-[11px] leading-snug text-(--color-fg-muted)">
-              Better than {relativeScore}% in this category
-            </p>
+            <div className="mt-2">
+              <BestInCohortChip
+                cohortId={cohortId}
+                subcategoryLabel={subcategory ?? ""}
+                productId={productId}
+                borderColor={c.chipBorder}
+                fgColor={c.chipFg}
+                labelOverride={`Better than ${relativeScore}%`}
+              />
+            </div>
           ) : null}
         </div>
       </div>
-
-      {topReasons.length > 0 ? (
-        <div className="mt-4 border-t border-current/10 pt-3">
-          <p className="text-[10px] font-medium uppercase tracking-[0.16em]" style={{ color: c.fg }}>
-            Top reasons
-          </p>
-          <ul className="mt-2 space-y-1.5 text-[13px] leading-snug text-(--color-fg-muted)">
-            {topReasons.map((reason) => (
-              <li key={reason} className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: c.fg }} aria-hidden />
-                <span>{reason}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       {showCohort ? (
         <p className="mt-3 text-[11px] leading-snug text-(--color-fg-muted)">

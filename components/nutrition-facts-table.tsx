@@ -7,14 +7,13 @@ import type { ProductNutrition } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 type NutritionTone = {
-  kind: "positive" | "watch" | "limit";
+  kind: "positive" | "limit";
   label: string;
   title: string;
 };
 
 const TONE_COLOR: Record<NutritionTone["kind"], string> = {
   positive: "var(--score-excellent)",
-  watch: "var(--score-poor)",
   limit: "var(--score-bad)",
 };
 
@@ -24,47 +23,32 @@ function nutritionTone(row: ResolvedNutritionRow): NutritionTone | null {
 
   switch (row.id) {
     case "energy_kcal_100g":
-      if (v >= 550) return { kind: "limit", label: "high", title: "High calorie density per 100g." };
-      if (v >= 400) return { kind: "watch", label: "watch", title: "Moderately calorie dense per 100g." };
+      if (v >= 450) return { kind: "limit", label: "high", title: "High calorie density per 100g." };
       return null;
     case "sugar_g_100g":
-      if (v >= 22.5) return { kind: "limit", label: "high", title: "High sugar: 22.5g+ per 100g." };
-      if (v >= 10) return { kind: "watch", label: "watch", title: "Moderate sugar: 10g+ per 100g." };
-      if (v <= 5) return { kind: "positive", label: "low", title: "Low sugar: 5g or less per 100g." };
+      if (v >= 10) return { kind: "limit", label: "high", title: "High sugar: 10g+ per 100g." };
+      if (v <= 5) return { kind: "positive", label: "good", title: "Low sugar: 5g or less per 100g." };
       return null;
     case "added_sugar_g_100g":
       if (v >= 10) return { kind: "limit", label: "high", title: "High added sugar per 100g." };
-      if (v > 0) return { kind: "watch", label: "added", title: "Contains added sugar." };
-      return { kind: "positive", label: "none", title: "No added sugar on the label." };
+      return null;
     case "saturated_fat_g_100g":
-      if (v >= 10) return { kind: "limit", label: "high", title: "High saturated fat: 10g+ per 100g." };
-      if (v >= 5) return { kind: "watch", label: "watch", title: "Moderate saturated fat: 5g+ per 100g." };
+      if (v >= 5) return { kind: "limit", label: "high", title: "High saturated fat: 5g+ per 100g." };
       return null;
     case "trans_fat_g_100g":
-      if (v > 0.2) return { kind: "limit", label: "avoid", title: "Trans fat is present." };
-      if (v === 0) return { kind: "positive", label: "zero", title: "Zero trans fat on the label." };
+      if (v > 0.2) return { kind: "limit", label: "high", title: "Trans fat is present." };
       return null;
     case "sodium_mg_100g":
-      if (v >= 800) return { kind: "limit", label: "high", title: "High sodium: 800mg+ per 100g." };
-      if (v >= 400) return { kind: "watch", label: "watch", title: "Moderate sodium: 400mg+ per 100g." };
+      if (v >= 400) return { kind: "limit", label: "high", title: "High sodium: 400mg+ per 100g." };
       return null;
     case "fat_g_100g":
-      if (v >= 25) return { kind: "limit", label: "high", title: "High total fat per 100g." };
-      if (v >= 17.5) return { kind: "watch", label: "watch", title: "Moderate total fat per 100g." };
+      if (v >= 17.5) return { kind: "limit", label: "high", title: "High total fat per 100g." };
       return null;
     case "protein_g_100g":
-      if (v >= 15) return { kind: "positive", label: "high", title: "High protein per 100g." };
-      if (v >= 8) return { kind: "positive", label: "good", title: "Meaningful protein per 100g." };
+      if (v >= 12) return { kind: "positive", label: "good", title: "Meaningful protein per 100g." };
       return null;
     case "fiber_g_100g":
-      if (v >= 6) return { kind: "positive", label: "high", title: "High fibre per 100g." };
-      if (v >= 3) return { kind: "positive", label: "source", title: "Source of fibre per 100g." };
-      return null;
-    case "calcium_mg_100g":
-      if (v >= 120) return { kind: "positive", label: "source", title: "Source of calcium per 100g." };
-      return null;
-    case "iron_mg_100g":
-      if (v >= 2) return { kind: "positive", label: "source", title: "Source of iron per 100g." };
+      if (v >= 3) return { kind: "positive", label: "good", title: "Source of fibre per 100g." };
       return null;
     default:
       return null;
