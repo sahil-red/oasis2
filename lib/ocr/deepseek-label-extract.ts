@@ -126,6 +126,13 @@ export type DeepseekExtractionResult = {
   extracted: ExtractedLabel;
   validation: ValidationResult;
   raw_response: string;
+  usage: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
+  } | null;
   prompt_chars: number;
   at: string;
 };
@@ -141,6 +148,8 @@ export type ValidationResult = {
   issues: ValidationIssue[];
 };
 
+type DeepseekUsage = DeepseekExtractionResult["usage"];
+
 export type DeepseekExtractOptions = {
   baseUrl?: string;
   apiKey?: string;
@@ -153,11 +162,19 @@ export type DeepseekExtractOptions = {
 type ChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
   error?: { message?: string };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
+  };
 };
 
 export const DEEPSEEK_LABEL_SYSTEM_PROMPT = `
 You are a strict food-label extraction engine for Indian grocery products.
-Return exactly one valid JSON object. Do not output markdown, comments, or prose.
+Return exactly one valid minified JSON object. Do not output markdown, comments, prose, or whitespace outside JSON strings.
+Use sparse JSON: include every value you extracted, but omit keys whose value would be null, [], or {}. The TypeScript normalizer will fill absent keys with null/empty defaults.
 
 MISSION
 Extract every useful fact printed on the package from the OCR text provided.
@@ -180,6 +197,7 @@ EXTRACTION RULES
 Every non-null extracted value must include evidence where possible:
 { "image_index": <int>, "variant": "<original|gray_normalized_sharp|highres_gray_normalized_sharp|bw_threshold>", "snippet": "<exact OCR text>" }
 When correcting an OCR typo, set "snippet" to the original OCR text and add "corrected": true to the evidence object.
+Use the shortest exact OCR snippet sufficient to audit the value. Do not paste full paragraphs or whole panels. Keep snippets under 240 characters unless a nutrition table excerpt genuinely needs more context.
 
 2. Prefer regulatory panels:
 Prefer Nutrition Facts / Nutrition Information tables over front-of-pack marketing claims.
@@ -206,28 +224,40 @@ Record which table was used as the primary source in nutrition.table_source.
 7. Marketing claims separation:
 Claims such as "40g protein", "no preservatives", "organic", "high fiber", "no added sugar", "gluten free", "lactose free", "probiotic", "low sugar", and "baked not fried" belong in marketing_claims[] unless the same value also appears in the Nutrition Facts table.
 
-8. Ingredient rules:
+8. Comparison and competitor attribution:
+Some packs contain comparison tables such as "Avolt vs other protein bars".
+Only extract facts that are explicitly under this SKU's/brand's column or otherwise clearly apply to this product.
+Do not copy competitor or "other brands/products" facts into this product's ingredients, allergens, nutrition, storage, or chips.
+If a comparison says this product is "gluten free" while other protein bars "may contain gluten", extract "gluten free" as this product's marketing/free-from claim and ignore the competitor gluten statement for allergens.may_contain.
+If a comparison table is ambiguous and you cannot tell which column a fact belongs to, leave the field null/empty and add a conflicts[] note.
+
+9. Allergen rules:
+allergens.contains and allergens.may_contain must come from product-specific allergen declarations, ingredient statements, or explicit warnings for this SKU.
+Do not derive allergens.may_contain from competitor/comparison text.
+If a product-specific "free from" claim and a product-specific "may contain" warning disagree, preserve both, add a conflicts[] entry, and do not apply the corresponding free-from chip.
+
+10. Ingredient rules:
 Ingredients must be literal raw materials from an ingredient/composition declaration, not product names, taglines, claims, or recipe descriptions.
 Preserve ingredient order exactly as printed. Do not sort alphabetically or by quantity.
 Retain percentage annotations exactly as printed.
 Retain INS/E-number annotations exactly as printed.
 Preserve parenthetical sub-ingredients as nested structure when present, but also keep the original raw line in ingredients.raw_list.
 
-9. Unit normalization:
+11. Unit normalization:
 Normalize quantity units to g, kg, ml, l, mcg, mg, kcal, kJ.
 Use normalized values in structured fields. Preserve the original printed value in evidence snippets.
 
-10. Metadata provenance:
+12. Metadata provenance:
 Product metadata is provided as context only. It is never evidence.
 Use metadata only for tie-breaking when OCR clearly references the same information.
 Any field that cannot be sourced from OCR must remain null.
 This rule applies especially to brand, flavor, net_quantity, and any numeric claim.
 
-11. OCR typo correction:
+13. OCR typo correction:
 Correct obvious single-character OCR substitution errors when the intended label text is unambiguous in context. Do not correct ambiguous fragments.
 Record the original OCR snippet in evidence with "corrected": true.
 
-12. Confidence scoring:
+14. Confidence scoring:
 Set confidence using these definitions:
 "high" means the value is directly visible in a structured label section with clear OCR quality (avg_confidence >= 0.85).
 "medium" means the value is visible but OCR quality is imperfect (avg_confidence 0.65-0.84), or appears in a non-structured section.
@@ -248,7 +278,7 @@ Recognized chip values and trigger conditions:
 "high_gi" - refined flour (maida) or glucose syrup is the first or second ingredient, and no fiber claim is present
 "high_protein" - protein_g per 100g >= 20g confirmed in nutrition table
 "no_added_sugar" - marketing_claims contains "no added sugar" and sugar_g <= 5g in nutrition table; both conditions required
-"gluten_free" - allergens.contains does not include gluten/wheat and marketing_claims contains "gluten free" or "gluten-free"
+"gluten_free" - a product-specific claim says "gluten free" or "gluten-free", and product-specific allergens.contains/may_contain do not include gluten/wheat/barley/rye/oats
 "vegan" - no dairy, egg, honey, or meat-derived ingredients detected
 "contains_nuts" - allergens indicate nuts or tree nuts/peanuts appear in ingredients
 
@@ -258,6 +288,7 @@ For each chip applied, include a one-line evidence note in chips_evidence[].
 why is a single plain-English sentence of 25 words or fewer summarising the most important health signal for this product. Write it from label evidence, not category assumptions.
 
 OUTPUT SCHEMA
+This is the normalized target shape. In your actual response, omit null fields and empty arrays/objects.
 {
   "schema_version": 2,
   "product": {
@@ -541,6 +572,10 @@ function hasEvidence(evidence: EvidenceRef | null): boolean {
   return Boolean(evidence?.snippet?.trim());
 }
 
+function mentionsGluten(value: string): boolean {
+  return /\b(gluten|wheat|barley|rye|oats?)\b/i.test(value);
+}
+
 export function validateExtractedLabel(extracted: ExtractedLabel): ValidationResult {
   const issues: ValidationIssue[] = [];
   const n = extracted.nutrition.per_100g_or_100ml;
@@ -583,6 +618,12 @@ export function validateExtractedLabel(extracted: ExtractedLabel): ValidationRes
 
   if (extracted.chips.length !== extracted.chips_evidence.length) {
     addIssue(issues, "warning", "chip_evidence_mismatch", "chips_evidence should contain one note per chip.");
+  }
+  if (
+    extracted.chips.includes("gluten_free") &&
+    [...extracted.allergens.contains, ...extracted.allergens.may_contain].some(mentionsGluten)
+  ) {
+    addIssue(issues, "warning", "gluten_free_allergen_conflict", "gluten_free chip conflicts with product-specific gluten allergen fields.");
   }
   if (extracted.why && extracted.why.split(/\s+/).length > 25) {
     addIssue(issues, "warning", "why_too_long", "why should be 25 words or fewer.");
@@ -636,7 +677,10 @@ export function buildDeepseekUserPrompt(params: {
   return `${metaBlock}\n\nOCR TEXT - ALL FRAMES (use all frames; merge and deduplicate as needed):\n${ocrBlock || "[no OCR text]"}`;
 }
 
-async function callDeepseek(messages: Array<{ role: "system" | "user"; content: string }>, opts: Required<DeepseekExtractOptions>): Promise<string> {
+async function callDeepseek(
+  messages: Array<{ role: "system" | "user"; content: string }>,
+  opts: Required<DeepseekExtractOptions>,
+): Promise<{ content: string; usage: DeepseekUsage }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   try {
@@ -669,7 +713,7 @@ async function callDeepseek(messages: Array<{ role: "system" | "user"; content: 
     const parsed = JSON.parse(body) as ChatResponse;
     const content = parsed.choices?.[0]?.message?.content;
     if (!content) throw new Error("DeepSeek returned no message content");
-    return content;
+    return { content, usage: (parsed.usage ?? null) as DeepseekUsage };
   } finally {
     clearTimeout(timer);
   }
@@ -686,7 +730,7 @@ export async function extractLabelWithDeepseek(params: {
     apiKey: params.opts?.apiKey ?? process.env.DEEPSEEK_API_KEY ?? "",
     model: params.opts?.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL,
     temperature: params.opts?.temperature ?? 0,
-    maxTokens: params.opts?.maxTokens ?? 5000,
+    maxTokens: params.opts?.maxTokens ?? 2500,
     timeoutMs: params.opts?.timeoutMs ?? 120_000,
   };
   if (!opts.apiKey) throw new Error("Missing DEEPSEEK_API_KEY");
@@ -696,10 +740,11 @@ export async function extractLabelWithDeepseek(params: {
     raw: params.raw,
     maxChars: params.maxInputChars,
   });
-  const rawResponse = await callDeepseek([
+  const response = await callDeepseek([
     { role: "system", content: DEEPSEEK_LABEL_SYSTEM_PROMPT },
     { role: "user", content: userPrompt },
   ], opts);
+  const rawResponse = response.content;
   const parsed = JSON.parse(extractJsonObject(rawResponse)) as Record<string, unknown>;
   const extracted = normalizeExtracted(parsed, params.product);
   const validation = validateExtractedLabel(extracted);
@@ -711,6 +756,7 @@ export async function extractLabelWithDeepseek(params: {
     extracted,
     validation,
     raw_response: rawResponse,
+    usage: response.usage,
     prompt_chars: DEEPSEEK_LABEL_SYSTEM_PROMPT.length + userPrompt.length,
     at: new Date().toISOString(),
   };

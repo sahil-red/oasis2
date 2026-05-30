@@ -8,6 +8,7 @@
  *   pnpm label:deepseek -- --limit=50 --sample=validation
  *   pnpm label:deepseek -- --sku=a5b27839-d7bb-4c42-9687-16ba67ea2d83
  *   pnpm label:deepseek -- --limit=100 --resume --concurrency=2
+ *   pnpm label:deepseek -- --limit=100 --retries=1
  *   pnpm label:deepseek -- --limit=100 --max-input-chars=90000
  */
 import { createReadStream, createWriteStream } from "node:fs";
@@ -66,7 +67,7 @@ function parseArgs(): Args {
   let nameQuery: string | null = null;
   let sample: "validation" | "sequential" = "validation";
   let concurrency = 1;
-  let retries = 2;
+  let retries = 0;
   let maxInputChars = 0;
 
   for (const arg of argv) {
@@ -83,7 +84,8 @@ function parseArgs(): Args {
     } else if (arg.startsWith("--concurrency=")) {
       concurrency = Math.max(1, Math.min(8, Number(arg.split("=")[1]) || 1));
     } else if (arg.startsWith("--retries=")) {
-      retries = Math.max(0, Math.min(5, Number(arg.split("=")[1]) || 2));
+      const parsed = Number(arg.split("=")[1]);
+      retries = Number.isFinite(parsed) ? Math.max(0, Math.min(5, parsed)) : 0;
     } else if (arg.startsWith("--max-input-chars=")) {
       const parsed = Number(arg.split("=")[1]);
       maxInputChars = Number.isFinite(parsed) && parsed > 0 ? Math.max(5_000, parsed) : 0;
@@ -129,8 +131,8 @@ async function loadDoneSkus(): Promise<Set<string>> {
     for await (const line of rl) {
       if (!line.trim()) continue;
       try {
-        const row = JSON.parse(line) as { zepto_sku?: string; error?: string; dry_run?: boolean };
-        if (row.zepto_sku && !row.error && !row.dry_run) done.add(row.zepto_sku);
+        const row = JSON.parse(line) as { zepto_sku?: string; dry_run?: boolean };
+        if (row.zepto_sku && !row.dry_run) done.add(row.zepto_sku);
       } catch {
         // ignore partial append line
       }
