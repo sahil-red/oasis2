@@ -121,6 +121,12 @@ export function VerdictBlock({
     ...sublabelChipLabels(sublabelIds),
     ...(deepseekChips ?? []).map(formatDeepseekChip),
   ].slice(0, 3);
+  const actionLabel: Record<VerdictId, string> = {
+    daily_staple: "Strong regular buy",
+    good_choice: "Recommended",
+    occasional_treat: "Occasional only",
+    skip: "Not recommended",
+  };
 
   return (
     <div
@@ -140,7 +146,10 @@ export function VerdictBlock({
           <p className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: c.fg }}>
             Overall health score
           </p>
-          <p className="mt-1 text-base font-bold tracking-tight text-(--color-fg)">
+          <p className="mt-1 text-xl font-black uppercase tracking-tight text-(--color-fg)">
+            {actionLabel[verdict]}
+          </p>
+          <p className="mt-0.5 text-[12px] font-semibold tracking-tight" style={{ color: c.fg }}>
             {verdictTitle(verdict)}
           </p>
           {showCohort ? (

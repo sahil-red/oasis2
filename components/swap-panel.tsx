@@ -82,84 +82,94 @@ export function SwapPanel({
               : "mt-5 space-y-3",
         )}
       >
-        {suggestions.map(({ product, goalFit, deltas }) => (
-          <li key={product.id}>
-            <Link
-              href={`/product/${product.slug}`}
-              className={cn(
-                "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
-                grid
-                  ? "h-full flex-col rounded-xl p-2.5"
-                  : compact
-                    ? "gap-3 p-3"
-                    : "gap-3 rounded-xl p-3",
-              )}
-            >
-              <div
+        {suggestions.map(({ product, goalFit, deltas }) => {
+          const primaryDelta = deltas[0] ?? "Better match";
+          const secondaryDeltas = deltas.slice(1, 3);
+
+          return (
+            <li key={product.id}>
+              <Link
+                href={`/product/${product.slug}`}
                 className={cn(
-                  "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
+                  "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
                   grid
-                    ? gridColumns === 4
-                      ? "h-28 w-full xl:h-32"
-                      : "h-24 w-full xl:h-28"
+                    ? "h-full flex-col rounded-xl p-2.5"
                     : compact
-                      ? "h-16 w-16"
-                      : "h-16 w-16",
+                      ? "gap-3 p-3"
+                      : "gap-3 rounded-xl p-3",
                 )}
               >
-                {product.image_urls[0] ? (
-                  <Image
-                    src={product.image_urls[0]}
-                    alt=""
-                    fill
-                    className={cn("object-contain", grid ? "p-1.5" : "p-1")}
-                  />
-                ) : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                {product.brand ? (
-                  <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
-                    {product.brand}
-                  </p>
-                ) : null}
-                <p
+                <div
                   className={cn(
-                    "font-medium leading-snug text-(--color-fg)",
-                    grid ? "line-clamp-2 text-[13px]" : "line-clamp-2 text-[13.5px]",
+                    "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
+                    grid
+                      ? gridColumns === 4
+                        ? "h-28 w-full xl:h-32"
+                        : "h-24 w-full xl:h-28"
+                      : compact
+                        ? "h-16 w-16"
+                        : "h-16 w-16",
                   )}
                 >
-                  {product.name}
-                </p>
-                <p className={cn("mt-0.5 leading-snug text-(--color-fg-dim)", grid ? "text-[10.5px]" : "text-[11px]")}>
-                  {deltas.join(" · ")}
-                </p>
-              </div>
-              <div
-                className={cn(
-                  "flex shrink-0 gap-0.5",
-                  grid ? "flex-row items-center justify-between" : "flex-col items-end",
-                )}
-              >
-                {goal !== "balanced" ? (
-                  <GoalFitBadge fit={goalFit} size="sm" />
-                ) : product.core_scores ? (
-                  <ScoreBadge
-                    score={product.core_scores.score}
-                    grade={product.core_scores.grade}
-                    className={grid ? "!h-9 !min-w-9 !rounded-lg !text-lg" : "!text-2xl"}
-                  />
-                ) : (
-                  <GoalFitBadge fit={goalFit} size="sm" />
-                )}
-                {product.price_inr != null ? (
-                  <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">
-                    ₹{product.price_inr}
-                  </span>
-                ) : null}
-              </div>
-            </Link>
-          </li>
-        ))}
+                  {product.image_urls[0] ? (
+                    <Image
+                      src={product.image_urls[0]}
+                      alt=""
+                      fill
+                      className={cn("object-contain", grid ? "p-1.5" : "p-1")}
+                    />
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  {product.brand ? (
+                    <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">
+                      {product.brand}
+                    </p>
+                  ) : null}
+                  <p
+                    className={cn(
+                      "font-medium leading-snug text-(--color-fg)",
+                      grid ? "line-clamp-2 text-[13px]" : "line-clamp-2 text-[13.5px]",
+                    )}
+                  >
+                    {product.name}
+                  </p>
+                  <p className="mt-1 inline-flex max-w-full rounded-md bg-(--color-bg-soft) px-1.5 py-0.5 text-[10.5px] font-semibold leading-snug text-(--color-fg)">
+                    {primaryDelta}
+                  </p>
+                  {secondaryDeltas.length > 0 ? (
+                    <p className={cn("mt-0.5 leading-snug text-(--color-fg-dim)", grid ? "text-[10.5px]" : "text-[11px]")}>
+                      {secondaryDeltas.join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+                <div
+                  className={cn(
+                    "flex shrink-0 gap-0.5",
+                    grid ? "flex-row items-center justify-between" : "flex-col items-end",
+                  )}
+                >
+                  {goal !== "balanced" ? (
+                    <GoalFitBadge fit={goalFit} size="sm" />
+                  ) : product.core_scores ? (
+                    <ScoreBadge
+                      score={product.core_scores.score}
+                      grade={product.core_scores.grade}
+                      className={grid ? "!h-9 !min-w-9 !rounded-lg !text-lg" : "!text-2xl"}
+                    />
+                  ) : (
+                    <GoalFitBadge fit={goalFit} size="sm" />
+                  )}
+                  {product.price_inr != null ? (
+                    <span className="text-[11px] font-semibold tabular-nums text-(--color-fg-muted)">
+                      ₹{product.price_inr}
+                    </span>
+                  ) : null}
+                </div>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

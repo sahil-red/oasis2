@@ -54,51 +54,54 @@ export function ProductTakePanel({
   const lines = takeLines(explanation, deepseekWhy);
   if (!lines.length) return null;
   const { good, watch } = bucketTake(lines);
+  const items = [
+    ...good.map((line) => ({ line, tone: "good" as const, label: "Good" })),
+    ...watch.map((line) => ({ line, tone: "watch" as const, label: "Watch" })),
+  ].slice(0, 4);
 
   return (
     <section
       className={cn(
-        "rounded-2xl border border-(--color-line) bg-(--color-bg-soft)/60 px-4 py-4 sm:px-5",
+        "rounded-2xl border border-(--color-line) bg-(--color-bg-soft)/60 px-4 py-3.5 sm:px-5",
         className,
       )}
     >
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-fg-dim)">
-        Our take
+        Quick take
       </p>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        {good.length > 0 ? (
-          <TakeBucket title="Good" lines={good} tone="good" />
-        ) : null}
-        <TakeBucket title="Watch" lines={watch.length ? watch : lines.slice(0, 2)} tone="watch" />
-      </div>
+      <ul className="mt-2.5 grid gap-1.5 text-[13px] leading-snug text-(--color-fg-muted) sm:grid-cols-2">
+        {items.map((item) => (
+          <TakeLine key={`${item.label}-${item.line}`} {...item} />
+        ))}
+      </ul>
     </section>
   );
 }
 
-function TakeBucket({
-  title,
-  lines,
+function TakeLine({
+  line,
   tone,
+  label,
 }: {
-  title: string;
-  lines: string[];
+  line: string;
   tone: "good" | "watch";
+  label: string;
 }) {
   const color = tone === "good" ? "var(--score-excellent)" : "var(--score-poor)";
 
   return (
-    <div>
-      <p className="text-[12px] font-semibold" style={{ color }}>
-        {title}
-      </p>
-      <ul className="mt-1.5 space-y-1.5 text-[13px] leading-snug text-(--color-fg-muted)">
-        {lines.map((line) => (
-          <li key={line} className="flex gap-2">
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <li className="flex gap-2 rounded-xl bg-(--color-panel)/60 px-2.5 py-2">
+      <span
+        className="mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+        style={{
+          color,
+          borderColor: `color-mix(in srgb, ${color} 45%, var(--color-line))`,
+          backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
+        }}
+      >
+        {label}
+      </span>
+      <span>{line}</span>
+    </li>
   );
 }

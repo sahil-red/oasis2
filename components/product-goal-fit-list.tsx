@@ -48,16 +48,6 @@ export function ProductGoalFitList({
     caption: string;
   }[] = [];
 
-  if (overall) {
-    gridGoals.push({
-      id: "balanced",
-      label: "Overall",
-      fit: overall.fit,
-      grade: overall.grade,
-      caption: overall.reasons[0] ?? "Nutrition + ingredients",
-    });
-  }
-
   const tileOrder: GoalId[] = [
     "gym",
     "fat-loss",
@@ -79,7 +69,16 @@ export function ProductGoalFitList({
     });
   }
 
-  const activeGoal = gridGoals.find((g) => g.id === active);
+  const activeGoal =
+    active === "balanced" && overall
+      ? {
+          id: "balanced" as GoalId,
+          label: "Overall",
+          fit: overall.fit,
+          grade: overall.grade,
+          caption: overall.reasons[0] ?? "Nutrition + ingredients",
+        }
+      : gridGoals.find((g) => g.id === active);
 
   if (!gridGoals.length) {
     return (
@@ -103,8 +102,8 @@ export function ProductGoalFitList({
               </p>
             ) : null}
           </div>
-          {activeGoal ? (
-            <ScorePill fit={activeGoal.fit} grade={activeGoal.grade} size="lg" />
+          {overall ? (
+            <ScorePill fit={overall.fit} grade={overall.grade} size="sm" />
           ) : null}
         </div>
 

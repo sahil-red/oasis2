@@ -206,6 +206,19 @@ export default async function ProductPage({
               </div>
             ) : null}
 
+            {swaps.length > 0 ? (
+              <div className="mt-5">
+                <SwapPanel
+                  current={product}
+                  suggestions={swaps}
+                  compact
+                  goal={goal}
+                  title="Better alternatives"
+                  description="Similar products that look stronger on score, macros, or ingredients."
+                />
+              </div>
+            ) : null}
+
           </div>
         </div>
 
@@ -225,19 +238,9 @@ export default async function ProductPage({
             />
           ) : null}
 
-          {swaps.length > 0 ? (
-            <SwapPanel
-              current={product}
-              suggestions={swaps}
-              compact
-              goal={goal}
-              title="Better alternatives"
-              description="Similar products that look stronger on score, macros, or ingredients."
-            />
-          ) : null}
         </div>
 
-        <div className="mt-12 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
+        <div className="mt-10 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -267,7 +270,7 @@ export default async function ProductPage({
         </div>
 
         {similarProducts.length > 0 ? (
-          <div className="mt-7">
+          <div className="mt-6">
             <SwapPanel
               current={product}
               suggestions={similarProducts}

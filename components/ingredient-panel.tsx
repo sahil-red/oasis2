@@ -27,6 +27,8 @@ const RISK_TEXT: Record<IngredientRisk, string> = {
   hazardous: "text-[#f87171]",
 };
 
+const INITIAL_INGREDIENT_COUNT = 10;
+
 function dotRiskForItem(item: IngredientDisplayItem): IngredientRisk {
   if (item.tierLabel === "Probiotic" || item.tierLabel.startsWith("Probiotic")) return "risk-free";
   if (item.source === "rules" && item.risk === "risk-free") return "unknown";
@@ -99,6 +101,7 @@ export function IngredientPanel({
   intelligenceRows?: IngredientIntelligenceRow[];
 }) {
   const [showFull, setShowFull] = useState(false);
+  const [showAllIngredients, setShowAllIngredients] = useState(false);
   const items = parseIngredientsForDisplayWithIntelligence(ingredientsRaw, intelligenceRows);
   const summary = ingredientDisplaySummary(items);
 
@@ -115,53 +118,55 @@ export function IngredientPanel({
   const watchfulCount = items.filter((i) => i.risk === "limited").length;
   const allClean = summary.flagged === 0 && summary.hazardous === 0 && watchfulCount === 0;
   const concernCount = summary.flagged + watchfulCount;
+  const visibleItems = showAllIngredients ? items : items.slice(0, INITIAL_INGREDIENT_COUNT);
+  const hiddenCount = Math.max(0, items.length - visibleItems.length);
 
   return (
-    <div className="space-y-2">
-      {/* ── merged summary bar ── */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-(--color-line) bg-(--color-bg-soft) px-2.5 py-1.5 text-[11px]">
-        {allClean ? (
-          <span className="flex items-center gap-1.5 font-semibold text-[#4ade80]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-            No concerns
-          </span>
-        ) : summary.hazardous > 0 ? (
-          <span className="flex items-center gap-1.5 font-semibold text-[#f87171]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
-            {summary.hazardous} high risk · {summary.flagged} flagged
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 font-semibold text-[#f59e0b]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-            {concernCount} concern{concernCount !== 1 ? "s" : ""}
-          </span>
-        )}
-
-        <span className="text-(--color-fg-dim)/40">·</span>
-
-        {/* total count */}
-        <span className="text-(--color-fg-muted)">
-          {summary.total} ingredients
-        </span>
-
-        {/* rated coverage */}
-        {summary.rated > 0 ? (
-          <>
-            <span className="text-(--color-fg-dim)/40">·</span>
-            <span className="text-(--color-fg-muted)">
-              <span className="font-medium text-(--color-fg)">{ratedPct}%</span> intelligence-rated
-            </span>
-          </>
-        ) : null}
+    <div className="space-y-3">
+      <div className="grid gap-2 rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-2 sm:grid-cols-3">
+        <SummaryTile label="Ingredients" value={summary.total.toString()} />
+        <SummaryTile
+          label={summary.hazardous > 0 ? "High risk" : "Flagged"}
+          value={
+            allClean
+              ? "0"
+              : summary.hazardous > 0
+                ? summary.hazardous.toString()
+                : concernCount.toString()
+          }
+          tone={allClean ? "good" : summary.hazardous > 0 ? "bad" : "watch"}
+        />
+        <SummaryTile
+          label="Confidence"
+          value={summary.rated > 0 ? `${ratedPct}%` : "Scan"}
+          caption={summary.rated > 0 ? "rated" : "pending"}
+        />
       </div>
 
       {/* ── ingredient list ── */}
       <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
         <ul>
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <IngredientRow key={item.key} item={item} />
           ))}
         </ul>
+        {hiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowAllIngredients(true)}
+            className="w-full border-t border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-left text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
+          >
+            Show {hiddenCount} more ingredient{hiddenCount !== 1 ? "s" : ""}
+          </button>
+        ) : showAllIngredients && items.length > INITIAL_INGREDIENT_COUNT ? (
+          <button
+            type="button"
+            onClick={() => setShowAllIngredients(false)}
+            className="w-full border-t border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-left text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
+          >
+            Collapse ingredient list
+          </button>
+        ) : null}
       </div>
 
       {/* ── raw label toggle ── */}
@@ -180,6 +185,41 @@ export function IngredientPanel({
             </p>
           ) : null}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  tone = "neutral",
+  caption,
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "good" | "watch" | "bad";
+  caption?: string;
+}) {
+  const color =
+    tone === "good"
+      ? "var(--score-excellent)"
+      : tone === "watch"
+        ? "var(--score-poor)"
+        : tone === "bad"
+          ? "var(--score-bad)"
+          : "var(--color-fg)";
+
+  return (
+    <div className="rounded-lg border border-(--color-line) bg-(--color-panel) px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-(--color-fg-dim)">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-2xl font-semibold leading-none tabular-nums" style={{ color }}>
+        {value}
+      </p>
+      {caption ? (
+        <p className="mt-1 text-[10.5px] text-(--color-fg-dim)">{caption}</p>
       ) : null}
     </div>
   );
