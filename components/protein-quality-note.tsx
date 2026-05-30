@@ -18,13 +18,8 @@ export function ProteinQualityNote({
   });
   if (!insight || insight.tier === "complete" || insight.tier === "supplement") return null;
 
-  const tone =
-    insight.tier === "grain"
-      ? "border-amber-200/80 bg-amber-50/60 text-amber-950"
-      : "border-(--color-line) bg-(--color-bg-soft) text-(--color-fg-muted)";
-
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2.5 text-[13px] leading-snug ${tone}`}>
+    <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-[13px] leading-snug text-(--color-fg-muted)">
       <p className="font-medium text-(--color-fg)">{insight.label}</p>
       <p className="mt-0.5">{insight.shortNote}</p>
       {nutrition.protein_g_100g != null && nutrition.energy_kcal_100g != null ? (

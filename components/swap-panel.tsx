@@ -93,7 +93,7 @@ export function SwapPanel({
             >
               <div
                 className={cn(
-                  "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-(--color-bg)",
+                  "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
                   grid ? "h-24 w-full xl:h-28" : compact ? "h-16 w-16" : "h-16 w-16",
                 )}
               >
@@ -102,7 +102,7 @@ export function SwapPanel({
                     src={product.image_urls[0]}
                     alt=""
                     fill
-                    className={cn("object-contain", grid ? "p-3" : "p-2")}
+                    className={cn("object-contain", grid ? "p-1.5" : "p-1")}
                   />
                 ) : null}
               </div>

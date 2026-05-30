@@ -31,10 +31,10 @@ export function bandFromScore(score: number): ScoreBand {
 }
 
 const BAND_COLORS: Record<ScoreBand, string> = {
-  excellent: "#22c55e",
-  good: "#84cc16",
-  poor: "#f59e0b",
-  bad: "#ef4444",
+  excellent: "var(--score-excellent)",
+  good: "var(--score-good)",
+  poor: "var(--score-poor)",
+  bad: "var(--score-bad)",
 };
 
 const BAND_LABELS: Record<ScoreBand, string> = {
@@ -57,7 +57,7 @@ export function colorForGrade(grade: Grade): string {
     case "C":
       return BAND_COLORS.poor;
     case "D":
-      return "#fb923c";
+      return BAND_COLORS.poor;
     case "F":
       return BAND_COLORS.bad;
   }

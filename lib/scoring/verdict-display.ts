@@ -12,36 +12,36 @@ export const VERDICT_COLORS: Record<
   { bg: string; fg: string; border: string; chipBg: string; chipBorder: string; chipFg: string }
 > = {
   daily_staple: {
-    bg: "color-mix(in srgb, #0f9e75 10%, var(--color-panel))",
-    fg: "#0f9e75",
-    border: "color-mix(in srgb, #0f9e75 28%, transparent)",
+    bg: "color-mix(in srgb, var(--score-excellent) 10%, var(--color-panel))",
+    fg: "var(--score-excellent)",
+    border: "color-mix(in srgb, var(--score-excellent) 28%, transparent)",
     chipBg: "transparent",
-    chipBorder: "#0f9e75",
-    chipFg: "#0f9e75",
+    chipBorder: "var(--score-excellent)",
+    chipFg: "var(--score-excellent)",
   },
   good_choice: {
-    bg: "color-mix(in srgb, #7ab830 10%, var(--color-panel))",
-    fg: "#5d8d22",
-    border: "color-mix(in srgb, #7ab830 28%, transparent)",
+    bg: "color-mix(in srgb, var(--score-good) 10%, var(--color-panel))",
+    fg: "var(--score-good)",
+    border: "color-mix(in srgb, var(--score-good) 28%, transparent)",
     chipBg: "transparent",
-    chipBorder: "#7ab830",
-    chipFg: "#5d8d22",
+    chipBorder: "var(--score-good)",
+    chipFg: "var(--score-good)",
   },
   occasional_treat: {
-    bg: "color-mix(in srgb, #e07030 10%, var(--color-panel))",
-    fg: "#c25e1f",
-    border: "color-mix(in srgb, #e07030 28%, transparent)",
+    bg: "color-mix(in srgb, var(--score-poor) 10%, var(--color-panel))",
+    fg: "var(--score-poor)",
+    border: "color-mix(in srgb, var(--score-poor) 28%, transparent)",
     chipBg: "transparent",
-    chipBorder: "#e07030",
-    chipFg: "#c25e1f",
+    chipBorder: "var(--score-poor)",
+    chipFg: "var(--score-poor)",
   },
   skip: {
-    bg: "color-mix(in srgb, #d43030 10%, var(--color-panel))",
-    fg: "#a02525",
-    border: "color-mix(in srgb, #d43030 28%, transparent)",
+    bg: "color-mix(in srgb, var(--score-bad) 10%, var(--color-panel))",
+    fg: "var(--score-bad)",
+    border: "color-mix(in srgb, var(--score-bad) 28%, transparent)",
     chipBg: "transparent",
-    chipBorder: "#d43030",
-    chipFg: "#a02525",
+    chipBorder: "var(--score-bad)",
+    chipFg: "var(--score-bad)",
   },
 };
 
@@ -55,17 +55,17 @@ export function sublabelChipLabels(ids: string[] | null | undefined): string[] {
 }
 
 const VERDICT_TIER: Record<VerdictId, { accent: string; background: string }> = {
-  daily_staple: { accent: "#0f9e75", background: "#0d2822" },
-  good_choice: { accent: "#7ab830", background: "#141e08" },
-  occasional_treat: { accent: "#e07030", background: "#2b1600" },
-  skip: { accent: "#d43030", background: "#220808" },
+  daily_staple: { accent: "var(--score-excellent)", background: "#0d2822" },
+  good_choice: { accent: "var(--score-good)", background: "#141e08" },
+  occasional_treat: { accent: "var(--score-poor)", background: "#2b1600" },
+  skip: { accent: "var(--score-bad)", background: "#220808" },
 };
 
 const BAND_TIER: Record<string, { accent: string; background: string }> = {
-  excellent: { accent: "#0f9e75", background: "#0a3d32" },
-  good: { accent: "#22c55e", background: "#14331f" },
-  poor: { accent: "#f59e0b", background: "#3d2a0a" },
-  bad: { accent: "#ef4444", background: "#3d1212" },
+  excellent: { accent: "var(--score-excellent)", background: "#0a3d32" },
+  good: { accent: "var(--score-good)", background: "#14331f" },
+  poor: { accent: "var(--score-poor)", background: "#3d2a0a" },
+  bad: { accent: "var(--score-bad)", background: "#3d1212" },
 };
 
 /** Catalog score badge — full tier fill color (score only on card). */

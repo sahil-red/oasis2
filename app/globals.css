@@ -17,6 +17,10 @@
   --color-good: #15803d;
   --color-warn: #b45309;
   --color-bad: #991b1b;
+  --score-excellent: #16a34a;
+  --score-good: #84a822;
+  --score-poor: #d97706;
+  --score-bad: #dc2626;
 
   /* next/font sets --font-inter and --font-instrument on <html> in layout.tsx */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -39,6 +43,10 @@ html.dark {
   --color-good: #34d399;
   --color-warn: #fbbf24;
   --color-bad: #f87171;
+  --score-excellent: #24a66f;
+  --score-good: #8a9f39;
+  --score-poor: #c9842f;
+  --score-bad: #c85f5f;
 }
 
 * {
