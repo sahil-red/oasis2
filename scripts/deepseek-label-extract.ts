@@ -22,6 +22,7 @@ import { config as loadEnv } from "dotenv";
 import type { AppleRawOcrProduct } from "@/lib/ocr/apple-raw";
 import {
   buildDeepseekUserPrompt,
+  DeepseekExtractionError,
   extractLabelWithDeepseek,
   validateExtractedLabel,
   type DeepseekExtractionResult,
@@ -380,11 +381,15 @@ async function main() {
       } catch (e) {
         errors++;
         const message = e instanceof Error ? e.message : String(e);
+        const extractionError = e instanceof DeepseekExtractionError ? e : null;
         out.write(
           `${JSON.stringify({
             zepto_sku: item.row.zepto_sku,
             name: item.row.name,
             error: message,
+            raw_response: extractionError?.rawResponse ?? undefined,
+            usage: extractionError?.usage ?? undefined,
+            response_metadata: extractionError?.responseMetadata ?? undefined,
             at: new Date().toISOString(),
           })}\n`,
         );

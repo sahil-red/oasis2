@@ -14,9 +14,10 @@ const cloudDispatcher = new Agent({
 export type ConfidenceLevel = "high" | "medium" | "low";
 
 export type EvidenceRef = {
+  evidence_id?: string | null;
   image_index: number | null;
   variant: string | null;
-  snippet: string;
+  snippet?: string;
   corrected?: boolean;
 };
 
@@ -132,7 +133,10 @@ export type DeepseekExtractionResult = {
     total_tokens?: number;
     prompt_cache_hit_tokens?: number;
     prompt_cache_miss_tokens?: number;
+    prompt_tokens_details?: Record<string, unknown>;
+    completion_tokens_details?: Record<string, unknown>;
   } | null;
+  response_metadata: DeepseekResponseMetadata | null;
   prompt_chars: number;
   at: string;
 };
@@ -150,6 +154,33 @@ export type ValidationResult = {
 
 type DeepseekUsage = DeepseekExtractionResult["usage"];
 
+type DeepseekResponseMetadata = {
+  finish_reason?: string | null;
+  request_id?: string | null;
+  response_model?: string | null;
+  max_tokens?: number;
+  temperature?: number;
+  thinking?: "disabled";
+};
+
+export class DeepseekExtractionError extends Error {
+  rawResponse: string | null;
+  usage: DeepseekUsage;
+  responseMetadata: DeepseekResponseMetadata | null;
+
+  constructor(message: string, details?: {
+    rawResponse?: string | null;
+    usage?: DeepseekUsage;
+    responseMetadata?: DeepseekResponseMetadata | null;
+  }) {
+    super(message);
+    this.name = "DeepseekExtractionError";
+    this.rawResponse = details?.rawResponse ?? null;
+    this.usage = details?.usage ?? null;
+    this.responseMetadata = details?.responseMetadata ?? null;
+  }
+}
+
 export type DeepseekExtractOptions = {
   baseUrl?: string;
   apiKey?: string;
@@ -160,6 +191,8 @@ export type DeepseekExtractOptions = {
 };
 
 type ChatResponse = {
+  id?: string;
+  model?: string;
   choices?: Array<{ finish_reason?: string; message?: { content?: string } }>;
   error?: { message?: string };
   usage?: {
@@ -168,7 +201,18 @@ type ChatResponse = {
     total_tokens?: number;
     prompt_cache_hit_tokens?: number;
     prompt_cache_miss_tokens?: number;
+    prompt_tokens_details?: Record<string, unknown>;
+    completion_tokens_details?: Record<string, unknown>;
   };
+};
+
+type OcrEvidenceBlock = {
+  id: string;
+  image_index: number;
+  variant: string;
+  avg_confidence: number;
+  low_confidence: boolean;
+  text: string;
 };
 
 export const DEEPSEEK_LABEL_SYSTEM_PROMPT = `
@@ -181,7 +225,7 @@ MISSION
 Extract every useful fact printed on the package from the OCR text provided.
 All OCR images have already been captured; your input is the complete set of frames for this SKU.
 Do not invent, infer from food knowledge, or fill from category defaults.
-Correct obvious OCR character-substitution errors, for example "Proteln" to "Protein", "Energv" to "Energy", and "Sodlum" to "Sodium", when the intended label text is unambiguous. Record the original OCR snippet as evidence so the correction is traceable.
+Correct obvious OCR character-substitution errors, for example "Proteln" to "Protein", "Energv" to "Energy", and "Sodlum" to "Sodium", when the intended label text is unambiguous. Cite the original OCR evidence block so the correction is traceable.
 
 EVIDENCE PRIORITY ORDER
 When sources disagree, trust them in this order. Higher rank wins.
@@ -196,9 +240,9 @@ When sources disagree, trust them in this order. Higher rank wins.
 EXTRACTION RULES
 1. Evidence citation:
 Every non-null extracted value must include evidence where possible:
-{ "image_index": <int>, "variant": "<original|gray_normalized_sharp|highres_gray_normalized_sharp|bw_threshold>", "snippet": "<exact OCR text>" }
-When correcting an OCR typo, set "snippet" to the original OCR text and add "corrected": true to the evidence object.
-Use the shortest exact OCR snippet sufficient to audit the value. Do not paste full paragraphs or whole panels. Keep snippets under 240 characters unless a nutrition table excerpt genuinely needs more context.
+{ "evidence_id": "<id from OCR EVIDENCE BLOCKS>", "image_index": <int>, "variant": "<original|gray_normalized_sharp|highres_gray_normalized_sharp|bw_threshold>" }
+Do not include OCR snippets in your JSON. Raw OCR is stored separately and will be joined by evidence_id.
+When correcting an OCR typo, cite the original OCR block with evidence_id and add "corrected": true to the evidence object.
 
 2. Prefer regulatory panels:
 Prefer Nutrition Facts / Nutrition Information tables over front-of-pack marketing claims.
@@ -246,7 +290,7 @@ Preserve parenthetical sub-ingredients as nested structure when present, but als
 
 11. Unit normalization:
 Normalize quantity units to g, kg, ml, l, mcg, mg, kcal, kJ.
-Use normalized values in structured fields. Preserve the original printed value in evidence snippets.
+Use normalized values in structured fields. The original printed value remains available through evidence_id.
 
 12. Metadata provenance:
 Product metadata is provided as context only. It is never evidence.
@@ -256,7 +300,7 @@ This rule applies especially to brand, flavor, net_quantity, and any numeric cla
 
 13. OCR typo correction:
 Correct obvious single-character OCR substitution errors when the intended label text is unambiguous in context. Do not correct ambiguous fragments.
-Record the original OCR snippet in evidence with "corrected": true.
+Cite the original OCR evidence block with "corrected": true.
 
 14. Confidence scoring:
 Set confidence using these definitions:
@@ -290,13 +334,14 @@ why is a single plain-English sentence of 25 words or fewer summarising the most
 
 OUTPUT SCHEMA
 This is the normalized target shape. In your actual response, omit null fields and empty arrays/objects.
+For evidence objects, use evidence_id/image_index/variant, not snippet.
 {
   "schema_version": 2,
   "product": {
     "name": null,
     "brand": null,
     "variant_flavor": null,
-    "net_quantity": { "value": null, "unit": null, "evidence": null },
+    "net_quantity": { "value": null, "unit": null, "evidence": { "evidence_id": null, "image_index": null, "variant": null } },
     "pack_type": null
   },
   "identity": {
@@ -443,25 +488,28 @@ function asConfidence(value: unknown): ConfidenceLevel {
   return value === "high" || value === "medium" || value === "low" ? value : "low";
 }
 
-function asEvidence(value: unknown): EvidenceRef | null {
+function asEvidence(value: unknown, evidenceById: Map<string, OcrEvidenceBlock>): EvidenceRef | null {
   if (!value || typeof value !== "object") return null;
   const rec = value as Record<string, unknown>;
-  const snippet = asString(rec.snippet);
-  if (!snippet) return null;
+  const evidenceId = asString(rec.evidence_id);
+  const block = evidenceId ? evidenceById.get(evidenceId) : undefined;
+  const snippet = asString(rec.snippet) ?? block?.text ?? null;
+  if (!evidenceId && !snippet) return null;
   return {
-    image_index: typeof rec.image_index === "number" ? rec.image_index : null,
-    variant: asString(rec.variant),
-    snippet,
+    evidence_id: evidenceId,
+    image_index: typeof rec.image_index === "number" ? rec.image_index : block?.image_index ?? null,
+    variant: asString(rec.variant) ?? block?.variant ?? null,
+    ...(snippet ? { snippet } : {}),
     ...(rec.corrected === true ? { corrected: true } : {}),
   };
 }
 
-function asQuantity(value: unknown): Quantity {
+function asQuantity(value: unknown, evidenceById: Map<string, OcrEvidenceBlock>): Quantity {
   const rec = value && typeof value === "object" ? value as Record<string, unknown> : {};
   return {
     value: asNumber(rec.value),
     unit: asString(rec.unit),
-    evidence: asEvidence(rec.evidence),
+    evidence: asEvidence(rec.evidence, evidenceById),
   };
 }
 
@@ -477,7 +525,11 @@ function normalizeNutrition(value: unknown): ExtractedLabel["nutrition"]["per_10
   return out;
 }
 
-function normalizeExtracted(raw: Record<string, unknown>, product: ZeptoCsvRow): ExtractedLabel {
+function normalizeExtracted(
+  raw: Record<string, unknown>,
+  product: ZeptoCsvRow,
+  evidenceById: Map<string, OcrEvidenceBlock> = new Map(),
+): ExtractedLabel {
   const p = raw.product && typeof raw.product === "object" ? raw.product as Record<string, unknown> : {};
   const id = raw.identity && typeof raw.identity === "object" ? raw.identity as Record<string, unknown> : {};
   const ing = raw.ingredients && typeof raw.ingredients === "object" ? raw.ingredients as Record<string, unknown> : {};
@@ -494,7 +546,7 @@ function normalizeExtracted(raw: Record<string, unknown>, product: ZeptoCsvRow):
       name: asString(p.name),
       brand: asString(p.brand),
       variant_flavor: asString(p.variant_flavor),
-      net_quantity: asQuantity(p.net_quantity),
+      net_quantity: asQuantity(p.net_quantity, evidenceById),
       pack_type: asString(p.pack_type),
     },
     identity: {
@@ -508,7 +560,7 @@ function normalizeExtracted(raw: Record<string, unknown>, product: ZeptoCsvRow):
       raw_list: asStringArray(ing.raw_list),
       contains_lines: asStringArray(ing.contains_lines),
       may_contain_lines: asStringArray(ing.may_contain_lines),
-      evidence: asEvidence(ing.evidence),
+      evidence: asEvidence(ing.evidence, evidenceById),
     },
     nutrition: {
       table_source: asString(nut.table_source),
@@ -523,25 +575,25 @@ function normalizeExtracted(raw: Record<string, unknown>, product: ZeptoCsvRow):
       rda_percent: nut.rda_percent && typeof nut.rda_percent === "object"
         ? Object.fromEntries(Object.entries(nut.rda_percent as Record<string, unknown>).map(([k, v]) => [k, asNumber(v)]))
         : {},
-      evidence: asEvidence(nut.evidence),
+      evidence: asEvidence(nut.evidence, evidenceById),
     },
     allergens: {
       contains: asStringArray(allergens.contains),
       may_contain: asStringArray(allergens.may_contain),
       free_from_claims: asStringArray(allergens.free_from_claims),
-      evidence: asEvidence(allergens.evidence),
+      evidence: asEvidence(allergens.evidence, evidenceById),
     },
     storage_and_shelf_life: {
       storage_instructions: asString(storage.storage_instructions),
       shelf_life_months: asNumber(storage.shelf_life_months),
       best_before_format: asString(storage.best_before_format),
-      evidence: asEvidence(storage.evidence),
+      evidence: asEvidence(storage.evidence, evidenceById),
     },
     usage: {
       preparation_instructions: asString(usage.preparation_instructions),
       serving_suggestion: asString(usage.serving_suggestion),
       recommended_dosage: asString(usage.recommended_dosage),
-      evidence: asEvidence(usage.evidence),
+      evidence: asEvidence(usage.evidence, evidenceById),
     },
     regulatory: {
       manufacturer: asString(regulatory.manufacturer),
@@ -549,7 +601,7 @@ function normalizeExtracted(raw: Record<string, unknown>, product: ZeptoCsvRow):
       customer_care: asString(regulatory.customer_care),
       address: asString(regulatory.address),
       certifications: asStringArray(regulatory.certifications),
-      evidence: asEvidence(regulatory.evidence),
+      evidence: asEvidence(regulatory.evidence, evidenceById),
     },
     marketing_claims: asStringArray(raw.marketing_claims),
     conflicts: Array.isArray(raw.conflicts) ? raw.conflicts.filter((x): x is Record<string, unknown> => Boolean(x && typeof x === "object")) : [],
@@ -570,7 +622,7 @@ function addIssue(issues: ValidationIssue[], severity: "error" | "warning", code
 }
 
 function hasEvidence(evidence: EvidenceRef | null): boolean {
-  return Boolean(evidence?.snippet?.trim());
+  return Boolean(evidence?.evidence_id?.trim() || evidence?.snippet?.trim());
 }
 
 function mentionsGluten(value: string): boolean {
@@ -638,21 +690,68 @@ export function buildDeepseekUserPrompt(params: {
   raw: AppleRawOcrProduct;
   maxChars?: number;
 }): string {
+  return buildDeepseekPromptContext(params).prompt;
+}
+
+function evidenceBlocks(raw: AppleRawOcrProduct): OcrEvidenceBlock[] {
+  const blocks: OcrEvidenceBlock[] = [];
+  const maxChars = 1200;
+  const maxLines = 12;
+
+  for (const image of raw.images) {
+    for (const variant of image.variants) {
+      const lines = variant.raw_text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      let chunk: string[] = [];
+      let chunkChars = 0;
+      let blockIndex = 0;
+
+      const flush = () => {
+        if (!chunk.length) return;
+        blocks.push({
+          id: `img${image.index}_${variant.variant}_b${blockIndex++}`,
+          image_index: image.index,
+          variant: variant.variant,
+          avg_confidence: variant.avg_confidence ?? 0,
+          low_confidence: image.quality.low_confidence,
+          text: chunk.join("\n"),
+        });
+        chunk = [];
+        chunkChars = 0;
+      };
+
+      for (const line of lines) {
+        if (line.length > maxChars) {
+          flush();
+          for (let i = 0; i < line.length; i += maxChars) {
+            chunk = [line.slice(i, i + maxChars)];
+            chunkChars = chunk[0]!.length;
+            flush();
+          }
+          continue;
+        }
+        if (chunk.length >= maxLines || chunkChars + line.length + 1 > maxChars) flush();
+        chunk.push(line);
+        chunkChars += line.length + 1;
+      }
+      flush();
+    }
+  }
+
+  return blocks;
+}
+
+function buildDeepseekPromptContext(params: {
+  product: ZeptoCsvRow;
+  raw: AppleRawOcrProduct;
+  maxChars?: number;
+}): { prompt: string; evidenceById: Map<string, OcrEvidenceBlock> } {
   const maxChars = params.maxChars ?? 0;
   const product = params.product;
-  const frames = params.raw.images.flatMap((image) =>
-    image.variants.flatMap((variant) => {
-      const text = variant.raw_text.trim();
-      if (!text) return [];
-      return [{
-        image_index: image.index,
-        variant: variant.variant,
-        avg_confidence: variant.avg_confidence ?? 0,
-        low_confidence: image.quality.low_confidence ? 1 : 0,
-        text,
-      }];
-    }),
-  );
+  const blocks = evidenceBlocks(params.raw);
+  const evidenceById = new Map(blocks.map((block) => [block.id, block]));
 
   const metaBlock = `PRODUCT METADATA (platform data - may contain errors; use as context only, never as label evidence; fields must remain null if not found in OCR):\n${JSON.stringify({
     zepto_sku: product.zepto_sku,
@@ -666,22 +765,25 @@ export function buildDeepseekUserPrompt(params: {
     platform_nutrition: product.nutrition,
   }, null, 2)}`;
 
-  let ocrBlock = frames
-    .map((frame) =>
-      `--- image_index=${frame.image_index} variant=${frame.variant} avg_confidence=${frame.avg_confidence.toFixed(2)} low_confidence=${frame.low_confidence.toFixed(2)} ---\n${frame.text}`,
+  let ocrBlock = blocks
+    .map((block) =>
+      `--- evidence_id=${block.id} image_index=${block.image_index} variant=${block.variant} avg_confidence=${block.avg_confidence.toFixed(2)} low_confidence=${block.low_confidence ? 1 : 0} ---\n${block.text}`,
     )
     .join("\n\n");
   if (maxChars > 0 && ocrBlock.length > maxChars) {
     ocrBlock = `${ocrBlock.slice(0, maxChars)}\n\n[TRUNCATED_TO_${maxChars}_CHARS]`;
   }
 
-  return `${metaBlock}\n\nOCR TEXT - ALL FRAMES (use all frames; merge and deduplicate as needed):\n${ocrBlock || "[no OCR text]"}`;
+  return {
+    prompt: `${metaBlock}\n\nOCR EVIDENCE BLOCKS (use all blocks; cite evidence_id in JSON; do not copy OCR snippets into JSON):\n${ocrBlock || "[no OCR text]"}`,
+    evidenceById,
+  };
 }
 
 async function callDeepseek(
   messages: Array<{ role: "system" | "user"; content: string }>,
   opts: Required<DeepseekExtractOptions>,
-): Promise<{ content: string; usage: DeepseekUsage }> {
+): Promise<{ content: string; usage: DeepseekUsage; responseMetadata: DeepseekResponseMetadata }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   try {
@@ -697,6 +799,7 @@ async function callDeepseek(
         temperature: opts.temperature,
         max_tokens: opts.maxTokens,
         response_format: { type: "json_object" },
+        thinking: { type: "disabled" },
         messages,
       }),
       signal: controller.signal,
@@ -713,13 +816,22 @@ async function callDeepseek(
     }
     const parsed = JSON.parse(body) as ChatResponse;
     const choice = parsed.choices?.[0];
+    const responseMetadata: DeepseekResponseMetadata = {
+      finish_reason: choice?.finish_reason ?? null,
+      request_id: res.headers.get("x-request-id") ?? res.headers.get("x-ds-request-id") ?? parsed.id ?? null,
+      response_model: parsed.model ?? opts.model,
+      max_tokens: opts.maxTokens,
+      temperature: opts.temperature,
+      thinking: "disabled",
+    };
     const content = choice?.message?.content;
     if (!content) {
-      throw new Error(
+      throw new DeepseekExtractionError(
         `DeepSeek returned no message content; finish_reason=${choice?.finish_reason ?? "unknown"} usage=${JSON.stringify(parsed.usage ?? null)}`,
+        { usage: (parsed.usage ?? null) as DeepseekUsage, responseMetadata },
       );
     }
-    return { content, usage: (parsed.usage ?? null) as DeepseekUsage };
+    return { content, usage: (parsed.usage ?? null) as DeepseekUsage, responseMetadata };
   } finally {
     clearTimeout(timer);
   }
@@ -741,18 +853,29 @@ export async function extractLabelWithDeepseek(params: {
   };
   if (!opts.apiKey) throw new Error("Missing DEEPSEEK_API_KEY");
 
-  const userPrompt = buildDeepseekUserPrompt({
+  const promptContext = buildDeepseekPromptContext({
     product: params.product,
     raw: params.raw,
     maxChars: params.maxInputChars,
   });
+  const userPrompt = promptContext.prompt;
   const response = await callDeepseek([
     { role: "system", content: DEEPSEEK_LABEL_SYSTEM_PROMPT },
     { role: "user", content: userPrompt },
   ], opts);
   const rawResponse = response.content;
-  const parsed = JSON.parse(extractJsonObject(rawResponse)) as Record<string, unknown>;
-  const extracted = normalizeExtracted(parsed, params.product);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(extractJsonObject(rawResponse)) as Record<string, unknown>;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    throw new DeepseekExtractionError(`DeepSeek returned malformed JSON: ${message}`, {
+      rawResponse,
+      usage: response.usage,
+      responseMetadata: response.responseMetadata,
+    });
+  }
+  const extracted = normalizeExtracted(parsed, params.product, promptContext.evidenceById);
   const validation = validateExtractedLabel(extracted);
 
   return {
@@ -763,6 +886,7 @@ export async function extractLabelWithDeepseek(params: {
     validation,
     raw_response: rawResponse,
     usage: response.usage,
+    response_metadata: response.responseMetadata,
     prompt_chars: DEEPSEEK_LABEL_SYSTEM_PROMPT.length + userPrompt.length,
     at: new Date().toISOString(),
   };
