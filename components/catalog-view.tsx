@@ -670,20 +670,11 @@ export function CatalogView({
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
         <section className="rounded-3xl border border-(--color-line) bg-(--color-panel) p-5 shadow-sm md:p-7">
-          <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">
-              Scout AI search
-            </p>
-            <h1 className="font-display mt-2 text-3xl leading-tight text-(--color-fg) md:text-4xl">
-              Tell Scout what you need.
-            </h1>
-            <p className="mt-2 text-sm leading-relaxed text-(--color-fg-muted)">
-              Ask in plain English. Scout parses your request, applies nutrition and ingredient rules, then ranks products with match reasons.
-            </p>
-          </div>
-
+          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-(--color-fg-dim)">
+            Ask Scout
+          </p>
           <form
-            className="mt-5 flex flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-3 md:flex-row md:items-center"
+            className="flex flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-3 md:flex-row md:items-center"
             onSubmit={(e) => {
               e.preventDefault();
               void runAiSearch();
@@ -721,18 +712,15 @@ export function CatalogView({
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px] text-(--color-fg-dim)">
-            <span>
-              Free AI searches today: {aiUsage ? `${aiUsage.count}/${aiUsage.limit}` : `0/10`}
-            </span>
-            <span className="hidden h-3 w-px bg-(--color-line) sm:inline-block" aria-hidden />
-            <span>Paid plan: unlimited searches, saved preferences, family profiles, and basket swaps.</span>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px] text-(--color-fg-dim)">
+            <span>{aiUsage ? `${aiUsage.count}/${aiUsage.limit}` : "0/10"} searches today</span>
+            {savedPrefs && preferencesToPrompt(savedPrefs) ? (
+              <>
+                <span className="hidden h-3 w-px bg-(--color-line) sm:inline-block" aria-hidden />
+                <span>Preferences saved</span>
+              </>
+            ) : null}
           </div>
-          {savedPrefs && preferencesToPrompt(savedPrefs) ? (
-            <p className="mt-2 text-[12px] text-(--color-fg-muted)">
-              Using saved preferences: {preferencesToPrompt(savedPrefs).replace(/^Saved preferences:\s*/i, "").replace(/\.$/, "")}
-            </p>
-          ) : null}
 
           {aiMode && aiSummary ? (
             <div className="mt-5 rounded-2xl border border-(--color-line) bg-(--color-bg) px-4 py-3">
