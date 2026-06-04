@@ -763,69 +763,12 @@ export function CatalogView({
           ) : null}
         </section>
 
-        {/* ── Sticky search + sort row ─────────────────────────────────── */}
-        <div className="sticky top-14 z-40 -mx-5 border-b border-(--color-line)/60 bg-(--color-bg)/95 px-5 py-3 backdrop-blur md:-mx-6 md:px-6">
-          <div className="flex items-center gap-3">
-            {/* search */}
-            <div className="relative flex-1 max-w-md">
-              <svg
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--color-fg-dim)"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                aria-hidden
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20L17 17" strokeLinecap="round" />
-              </svg>
-              <input
-                type="search"
-                value={state.q}
-                onChange={(e) => patch({ q: e.target.value })}
-                placeholder="Advanced browse by name or brand…"
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full min-w-0 appearance-none rounded-full border border-(--color-line) bg-(--color-panel) py-2 pl-9 pr-3 text-[14px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
-              />
-            </div>
-
-            {/* sort */}
-            <details className="group relative shrink-0">
-              <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-(--color-line) px-3.5 text-[13px] font-medium text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) [&::-webkit-details-marker]:hidden">
-                <span className="hidden sm:inline">Sort:</span>
-                <span className="text-(--color-fg)">{sortBarLabel(activeState.sort)}</span>
-                <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
-              </summary>
-              <ul className="absolute right-0 top-full z-40 mt-1.5 min-w-[180px] overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel) py-1 shadow-xl">
-                {CATALOG_BAR_SORT_OPTIONS.map((o) => (
-                  <li key={o.id}>
-                    <button
-                      type="button"
-                      className={`w-full px-4 py-2 text-left text-sm transition hover:bg-(--color-bg-soft) ${
-                        activeState.sort === o.id ? "font-medium text-(--color-fg)" : "text-(--color-fg-muted)"
-                      }`}
-                      onClick={() => patch({ sort: o.id })}
-                    >
-                      {o.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-
-            {/* refreshing indicator */}
-            {refreshing ? (
-              <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border border-(--color-line-strong) border-t-transparent" />
-            ) : null}
+        {/* refreshing indicator */}
+        {refreshing ? (
+          <div className="flex justify-end">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border border-(--color-line-strong) border-t-transparent" />
           </div>
-
-          {/* Goal + diet, on the same sticky bar but smaller */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <GoalModePicker value={goal} onChange={pickGoal} compact />
-            <DietPicker value={diet} onChange={pickDiet} compact />
-          </div>
-        </div>
+        ) : null}
 
         <details className="group rounded-xl border border-(--color-line) bg-(--color-panel) open:pb-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -842,6 +785,11 @@ export function CatalogView({
           </summary>
 
           <div className="space-y-4 px-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--color-line) pb-4">
+              <GoalModePicker value={goal} onChange={pickGoal} compact />
+              <DietPicker value={diet} onChange={pickDiet} compact />
+            </div>
+
             <div className="flex flex-wrap gap-2">
               {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
                 const labels: Record<string, string> = {
@@ -951,9 +899,6 @@ export function CatalogView({
             ) : null}
             {activeState.sublabel ? (
               <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} />
-            ) : null}
-            {activeState.q.trim() ? (
-              <FilterChip label={`"${activeState.q.trim()}"`} onClear={() => patch({ q: "" })} />
             ) : null}
             <button
               type="button"
