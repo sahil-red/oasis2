@@ -101,14 +101,24 @@ async function loadCandidates(args: Args): Promise<Array<DeepseekExtractionResul
     .slice(0, args.sku ? 1 : args.limit);
 }
 
-async function fetchProduct(supabase: ReturnType<typeof adminClient>, sku: string): Promise<ProductRow | null> {
-  const { data, error } = await supabase
-    .from("products")
-    .select("id, zepto_sku, product_key, name, nutrition, ingredients_raw, attributes, ocr_payload")
-    .or(`zepto_sku.eq.${sku},product_key.eq.${sku}`)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data as ProductRow | null;
+async function fetchProductsBatch(
+  supabase: ReturnType<typeof adminClient>,
+  skus: string[],
+): Promise<Map<string, ProductRow>> {
+  const map = new Map<string, ProductRow>();
+  const chunkSize = 500;
+  for (let i = 0; i < skus.length; i += chunkSize) {
+    const chunk = skus.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, zepto_sku, product_key, name, nutrition, ingredients_raw, attributes, ocr_payload")
+      .in("zepto_sku", chunk);
+    if (error) throw new Error(error.message);
+    for (const row of (data ?? []) as ProductRow[]) {
+      if (row.zepto_sku) map.set(row.zepto_sku, row);
+    }
+  }
+  return map;
 }
 
 function summaryFor(results: DeepseekPromotionResult[], args: Args, missing: string[]) {
@@ -146,9 +156,13 @@ async function main() {
   const missing: string[] = [];
   let checked = 0;
 
+  const skus = candidates.map((c) => c.zepto_sku);
+  console.log(`[promote-deepseek] fetching ${skus.length} products from DB...`);
+  const productMap = await fetchProductsBatch(supabase, skus);
+
   for (const result of candidates) {
     checked++;
-    const product = await fetchProduct(supabase, result.zepto_sku);
+    const product = productMap.get(result.zepto_sku) ?? null;
     if (!product) {
       missing.push(result.zepto_sku);
       continue;
