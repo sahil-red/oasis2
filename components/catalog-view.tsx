@@ -665,8 +665,8 @@ export function CatalogView({
   }
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-5">
+    <div className="space-y-4">
+      <div className="space-y-3">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
         <section className="pb-2">
@@ -864,203 +864,111 @@ export function CatalogView({
                 ))}
               </div>
             </div>
-          </div>
-        </details>
+            <div className="border-t border-(--color-line) pt-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <FilterSelect
+                  label="Brand"
+                  value={activeState.brand}
+                  onChange={(e) => patch({ brand: e.target.value })}
+                  disabled={!metaReady || !filterOptions.brands.length}
+                >
+                  <option value="">All brands</option>
+                  {filterOptions.brands.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </FilterSelect>
 
-        {/* ── Active filter chips ─────────────────────────────────────── */}
-        {hasFilters ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-(--color-fg-dim)">
-              Filters:
-            </span>
-            {activeState.subcategory ? (
-              <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} />
-            ) : null}
-            {activeState.brand ? (
-              <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} />
-            ) : null}
-            {activeState.minScore > 0 ? (
-              <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} />
-            ) : null}
-            {activeState.maxPrice > 0 ? (
-              <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} />
-            ) : null}
-            {activeState.grade ? (
-              <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} />
-            ) : null}
-            {activeState.onlyDeepseek ? (
-              <FilterChip label="DeepSeek label extracted" onClear={() => patch({ onlyDeepseek: false })} />
-            ) : null}
-            {activeState.onlyLabelResolved ? (
-              <FilterChip label="Label ≠ CSV" onClear={() => patch({ onlyLabelResolved: false })} />
-            ) : null}
-            {activeState.onlyScored ? (
-              <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} />
-            ) : null}
-            {activeState.sublabel ? (
-              <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} />
-            ) : null}
-            <button
-              type="button"
-              onClick={clearAll}
-              className="text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline"
-            >
-              Clear all
-            </button>
-          </div>
-        ) : null}
+                <FilterSelect
+                  label="Min score"
+                  value={activeState.minScore || ""}
+                  onChange={(e) => patch({ minScore: e.target.value ? Number(e.target.value) : 0 })}
+                >
+                  <option value="">Any score</option>
+                  <option value="40">40+</option>
+                  <option value="50">50+</option>
+                  <option value="60">60+</option>
+                  <option value="70">70+</option>
+                </FilterSelect>
 
-        {/* ── More filters drawer ─────────────────────────────────────── */}
-        <details
-          className="group rounded-xl border border-(--color-line) bg-(--color-panel) open:pb-4"
-          open={undefined}
-        >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center gap-2.5">
-              <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
-              <span className="text-[14px] font-medium text-(--color-fg)">More filters</span>
-              {activeFilterCount > 0 ? (
-                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-fg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-bg)">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </span>
-            <ChevronDown className="h-4 w-4 text-(--color-fg-dim) transition group-open:rotate-180" />
-          </summary>
+                <FilterSelect
+                  label="Max price"
+                  value={activeState.maxPrice || ""}
+                  onChange={(e) => patch({ maxPrice: e.target.value ? Number(e.target.value) : 0 })}
+                >
+                  <option value="">Any price</option>
+                  <option value="100">Under ₹100</option>
+                  <option value="200">Under ₹200</option>
+                  <option value="500">Under ₹500</option>
+                </FilterSelect>
 
-          <div className="space-y-4 px-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <FilterSelect
-                label="Brand"
-                value={activeState.brand}
-                onChange={(e) => patch({ brand: e.target.value })}
-                disabled={!metaReady || !filterOptions.brands.length}
-              >
-                <option value="">All brands</option>
-                {filterOptions.brands.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </FilterSelect>
+                <FilterSelect
+                  label="Type"
+                  value={activeState.subcategory}
+                  onChange={(e) => patch({ subcategory: e.target.value })}
+                  disabled={!metaReady || !filterOptions.subcategories.length}
+                >
+                  <option value="">All types</option>
+                  {filterOptions.subcategories.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </FilterSelect>
 
-              <FilterSelect
-                label="Min score"
-                value={activeState.minScore || ""}
-                onChange={(e) =>
-                  patch({ minScore: e.target.value ? Number(e.target.value) : 0 })
-                }
-              >
-                <option value="">Any score</option>
-                <option value="40">40+</option>
-                <option value="50">50+</option>
-                <option value="60">60+</option>
-                <option value="70">70+</option>
-              </FilterSelect>
+                <FilterSelect
+                  label="Grade"
+                  value={activeState.grade}
+                  onChange={(e) => patch({ grade: (e.target.value || "") as Grade | "" })}
+                >
+                  <option value="">Any grade</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </FilterSelect>
 
-              <FilterSelect
-                label="Max price"
-                value={activeState.maxPrice || ""}
-                onChange={(e) =>
-                  patch({ maxPrice: e.target.value ? Number(e.target.value) : 0 })
-                }
-              >
-                <option value="">Any price</option>
-                <option value="100">Under ₹100</option>
-                <option value="200">Under ₹200</option>
-                <option value="500">Under ₹500</option>
-              </FilterSelect>
+                <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
+                  <input
+                    type="checkbox"
+                    checked={activeState.onlyScored}
+                    onChange={(e) => patch({ onlyScored: e.target.checked })}
+                    className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
+                  />
+                  Scored only
+                </label>
+              </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <FilterSelect
-                label="Type"
-                value={activeState.subcategory}
-                onChange={(e) => patch({ subcategory: e.target.value })}
-                disabled={!metaReady || !filterOptions.subcategories.length}
-              >
-                <option value="">All types</option>
-                {filterOptions.subcategories.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label="Usecase"
-                value={activeState.usecase}
-                onChange={(e) => patch({ usecase: e.target.value })}
-                disabled={!metaReady || !filterOptions.usecases.length}
-              >
-                <option value="">All usecases</option>
-                {filterOptions.usecases.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label="Grade"
-                value={activeState.grade}
-                onChange={(e) => patch({ grade: (e.target.value || "") as Grade | "" })}
-              >
-                <option value="">Any grade</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-              </FilterSelect>
-
-              <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
-                <input
-                  type="checkbox"
-                  checked={activeState.onlyScored}
-                  onChange={(e) => patch({ onlyScored: e.target.checked })}
-                  className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
-                />
-                Scored only
-              </label>
-
-              <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
-                <input
-                  type="checkbox"
-                  checked={activeState.onlyLabelResolved}
-                  onChange={(e) => patch({ onlyLabelResolved: e.target.checked })}
-                  className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
-                />
-                Label ≠ CSV
-              </label>
-
-              <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
-                <input
-                  type="checkbox"
-                  checked={activeState.onlyDeepseek}
-                  onChange={(e) => patch({ onlyDeepseek: e.target.checked })}
-                  className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
-                />
-                DeepSeek label extracted
-              </label>
-            </div>
-          </div>
 
           {hasFilters ? (
-            <div className="mt-3 px-4">
-              <button
-                type="button"
-                onClick={clearAll}
-                className="text-[13px] text-(--color-fg-dim) underline-offset-2 transition hover:text-(--color-fg) hover:underline"
-              >
-                Clear all filters
+            <div className="flex flex-wrap items-center gap-2 border-t border-(--color-line) pt-3">
+              {activeState.subcategory ? <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} /> : null}
+              {activeState.brand ? <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} /> : null}
+              {activeState.minScore > 0 ? <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} /> : null}
+              {activeState.maxPrice > 0 ? <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} /> : null}
+              {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
+              {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
+              {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
+              <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
+                Clear all
               </button>
             </div>
           ) : null}
+        </div>
         </details>
       </div>
 
-      {loading && items.length === 0 ? (
-        <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+      {/* ── Product grid or empty state ──────────────────────────────── */}
+      {!aiMode ? (
+        <div className="flex flex-col items-center gap-6 py-20 text-center">
+          <p className="text-[15px] text-(--color-fg-muted)">
+            Search above to find products — or open <span className="font-medium text-(--color-fg)">Filters</span> to browse by goal, diet, or aisle.
+          </p>
+          {stats ? (
+            <p className="text-[12px] text-(--color-fg-dim)">
+              {stats.scored.toLocaleString()} scored products across {stats.visible.toLocaleString()} with labels
+            </p>
+          ) : null}
+        </div>
+      ) : loading && items.length === 0 ? (
+        <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="animate-pulse space-y-2">
               <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
@@ -1069,12 +977,10 @@ export function CatalogView({
           ))}
         </div>
       ) : total === 0 ? (
-        <p className="py-20 text-center text-sm text-(--color-fg-muted)">
-          No products match.
-        </p>
+        <p className="py-16 text-center text-sm text-(--color-fg-muted)">No products match.</p>
       ) : (
         <div
-          className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+          className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
             refreshing ? "opacity-80" : "opacity-100"
           } transition-opacity duration-100`}
         >
