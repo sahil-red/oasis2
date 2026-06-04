@@ -85,12 +85,70 @@ const filterSelectClass =
 
 const CATALOG_PAGE_SIZE = 96;
 const SEARCH_DEBOUNCE_MS = 120;
-const AI_PROMPT_EXAMPLES = [
+
+const ALL_PROMPT_EXAMPLES = [
   "biscuits with low sugar",
   "paneer with low fat under ₹150",
   "high protein snacks for gym",
   "kids snacks without artificial colours",
+  "zero sugar soft drinks",
+  "diabetic friendly breakfast cereals",
+  "oats without added sugar",
+  "clean protein bars no artificial sweeteners",
+  "full cream milk high protein",
+  "ghee from grass fed cows",
+  "chips without palm oil",
+  "curd high protein low fat",
+  "dark chocolate no added sugar",
+  "multigrain bread no maida",
+  "protein powder for bulking",
+  "juice no added sugar no preservatives",
+  "peanut butter without palm oil",
+  "greek yogurt high protein",
+  "baby food no preservatives no colours",
+  "green tea without artificial flavours",
+  "low sodium snacks",
+  "vegan protein snacks",
+  "keto friendly snacks",
+  "cheese with no preservatives",
+  "muesli without added sugar",
+  "rice cakes low calorie",
+  "almond milk no added sugar",
+  "coconut water natural no sugar",
+  "energy bars without high fructose corn syrup",
+  "tofu high protein vegetarian",
+  "instant oats no added flavours",
+  "low carb bread",
+  "whey protein isolate",
+  "seeds and nuts mix no salt",
+  "cold pressed juice no preservatives",
+  "kombucha low sugar",
+  "sourdough bread no maida",
+  "chickpea snacks high protein",
+  "trail mix no added sugar",
+  "probiotic yogurt no artificial flavours",
+  "dal high protein low price",
+  "sprouts mix protein rich",
+  "quinoa for weight loss",
+  "flax seeds omega 3",
+  "plant based milk alternatives",
+  "sugar free chocolate",
+  "healthy namkeen low fat",
+  "ragi biscuits for kids",
+  "millet based snacks",
+  "low fat paneer for diet",
 ];
+
+// Show 10 prompts rotating by day so they feel fresh each visit
+function getDayPrompts(): string[] {
+  const dayIdx = Math.floor(Date.now() / 86_400_000);
+  const start = (dayIdx * 7) % ALL_PROMPT_EXAMPLES.length;
+  const out: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    out.push(ALL_PROMPT_EXAMPLES[(start + i) % ALL_PROMPT_EXAMPLES.length]!);
+  }
+  return out;
+}
 
 
 function countActiveFilters(state: CatalogFilterState): number {
@@ -734,8 +792,8 @@ export function CatalogView({
       <div className="space-y-3">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
-        <section className="pb-2">
-          <p className="font-display mb-4 text-3xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-4xl">
+        <section className="pb-1">
+          <p className="font-display mb-3 text-2xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-3xl">
             Ask Scout
           </p>
           <form
@@ -761,8 +819,9 @@ export function CatalogView({
             </button>
           </form>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {AI_PROMPT_EXAMPLES.map((example) => (
+          {/* Prompt chips — 10 rotating from 50-prompt dataset */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {getDayPrompts().map((example) => (
               <button
                 key={example}
                 type="button"
@@ -770,28 +829,25 @@ export function CatalogView({
                   setAiPrompt(example);
                   void runAiSearch(example);
                 }}
-                className="rounded-full border border-(--color-line-strong) px-3 py-1.5 text-[12px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                className="rounded-full border border-(--color-line) px-3 py-1 text-[11px] text-(--color-fg-dim) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
               >
                 {example}
               </button>
             ))}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px] text-(--color-fg-dim)">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-(--color-fg-dim)">
             <span>{aiUsage ? `${aiUsage.count}/${aiUsage.limit}` : "0/10"} searches today</span>
             {savedPrefs && preferencesToPrompt(savedPrefs) ? (
-              <>
-                <span className="hidden h-3 w-px bg-(--color-line) sm:inline-block" aria-hidden />
-                <span>Preferences saved</span>
-              </>
+              <span>· Preferences saved</span>
             ) : null}
           </div>
 
           {aiMode && aiSummary ? (
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-(--color-line) pt-4">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
               <p className="text-[13px] font-medium text-(--color-fg)">{aiSummary}</p>
               {aiWarning ? (
-                <p className="text-[12px] text-(--color-fg-dim)">{aiWarning}</p>
+                <p className="text-[11px] text-(--color-fg-dim)">{aiWarning}</p>
               ) : null}
               {aiParsed ? (
                 <button
@@ -807,7 +863,7 @@ export function CatalogView({
                 </button>
               ) : null}
               {aiRefinements.length > 0 ? (
-                <div className="flex w-full flex-wrap gap-2">
+                <div className="flex w-full flex-wrap gap-1.5">
                   {aiRefinements.map((refinement) => (
                     <button
                       key={refinement}
@@ -817,7 +873,7 @@ export function CatalogView({
                         setAiPrompt(next);
                         void runAiSearch(next);
                       }}
-                      className="rounded-full border border-(--color-line-strong) px-3 py-1 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
+                      className="rounded-full border border-(--color-line) px-2.5 py-0.5 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
                     >
                       {refinement}
                     </button>
@@ -835,18 +891,18 @@ export function CatalogView({
           </div>
         ) : null}
 
-        <details className="group rounded-xl border border-(--color-line) bg-(--color-panel) open:pb-4">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center gap-2.5">
-              <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
-              <span className="text-[14px] font-medium text-(--color-fg)">Refine results</span>
+        <details className="group rounded-xl border border-(--color-line)/60 bg-(--color-fg) open:pb-4 dark:border-white/10">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-(--color-bg)/60" aria-hidden />
+              <span className="text-[13px] font-medium text-(--color-bg)">Refine results</span>
               {activeFilterCount > 0 ? (
-                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-fg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-bg)">
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-bg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-fg)">
                   {activeFilterCount}
                 </span>
               ) : null}
             </span>
-            <ChevronDown className="h-4 w-4 text-(--color-fg-dim) transition group-open:rotate-180" />
+            <ChevronDown className="h-3.5 w-3.5 text-(--color-bg)/50 transition group-open:rotate-180" />
           </summary>
 
           <div className="space-y-4 px-4">

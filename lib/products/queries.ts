@@ -1201,7 +1201,9 @@ export async function getAiSearchProductPool(): Promise<ProductListItem[]> {
   if (_aiProductPoolCache && Date.now() - _aiProductPoolCache.at < AI_POOL_TTL_MS) {
     return _aiProductPoolCache.data;
   }
-  const data = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+  // Include ALL catalog-visible products, not just scored ones.
+  // Many commodity products (milk, dal, rice) are never scored but are perfectly valid results.
+  const data = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: false });
   _aiProductPoolCache = { data, at: Date.now() };
   return data;
 }

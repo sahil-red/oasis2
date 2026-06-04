@@ -42,7 +42,7 @@ export default async function CatalogPage({
     <main className="min-h-screen">
       <SiteNav />
 
-      <div className="mx-auto max-w-6xl px-5 pb-20 pt-8 md:px-6 md:pt-10">
+      <div className="mx-auto max-w-6xl px-5 pb-20 pt-3 md:px-6 md:pt-4">
         <CatalogLoader initialParams={params} initialMeta={meta} initialSearch={initialSearch} />
       </div>
 

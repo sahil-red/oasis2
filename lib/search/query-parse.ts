@@ -101,14 +101,16 @@ Schema:
 }
 
 Rules:
-- product_terms are concrete food/product words from the user: biscuits, paneer, chips, cereal, protein bar.
+- product_terms are concrete food/product words from the user: milk, biscuits, paneer, chips, cereal, protein bar, curd, bread, dal, ghee.
 - categories are broad aisle/shelf hints only when obvious: snacks, dairy, breakfast, bakery, sweets, sauces.
 - Use hard constraints only when the user asks for a limit or strict requirement.
 - "low sugar" means max_sugar_g_100g = 10 unless a numeric limit is given.
 - "no sugar" or "zero sugar" means max_sugar_g_100g = 1.
 - "low fat" means max_fat_g_100g = 12 unless a numeric limit is given.
-- "high protein" means min_protein_g_100g = 12 unless a numeric limit is given.
-- Map gym/high protein to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"].
+- CRITICAL: "high protein [specific food]" (e.g. "high protein milk", "high protein curd", "high protein bread") means the user wants that food sorted by protein content. Set sort_intent:"highest_protein" ONLY. Do NOT set min_protein_g_100g — milk/curd/bread naturally have low protein, the user wants the best option within that food type.
+- Set min_protein_g_100g = 12 ONLY when the user is explicitly looking for protein supplements or high-protein products without naming a specific everyday food (e.g. "protein powder", "high protein snacks", "protein bar"). Never set it when a specific food is named.
+- "low sugar" for a specific food (e.g. "low sugar biscuits") means max_sugar_g_100g = 10 — apply as a hard constraint since biscuits can vary widely.
+- Map gym/high protein snacks to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"].
 - Keep explanation under 22 words.
 `;
 

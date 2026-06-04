@@ -131,12 +131,16 @@ function productTermScore(p: ProductListItem, parsed: ParsedProductQuery): { sco
   return { score, reasons };
 }
 
-function constraintScore(p: ProductListItem, parsed: ParsedProductQuery): {
+function constraintScore(p: ProductListItem, parsed: ParsedProductQuery, isNameMatch: boolean): {
   score: number;
   reasons: string[];
   failures: string[];
 } {
   const c = parsed.hard_constraints;
+  // When the user named a specific food product and it's a name match, treat protein
+  // minimum as a sort preference only — don't penalise products just for being the natural
+  // form of that food (milk has 3g protein, that's fine when searching "high protein milk").
+  const suppressProteinMin = isNameMatch && parsed.product_terms.length > 0;
   const reasons: string[] = [];
   const failures: string[] = [];
   let score = 0;
@@ -174,7 +178,13 @@ function constraintScore(p: ProductListItem, parsed: ParsedProductQuery): {
     }
   }
   if (c.min_protein_g_100g != null) {
-    if (protein != null && protein >= c.min_protein_g_100g) {
+    if (suppressProteinMin) {
+      // Sort boost only — protein content used for ranking, not filtering
+      if (protein != null) {
+        score += Math.min(14, protein * 0.7);
+        if (protein >= c.min_protein_g_100g) reasons.push(`Protein ${protein}g/100g`);
+      }
+    } else if (protein != null && protein >= c.min_protein_g_100g) {
       score += 18;
       reasons.push(`Protein ${protein}g/100g`);
     } else {
@@ -263,7 +273,8 @@ function formatPenalty(p: ProductListItem, parsed: ParsedProductQuery): { penalt
 
 function rankProduct(p: ProductListItem, parsed: ParsedProductQuery): RankedCandidate {
   const term = productTermScore(p, parsed);
-  const constraint = constraintScore(p, parsed);
+  const isNameMatch = term.score >= 42;
+  const constraint = constraintScore(p, parsed, isNameMatch);
   const goal = goalScore(p, parsed);
   const core = p.core_scores?.score ?? 0;
   const failures = constraint.failures;
@@ -348,11 +359,29 @@ export async function runAiProductSearch(
   const parsed = parseResult.parsed;
   const products = await getAiSearchProductPool();
   const terms = [...parsed.product_terms, ...parsed.categories].map((t) => t.toLowerCase());
-  // Word-boundary pre-filter: prevents "milky" matching "milk", "coconut milk" dominating, etc.
-  const prefiltered = terms.length
-    ? products.filter((p) => includesAny(textHaystack(p), terms))
+
+  // Pre-filter by name+brand ONLY — using aisle/shelf text causes false positives
+  // (e.g. "Dairy, Bread & Eggs" category would match "milk" for ALL dairy including paneer/ghee).
+  const nameBrandOf = (p: ProductListItem) =>
+    [p.name, p.brand].filter(Boolean).join(" ").toLowerCase();
+
+  const nameBrandMatches = terms.length
+    ? products.filter((p) => includesAny(nameBrandOf(p), terms))
     : products;
-  const pool = prefiltered.length >= 8 ? prefiltered : products;
+
+  // Prefer strict name/brand matches. Only fall back to full haystack if we got very few
+  // name matches AND no product term was specified (generic category search).
+  // Never fall back to all products when the user named a specific food — it's better to
+  // show 3 relevant results than 100 irrelevant ones.
+  const hasSpecificProduct = parsed.product_terms.length > 0;
+  const pool =
+    nameBrandMatches.length >= 6
+      ? nameBrandMatches
+      : nameBrandMatches.length > 0 && hasSpecificProduct
+        ? nameBrandMatches
+        : !hasSpecificProduct && nameBrandMatches.length < 6
+          ? products.filter((p) => includesAny(textHaystack(p), terms))
+          : products;
   const rankedAll = pool
     .map((p) => rankProduct(p, parsed))
     .filter((c) => c.score > 0)
