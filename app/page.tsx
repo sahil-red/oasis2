@@ -2,12 +2,13 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { HomeRailCard } from "@/components/home-rail-card";
 import { HomeShowcase } from "@/components/home-showcase";
-import { LandingPickOfDay } from "@/components/landing-pick-of-day";
 import { LandingIntel } from "@/components/landing-intel";
 import { LandingGoalBoards } from "@/components/landing-goal-boards";
+import { LandingBestInClass, buildBestInClass } from "@/components/landing-best-in-class";
+import { LandingDodgeList, buildDodgeList } from "@/components/landing-dodge-list";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getCachedLandingInsights } from "@/lib/products/catalog-cache";
+import { getCachedLandingInsights, getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache";
 import { getHomeShelves } from "@/lib/products/queries";
 
 export const revalidate = 600;
@@ -21,10 +22,22 @@ const PROMPTS = [
 ];
 
 export default async function Home() {
-  const [shelves, insights] = await Promise.all([
+  const [shelves, insights, allProducts] = await Promise.all([
     getHomeShelves(),
     getCachedLandingInsights(),
+    getCachedScoredCatalogForInsights(),
   ]);
+
+  const TOP_CATEGORIES = [
+    "Dairy, Bread & Eggs",
+    "Munchies",
+    "Biscuits",
+    "Breakfast",
+    "Packaged Food",
+    "Cold Drinks & Juices",
+  ];
+  const bestInClass = buildBestInClass(allProducts, TOP_CATEGORIES);
+  const dodgeList = buildDodgeList(allProducts);
 
   // Rotate the featured goal board each hour so it feels fresh each visit
   const hourIndex = Math.floor(Date.now() / 3_600_000);
@@ -126,9 +139,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ── Pick of the day ───────────────────────────────────────────── */}
-      {insights.pickOfDay && <LandingPickOfDay data={insights.pickOfDay} />}
-
       {/* ── Scout intel: data facts ───────────────────────────────────── */}
       {insights.facts.length > 0 && <LandingIntel facts={insights.facts} />}
 
@@ -140,7 +150,13 @@ export default async function Home() {
         />
       )}
 
-      {/* ── Rails ─────────────────────────────────────────────────────── */}
+      {/* ── Best in class by category ─────────────────────────────────── */}
+      {bestInClass.length > 0 && <LandingBestInClass categories={bestInClass} />}
+
+      {/* ── The dodge list: marketing vs reality ──────────────────────── */}
+      {dodgeList.length > 0 && <LandingDodgeList products={dodgeList} />}
+
+      {/* ── Daily staples rail ────────────────────────────────────────── */}
       <Rail
         eyebrow="Daily staples"
         title="Worth buying every week."
@@ -148,32 +164,6 @@ export default async function Home() {
         cta={{ href: "/search?verdict=daily_staple", label: "All staples" }}
         items={shelves.dailyStaples}
       />
-
-      <Rail
-        eyebrow="Skip list"
-        title="The marketing's better than the food."
-        subtitle="Score below 40, or hazardous flags. Sugar, refined flour, and ultra-processed stuff dressed up in green wrappers."
-        cta={{ href: "/search?verdict=skip", label: "Full skip list" }}
-        items={shelves.skipWorthy}
-      />
-
-      <Rail
-        eyebrow="Quietly good"
-        title="Solid picks you might miss."
-        subtitle="Top of their aisle. Not a daily staple, but you won't be embarrassed by the back label."
-        cta={{ href: "/search?verdict=good_choice", label: "More good choices" }}
-        items={shelves.bestValue}
-      />
-
-      {shelves.occasionalTreats.length > 0 && (
-        <Rail
-          eyebrow="Occasional treats"
-          title="Honest about what they are."
-          subtitle="Not pretending to be healthy. Eaten mindfully, perfectly fine."
-          cta={{ href: "/search?verdict=occasional_treat", label: "Treat shelf" }}
-          items={shelves.occasionalTreats}
-        />
-      )}
 
       <SiteFooter />
     </main>

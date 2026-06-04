@@ -790,7 +790,7 @@ export function CatalogView({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3">
+      <div className="relative space-y-3">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
         <section className="pb-1">
@@ -814,8 +814,8 @@ export function CatalogView({
             <div className="flex flex-col gap-1.5">
               <button
                 type="submit"
-                disabled={aiSearching || !aiPrompt.trim()}
-                className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={aiSearching}
+                className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
               >
                 {aiSearching ? "Searching…" : "Search"}
               </button>
@@ -852,12 +852,9 @@ export function CatalogView({
             ))}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-(--color-fg-dim)">
-            <span>{aiUsage ? `${aiUsage.count}/${aiUsage.limit}` : "0/10"} searches today</span>
-            {savedPrefs && preferencesToPrompt(savedPrefs) ? (
-              <span>· Preferences saved</span>
-            ) : null}
-          </div>
+          {savedPrefs && preferencesToPrompt(savedPrefs) ? (
+            <div className="mt-1.5 text-[11px] text-(--color-fg-dim)">Preferences saved</div>
+          ) : null}
 
           {aiMode && aiSummary ? (
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
@@ -908,7 +905,7 @@ export function CatalogView({
         ) : null}
 
         {refineOpen && (
-          <div className="rounded-xl border border-(--color-line) bg-(--color-panel) pb-4">
+          <div className="absolute left-0 right-0 top-full z-40 mt-1 rounded-xl border border-(--color-line) bg-(--color-panel) pb-4 shadow-xl">
           <div className="space-y-4 px-4 pt-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--color-line) pb-4">
               <GoalModePicker value={goal} onChange={pickGoal} compact />
