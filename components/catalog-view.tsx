@@ -84,37 +84,6 @@ const AI_PROMPT_EXAMPLES = [
   "kids snacks without artificial colours",
 ];
 
-const CURATED_COLLECTIONS: {
-  prompt: string;
-  title: string;
-  blurb: string;
-  accent: string;
-}[] = [
-  {
-    prompt: "high protein snacks for gym",
-    title: "Protein-packed snacks",
-    blurb: "Fuel workouts without junk",
-    accent: "#0f9e75",
-  },
-  {
-    prompt: "biscuits and cookies with low sugar",
-    title: "Low-sugar treats",
-    blurb: "Satisfy cravings, skip the sugar spike",
-    accent: "#e07030",
-  },
-  {
-    prompt: "kids snacks without artificial colours or preservatives",
-    title: "Clean picks for kids",
-    blurb: "No artificial colours or junk additives",
-    accent: "#7ab830",
-  },
-  {
-    prompt: "healthy breakfast options high in fibre",
-    title: "Better breakfasts",
-    blurb: "High-fibre starts to the day",
-    accent: "#3b82f6",
-  },
-];
 
 function countActiveFilters(state: CatalogFilterState): number {
   let n = 0;
@@ -987,86 +956,15 @@ export function CatalogView({
         </details>
       </div>
 
-      {/* ── Magnified landing or product grid ────────────────────────── */}
+      {/* ── Magic landing or product grid ────────────────────────────── */}
       {!aiMode && !hasFilters ? (
-        <div className="space-y-12 pt-2">
-          {/* Curated collections */}
-          <section className="space-y-4">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-xl font-semibold text-(--color-fg)">Start here</h2>
-              {stats ? (
-                <span className="text-[12px] text-(--color-fg-dim)">
-                  {stats.scored.toLocaleString()} products scored
-                </span>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {CURATED_COLLECTIONS.map((c) => (
-                <button
-                  key={c.prompt}
-                  type="button"
-                  onClick={() => {
-                    setAiPrompt(c.prompt);
-                    void runAiSearch(c.prompt);
-                  }}
-                  className="group relative overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-panel) p-5 text-left transition hover:border-(--color-fg-dim) hover:shadow-md"
-                >
-                  <span
-                    className="absolute inset-x-0 top-0 h-1 w-full"
-                    style={{ backgroundColor: c.accent }}
-                    aria-hidden
-                  />
-                  <h3 className="text-[15px] font-semibold text-(--color-fg)">{c.title}</h3>
-                  <p className="mt-1 text-[13px] leading-relaxed text-(--color-fg-muted)">{c.blurb}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-[12px] font-medium text-(--color-fg-muted) transition group-hover:gap-1.5 group-hover:text-(--color-fg)">
-                    Explore
-                    <span aria-hidden>→</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Browse by aisle */}
-          {filterOptions.categories.length > 0 ? (
-            <section className="space-y-4">
-              <h2 className="font-display text-xl font-semibold text-(--color-fg)">Browse by aisle</h2>
-              <div className="flex flex-wrap gap-2">
-                {filterOptions.categories.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => patch({ category: activeState.category === c ? "" : c })}
-                    className="rounded-full border border-(--color-line-strong) px-4 py-2 text-[13px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {/* Top-rated picks */}
-          {items.length > 0 ? (
-            <section className="space-y-4">
-              <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-xl font-semibold text-(--color-fg)">Top-rated right now</h2>
-                <span className="text-[12px] text-(--color-fg-dim)">Highest health scores</span>
-              </div>
-              <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
-                {items.slice(0, 8).map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    hrefQuery={productQuery}
-                    goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                    onSublabelClick={handleSublabelClick}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </div>
+        <ScoutMagicLanding
+          stats={stats ?? null}
+          onAsk={(prompt) => {
+            setAiPrompt(prompt);
+            void runAiSearch(prompt);
+          }}
+        />
       ) : loading && items.length === 0 ? (
         <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
           {Array.from({ length: 12 }).map((_, i) => (
@@ -1112,6 +1010,156 @@ export function CatalogView({
       {stats ? (
         <p className="text-center text-[11px] text-(--color-fg-dim)">
           {stats.scored.toLocaleString()} scored · {stats.visible.toLocaleString()} with labels
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type ScoutScenario = {
+  q: string;
+  steps: string[];
+  result: string;
+};
+
+const SCOUT_SCENARIOS: ScoutScenario[] = [
+  {
+    q: "paneer with low fat under ₹150",
+    steps: [
+      "Reading every paneer label in the cold aisle",
+      "Keeping only 8g fat or less per 100g",
+      "Dropping anything over ₹150",
+      "Ranking what's left by health score",
+    ],
+    result: "6 clean picks",
+  },
+  {
+    q: "biscuits my kid will love but lower in sugar",
+    steps: [
+      "Scanning 140+ biscuit labels",
+      "Flagging added sugar above 5g",
+      "Removing artificial colours",
+      "Sorting by score, not marketing",
+    ],
+    result: "9 better swaps",
+  },
+  {
+    q: "high-protein snacks for the gym",
+    steps: [
+      "Comparing protein across the snack aisle",
+      "Requiring 10g+ protein a serving",
+      "Penalising junk additives",
+      "Ranking by protein per rupee",
+    ],
+    result: "12 contenders",
+  },
+];
+
+function ScoutMagicLanding({
+  stats,
+  onAsk,
+}: {
+  stats: { scored: number; visible: number } | null;
+  onAsk: (prompt: string) => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [steps, setSteps] = useState(0);
+  const [showResult, setShowResult] = useState(false);
+  const [fading, setFading] = useState(false);
+
+  const scenario = SCOUT_SCENARIOS[idx % SCOUT_SCENARIOS.length]!;
+
+  useEffect(() => {
+    const current = SCOUT_SCENARIOS[idx % SCOUT_SCENARIOS.length]!;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    setTyped("");
+    setSteps(0);
+    setShowResult(false);
+    setFading(false);
+
+    let t = 350;
+    for (let i = 1; i <= current.q.length; i++) {
+      timers.push(setTimeout(() => setTyped(current.q.slice(0, i)), t));
+      t += 42;
+    }
+    t += 450;
+    for (let s = 1; s <= current.steps.length; s++) {
+      timers.push(setTimeout(() => setSteps(s), t));
+      t += 640;
+    }
+    t += 250;
+    timers.push(setTimeout(() => setShowResult(true), t));
+    t += 2200;
+    timers.push(setTimeout(() => setFading(true), t));
+    t += 600;
+    timers.push(setTimeout(() => setIdx((v) => v + 1), t));
+
+    return () => timers.forEach(clearTimeout);
+  }, [idx]);
+
+  return (
+    <div className="relative flex min-h-[360px] flex-col items-center justify-center overflow-hidden py-10">
+      <div
+        aria-hidden
+        className="scout-aura pointer-events-none absolute left-1/2 top-[38%] h-72 w-72 rounded-full blur-3xl"
+        style={{
+          background:
+            "radial-gradient(circle, color-mix(in srgb, var(--color-good) 22%, transparent), transparent 70%)",
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={() => onAsk(scenario.q)}
+        className={`group relative w-full max-w-xl text-left transition-opacity duration-500 ${
+          fading ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">
+          Someone just asked Scout
+        </p>
+        <p className="font-display mt-3 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[30px]">
+          <span className="text-(--color-fg-dim)">“</span>
+          {typed}
+          <span className="scout-caret ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[3px] bg-(--color-fg)" />
+          <span className="text-(--color-fg-dim)">”</span>
+        </p>
+
+        <div className="mt-7 space-y-2.5">
+          {scenario.steps.slice(0, steps).map((s, i) => (
+            <div
+              key={`${idx}-${i}`}
+              className="scout-rise flex items-center gap-3 text-[14px] text-(--color-fg-muted)"
+            >
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: "var(--color-good)" }}
+              />
+              {s}
+            </div>
+          ))}
+
+          {showResult ? (
+            <div className="scout-rise flex flex-wrap items-center gap-x-3 gap-y-1 pt-3">
+              <span className="text-[16px] font-semibold text-(--color-fg)">
+                → {scenario.result}
+              </span>
+              <span className="text-[13px] text-(--color-fg-muted) underline-offset-4 group-hover:underline">
+                tap to see them
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </button>
+
+      {stats ? (
+        <p className="mt-14 max-w-md text-center text-[12.5px] leading-relaxed text-(--color-fg-dim)">
+          Scout has read the label on every one of{" "}
+          <span className="font-medium text-(--color-fg-muted)">
+            {stats.scored.toLocaleString()}
+          </span>{" "}
+          scored products — so you don't have to.
         </p>
       ) : null}
     </div>
