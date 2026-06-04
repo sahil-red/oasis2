@@ -110,7 +110,23 @@ function displayFromIntelligenceRow(
   if (code && isInsulinMislabel(row.display_name)) {
     return base.eNumber ?? `INS ${code.toUpperCase()}`;
   }
-  return row.display_name?.trim() || base.display;
+  const baseName = row.display_name?.trim() || base.display;
+
+  // If the token contains sub-ingredients in [] or {}, append them so they
+  // aren't silently dropped when the intelligence name replaces the full token.
+  const bracketMatch = token.match(/\[([^\]]{2,})\]|\{([^}]{2,})\}/);
+  if (bracketMatch) {
+    const sub = (bracketMatch[1] ?? bracketMatch[2] ?? "").trim();
+    // Strip INS/E codes from the sub-ingredient list — keep only food names
+    const cleaned = sub
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s && !/^\s*(ins|e)\s*\d/i.test(s))
+      .join(", ");
+    if (cleaned) return `${baseName} (${cleaned})`;
+  }
+
+  return baseName;
 }
 
 function fromIntelligence(
