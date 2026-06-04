@@ -98,30 +98,6 @@ body {
   100% { transform: translateX(100%); }
 }
 
-/* Scout magic landing — reasoning steps rise in, ambient aura breathes. */
-@keyframes scout-rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scout-aura {
-  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-  50%      { opacity: 0.85; transform: translate(-50%, -50%) scale(1.12); }
-}
-
-@keyframes scout-caret {
-  0%, 49%  { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-.scout-rise { animation: scout-rise 0.45s ease both; }
-.scout-aura { animation: scout-aura 6s ease-in-out infinite; }
-.scout-caret { animation: scout-caret 1s step-end infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .scout-rise, .scout-aura, .scout-caret { animation: none; }
-}
-
 /* Photo frame for product images — soft surface that adapts to theme. */
 .photo-frame {
   background: var(--color-bg-soft);

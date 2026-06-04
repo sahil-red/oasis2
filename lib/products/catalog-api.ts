@@ -1,5 +1,6 @@
 import type { CatalogFilters, CatalogGridItem, CatalogSearchResult } from "@/lib/products/queries";
 import type { AiSearchResult } from "@/lib/search/ai-search";
+import type { LandingInsights } from "@/lib/products/landing-insights";
 
 export type CatalogMetaResponse = {
   stats: { visible: number; scored: number; zepto: number };
@@ -88,4 +89,18 @@ export async function fetchAiCatalogSearch(prompt: string, limit = 24): Promise<
   return await res.json() as AiSearchResult;
 }
 
-export type { CatalogGridItem, CatalogSearchResult, AiSearchResult };
+let landingCache: { at: number; data: LandingInsights } | null = null;
+const LANDING_CACHE_MS = 300_000;
+
+export async function fetchLandingInsights(): Promise<LandingInsights> {
+  if (landingCache && Date.now() - landingCache.at < LANDING_CACHE_MS) {
+    return landingCache.data;
+  }
+  const res = await fetch("/api/landing");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as LandingInsights;
+  landingCache = { at: Date.now(), data };
+  return data;
+}
+
+export type { CatalogGridItem, CatalogSearchResult, AiSearchResult, LandingInsights };

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { dietFromParam } from "@/lib/diet/types";
 import { goalFromParam } from "@/lib/goals/types";
+import { buildLandingInsights } from "@/lib/products/landing-insights";
 import { sortFromParam } from "@/lib/products/catalog-sort";
 import {
   getCatalogMeta,
@@ -27,6 +28,14 @@ export async function getCachedScoredCatalogForInsights() {
     () => getScoredProductsForInsights(),
     ["catalog-insights-scored"],
     { revalidate: 300 },
+  )();
+}
+
+export async function getCachedLandingInsights() {
+  return unstable_cache(
+    async () => buildLandingInsights(await getScoredProductsForInsights()),
+    ["catalog-landing-insights"],
+    { revalidate: 600 },
   )();
 }
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
@@ -20,10 +22,15 @@ import {
   fetchCatalogMeta,
   fetchAiCatalogSearch,
   fetchCatalogSearch,
+  fetchLandingInsights,
   prefetchCatalogSearch,
   type CatalogGridItem,
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
+import type {
+  LandingInsights,
+  LandingPick,
+} from "@/lib/products/landing-insights";
 import {
   canUseAiSearch,
   readAiSearchPreferences,
@@ -956,10 +963,13 @@ export function CatalogView({
         </details>
       </div>
 
-      {/* ── Magic landing or product grid ────────────────────────────── */}
+      {/* ── Data-rich landing or product grid ────────────────────────── */}
       {!aiMode && !hasFilters ? (
-        <ScoutMagicLanding
+        <ScoutLanding
           stats={stats ?? null}
+          goal={goal}
+          onGoalChange={pickGoal}
+          hrefQuery={productQuery}
           onAsk={(prompt) => {
             setAiPrompt(prompt);
             void runAiSearch(prompt);
@@ -1016,150 +1026,263 @@ export function CatalogView({
   );
 }
 
-type ScoutScenario = {
-  q: string;
-  steps: string[];
-  result: string;
-};
+function scoreColor(score: number | null): string {
+  if (score == null) return "var(--color-fg-dim)";
+  if (score >= 65) return "var(--color-good)";
+  if (score >= 50) return "#7ab830";
+  if (score >= 40) return "var(--color-warn)";
+  return "var(--color-bad)";
+}
 
-const SCOUT_SCENARIOS: ScoutScenario[] = [
-  {
-    q: "paneer with low fat under ₹150",
-    steps: [
-      "Reading every paneer label in the cold aisle",
-      "Keeping only 8g fat or less per 100g",
-      "Dropping anything over ₹150",
-      "Ranking what's left by health score",
-    ],
-    result: "6 clean picks",
-  },
-  {
-    q: "biscuits my kid will love but lower in sugar",
-    steps: [
-      "Scanning 140+ biscuit labels",
-      "Flagging added sugar above 5g",
-      "Removing artificial colours",
-      "Sorting by score, not marketing",
-    ],
-    result: "9 better swaps",
-  },
-  {
-    q: "high-protein snacks for the gym",
-    steps: [
-      "Comparing protein across the snack aisle",
-      "Requiring 10g+ protein a serving",
-      "Penalising junk additives",
-      "Ranking by protein per rupee",
-    ],
-    result: "12 contenders",
-  },
-];
+function LandingScoreBadge({ score }: { score: number | null }) {
+  if (score == null) return null;
+  return (
+    <span
+      className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1.5 text-[13px] font-bold text-white"
+      style={{ backgroundColor: scoreColor(score) }}
+    >
+      {score}
+    </span>
+  );
+}
 
-function ScoutMagicLanding({
+function LandingPickCard({ pick, hrefQuery }: { pick: LandingPick; hrefQuery: string }) {
+  return (
+    <Link
+      href={`/product/${pick.slug}${hrefQuery}`}
+      onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-fg-dim) hover:shadow-md"
+    >
+      <div className="relative aspect-square photo-frame">
+        {pick.image ? (
+          <Image
+            src={pick.image}
+            alt={pick.name}
+            fill
+            sizes="(max-width: 640px) 50vw, 220px"
+            className="object-contain p-3 transition group-hover:scale-[1.03]"
+          />
+        ) : null}
+        <span className="absolute left-2 top-2">
+          <LandingScoreBadge score={pick.score} />
+        </span>
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        {pick.brand ? (
+          <span className="text-[10.5px] font-medium uppercase tracking-wide text-(--color-fg-dim)">
+            {pick.brand}
+          </span>
+        ) : null}
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-(--color-fg)">
+          {pick.name}
+        </span>
+        <div className="mt-auto flex items-center justify-between pt-1.5">
+          {pick.meta ? (
+            <span className="text-[12px] font-semibold text-(--color-fg-muted)">{pick.meta}</span>
+          ) : <span />}
+          {pick.price != null ? (
+            <span className="text-[12px] text-(--color-fg-dim)">₹{pick.price}</span>
+          ) : null}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ScoutLanding({
   stats,
+  goal,
+  onGoalChange,
+  hrefQuery,
   onAsk,
 }: {
   stats: { scored: number; visible: number } | null;
+  goal: GoalId;
+  onGoalChange: (goal: GoalId) => void;
+  hrefQuery: string;
   onAsk: (prompt: string) => void;
 }) {
-  const [idx, setIdx] = useState(0);
-  const [typed, setTyped] = useState("");
-  const [steps, setSteps] = useState(0);
-  const [showResult, setShowResult] = useState(false);
-  const [fading, setFading] = useState(false);
-
-  const scenario = SCOUT_SCENARIOS[idx % SCOUT_SCENARIOS.length]!;
+  const [data, setData] = useState<LandingInsights | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const current = SCOUT_SCENARIOS[idx % SCOUT_SCENARIOS.length]!;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    setTyped("");
-    setSteps(0);
-    setShowResult(false);
-    setFading(false);
+    let alive = true;
+    fetchLandingInsights()
+      .then((d) => {
+        if (alive) setData(d);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-    let t = 350;
-    for (let i = 1; i <= current.q.length; i++) {
-      timers.push(setTimeout(() => setTyped(current.q.slice(0, i)), t));
-      t += 42;
-    }
-    t += 450;
-    for (let s = 1; s <= current.steps.length; s++) {
-      timers.push(setTimeout(() => setSteps(s), t));
-      t += 640;
-    }
-    t += 250;
-    timers.push(setTimeout(() => setShowResult(true), t));
-    t += 2200;
-    timers.push(setTimeout(() => setFading(true), t));
-    t += 600;
-    timers.push(setTimeout(() => setIdx((v) => v + 1), t));
+  if (!loaded && !data) {
+    return (
+      <div className="space-y-10 pt-2">
+        <div className="h-48 animate-pulse rounded-2xl bg-(--color-bg-soft)" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-(--color-bg-soft)" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-    return () => timers.forEach(clearTimeout);
-  }, [idx]);
+  const pick = data?.pickOfDay ?? null;
+  const facts = data?.facts ?? [];
+  const board =
+    data?.goalBoards.find((b) => b.goal === goal) ?? data?.goalBoards[0] ?? null;
 
   return (
-    <div className="relative flex min-h-[360px] flex-col items-center justify-center overflow-hidden py-10">
-      <div
-        aria-hidden
-        className="scout-aura pointer-events-none absolute left-1/2 top-[38%] h-72 w-72 rounded-full blur-3xl"
-        style={{
-          background:
-            "radial-gradient(circle, color-mix(in srgb, var(--color-good) 22%, transparent), transparent 70%)",
-        }}
-      />
-
-      <button
-        type="button"
-        onClick={() => onAsk(scenario.q)}
-        className={`group relative w-full max-w-xl text-left transition-opacity duration-500 ${
-          fading ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">
-          Someone just asked Scout
-        </p>
-        <p className="font-display mt-3 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[30px]">
-          <span className="text-(--color-fg-dim)">“</span>
-          {typed}
-          <span className="scout-caret ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[3px] bg-(--color-fg)" />
-          <span className="text-(--color-fg-dim)">”</span>
-        </p>
-
-        <div className="mt-7 space-y-2.5">
-          {scenario.steps.slice(0, steps).map((s, i) => (
-            <div
-              key={`${idx}-${i}`}
-              className="scout-rise flex items-center gap-3 text-[14px] text-(--color-fg-muted)"
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: "var(--color-good)" }}
-              />
-              {s}
+    <div className="space-y-12 pt-2">
+      {/* C — Scout's pick of the day */}
+      {pick ? (
+        <section>
+          <div className="overflow-hidden rounded-3xl border border-(--color-line) bg-(--color-panel)">
+            <div className="grid gap-0 sm:grid-cols-[200px_1fr] md:grid-cols-[260px_1fr]">
+              <Link
+                href={`/product/${pick.pick.slug}${hrefQuery}`}
+                onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+                className="relative aspect-square photo-frame sm:aspect-auto"
+              >
+                {pick.pick.image ? (
+                  <Image
+                    src={pick.pick.image}
+                    alt={pick.pick.name}
+                    fill
+                    sizes="260px"
+                    className="object-contain p-5"
+                  />
+                ) : null}
+              </Link>
+              <div className="flex flex-col justify-center gap-3 p-6 md:p-8">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">
+                  Scout’s pick of the day
+                </p>
+                <div className="flex items-start gap-3">
+                  <LandingScoreBadge score={pick.pick.score} />
+                  <div>
+                    {pick.pick.brand ? (
+                      <p className="text-[12px] font-medium uppercase tracking-wide text-(--color-fg-dim)">
+                        {pick.pick.brand}
+                      </p>
+                    ) : null}
+                    <Link
+                      href={`/product/${pick.pick.slug}${hrefQuery}`}
+                      onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+                      className="font-display text-xl font-semibold leading-snug text-(--color-fg) hover:underline md:text-2xl"
+                    >
+                      {pick.pick.name}
+                    </Link>
+                  </div>
+                </div>
+                {pick.reasons.length ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {pick.reasons.map((r) => (
+                      <li
+                        key={r}
+                        className="rounded-full border border-(--color-line-strong) px-3 py-1 text-[12px] text-(--color-fg-muted)"
+                      >
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <Link
+                  href={`/product/${pick.pick.slug}${hrefQuery}`}
+                  onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+                  className="mt-1 inline-flex w-fit items-center gap-1.5 text-[13px] font-semibold text-(--color-fg) underline-offset-4 hover:underline"
+                >
+                  See why it wins <span aria-hidden>→</span>
+                </Link>
+              </div>
             </div>
-          ))}
+          </div>
+        </section>
+      ) : null}
 
-          {showResult ? (
-            <div className="scout-rise flex flex-wrap items-center gap-x-3 gap-y-1 pt-3">
-              <span className="text-[16px] font-semibold text-(--color-fg)">
-                → {scenario.result}
-              </span>
-              <span className="text-[13px] text-(--color-fg-muted) underline-offset-4 group-hover:underline">
-                tap to see them
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </button>
+      {/* B — Myth-busting facts */}
+      {facts.length ? (
+        <section className="space-y-4">
+          <h2 className="font-display text-xl font-semibold text-(--color-fg)">
+            What Scout found on the shelf
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {facts.map((f) => (
+              <button
+                key={f.headline}
+                type="button"
+                onClick={() => onAsk(f.prompt)}
+                className="group flex flex-col rounded-2xl border border-(--color-line) bg-(--color-panel) p-5 text-left transition hover:border-(--color-fg-dim) hover:shadow-md"
+              >
+                <span
+                  className="font-display text-3xl font-bold leading-none"
+                  style={{
+                    color:
+                      f.tone === "bad"
+                        ? "var(--color-bad)"
+                        : f.tone === "good"
+                        ? "var(--color-good)"
+                        : "var(--color-fg)",
+                  }}
+                >
+                  {f.stat}
+                </span>
+                <span className="mt-2 text-[13px] leading-relaxed text-(--color-fg-muted)">
+                  {f.headline}
+                </span>
+                <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-(--color-fg-muted) transition group-hover:gap-1.5 group-hover:text-(--color-fg)">
+                  Show me <span aria-hidden>→</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* E — For your goal */}
+      {board && data ? (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-xl font-semibold text-(--color-fg)">
+              Best for {board.label.toLowerCase()}
+            </h2>
+            <span className="text-[12.5px] text-(--color-fg-dim)">{board.tagline}</span>
+          </div>
+
+          <div className="-mx-1 flex flex-wrap gap-2 px-1">
+            {data.goalBoards.map((b) => (
+              <button
+                key={b.goal}
+                type="button"
+                onClick={() => onGoalChange(b.goal)}
+                className={`rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
+                  b.goal === board.goal
+                    ? "bg-(--color-fg) font-medium text-(--color-bg)"
+                    : "border border-(--color-line-strong) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+            {board.picks.map((p) => (
+              <LandingPickCard key={p.slug} pick={p} hrefQuery={hrefQuery} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {stats ? (
-        <p className="mt-14 max-w-md text-center text-[12.5px] leading-relaxed text-(--color-fg-dim)">
-          Scout has read the label on every one of{" "}
-          <span className="font-medium text-(--color-fg-muted)">
-            {stats.scored.toLocaleString()}
-          </span>{" "}
-          scored products — so you don't have to.
+        <p className="pt-2 text-center text-[12px] text-(--color-fg-dim)">
+          Scout has read the label on every one of {stats.scored.toLocaleString()} scored products.
         </p>
       ) : null}
     </div>
