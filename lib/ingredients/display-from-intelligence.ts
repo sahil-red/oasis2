@@ -6,6 +6,11 @@ import {
 } from "@/lib/ingredients/parse";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 import { expandAndNormalize } from "@/lib/scoring/ingredient-normalize";
+import {
+  insCodesFromText,
+  isInsulinMislabel,
+  resolveIngredientIntelligenceRow,
+} from "@/lib/scoring/intelligence-row-resolve";
 import { normalizeIngredientName } from "@/lib/scoring/normalize-ingredient-name";
 
 const BENEFICIAL_ROLES = new Set([
@@ -93,14 +98,19 @@ function lookupIntelligence(
   byName: Map<string, IngredientIntelligenceRow>,
 ): IngredientIntelligenceRow | null {
   const direct = normalizeIngredientName(token);
-  const hit = byName.get(direct);
-  if (hit) return hit;
+  return resolveIngredientIntelligenceRow(direct, byName, expandAndNormalize);
+}
 
-  for (const atom of expandAndNormalize(token)) {
-    const row = byName.get(atom);
-    if (row) return row;
+function displayFromIntelligenceRow(
+  token: string,
+  row: IngredientIntelligenceRow,
+  base: ParsedIngredient,
+): string {
+  const code = insCodesFromText(token)[0] ?? insCodesFromText(row.normalized_name)[0];
+  if (code && isInsulinMislabel(row.display_name)) {
+    return base.eNumber ?? `INS ${code.toUpperCase()}`;
   }
-  return null;
+  return row.display_name?.trim() || base.display;
 }
 
 function fromIntelligence(
@@ -108,12 +118,21 @@ function fromIntelligence(
   row: IngredientIntelligenceRow,
   base: ParsedIngredient,
 ): IngredientDisplayItem {
-  const display = row.display_name?.trim() || base.display;
-  const risk = riskFromIntelligence(row, display);
-  const why =
+  const code = insCodesFromText(token)[0] ?? insCodesFromText(row.normalized_name)[0];
+  const insulinMislabel = Boolean(code && isInsulinMislabel(row.display_name));
+  const display = displayFromIntelligenceRow(token, row, base);
+  let risk = riskFromIntelligence(row, display);
+  let why =
     row.concern_reasons.length > 0
       ? row.concern_reasons.join(" · ")
       : base.why;
+
+  if (insulinMislabel) {
+    // Prefer E-number row tier when the cached row misread INS as insulin.
+    risk = row.concern_tier === "innocuous" || row.concern_tier === "watchful" ? "unknown" : "limited";
+    why = "Food additive code (INS/E number), not insulin";
+  }
+
   const nova = row.nova_class;
 
   let tierLabel: string;

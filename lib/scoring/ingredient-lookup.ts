@@ -1,6 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
+import { expandAndNormalize } from "@/lib/scoring/ingredient-normalize";
+import {
+  insCodesFromText,
+  lookupKeysForInsCode,
+  resolveIngredientIntelligenceRow,
+} from "@/lib/scoring/intelligence-row-resolve";
 import { uniqueIngredientsFromList } from "@/lib/scoring/normalize-ingredient-name";
+
+function collectLookupKeys(names: string[]): string[] {
+  const keys = new Set(names);
+  for (const name of names) {
+    for (const code of insCodesFromText(name)) {
+      for (const key of lookupKeysForInsCode(code)) keys.add(key);
+    }
+    for (const atom of expandAndNormalize(name)) {
+      keys.add(atom);
+      for (const code of insCodesFromText(atom)) {
+        for (const key of lookupKeysForInsCode(code)) keys.add(key);
+      }
+    }
+  }
+  return [...keys];
+}
 
 /** Load cached intelligence rows for a product ingredients list (order preserved). */
 export async function loadIngredientIntelligenceForProduct(
@@ -10,12 +32,13 @@ export async function loadIngredientIntelligenceForProduct(
   const names = uniqueIngredientsFromList(ingredients_raw);
   if (!names.length) return [];
 
+  const lookupKeys = collectLookupKeys(names);
   const { data, error } = await supabase
     .from("ingredient_intelligence")
     .select(
       "normalized_name, display_name, nova_class, role, concern_tier, concern_reasons, intrinsic_quality, synonyms",
     )
-    .in("normalized_name", names);
+    .in("normalized_name", lookupKeys);
 
   if (error) {
     if (error.code === "42P01" || error.code === "PGRST205") return [];
@@ -41,6 +64,6 @@ export async function loadIngredientIntelligenceForProduct(
   );
 
   return names
-    .map((n) => byName.get(n))
+    .map((n) => resolveIngredientIntelligenceRow(n, byName, expandAndNormalize))
     .filter((r): r is IngredientIntelligenceRow => r != null);
 }

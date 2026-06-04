@@ -1,4 +1,11 @@
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
+import { expandAndNormalize } from "@/lib/scoring/ingredient-normalize";
+import {
+  effectiveConcernTier,
+  insCodesFromText,
+  lookupKeysForInsCode,
+  resolveIngredientIntelligenceRow,
+} from "@/lib/scoring/intelligence-row-resolve";
 import { uniqueIngredientsFromList } from "@/lib/scoring/normalize-ingredient-name";
 import { scoreAdditives, type MatchedAdditive } from "@/lib/scoring/rules";
 
@@ -41,11 +48,23 @@ export function scoreIngredientQuality(
     };
   }
 
-  const ordered = names
-    .map((n) => rows.find((r) => r.normalized_name === n))
-    .filter((r): r is IngredientIntelligenceRow => r != null);
+  const byName = new Map(rows.map((r) => [r.normalized_name, r]));
+  for (const r of rows) {
+    for (const code of insCodesFromText(r.normalized_name)) {
+      for (const key of lookupKeysForInsCode(code)) {
+        if (!byName.has(key)) byName.set(key, r);
+      }
+    }
+  }
 
-  if (!ordered.length) {
+  const paired = names
+    .map((name) => {
+      const row = resolveIngredientIntelligenceRow(name, byName, expandAndNormalize);
+      return row ? { name, row } : null;
+    })
+    .filter((p): p is { name: string; row: IngredientIntelligenceRow } => p != null);
+
+  if (!paired.length) {
     return {
       score: rules.score,
       hazardous: rules.hazardous,
@@ -61,7 +80,7 @@ export function scoreIngredientQuality(
   let novaWSum = 0;
   let nova4W = 0;
 
-  ordered.forEach((r, i) => {
+  paired.forEach(({ row: r }, i) => {
     const w = positionWeight(i);
     wSum += w;
     qualitySum += (r.intrinsic_quality ?? 50) * w;
@@ -75,8 +94,8 @@ export function scoreIngredientQuality(
 
   let score = Math.round((avgQuality / 100) * 30);
 
-  for (const r of ordered) {
-    score -= TIER_PENALTY[r.concern_tier] ?? 0;
+  for (const { name, row: r } of paired) {
+    score -= TIER_PENALTY[effectiveConcernTier(name, r)] ?? 0;
   }
 
   if (nova4Share > 0.4) score -= 4;
@@ -84,7 +103,7 @@ export function scoreIngredientQuality(
 
   const hazardous =
     rules.hazardous ||
-    ordered.some((r) => r.concern_tier === "hazardous");
+    paired.some(({ name, row: r }) => effectiveConcernTier(name, r) === "hazardous");
 
   score = Math.max(0, Math.min(30, score));
 

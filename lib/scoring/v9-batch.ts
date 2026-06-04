@@ -3,6 +3,8 @@ import { computeAbsoluteScore } from "@/lib/scoring/absolute";
 import { computeCoreScoreV9 } from "@/lib/scoring/core-v9";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 import { loadIngredientIntelligenceForProduct } from "@/lib/scoring/ingredient-lookup";
+import { expandAndNormalize } from "@/lib/scoring/ingredient-normalize";
+import { resolveIngredientIntelligenceRow } from "@/lib/scoring/intelligence-row-resolve";
 import { uniqueIngredientsFromList } from "@/lib/scoring/normalize-ingredient-name";
 import { buildCohortId } from "@/lib/scoring/relative";
 import type { ScoreableProduct } from "@/lib/scoring/persist-core";
@@ -66,7 +68,7 @@ function rowsFromGlobalMap(
 ): IngredientIntelligenceRow[] {
   const names = uniqueIngredientsFromList(ingredients_raw);
   return names
-    .map((n) => globalMap.get(n))
+    .map((n) => resolveIngredientIntelligenceRow(n, globalMap, expandAndNormalize))
     .filter((r): r is IngredientIntelligenceRow => r != null);
 }
 
