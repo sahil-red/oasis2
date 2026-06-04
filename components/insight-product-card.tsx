@@ -19,11 +19,11 @@ export function InsightProductCard({
 }) {
   const accentBorder =
     accent === "warn"
-      ? "border-amber-200 bg-gradient-to-b from-amber-50/80 to-white"
+      ? "border-amber-500/30 bg-(--color-panel)"
       : accent === "value"
-        ? "border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-white"
+        ? "border-emerald-500/30 bg-(--color-panel)"
         : accent === "snack"
-          ? "border-violet-200 bg-gradient-to-b from-violet-50/50 to-white"
+          ? "border-violet-500/30 bg-(--color-panel)"
           : "border-(--color-line) bg-(--color-panel)";
 
   return (
@@ -99,7 +99,7 @@ export function InsightFeaturedCard({
   return (
     <Link
       href={`/product/${product.slug}`}
-      className="group grid overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
+      className="group grid overflow-hidden rounded-2xl border border-amber-500/30 bg-(--color-panel) shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
     >
       <div className="relative aspect-square bg-(--color-panel) md:aspect-auto md:min-h-[220px]">
         {product.image_urls[0] ? (
@@ -112,7 +112,7 @@ export function InsightFeaturedCard({
         ) : null}
       </div>
       <div className="flex flex-col justify-center p-6 md:p-8">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-amber-800/80">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-amber-500">
           Marketing reality check
         </p>
         <h2 className="mt-2 font-display text-2xl leading-tight text-(--color-fg) group-hover:text-(--color-accent)">

@@ -158,10 +158,20 @@ export default async function ProductPage({
         <CatalogBackLink params={sp} />
 
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
+          {/* Left: images + goals at a glance */}
           <div className="space-y-5">
             <ProductGallery images={product.image_urls} alt={product.name} />
+            <Suspense fallback={null}>
+              <ProductGoalFitList
+                rows={goalRows}
+                overall={overallGoal}
+                className="mt-0"
+                cardClassName="text-sm"
+              />
+            </Suspense>
           </div>
 
+          {/* Right: meta, verdict, swaps, quick take */}
           <div className="min-w-0">
             {product.brand ? (
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">
@@ -219,25 +229,14 @@ export default async function ProductPage({
               </div>
             ) : null}
 
+            {scoreWhy || deepseekDisplay?.why ? (
+              <ProductTakePanel
+                explanation={scoreWhy}
+                deepseekWhy={deepseekDisplay?.why}
+              />
+            ) : null}
+
           </div>
-        </div>
-
-        <div className="mt-10 space-y-6">
-          <Suspense fallback={null}>
-            <ProductGoalFitList
-              rows={goalRows}
-              overall={overallGoal}
-              className="mt-0"
-            />
-          </Suspense>
-
-          {scoreWhy || deepseekDisplay?.why ? (
-            <ProductTakePanel
-              explanation={scoreWhy}
-              deepseekWhy={deepseekDisplay?.why}
-            />
-          ) : null}
-
         </div>
 
         <div className="mt-10 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">

@@ -40,7 +40,7 @@ export default async function InsightsPage() {
       <div className="border-b border-(--color-line)">
         <div className="mx-auto max-w-6xl px-5 py-12 md:px-6 md:py-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-            Evidence-based · {ins.totalScored.toLocaleString()} products analysed
+            {ins.totalScored.toLocaleString()} products analysed
           </p>
           <h1 className="mt-3 font-display text-4xl leading-tight md:text-5xl">
             What we found
@@ -48,27 +48,14 @@ export default async function InsightsPage() {
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-(--color-fg-muted)">
             Patterns across the full catalog — staples, traps, and aisles that actually deliver.
           </p>
-
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatPill label="Avg score" value={`${ins.avgScore}`} unit="/100" tone="good" />
-            <StatPill
-              label="Daily staples"
-              value={ins.dailyStapleCount.toLocaleString()}
-              unit="products"
-              tone="good"
-            />
-            <StatPill
-              label="Skip-worthy"
-              value={ins.skipCount.toLocaleString()}
-              unit="products"
-              tone="bad"
-            />
-            <StatPill
-              label="Categories"
-              value={ins.categoryStats.length.toLocaleString()}
-              unit="tracked"
-              tone="neutral"
-            />
+          <div className="mt-5 flex flex-wrap gap-4 text-sm text-(--color-fg-muted)">
+            <span>Avg score <strong className="text-(--color-fg)">{ins.avgScore}/100</strong></span>
+            <span>·</span>
+            <span><strong className="text-emerald-500">{ins.dailyStapleCount.toLocaleString()}</strong> daily staples</span>
+            <span>·</span>
+            <span><strong className="text-red-500">{ins.skipCount.toLocaleString()}</strong> skip-worthy</span>
+            <span>·</span>
+            <span><strong className="text-(--color-fg)">{ins.categoryStats.length}</strong> categories</span>
           </div>
         </div>
       </div>

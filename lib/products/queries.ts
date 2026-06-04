@@ -1154,6 +1154,7 @@ export async function getAllCatalogProducts(opts?: {
   const max = 30_000;
   const all: ProductListItem[] = [];
 
+  const hasVisible = await catalogHasVisibleColumn();
   for (let offset = 0; offset < max; offset += pageSize) {
     let query = supabase
       .from("products")
@@ -1164,8 +1165,8 @@ export async function getAllCatalogProducts(opts?: {
     if (opts?.onlyWithDetail ?? true) {
       query = query.eq("platform", "zepto");
     }
-    // Apply catalog_visible in SQL — vastly reduces rows fetched (9.9K vs 24K)
-    if (await catalogHasVisibleColumn()) {
+    // Apply catalog_visible in SQL — reduces rows fetched from 24K to 9.9K
+    if (hasVisible) {
       query = query.eq("catalog_visible", true);
     }
     if (opts?.onlyScored) {

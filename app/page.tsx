@@ -4,11 +4,9 @@ import { HomeRailCard } from "@/components/home-rail-card";
 import { HomeShowcase } from "@/components/home-showcase";
 import { LandingIntel } from "@/components/landing-intel";
 import { LandingGoalBoards } from "@/components/landing-goal-boards";
-import { LandingBestInClass, buildBestInClass } from "@/components/landing-best-in-class";
-import { LandingDodgeList, buildDodgeList } from "@/components/landing-dodge-list";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getCachedLandingInsights, getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache";
+import { getCachedLandingInsights } from "@/lib/products/catalog-cache";
 import { getHomeShelves } from "@/lib/products/queries";
 
 export const revalidate = 600;
@@ -22,22 +20,10 @@ const PROMPTS = [
 ];
 
 export default async function Home() {
-  const [shelves, insights, allProducts] = await Promise.all([
+  const [shelves, insights] = await Promise.all([
     getHomeShelves(),
     getCachedLandingInsights(),
-    getCachedScoredCatalogForInsights(),
   ]);
-
-  const TOP_CATEGORIES = [
-    "Dairy, Bread & Eggs",
-    "Munchies",
-    "Biscuits",
-    "Breakfast",
-    "Packaged Food",
-    "Cold Drinks & Juices",
-  ];
-  const bestInClass = buildBestInClass(allProducts, TOP_CATEGORIES);
-  const dodgeList = buildDodgeList(allProducts);
 
   // Rotate the featured goal board each hour so it feels fresh each visit
   const hourIndex = Math.floor(Date.now() / 3_600_000);
@@ -149,12 +135,6 @@ export default async function Home() {
           initialIndex={initialGoalIndex}
         />
       )}
-
-      {/* ── Best in class by category ─────────────────────────────────── */}
-      {bestInClass.length > 0 && <LandingBestInClass categories={bestInClass} />}
-
-      {/* ── The dodge list: marketing vs reality ──────────────────────── */}
-      {dodgeList.length > 0 && <LandingDodgeList products={dodgeList} />}
 
       {/* ── Daily staples rail ────────────────────────────────────────── */}
       <Rail
