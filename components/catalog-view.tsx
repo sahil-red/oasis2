@@ -669,12 +669,12 @@ export function CatalogView({
       <div className="space-y-5">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
-        <section className="rounded-3xl border border-(--color-line) bg-(--color-panel) p-5 shadow-sm md:p-7">
-          <p className="font-display mb-5 text-3xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-4xl">
+        <section className="pb-2">
+          <p className="font-display mb-4 text-3xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-4xl">
             Ask Scout
           </p>
           <form
-            className="flex flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-3 md:flex-row md:items-center"
+            className="flex flex-col gap-2 md:flex-row md:items-center"
             onSubmit={(e) => {
               e.preventDefault();
               void runAiSearch();
@@ -685,14 +685,14 @@ export function CatalogView({
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="e.g. paneer with low fat under ₹150"
-              className="min-h-12 flex-1 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 text-[15px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+              className="min-h-[52px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
             <button
               type="submit"
               disabled={aiSearching || !aiPrompt.trim()}
-              className="min-h-12 rounded-xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[52px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {aiSearching ? "Searching…" : "Find products"}
+              {aiSearching ? "Searching…" : "Search"}
             </button>
           </form>
 
@@ -705,7 +705,7 @@ export function CatalogView({
                   setAiPrompt(example);
                   void runAiSearch(example);
                 }}
-                className="rounded-full border border-(--color-line) px-3 py-1.5 text-[12px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                className="rounded-full border border-(--color-line-strong) px-3 py-1.5 text-[12px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
               >
                 {example}
               </button>
@@ -723,12 +723,11 @@ export function CatalogView({
           </div>
 
           {aiMode && aiSummary ? (
-            <div className="mt-5 rounded-2xl border border-(--color-line) bg-(--color-bg) px-4 py-3">
-              <p className="text-sm font-medium text-(--color-fg)">{aiSummary}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-(--color-fg-dim)">
-                <span>Parser: {aiParseSource === "deepseek" ? "DeepSeek" : "local fallback"}</span>
-                {aiWarning ? <span>{aiWarning}</span> : null}
-              </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-(--color-line) pt-4">
+              <p className="text-[13px] font-medium text-(--color-fg)">{aiSummary}</p>
+              {aiWarning ? (
+                <p className="text-[12px] text-(--color-fg-dim)">{aiWarning}</p>
+              ) : null}
               {aiParsed ? (
                 <button
                   type="button"
@@ -737,13 +736,13 @@ export function CatalogView({
                     writeAiSearchPreferences(prefs);
                     setSavedPrefs(prefs);
                   }}
-                  className="mt-3 rounded-full border border-(--color-line) px-3 py-1.5 text-[11px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                  className="ml-auto rounded-full border border-(--color-line-strong) px-3 py-1 text-[11px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
                 >
-                  Save these preferences
+                  Save preferences
                 </button>
               ) : null}
               {aiRefinements.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="flex w-full flex-wrap gap-2">
                   {aiRefinements.map((refinement) => (
                     <button
                       key={refinement}
@@ -753,7 +752,7 @@ export function CatalogView({
                         setAiPrompt(next);
                         void runAiSearch(next);
                       }}
-                      className="rounded-full bg-(--color-bg-soft) px-3 py-1 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
+                      className="rounded-full border border-(--color-line-strong) px-3 py-1 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
                     >
                       {refinement}
                     </button>

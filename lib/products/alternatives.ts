@@ -379,18 +379,24 @@ function buildSimilarityReasons(current: ProductListItem, p: ProductListItem): s
     reasons.push(`−${(curSat - pSat).toFixed(1)}g sat fat`);
   }
   if (curSodium != null && pSodium != null && pSodium <= curSodium - 80) {
-    reasons.push("Lower sodium");
+    reasons.push(`−${Math.round(curSodium - pSodium)}mg sodium`);
   }
-  if (pAdditives === 0 && p.ingredients_raw?.trim()) {
-    reasons.push("No obvious additives");
-  } else if (curAdditives > 0 && pAdditives < curAdditives) {
-    reasons.push("Fewer additives");
+  // Only flag clean ingredients if the current product is NOT clean — makes it a real differentiator
+  if (curAdditives > 0 && pAdditives === 0 && p.ingredients_raw?.trim()) {
+    reasons.push("Cleaner ingredients");
+  } else if (curAdditives > 1 && pAdditives < curAdditives) {
+    reasons.push(`${curAdditives - pAdditives} fewer additives`);
   }
   if (p.core_scores?.score != null && current.core_scores?.score != null) {
     const diff = p.core_scores.score - current.core_scores.score;
     if (diff >= 4) reasons.push(`Score +${diff}`);
   }
-  if (!reasons.length && p.core_scores?.score != null) reasons.push(`Health score ${p.core_scores.score}`);
+  // Fallback: ingredient count is more concrete than a bare score
+  if (!reasons.length) {
+    const ingCount = p.ingredients_raw?.split(",").filter(Boolean).length;
+    if (ingCount) reasons.push(`${ingCount} ingredients`);
+    else if (p.core_scores?.score != null) reasons.push(`Score ${p.core_scores.score}`);
+  }
   return reasons.slice(0, 3);
 }
 
