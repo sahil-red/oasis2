@@ -375,6 +375,7 @@ export function CatalogView({
   const autoPromptRan = useRef(false);
   const goalSentinelRef = useRef<HTMLDivElement>(null);
   const [goalStripScrolledPast, setGoalStripScrolledPast] = useState(false);
+  const [refineOpen, setRefineOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState(initialParams.prompt ?? initialParams.q ?? "");
   const [aiMode, setAiMode] = useState(false);
   const [factBrowse, setFactBrowse] = useState<{
@@ -797,7 +798,7 @@ export function CatalogView({
             Ask Scout
           </p>
           <form
-            className="flex flex-col gap-2 md:flex-row md:items-center"
+            className="flex items-start gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               void runAiSearch();
@@ -808,15 +809,30 @@ export function CatalogView({
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="e.g. paneer with low fat under ₹150"
-              className="min-h-[52px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
+              className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
-            <button
-              type="submit"
-              disabled={aiSearching || !aiPrompt.trim()}
-              className="min-h-[52px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {aiSearching ? "Searching…" : "Search"}
-            </button>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="submit"
+                disabled={aiSearching || !aiPrompt.trim()}
+                className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {aiSearching ? "Searching…" : "Search"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRefineOpen((o) => !o)}
+                className="flex min-h-[34px] items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-(--color-fg) px-4 text-[12px] font-medium text-(--color-bg) transition hover:opacity-80"
+              >
+                <SlidersHorizontal className="h-3 w-3 opacity-70" aria-hidden />
+                Refine
+                {activeFilterCount > 0 ? (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-bg) px-1 text-[9px] font-bold text-(--color-fg)">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
           </form>
 
           {/* Prompt chips — 10 rotating from 50-prompt dataset */}
@@ -891,21 +907,9 @@ export function CatalogView({
           </div>
         ) : null}
 
-        <details className="group rounded-xl border border-(--color-line)/60 bg-(--color-fg) open:pb-4 dark:border-white/10">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-(--color-bg)/60" aria-hidden />
-              <span className="text-[13px] font-medium text-(--color-bg)">Refine results</span>
-              {activeFilterCount > 0 ? (
-                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-bg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-fg)">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 text-(--color-bg)/50 transition group-open:rotate-180" />
-          </summary>
-
-          <div className="space-y-4 px-4">
+        {refineOpen && (
+          <div className="rounded-xl border border-(--color-line) bg-(--color-panel) pb-4">
+          <div className="space-y-4 px-4 pt-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--color-line) pb-4">
               <GoalModePicker value={goal} onChange={pickGoal} compact />
               <DietPicker value={diet} onChange={pickDiet} compact />
@@ -1073,7 +1077,8 @@ export function CatalogView({
             </div>
           ) : null}
         </div>
-        </details>
+          </div>
+        )}
       </div>
 
       {/* ── Data-rich landing or product grid ────────────────────────── */}
