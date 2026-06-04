@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { runAiProductSearch } from "@/lib/search/ai-search";
 import { parseProductQueryWithDeepseek } from "@/lib/search/query-parse";
 
+// Prompt-specific results cannot be shared across users — keep private.
+// But the underlying product pool is cached inside runAiProductSearch.
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

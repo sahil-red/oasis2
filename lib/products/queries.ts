@@ -1192,6 +1192,20 @@ export async function getAllCatalogProducts(opts?: {
   return all.map(slimListItemForCatalog);
 }
 
+// In-process cache for the AI search product pool — expires every 10 minutes.
+// Prevents getAllCatalogProducts from hitting Supabase on every search request.
+let _aiProductPoolCache: { data: ProductListItem[]; at: number } | null = null;
+const AI_POOL_TTL_MS = 10 * 60 * 1000;
+
+export async function getAiSearchProductPool(): Promise<ProductListItem[]> {
+  if (_aiProductPoolCache && Date.now() - _aiProductPoolCache.at < AI_POOL_TTL_MS) {
+    return _aiProductPoolCache.data;
+  }
+  const data = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+  _aiProductPoolCache = { data, at: Date.now() };
+  return data;
+}
+
 /** Same-aisle pool for PDP swaps — avoids loading the full catalog. */
 export async function getProductsForSwaps(
   current: Pick<ProductListItem, "id" | "category" | "super_category" | "subcategory">,

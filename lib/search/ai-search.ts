@@ -2,7 +2,7 @@ import { isDietCompatible } from "@/lib/diet/match";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
 import { productAisle, productShelf, productUsecase } from "@/lib/products/catalog-meta";
-import { getAllCatalogProducts, type CatalogGridItem, type ProductListItem } from "@/lib/products/queries";
+import { getAiSearchProductPool, type CatalogGridItem, type ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ParsedHealthContext, ParsedProductQuery, QueryParseResult } from "@/lib/search/query-parse";
 
@@ -66,26 +66,60 @@ function textHaystack(p: ProductListItem): string {
     .toLowerCase();
 }
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Word-boundary match — prevents "milk" from matching "milky" or "milkshake brand names". */
+function wordMatch(hay: string, term: string): boolean {
+  return new RegExp(`\\b${escapeRe(term.toLowerCase())}\\b`, "i").test(hay);
+}
+
 function includesAny(hay: string, terms: string[]): boolean {
-  return terms.some((term) => hay.includes(term.toLowerCase()));
+  return terms.some((term) => wordMatch(hay, term));
+}
+
+/**
+ * Returns true when the term appears only as a modifier/ingredient in the product name
+ * (e.g. "Coconut Milk" in "Kerala Fish Curry With Coconut Milk" or
+ *  "Milk Chocolate" coating on an otherwise non-milk product).
+ * In these cases the product shouldn't rank as a primary match.
+ */
+function termIsIngredientMention(name: string, term: string): boolean {
+  const lower = name.toLowerCase();
+  const t = term.toLowerCase();
+  if (!wordMatch(lower, t)) return false;
+  // Term appears after a preposition → likely an ingredient, not the primary product
+  return new RegExp(`\\b(with|in|of|and|flavou?red?|coated?|filled?|made with)\\s+(?:\\w+\\s+){0,3}${escapeRe(t)}\\b`, "i").test(lower);
 }
 
 function productTermScore(p: ProductListItem, parsed: ParsedProductQuery): { score: number; reasons: string[] } {
   const hay = textHaystack(p);
+  const nameOnly = (p.name ?? "").toLowerCase();
   const primaryHay = [p.name, p.brand].filter(Boolean).join(" ").toLowerCase();
   const terms = parsed.product_terms.map((t) => t.toLowerCase()).filter(Boolean);
   const categories = parsed.categories.map((t) => t.toLowerCase()).filter(Boolean);
   let score = 0;
   const reasons: string[] = [];
 
-  const primaryMatches = terms.filter((term) => primaryHay.includes(term));
-  const contextMatches = terms.filter((term) => !primaryHay.includes(term) && hay.includes(term));
-  if (primaryMatches.length) {
-    score += 42 + Math.min(24, primaryMatches.length * 8);
-    reasons.push(`Matches ${primaryMatches.slice(0, 2).join(", ")}`);
+  // Word-boundary match on name/brand — prevents "milky" matching "milk"
+  const primaryMatches = terms.filter((term) => wordMatch(primaryHay, term));
+  // Penalise terms that appear only as ingredient/modifier mentions
+  const ingredientOnly = primaryMatches.filter((term) => termIsIngredientMention(nameOnly, term));
+  const trueMatches = primaryMatches.filter((term) => !ingredientOnly.includes(term));
+
+  const contextMatches = terms.filter((term) => !wordMatch(primaryHay, term) && wordMatch(hay, term));
+
+  if (trueMatches.length) {
+    score += 42 + Math.min(24, trueMatches.length * 8);
+    reasons.push(`Matches ${trueMatches.slice(0, 2).join(", ")}`);
+  } else if (ingredientOnly.length) {
+    // Term is in the name but as a "with X" ingredient mention — much lower score
+    score += 10;
+    reasons.push(`Contains ${ingredientOnly.slice(0, 1).join(", ")}`);
   } else if (contextMatches.length) {
     score += 14 + Math.min(12, contextMatches.length * 4);
-    reasons.push(`Same shelf as ${contextMatches.slice(0, 2).join(", ")}`);
+    reasons.push(`Right aisle`);
   }
   if (categories.length && includesAny(hay, categories)) {
     score += 10;
@@ -312,8 +346,9 @@ export async function runAiProductSearch(
 ): Promise<AiSearchResult> {
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const parsed = parseResult.parsed;
-  const products = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: true });
+  const products = await getAiSearchProductPool();
   const terms = [...parsed.product_terms, ...parsed.categories].map((t) => t.toLowerCase());
+  // Word-boundary pre-filter: prevents "milky" matching "milk", "coconut milk" dominating, etc.
   const prefiltered = terms.length
     ? products.filter((p) => includesAny(textHaystack(p), terms))
     : products;
