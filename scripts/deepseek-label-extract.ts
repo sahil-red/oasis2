@@ -43,6 +43,7 @@ const MAX_BATCH = 50_000;
 type Args = {
   limit: number;
   limitExplicit: boolean;
+  offset: number;
   sku: string | null;
   nameQuery: string | null;
   sample: "validation" | "sequential";
@@ -64,6 +65,7 @@ function parseArgs(): Args {
   const argv = scriptArgv();
   let limit = 50;
   let limitExplicit = false;
+  let offset = 0;
   let sku: string | null = null;
   let nameQuery: string | null = null;
   let sample: "validation" | "sequential" = "validation";
@@ -75,6 +77,8 @@ function parseArgs(): Args {
     if (arg.startsWith("--limit=")) {
       limit = Number(arg.split("=")[1]) || limit;
       limitExplicit = true;
+    } else if (arg.startsWith("--offset=")) {
+      offset = Math.max(0, Number(arg.split("=")[1]) || 0);
     } else if (arg.startsWith("--sku=")) {
       sku = arg.slice("--sku=".length).trim() || null;
     } else if (arg.startsWith("--name=")) {
@@ -83,7 +87,7 @@ function parseArgs(): Args {
       const value = arg.slice("--sample=".length);
       sample = value === "sequential" ? "sequential" : "validation";
     } else if (arg.startsWith("--concurrency=")) {
-      concurrency = Math.max(1, Math.min(8, Number(arg.split("=")[1]) || 1));
+      concurrency = Math.max(1, Math.min(50, Number(arg.split("=")[1]) || 1));
     } else if (arg.startsWith("--retries=")) {
       const parsed = Number(arg.split("=")[1]);
       retries = Number.isFinite(parsed) ? Math.max(0, Math.min(5, parsed)) : 0;
@@ -96,6 +100,7 @@ function parseArgs(): Args {
   return {
     limit: Math.min(limit, MAX_BATCH),
     limitExplicit,
+    offset,
     sku,
     nameQuery,
     sample,
@@ -234,6 +239,7 @@ function selectWork(items: WorkItem[], args: Args): WorkItem[] {
   if (args.sample === "validation" && !args.sku && !args.nameQuery) {
     work = selectValidationSample(work, args.limit);
   } else {
+    if (args.offset > 0) work = work.slice(args.offset);
     work = work.slice(0, args.limit);
   }
   if (args.sku || args.nameQuery) {
@@ -327,7 +333,7 @@ async function main() {
   }
 
   console.log(
-    `[deepseek-label] work=${work.length} sample=${args.sample} concurrency=${args.concurrency} dry_run=${args.dryRun} out=${RESULTS_PATH}`,
+    `[deepseek-label] work=${work.length} offset=${args.offset} sample=${args.sample} concurrency=${args.concurrency} dry_run=${args.dryRun} out=${RESULTS_PATH}`,
   );
 
   const out = createWriteStream(RESULTS_PATH, { flags: "a" });

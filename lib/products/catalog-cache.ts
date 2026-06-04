@@ -15,11 +15,11 @@ import type { Grade } from "@/lib/supabase/types";
 export async function getCachedCatalogMeta(category?: string): Promise<CatalogMeta> {
   if (category) {
     return unstable_cache(() => getCatalogMeta(category), ["catalog-meta", category], {
-      revalidate: 300,
+      revalidate: 3600,
     })();
   }
   return unstable_cache(() => getCatalogMeta(), ["catalog-meta"], {
-    revalidate: 300,
+    revalidate: 3600,
   })();
 }
 
@@ -35,7 +35,7 @@ export async function getCachedLandingInsights() {
   return unstable_cache(
     async () => buildLandingInsights(await getScoredProductsForInsights()),
     ["catalog-landing-insights"],
-    { revalidate: 600 },
+    { revalidate: 3600 },
   )();
 }
 

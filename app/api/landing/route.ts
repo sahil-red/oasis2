@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCachedLandingInsights } from "@/lib/products/catalog-cache";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
 
 export async function GET() {
   try {
     const data = await getCachedLandingInsights();
     return NextResponse.json(data, {
-      headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=600" },
+      headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=1200" },
     });
   } catch {
     return NextResponse.json(

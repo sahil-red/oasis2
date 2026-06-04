@@ -27,15 +27,15 @@ const TIER_LABELS: Record<IngredientRisk, string> = {
   hazardous: "High risk",
 };
 
-/** Split ingredient list respecting parentheses (FSSAI-style lists). */
+/** Split ingredient list respecting parentheses, brackets and braces (FSSAI-style lists). */
 export function splitIngredientList(raw: string): string[] {
   const parts: string[] = [];
   let buf = "";
   let depth = 0;
 
   for (const ch of raw) {
-    if (ch === "(") depth++;
-    if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    if (ch === ")" || ch === "]" || ch === "}") depth = Math.max(0, depth - 1);
 
     if ((ch === "," || ch === ";" || ch === "\n") && depth === 0) {
       const t = buf.trim();

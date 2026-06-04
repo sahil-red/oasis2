@@ -456,7 +456,7 @@ function endpoint(baseUrl: string): string {
     : `${trimmed}/chat/completions`;
 }
 
-function extractJsonObject(raw: string): string {
+export function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence?.[1]) return fence[1].trim();
@@ -525,7 +525,7 @@ function normalizeNutrition(value: unknown): ExtractedLabel["nutrition"]["per_10
   return out;
 }
 
-function normalizeExtracted(
+export function normalizeExtracted(
   raw: Record<string, unknown>,
   product: ZeptoCsvRow,
   evidenceById: Map<string, OcrEvidenceBlock> = new Map(),
@@ -743,14 +743,18 @@ function evidenceBlocks(raw: AppleRawOcrProduct): OcrEvidenceBlock[] {
   return blocks;
 }
 
-function buildDeepseekPromptContext(params: {
+export function buildDeepseekPromptContext(params: {
   product: ZeptoCsvRow;
   raw: AppleRawOcrProduct;
   maxChars?: number;
+  evidencePrefix?: string;
 }): { prompt: string; evidenceById: Map<string, OcrEvidenceBlock> } {
   const maxChars = params.maxChars ?? 0;
+  const prefix = params.evidencePrefix ?? "";
   const product = params.product;
-  const blocks = evidenceBlocks(params.raw);
+  const blocks = evidenceBlocks(params.raw).map((b) =>
+    prefix ? { ...b, id: `${prefix}${b.id}` } : b,
+  );
   const evidenceById = new Map(blocks.map((block) => [block.id, block]));
 
   const metaBlock = `PRODUCT METADATA (platform data - may contain errors; use as context only, never as label evidence; fields must remain null if not found in OCR):\n${JSON.stringify({

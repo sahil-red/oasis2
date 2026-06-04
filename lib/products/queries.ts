@@ -584,6 +584,8 @@ function buildCatalogDbQuery(
   if (sqlVisible) q = q.eq("catalog_visible", true);
 
   if (state.onlyLabelResolved) q = applyLabelResolvedDbFilter(q);
+  // Push deepseek filter to SQL — checks ocr_payload->deepseek_label exists in DB
+  if (state.onlyDeepseek) q = q.not("ocr_payload->deepseek_label", "is", null);
   if (state.onlyScored) q = q.not("core_scores", "is", null);
   if (state.minScore > 0) q = q.gte("core_scores.score", state.minScore);
   if (state.grade) q = q.eq("core_scores.grade", state.grade);
@@ -808,13 +810,15 @@ async function paginateCatalogSql(opts: {
   const { page, limit, state, diet, variant = "grid" } = opts;
   const sqlVisible = await catalogHasVisibleColumn();
 
-  if (diet !== "any" || !sqlVisible || state.onlyLabelResolved || state.onlyDeepseek) {
+  // onlyDeepseek is now pushed to SQL via buildCatalogDbQuery — no longer needs client loop.
+  // Only fall back to client-side pagination when diet filtering is needed (requires ingredients_raw).
+  if (diet !== "any" || !sqlVisible || state.onlyLabelResolved) {
     return paginateCatalogWithClientFilter({
       page,
       limit,
       state,
       diet,
-      variant: sqlVisible ? (state.onlyLabelResolved || state.onlyDeepseek ? "full" : variant) : "full",
+      variant: sqlVisible ? (state.onlyLabelResolved ? "full" : variant) : "full",
     });
   }
 
@@ -855,7 +859,7 @@ async function paginateCatalogWithClientFilter(opts: {
   const start = (page - 1) * limit;
   const target = start + limit;
   const supabase = db();
-  const batchSize = 500;
+  const batchSize = 2000;
   const matched: ProductListItem[] = [];
   let dbOffset = 0;
   let dbExhausted = false;
@@ -901,7 +905,7 @@ async function paginateGoalCatalog(opts: {
 }): Promise<CatalogSearchResult> {
   const { page, limit, state, diet, goal } = opts;
   const supabase = db();
-  const poolSize = 5000;
+  const poolSize = 2000;
   const pageSize = 1000;
   const pool: ProductListItem[] = [];
   const sqlVisible = await catalogHasVisibleColumn();
@@ -946,18 +950,17 @@ async function paginateGoalCatalog(opts: {
 async function fetchProteinSortedCatalog(
   state: CatalogFilterState,
   diet: DietMode,
-  maxRows = 8000,
+  maxRows = 2000,
 ): Promise<ProductListItem[]> {
   const supabase = db();
   const pageSize = 1000;
   const all: ProductListItem[] = [];
   const sqlVisible = await catalogHasVisibleColumn();
 
+  // Only fetch scored products with nutrition data — they're the only ones that can rank by protein
   for (let offset = 0; offset < maxRows; offset += pageSize) {
-    let q = applyScoreSortFilters(
-      buildCatalogDbQuery(supabase, state, "full", sqlVisible),
-      state,
-    );
+    let q = buildCatalogDbQuery(supabase, state, "full", sqlVisible);
+    q = q.not("core_scores", "is", null).not("nutrition", "is", null);
     const { data, error } = await q.range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as unknown as Record<string, unknown>[];
