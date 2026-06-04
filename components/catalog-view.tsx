@@ -84,6 +84,38 @@ const AI_PROMPT_EXAMPLES = [
   "kids snacks without artificial colours",
 ];
 
+const CURATED_COLLECTIONS: {
+  prompt: string;
+  title: string;
+  blurb: string;
+  accent: string;
+}[] = [
+  {
+    prompt: "high protein snacks for gym",
+    title: "Protein-packed snacks",
+    blurb: "Fuel workouts without junk",
+    accent: "#0f9e75",
+  },
+  {
+    prompt: "biscuits and cookies with low sugar",
+    title: "Low-sugar treats",
+    blurb: "Satisfy cravings, skip the sugar spike",
+    accent: "#e07030",
+  },
+  {
+    prompt: "kids snacks without artificial colours or preservatives",
+    title: "Clean picks for kids",
+    blurb: "No artificial colours or junk additives",
+    accent: "#7ab830",
+  },
+  {
+    prompt: "healthy breakfast options high in fibre",
+    title: "Better breakfasts",
+    blurb: "High-fibre starts to the day",
+    accent: "#3b82f6",
+  },
+];
+
 function countActiveFilters(state: CatalogFilterState): number {
   let n = 0;
   if (state.category) n++;
@@ -955,16 +987,84 @@ export function CatalogView({
         </details>
       </div>
 
-      {/* ── Product grid or empty state ──────────────────────────────── */}
-      {!aiMode ? (
-        <div className="flex flex-col items-center gap-6 py-20 text-center">
-          <p className="text-[15px] text-(--color-fg-muted)">
-            Search above to find products — or open <span className="font-medium text-(--color-fg)">Filters</span> to browse by goal, diet, or aisle.
-          </p>
-          {stats ? (
-            <p className="text-[12px] text-(--color-fg-dim)">
-              {stats.scored.toLocaleString()} scored products across {stats.visible.toLocaleString()} with labels
-            </p>
+      {/* ── Magnified landing or product grid ────────────────────────── */}
+      {!aiMode && !hasFilters ? (
+        <div className="space-y-12 pt-2">
+          {/* Curated collections */}
+          <section className="space-y-4">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-display text-xl font-semibold text-(--color-fg)">Start here</h2>
+              {stats ? (
+                <span className="text-[12px] text-(--color-fg-dim)">
+                  {stats.scored.toLocaleString()} products scored
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {CURATED_COLLECTIONS.map((c) => (
+                <button
+                  key={c.prompt}
+                  type="button"
+                  onClick={() => {
+                    setAiPrompt(c.prompt);
+                    void runAiSearch(c.prompt);
+                  }}
+                  className="group relative overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-panel) p-5 text-left transition hover:border-(--color-fg-dim) hover:shadow-md"
+                >
+                  <span
+                    className="absolute inset-x-0 top-0 h-1 w-full"
+                    style={{ backgroundColor: c.accent }}
+                    aria-hidden
+                  />
+                  <h3 className="text-[15px] font-semibold text-(--color-fg)">{c.title}</h3>
+                  <p className="mt-1 text-[13px] leading-relaxed text-(--color-fg-muted)">{c.blurb}</p>
+                  <span className="mt-4 inline-flex items-center gap-1 text-[12px] font-medium text-(--color-fg-muted) transition group-hover:gap-1.5 group-hover:text-(--color-fg)">
+                    Explore
+                    <span aria-hidden>→</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Browse by aisle */}
+          {filterOptions.categories.length > 0 ? (
+            <section className="space-y-4">
+              <h2 className="font-display text-xl font-semibold text-(--color-fg)">Browse by aisle</h2>
+              <div className="flex flex-wrap gap-2">
+                {filterOptions.categories.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => patch({ category: activeState.category === c ? "" : c })}
+                    className="rounded-full border border-(--color-line-strong) px-4 py-2 text-[13px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {/* Top-rated picks */}
+          {items.length > 0 ? (
+            <section className="space-y-4">
+              <div className="flex items-baseline justify-between">
+                <h2 className="font-display text-xl font-semibold text-(--color-fg)">Top-rated right now</h2>
+                <span className="text-[12px] text-(--color-fg-dim)">Highest health scores</span>
+              </div>
+              <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+                {items.slice(0, 8).map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    hrefQuery={productQuery}
+                    goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                    onSublabelClick={handleSublabelClick}
+                  />
+                ))}
+              </div>
+            </section>
           ) : null}
         </div>
       ) : loading && items.length === 0 ? (
