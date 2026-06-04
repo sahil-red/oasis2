@@ -670,7 +670,7 @@ export function CatalogView({
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
         <section className="rounded-3xl border border-(--color-line) bg-(--color-panel) p-5 shadow-sm md:p-7">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-(--color-fg-dim)">
+          <p className="font-display mb-5 text-3xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-4xl">
             Ask Scout
           </p>
           <form
