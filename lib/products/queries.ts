@@ -1164,6 +1164,10 @@ export async function getAllCatalogProducts(opts?: {
     if (opts?.onlyWithDetail ?? true) {
       query = query.eq("platform", "zepto");
     }
+    // Apply catalog_visible in SQL — vastly reduces rows fetched (9.9K vs 24K)
+    if (await catalogHasVisibleColumn()) {
+      query = query.eq("catalog_visible", true);
+    }
     if (opts?.onlyScored) {
       query = query.not("core_scores", "is", null);
     }

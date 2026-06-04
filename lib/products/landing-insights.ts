@@ -41,12 +41,43 @@ export type LandingPickOfDay = {
   reasons: string[];
 };
 
+export type LandingBestInClassProduct = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number;
+  grade: string | null;
+  protein: number | null;
+  sugar: number | null;
+};
+
+export type LandingBestInClassCategory = {
+  label: string;
+  href: string;
+  avgScore: number;
+  skipPct: number;
+  products: LandingBestInClassProduct[];
+};
+
+export type LandingDodgeProduct = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number;
+  claim: string;
+  reality: string;
+};
+
 export type LandingInsights = {
   totalScored: number;
   avgScore: number;
   facts: LandingFact[];
   pickOfDay: LandingPickOfDay | null;
   goalBoards: LandingGoalBoard[];
+  bestInClass: LandingBestInClassCategory[];
+  dodgeList: LandingDodgeProduct[];
 };
 
 function sugarOf(n: ProductNutrition | null | undefined): number | null {
@@ -302,6 +333,92 @@ function buildPickOfDay(ins: InsightLists): LandingPickOfDay | null {
   };
 }
 
+const HEALTH_CLAIMS_RE =
+  /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive|sugar.?free|no.?added.?sugar|high.?fiber|organic|whole.?grain|multigrain|fortified|enriched|probiotic)\b/i;
+
+const TOP_CATEGORIES = [
+  "Dairy, Bread & Eggs",
+  "Munchies",
+  "Biscuits",
+  "Breakfast",
+  "Packaged Food",
+  "Cold Drinks & Juices",
+];
+
+function buildBestInClass(products: ProductListItem[]): LandingBestInClassCategory[] {
+  const scored = products.filter((p) => p.core_scores);
+  const result: LandingBestInClassCategory[] = [];
+  for (const cat of TOP_CATEGORIES) {
+    const inCat = scored.filter((p) => p.category === cat);
+    if (inCat.length < 3) continue;
+    const top = [...inCat]
+      .sort((a, b) => (b.core_scores?.score ?? 0) - (a.core_scores?.score ?? 0))
+      .slice(0, 3);
+    const avgScore = Math.round(
+      inCat.reduce((s, p) => s + (p.core_scores?.score ?? 0), 0) / inCat.length,
+    );
+    const skipPct = Math.round(
+      (inCat.filter((p) => p.core_scores?.verdict === "skip").length / inCat.length) * 100,
+    );
+    result.push({
+      label: cat,
+      href: `/search?category=${encodeURIComponent(cat)}&verdict=daily_staple`,
+      avgScore,
+      skipPct,
+      products: top.map((p) => ({
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand ?? null,
+        image: p.image_urls?.[0] ?? null,
+        score: p.core_scores?.score ?? 0,
+        grade: p.core_scores?.grade ?? null,
+        protein: p.nutrition?.protein_g_100g ?? null,
+        sugar: sugarOf(p.nutrition),
+      })),
+    });
+  }
+  return result;
+}
+
+function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
+  const scored = products.filter((p) => p.core_scores);
+  const dodgers = scored.filter(
+    (p) =>
+      HEALTH_CLAIMS_RE.test(p.name) &&
+      (p.core_scores?.score ?? 100) < 45,
+  );
+  return dodgers
+    .sort((a, b) => (a.core_scores?.score ?? 0) - (b.core_scores?.score ?? 0))
+    .slice(0, 6)
+    .map((p) => {
+      const score = p.core_scores?.score ?? 0;
+      const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+      let claim = "Markets as healthy";
+      if (/no.?added.?sugar|zero.?sugar/i.test(p.name)) claim = "No added sugar";
+      else if (/high.?protein|protein.?rich/i.test(p.name)) claim = "High protein";
+      else if (/organic/i.test(p.name)) claim = "Organic & natural";
+      else if (/multigrain|whole.?grain/i.test(p.name)) claim = "Multigrain / whole grain";
+      else if (/sugar.?free/i.test(p.name)) claim = "Sugar free";
+      else if (/natural/i.test(p.name)) claim = "100% natural";
+      else if (/diet|lite|light/i.test(p.name)) claim = "Diet / light";
+      const realities: string[] = [];
+      if (sublabels.includes("hidden_sweetener")) realities.push("hidden sweeteners");
+      if (sublabels.includes("ultra_processed")) realities.push("ultra-processed (NOVA 4)");
+      if (sublabels.includes("high_sugar")) realities.push("high in sugar");
+      if (sublabels.includes("artificial_colors")) realities.push("artificial colours");
+      if (!realities.length) realities.push(`score just ${score}/100`);
+      return {
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand ?? null,
+        image: p.image_urls?.[0] ?? null,
+        score,
+        claim,
+        reality: realities.join(", "),
+      };
+    });
+}
+
 export function buildLandingInsights(products: ProductListItem[]): LandingInsights {
   const scored = products.filter((p) => p.core_scores);
   const totalScored = scored.length;
@@ -316,5 +433,7 @@ export function buildLandingInsights(products: ProductListItem[]): LandingInsigh
     facts: buildFacts(products, totalScored),
     pickOfDay: buildPickOfDay(ins),
     goalBoards: buildGoalBoards(products, ins),
+    bestInClass: buildBestInClass(products),
+    dodgeList: buildDodgeList(products),
   };
 }

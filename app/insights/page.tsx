@@ -24,8 +24,7 @@ import { getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache"
 import { marketingCallout } from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 120;
+export const revalidate = 600;
 
 export default async function InsightsPage() {
   const products = await getCachedScoredCatalogForInsights();
