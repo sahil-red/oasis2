@@ -51,6 +51,15 @@ export const ProductCard = memo(function ProductCard({
       : [];
   const chipLabels = deepseekChipLabels.length ? deepseekChipLabels : scoreChipLabels;
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
+  const aiMatchScore = "ai_match_score" in product ? product.ai_match_score : undefined;
+  const aiReasons =
+    "ai_match_reasons" in product && Array.isArray(product.ai_match_reasons)
+      ? product.ai_match_reasons
+      : [];
+  const aiWarning =
+    "ai_match_warning" in product && typeof product.ai_match_warning === "string"
+      ? product.ai_match_warning
+      : null;
 
   return (
     <article className="group flex h-full flex-col">
@@ -89,7 +98,16 @@ export const ProductCard = memo(function ProductCard({
         ) : null}
 
         {/* score badge, top-right (subtle, not screaming) */}
-        {goalFit != null ? (
+        {aiMatchScore != null ? (
+          <div className="absolute right-2 top-2 rounded-xl border border-(--color-line) bg-(--color-panel)/95 px-2 py-1 text-right shadow-sm">
+            <p className="font-display text-xl leading-none tabular-nums text-(--color-fg)">
+              {aiMatchScore}
+            </p>
+            <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-(--color-fg-dim)">
+              match
+            </p>
+          </div>
+        ) : goalFit != null ? (
           <div className="absolute right-2 top-2">
             <GoalFitBadge fit={goalFit} />
           </div>
@@ -119,10 +137,19 @@ export const ProductCard = memo(function ProductCard({
           </h3>
 
           {/* chips — subtle, monochrome, no verdict color */}
-          {chipLabels.length > 0 ? (
+          {aiReasons.length > 0 ? (
+            <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
+              {aiReasons.slice(0, 2).join(" · ")}
+            </p>
+          ) : chipLabels.length > 0 ? (
             <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">
               {chipLabels.slice(0, 2).join(" · ")}
               {chipLabels.length > 2 ? ` · +${chipLabels.length - 2}` : ""}
+            </p>
+          ) : null}
+          {aiWarning ? (
+            <p className="mt-1 line-clamp-1 text-[10.5px] text-(--score-poor)">
+              {aiWarning}
             </p>
           ) : null}
         </Link>

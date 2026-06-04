@@ -18,11 +18,22 @@ import {
 } from "@/lib/products/catalog-filter";
 import {
   fetchCatalogMeta,
+  fetchAiCatalogSearch,
   fetchCatalogSearch,
   prefetchCatalogSearch,
   type CatalogGridItem,
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
+import {
+  canUseAiSearch,
+  readAiSearchPreferences,
+  readAiSearchUsage,
+  recordAiSearch,
+  writeAiSearchPreferences,
+  type AiSearchPreferences,
+  type AiSearchUsage,
+} from "@/lib/search/ai-usage";
+import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
   CATALOG_SORT_OPTIONS,
@@ -32,6 +43,7 @@ import type { CatalogFilters, CatalogSearchResult } from "@/lib/products/queries
 import type { Grade } from "@/lib/supabase/types";
 
 type Params = {
+  prompt?: string;
   q?: string;
   category?: string;
   subcategory?: string;
@@ -65,7 +77,12 @@ const filterSelectClass =
 
 const CATALOG_PAGE_SIZE = 96;
 const SEARCH_DEBOUNCE_MS = 120;
-const VISIBLE_CATEGORY_COUNT = 5;
+const AI_PROMPT_EXAMPLES = [
+  "biscuits with low sugar",
+  "paneer with low fat under ₹150",
+  "high protein snacks for gym",
+  "kids snacks without artificial colours",
+];
 
 function countActiveFilters(state: CatalogFilterState): number {
   let n = 0;
@@ -161,6 +178,7 @@ function paramsFromLocation(): Params {
   const sp = new URLSearchParams(window.location.search);
   return {
     q: sp.get("q") ?? undefined,
+    prompt: sp.get("prompt") ?? undefined,
     category: sp.get("category") ?? undefined,
     subcategory: sp.get("subcategory") ?? undefined,
     usecase: sp.get("usecase") ?? undefined,
@@ -210,6 +228,26 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
     return () => clearTimeout(t);
   }, [value, delayMs]);
   return debounced;
+}
+
+function preferencesToPrompt(prefs: AiSearchPreferences | null): string {
+  if (!prefs) return "";
+  const parts = [
+    prefs.diet ? `diet ${prefs.diet}` : null,
+    prefs.healthContexts?.length ? `health goals ${prefs.healthContexts.join(", ")}` : null,
+    prefs.avoidIngredients?.length ? `avoid ${prefs.avoidIngredients.join(", ")}` : null,
+    prefs.budget ? `budget under ₹${prefs.budget}` : null,
+  ].filter(Boolean);
+  return parts.length ? `Saved preferences: ${parts.join("; ")}.` : "";
+}
+
+function preferencesFromParsed(parsed: ParsedProductQuery): AiSearchPreferences {
+  return {
+    diet: parsed.hard_constraints.vegetarian ? "vegetarian" : undefined,
+    healthContexts: parsed.health_contexts,
+    avoidIngredients: parsed.hard_constraints.avoid_ingredients,
+    budget: parsed.hard_constraints.max_price ?? null,
+  };
 }
 
 function goalFromParams(params: Params): GoalId {
@@ -267,9 +305,19 @@ export function CatalogView({
   const fetchGen = useRef(0);
   const skipParamsSync = useRef(true);
   const skipInitialSearch = useRef(Boolean(initialSearch));
+  const autoPromptRan = useRef(false);
   const goalSentinelRef = useRef<HTMLDivElement>(null);
   const [goalStripScrolledPast, setGoalStripScrolledPast] = useState(false);
-  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState(initialParams.prompt ?? initialParams.q ?? "");
+  const [aiMode, setAiMode] = useState(false);
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiParseSource, setAiParseSource] = useState<"deepseek" | "heuristic" | null>(null);
+  const [aiWarning, setAiWarning] = useState<string | null>(null);
+  const [aiRefinements, setAiRefinements] = useState<string[]>([]);
+  const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
+  const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
+  const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
@@ -312,6 +360,8 @@ export function CatalogView({
     setShowGoalHint(
       !localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"),
     );
+    setAiUsage(readAiSearchUsage());
+    setSavedPrefs(readAiSearchPreferences());
   }, []);
 
   useEffect(() => {
@@ -401,6 +451,7 @@ export function CatalogView({
   }, [activeState.category, initialMeta]);
 
   useEffect(() => {
+    if (aiMode) return;
     if (skipInitialSearch.current) {
       skipInitialSearch.current = false;
       return;
@@ -435,14 +486,15 @@ export function CatalogView({
         }
       }
     })();
-  }, [searchKey]);
+  }, [searchKey, aiMode]);
 
   useEffect(() => {
-    if (!hasMore || loading || refreshing || loadError) return;
+    if (aiMode || !hasMore || loading || refreshing || loadError) return;
     prefetchCatalogSearch(buildSearchRequest(activeState, debouncedQ, goal, diet, page + 1));
-  }, [hasMore, page, searchKey, loading, refreshing, loadError, activeState, debouncedQ, goal, diet]);
+  }, [aiMode, hasMore, page, searchKey, loading, refreshing, loadError, activeState, debouncedQ, goal, diet]);
 
   const loadMore = useCallback(async () => {
+    if (aiMode) return;
     const nextPage = page + 1;
     setLoadingMore(true);
     try {
@@ -458,7 +510,7 @@ export function CatalogView({
     } finally {
       setLoadingMore(false);
     }
-  }, [page, debouncedQ, activeState, goal, diet]);
+  }, [aiMode, page, debouncedQ, activeState, goal, diet]);
 
   const prevUrlRef = useRef<string | null>(null);
   useEffect(() => {
@@ -484,6 +536,11 @@ export function CatalogView({
   }, []);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
+    setAiMode(false);
+    setAiSummary(null);
+    setAiWarning(null);
+    setAiRefinements([]);
+    setAiParsed(null);
     setState((prev) => {
       const next = { ...prev, ...partial };
       if (partial.category !== undefined && partial.category !== prev.category) {
@@ -500,6 +557,60 @@ export function CatalogView({
       return next;
     });
   }, []);
+
+  const runAiSearch = useCallback(async (promptOverride?: string) => {
+    const prompt = (promptOverride ?? aiPrompt).trim();
+    if (!prompt) return;
+    setLoadError(null);
+    if (!canUseAiSearch()) {
+      const usage = readAiSearchUsage();
+      setAiUsage(usage);
+      setLoadError(
+        `Free AI searches used for today (${usage.count}/${usage.limit}). Upgrade will unlock unlimited searches.`,
+      );
+      return;
+    }
+
+    const gen = ++fetchGen.current;
+    setAiSearching(true);
+    setRefreshing(items.length > 0);
+    try {
+      const prefContext = preferencesToPrompt(savedPrefs);
+      const result = await fetchAiCatalogSearch(
+        prefContext ? `${prompt}. ${prefContext}` : prompt,
+        CATALOG_PAGE_SIZE,
+      );
+      if (gen !== fetchGen.current) return;
+      setItems(result.items);
+      setGoalFits({});
+      setTotal(result.items.length);
+      setPage(1);
+      setHasMore(false);
+      setAiMode(true);
+      setAiSummary(result.summary);
+      setAiParseSource(result.parse_source);
+      setAiWarning(result.parse_warning ?? null);
+      setAiRefinements(result.refinements);
+      setAiParsed(result.parsed);
+      setAiUsage(recordAiSearch());
+      saveCatalogReturnUrl("/search");
+    } catch (e) {
+      if (gen !== fetchGen.current) return;
+      setLoadError((e as Error).message);
+    } finally {
+      if (gen === fetchGen.current) {
+        setAiSearching(false);
+        setRefreshing(false);
+        setLoading(false);
+      }
+    }
+  }, [aiPrompt, items.length, savedPrefs]);
+
+  useEffect(() => {
+    if (autoPromptRan.current || !initialParams.prompt?.trim()) return;
+    autoPromptRan.current = true;
+    void runAiSearch(initialParams.prompt);
+  }, [initialParams.prompt, runAiSearch]);
 
   const hasFilters = Boolean(
     activeState.q ||
@@ -545,14 +656,6 @@ export function CatalogView({
   const activeFilterCount = countActiveFilters(activeState);
   const goalLabel = GOAL_PROFILES.find((g) => g.id === goal)?.label ?? goal;
 
-  const visibleCategories = categoriesExpanded
-    ? filterOptions.categories
-    : filterOptions.categories.slice(0, VISIBLE_CATEGORY_COUNT);
-  const hiddenCategoryCount = Math.max(
-    0,
-    filterOptions.categories.length - VISIBLE_CATEGORY_COUNT,
-  );
-
   if (loadError && !items.length && !meta) {
     return (
       <p className="py-16 text-center text-sm text-(--color-bad)">
@@ -565,6 +668,113 @@ export function CatalogView({
     <div className="space-y-8">
       <div className="space-y-5">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
+
+        <section className="rounded-3xl border border-(--color-line) bg-(--color-panel) p-5 shadow-sm md:p-7">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">
+              Scout AI search
+            </p>
+            <h1 className="font-display mt-2 text-3xl leading-tight text-(--color-fg) md:text-4xl">
+              Tell Scout what you need.
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-(--color-fg-muted)">
+              Ask in plain English. Scout parses your request, applies nutrition and ingredient rules, then ranks products with match reasons.
+            </p>
+          </div>
+
+          <form
+            className="mt-5 flex flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-bg-soft) p-3 md:flex-row md:items-center"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void runAiSearch();
+            }}
+          >
+            <input
+              type="search"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="e.g. paneer with low fat under ₹150"
+              className="min-h-12 flex-1 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 text-[15px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+            />
+            <button
+              type="submit"
+              disabled={aiSearching || !aiPrompt.trim()}
+              className="min-h-12 rounded-xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {aiSearching ? "Searching…" : "Find products"}
+            </button>
+          </form>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {AI_PROMPT_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => {
+                  setAiPrompt(example);
+                  void runAiSearch(example);
+                }}
+                className="rounded-full border border-(--color-line) px-3 py-1.5 text-[12px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px] text-(--color-fg-dim)">
+            <span>
+              Free AI searches today: {aiUsage ? `${aiUsage.count}/${aiUsage.limit}` : `0/10`}
+            </span>
+            <span className="hidden h-3 w-px bg-(--color-line) sm:inline-block" aria-hidden />
+            <span>Paid plan: unlimited searches, saved preferences, family profiles, and basket swaps.</span>
+          </div>
+          {savedPrefs && preferencesToPrompt(savedPrefs) ? (
+            <p className="mt-2 text-[12px] text-(--color-fg-muted)">
+              Using saved preferences: {preferencesToPrompt(savedPrefs).replace(/^Saved preferences:\s*/i, "").replace(/\.$/, "")}
+            </p>
+          ) : null}
+
+          {aiMode && aiSummary ? (
+            <div className="mt-5 rounded-2xl border border-(--color-line) bg-(--color-bg) px-4 py-3">
+              <p className="text-sm font-medium text-(--color-fg)">{aiSummary}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-(--color-fg-dim)">
+                <span>Parser: {aiParseSource === "deepseek" ? "DeepSeek" : "local fallback"}</span>
+                {aiWarning ? <span>{aiWarning}</span> : null}
+              </div>
+              {aiParsed ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prefs = preferencesFromParsed(aiParsed);
+                    writeAiSearchPreferences(prefs);
+                    setSavedPrefs(prefs);
+                  }}
+                  className="mt-3 rounded-full border border-(--color-line) px-3 py-1.5 text-[11px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                >
+                  Save these preferences
+                </button>
+              ) : null}
+              {aiRefinements.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {aiRefinements.map((refinement) => (
+                    <button
+                      key={refinement}
+                      type="button"
+                      onClick={() => {
+                        const next = `${aiPrompt.trim()} ${refinement.replace(/^Add /i, "")}`.trim();
+                        setAiPrompt(next);
+                        void runAiSearch(next);
+                      }}
+                      className="rounded-full bg-(--color-bg-soft) px-3 py-1 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
+                    >
+                      {refinement}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
         {/* ── Sticky search + sort row ─────────────────────────────────── */}
         <div className="sticky top-14 z-40 -mx-5 border-b border-(--color-line)/60 bg-(--color-bg)/95 px-5 py-3 backdrop-blur md:-mx-6 md:px-6">
@@ -586,7 +796,7 @@ export function CatalogView({
                 type="search"
                 value={state.q}
                 onChange={(e) => patch({ q: e.target.value })}
-                placeholder="Search by name or brand…"
+                placeholder="Advanced browse by name or brand…"
                 autoComplete="off"
                 spellCheck={false}
                 className="w-full min-w-0 appearance-none rounded-full border border-(--color-line) bg-(--color-panel) py-2 pl-9 pr-3 text-[14px] text-(--color-fg) outline-none transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
@@ -630,68 +840,80 @@ export function CatalogView({
           </div>
         </div>
 
-        {/* ── Verdict pills: the headline filter ─────────────────────── */}
-        <div className="flex flex-wrap gap-2">
-          {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
-            const labels: Record<string, string> = {
-              daily_staple: "Daily staples",
-              good_choice: "Good choices",
-              occasional_treat: "Treats",
-              skip: "Skip",
-            };
-            const colors: Record<string, { fg: string; bg: string; border: string; activeBg: string }> = {
-              daily_staple: { fg: "#0f9e75", bg: "transparent", border: "#0f9e75", activeBg: "color-mix(in srgb, #0f9e75 14%, transparent)" },
-              good_choice: { fg: "#7ab830", bg: "transparent", border: "#7ab830", activeBg: "color-mix(in srgb, #7ab830 14%, transparent)" },
-              occasional_treat: { fg: "#e07030", bg: "transparent", border: "#e07030", activeBg: "color-mix(in srgb, #e07030 14%, transparent)" },
-              skip: { fg: "#d43030", bg: "transparent", border: "#d43030", activeBg: "color-mix(in srgb, #d43030 14%, transparent)" },
-            };
-            const c = colors[v]!;
-            const active = activeState.verdict === v;
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => patch({ verdict: active ? "" : v })}
-                className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
-                style={{
-                  borderColor: c.border,
-                  color: c.fg,
-                  backgroundColor: active ? c.activeBg : c.bg,
-                }}
-              >
-                {labels[v]}
-              </button>
-            );
-          })}
-          <span className="hidden h-6 w-px bg-(--color-line) sm:inline-block" aria-hidden />
-          <button
-            type="button"
-            onClick={() => patch({ verdict: "" })}
-            className={`rounded-full px-3 py-1.5 text-[13px] transition ${
-              !activeState.verdict
-                ? "font-medium text-(--color-fg)"
-                : "text-(--color-fg-dim) hover:text-(--color-fg-muted)"
-            }`}
-          >
-            All
-          </button>
-        </div>
+        <details className="group rounded-xl border border-(--color-line) bg-(--color-panel) open:pb-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2.5">
+              <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
+              <span className="text-[14px] font-medium text-(--color-fg)">Refine results</span>
+              {activeFilterCount > 0 ? (
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-(--color-fg) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-bg)">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown className="h-4 w-4 text-(--color-fg-dim) transition group-open:rotate-180" />
+          </summary>
 
-        {/* ── Category chips: scrollable horizontal rail ───────────── */}
-        <div className="-mx-5 overflow-x-auto px-5 pb-1 scrollbar-none md:-mx-6 md:px-6">
-          <div className="flex w-max items-center gap-2">
-            <button
-              type="button"
-              onClick={() => patch({ category: "" })}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
-                !activeState.category
-                  ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                  : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-              }`}
-            >
-              All aisles
-            </button>
-            {filterOptions.categories.map((c) => (
+          <div className="space-y-4 px-4">
+            <div className="flex flex-wrap gap-2">
+              {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
+                const labels: Record<string, string> = {
+                  daily_staple: "Daily staples",
+                  good_choice: "Good choices",
+                  occasional_treat: "Treats",
+                  skip: "Skip",
+                };
+                const colors: Record<string, { fg: string; bg: string; border: string; activeBg: string }> = {
+                  daily_staple: { fg: "#0f9e75", bg: "transparent", border: "#0f9e75", activeBg: "color-mix(in srgb, #0f9e75 14%, transparent)" },
+                  good_choice: { fg: "#7ab830", bg: "transparent", border: "#7ab830", activeBg: "color-mix(in srgb, #7ab830 14%, transparent)" },
+                  occasional_treat: { fg: "#e07030", bg: "transparent", border: "#e07030", activeBg: "color-mix(in srgb, #e07030 14%, transparent)" },
+                  skip: { fg: "#d43030", bg: "transparent", border: "#d43030", activeBg: "color-mix(in srgb, #d43030 14%, transparent)" },
+                };
+                const c = colors[v]!;
+                const active = activeState.verdict === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => patch({ verdict: active ? "" : v })}
+                    className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
+                    style={{
+                      borderColor: c.border,
+                      color: c.fg,
+                      backgroundColor: active ? c.activeBg : c.bg,
+                    }}
+                  >
+                    {labels[v]}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => patch({ verdict: "" })}
+                className={`rounded-full px-3 py-1.5 text-[13px] transition ${
+                  !activeState.verdict
+                    ? "font-medium text-(--color-fg)"
+                    : "text-(--color-fg-dim) hover:text-(--color-fg-muted)"
+                }`}
+              >
+                All verdicts
+              </button>
+            </div>
+
+            <div className="-mx-4 overflow-x-auto px-4 pb-1 scrollbar-none">
+              <div className="flex w-max items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => patch({ category: "" })}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
+                    !activeState.category
+                      ? "bg-(--color-fg) font-medium text-(--color-bg)"
+                      : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                  }`}
+                >
+                  All aisles
+                </button>
+                {filterOptions.categories.map((c) => (
               <button
                 key={c}
                 type="button"
@@ -704,9 +926,11 @@ export function CatalogView({
               >
                 {c}
               </button>
-            ))}
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
 
         {/* ── Active filter chips ─────────────────────────────────────── */}
         {hasFilters ? (

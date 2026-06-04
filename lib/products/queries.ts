@@ -211,6 +211,9 @@ export type ProductListItem = Pick<
   ocr_payload?: Record<string, unknown> | null;
   deepseek_chips?: string[];
   deepseek_why?: string | null;
+  ai_match_score?: number;
+  ai_match_reasons?: string[];
+  ai_match_warning?: string | null;
 };
 
 export type ProductDetail = Product & {

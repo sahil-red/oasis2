@@ -1,4 +1,5 @@
 import type { CatalogFilters, CatalogGridItem, CatalogSearchResult } from "@/lib/products/queries";
+import type { AiSearchResult } from "@/lib/search/ai-search";
 
 export type CatalogMetaResponse = {
   stats: { visible: number; scored: number; zepto: number };
@@ -74,4 +75,17 @@ export function prefetchCatalogSearch(
   void fetchCatalogSearch(params).catch(() => {});
 }
 
-export type { CatalogGridItem, CatalogSearchResult };
+export async function fetchAiCatalogSearch(prompt: string, limit = 24): Promise<AiSearchResult> {
+  const res = await fetch("/api/search/ai", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt, limit }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new Error(body?.error ?? `HTTP ${res.status}`);
+  }
+  return await res.json() as AiSearchResult;
+}
+
+export type { CatalogGridItem, CatalogSearchResult, AiSearchResult };

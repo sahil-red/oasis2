@@ -28,23 +28,36 @@ export default async function Home() {
               <span className="italic text-(--color-accent)">so you don't have to</span>.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-(--color-fg-muted)">
-              Every product on Indian grocery shelves, scored and labelled.
-              What's a daily staple, what's a treat, what to skip — with the
-              evidence printed right there on the back of the pack.
+              Ask for what you actually need: low-sugar biscuits, high-protein snacks,
+              paneer under ₹150, or kid-friendly foods without artificial colours.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/search"
-                className="inline-flex items-center gap-2 rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) transition hover:opacity-90"
+            <form action="/search" className="mt-8 flex max-w-2xl flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 sm:flex-row">
+              <input
+                name="prompt"
+                type="search"
+                placeholder="Try: biscuits with low sugar"
+                className="min-h-12 flex-1 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 text-[15px] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+              />
+              <button
+                type="submit"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition hover:opacity-90"
               >
-                Browse the catalog
+                Ask Scout
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </button>
+            </form>
+            <div className="mt-4 flex flex-wrap gap-3">
               <Link
                 href="/insights"
                 className="inline-flex items-center gap-2 rounded-full border border-(--color-line) px-5 py-2.5 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
               >
                 What we found
+              </Link>
+              <Link
+                href="/search"
+                className="inline-flex items-center gap-2 rounded-full border border-(--color-line) px-5 py-2.5 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
+              >
+                Advanced browse
               </Link>
             </div>
           </div>

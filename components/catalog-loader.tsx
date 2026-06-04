@@ -5,6 +5,7 @@ import type { CatalogMetaResponse } from "@/lib/products/catalog-api";
 import type { CatalogSearchResult } from "@/lib/products/queries";
 
 type Params = {
+  prompt?: string;
   q?: string;
   category?: string;
   subcategory?: string;
