@@ -75,7 +75,7 @@ Rules:
 
 function buildBatchUserPrompt(items: BatchItem[]): { prompt: string; evidenceMaps: Map<string, unknown>[] } {
   const parts: string[] = [
-    `Extract labels for the following ${items.length} products. Return a JSON array of exactly ${items.length} objects.\n`,
+    `Extract labels for the following ${items.length} products. Wrap each product's JSON in ${PRODUCT_START} / ${PRODUCT_END} delimiters.\n`,
   ];
   const evidenceMaps: Map<string, unknown>[] = [];
 
@@ -182,28 +182,23 @@ export async function extractBatchWithGemini(
   const content = parsed.choices?.[0]?.message?.content;
   if (!content) throw new DeepseekExtractionError("Gemini returned no content");
 
-  let arr: unknown[];
-  let recovered = false;
-  try {
-    arr = extractJsonArray(content);
-    if (arr.length < items.length) {
-      recovered = true;
-      console.warn(`  [recover] got ${arr.length}/${items.length} objects from response`);
-    }
-  } catch (e) {
+  const parsed_objects = extractDelimitedObjects(content);
+  if (parsed_objects.length === 0) {
     throw new DeepseekExtractionError(
-      `Gemini batch response unparseable: ${(e as Error).message}`,
+      `Gemini returned no delimited objects (got ${content.length} chars)`,
       { rawResponse: content },
     );
   }
-  void recovered;
+  if (parsed_objects.length < items.length) {
+    console.warn(`  [recover] got ${parsed_objects.length}/${items.length} objects from response`);
+  }
 
   const results: Array<BatchProductResult | BatchProductError> = [];
   const now = new Date().toISOString();
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
-    const element = arr[i];
+    const element = parsed_objects[i];
     if (!element || typeof element !== "object" || Array.isArray(element)) {
       results.push({
         zepto_sku: item.row.zepto_sku,
