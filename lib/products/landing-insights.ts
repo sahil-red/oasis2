@@ -15,11 +15,18 @@ export type LandingPick = {
   meta: string | null;
 };
 
+export type LandingFactAction =
+  | { type: "expose"; slugs: string[] }
+  | { type: "catalog"; sublabel?: string; verdict?: string; sort?: string }
+  | { type: "ai_search"; prompt: string };
+
 export type LandingFact = {
   stat: string;
   headline: string;
-  prompt: string;
   tone: "bad" | "good" | "neutral";
+  action: LandingFactAction;
+  /** Button label — defaults to "See them" for expose/catalog, "Search" for ai */
+  cta: string;
 };
 
 export type LandingGoalBoard = {
@@ -115,12 +122,13 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `${pct}%`,
       headline: `of products marketed as “healthy” actually score below 50`,
-      prompt: "products marketed as healthy that score 60 or above",
       tone: "bad",
+      action: { type: "expose", slugs: healthyButWeak.map((p) => p.slug) },
+      cta: "See them",
     });
   }
 
-  // 2. Healthy-marketed but hidden sweeteners (matches the card users see)
+  // 2. Healthy-marketed but hidden sweeteners
   const hiddenSweetHealthy = scored.filter(
     (p) =>
       hasSublabel(p, "hidden_sweetener") &&
@@ -130,8 +138,9 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `${hiddenSweetHealthy.length}`,
       headline: `“healthy” products still hide added sweeteners on the label`,
-      prompt: "healthy products without hidden sweeteners that score well",
       tone: "bad",
+      action: { type: "expose", slugs: hiddenSweetHealthy.map((p) => p.slug) },
+      cta: "See them",
     });
   }
 
@@ -142,28 +151,30 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `1 in ${oneIn}`,
       headline: `products here aren’t worth buying — Scout flags them so you skip them`,
-      prompt: "daily staples worth buying that score above 60",
       tone: "bad",
+      action: { type: "catalog", verdict: "skip", sort: "score-asc" },
+      cta: "See them",
     });
   }
 
   // 4. Ultra-processed share
-  const ultra = scored.filter(
+  const ultraProducts = scored.filter(
     (p) => hasSublabel(p, "ultra_processed") || hasSublabel(p, "mostly_nova_4"),
-  ).length;
-  if (ultra > 0 && totalScored > 0) {
-    const pct = Math.round((ultra / totalScored) * 100);
+  );
+  if (ultraProducts.length > 0 && totalScored > 0) {
+    const pct = Math.round((ultraProducts.length / totalScored) * 100);
     if (pct >= 5) {
       facts.push({
         stat: `${pct}%`,
         headline: `of everything on the shelf is ultra-processed`,
-        prompt: "minimally processed foods that score well",
         tone: "bad",
+        action: { type: "expose", slugs: ultraProducts.map((p) => p.slug).slice(0, 40) },
+        cta: "See them",
       });
     }
   }
 
-  // 5. Low-sugar rarity in biscuits
+  // 5. Low-sugar rarity in biscuits — show the rare good ones
   const biscuits = scored.filter((p) => /biscuit|cookie/i.test(p.category ?? p.subcategory ?? ""));
   const lowSugarBiscuits = biscuits.filter((p) => {
     const s = sugarOf(p.nutrition);
@@ -173,20 +184,22 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `${lowSugarBiscuits.length} of ${biscuits.length}`,
       headline: `biscuits have under 5g sugar per 100g`,
-      prompt: "biscuits with low sugar that score well",
       tone: "neutral",
+      action: { type: "expose", slugs: lowSugarBiscuits.map((p) => p.slug) },
+      cta: "See them",
     });
   }
 
-  // 6. Hidden sweeteners (generic fallback if healthy+hidden didn't fire)
+  // 6. Hidden sweeteners (generic fallback)
   if (!hiddenSweetHealthy.length) {
-    const hidden = scored.filter((p) => hasSublabel(p, "hidden_sweetener")).length;
-    if (hidden >= 10) {
+    const hiddenProducts = scored.filter((p) => hasSublabel(p, "hidden_sweetener"));
+    if (hiddenProducts.length >= 10) {
       facts.push({
-        stat: `${hidden}`,
+        stat: `${hiddenProducts.length}`,
         headline: `products hide added sweeteners you wouldn’t spot on the front`,
-        prompt: "products without hidden sweeteners that score well",
         tone: "bad",
+        action: { type: "expose", slugs: hiddenProducts.map((p) => p.slug) },
+        cta: "See them",
       });
     }
   }

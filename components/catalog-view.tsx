@@ -28,6 +28,7 @@ import {
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
 import type {
+  LandingFact,
   LandingInsights,
   LandingPick,
 } from "@/lib/products/landing-insights";
@@ -46,7 +47,7 @@ import {
   CATALOG_SORT_OPTIONS,
   type CatalogSort,
 } from "@/lib/products/catalog-sort";
-import type { CatalogFilters, CatalogSearchResult } from "@/lib/products/queries";
+import type { CatalogFilters, CatalogSearchResult, ProductListItem } from "@/lib/products/queries";
 import type { Grade } from "@/lib/supabase/types";
 
 type Params = {
@@ -318,6 +319,11 @@ export function CatalogView({
   const [goalStripScrolledPast, setGoalStripScrolledPast] = useState(false);
   const [aiPrompt, setAiPrompt] = useState(initialParams.prompt ?? initialParams.q ?? "");
   const [aiMode, setAiMode] = useState(false);
+  const [factBrowse, setFactBrowse] = useState<{
+    headline: string;
+    items: ProductListItem[];
+    total: number;
+  } | null>(null);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiParseSource, setAiParseSource] = useState<"deepseek" | "heuristic" | null>(null);
@@ -595,6 +601,7 @@ export function CatalogView({
       setPage(1);
       setHasMore(false);
       setAiMode(true);
+      setFactBrowse(null);
       setAiSummary(result.summary);
       setAiParseSource(result.parse_source);
       setAiWarning(result.parse_warning ?? null);
@@ -613,6 +620,56 @@ export function CatalogView({
       }
     }
   }, [aiPrompt, items.length, savedPrefs]);
+
+  const handleFactAction = useCallback(
+    async (fact: LandingFact) => {
+      setLoadError(null);
+      setFactBrowse(null);
+      setAiMode(false);
+      const { action } = fact;
+
+      if (action.type === "expose") {
+        setRefreshing(true);
+        setLoading(true);
+        try {
+          const slugs = action.slugs.slice(0, 40);
+          const res = await fetch(`/api/products?slugs=${encodeURIComponent(slugs.join(","))}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const products = (await res.json()) as ProductListItem[];
+          setFactBrowse({
+            headline: fact.headline,
+            items: products,
+            total: action.slugs.length,
+          });
+          setItems(products as unknown as CatalogGridItem[]);
+          setGoalFits({});
+          setTotal(products.length);
+          setPage(1);
+          setHasMore(false);
+          saveCatalogReturnUrl("/search");
+        } catch (e) {
+          setLoadError((e as Error).message);
+        } finally {
+          setRefreshing(false);
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (action.type === "catalog") {
+        patch({
+          sublabel: action.sublabel ?? "",
+          verdict: action.verdict ?? "",
+          sort: (action.sort ?? "score-desc") as CatalogSort,
+        });
+        return;
+      }
+
+      setAiPrompt(action.prompt);
+      void runAiSearch(action.prompt);
+    },
+    [patch, runAiSearch],
+  );
 
   useEffect(() => {
     if (autoPromptRan.current || !initialParams.prompt?.trim()) return;
@@ -964,16 +1021,13 @@ export function CatalogView({
       </div>
 
       {/* ── Data-rich landing or product grid ────────────────────────── */}
-      {!aiMode && !hasFilters ? (
+      {!aiMode && !hasFilters && !factBrowse ? (
         <ScoutLanding
           stats={stats ?? null}
           goal={goal}
           onGoalChange={pickGoal}
           hrefQuery={productQuery}
-          onAsk={(prompt) => {
-            setAiPrompt(prompt);
-            void runAiSearch(prompt);
-          }}
+          onFactAction={(fact) => void handleFactAction(fact)}
         />
       ) : loading && items.length === 0 ? (
         <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
@@ -987,20 +1041,44 @@ export function CatalogView({
       ) : total === 0 ? (
         <p className="py-16 text-center text-sm text-(--color-fg-muted)">No products match.</p>
       ) : (
-        <div
-          className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
-            refreshing ? "opacity-80" : "opacity-100"
-          } transition-opacity duration-100`}
-        >
-          {items.map((p) => (
-            <ProductCard
-              key={p.id}
-              product={p}
-              hrefQuery={productQuery}
-              goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-              onSublabelClick={handleSublabelClick}
-            />
-          ))}
+        <div className="space-y-4">
+          {factBrowse ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[14px] text-(--color-fg-muted)">
+                <span className="font-semibold text-(--color-fg)">{factBrowse.total}</span> products ·{" "}
+                {factBrowse.headline}
+                {factBrowse.total > factBrowse.items.length ? (
+                  <span className="text-(--color-fg-dim)"> (showing {factBrowse.items.length})</span>
+                ) : null}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFactBrowse(null);
+                  setItems([]);
+                  setTotal(0);
+                }}
+                className="text-[13px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline"
+              >
+                Back to Scout
+              </button>
+            </div>
+          ) : null}
+          <div
+            className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+              refreshing ? "opacity-80" : "opacity-100"
+            } transition-opacity duration-100`}
+          >
+            {items.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                hrefQuery={productQuery}
+                goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                onSublabelClick={handleSublabelClick}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -1094,13 +1172,13 @@ function ScoutLanding({
   goal,
   onGoalChange,
   hrefQuery,
-  onAsk,
+  onFactAction,
 }: {
   stats: { scored: number; visible: number } | null;
   goal: GoalId;
   onGoalChange: (goal: GoalId) => void;
   hrefQuery: string;
-  onAsk: (prompt: string) => void;
+  onFactAction: (fact: LandingFact) => void;
 }) {
   const [data, setData] = useState<LandingInsights | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -1217,7 +1295,7 @@ function ScoutLanding({
               <button
                 key={f.headline}
                 type="button"
-                onClick={() => onAsk(f.prompt)}
+                onClick={() => onFactAction(f)}
                 className="group flex flex-col rounded-2xl border border-(--color-line) bg-(--color-panel) p-5 text-left transition hover:border-(--color-fg-dim) hover:shadow-md"
               >
                 <span
@@ -1237,7 +1315,7 @@ function ScoutLanding({
                   {f.headline}
                 </span>
                 <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-(--color-fg-muted) transition group-hover:gap-1.5 group-hover:text-(--color-fg)">
-                  Show me <span aria-hidden>→</span>
+                  {f.cta} <span aria-hidden>→</span>
                 </span>
               </button>
             ))}
