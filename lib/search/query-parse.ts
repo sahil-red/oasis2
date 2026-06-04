@@ -34,6 +34,7 @@ export type ParsedProductQuery = {
     vegetarian?: boolean;
     avoid_ingredients?: string[];
     allergens_excluded?: string[];
+    avoid_sublabels?: string[];
   };
   soft_preferences: string[];
   health_contexts: ParsedHealthContext[];
@@ -90,7 +91,8 @@ Schema:
     "min_protein_g_100g"?: number,
     "vegetarian"?: boolean,
     "avoid_ingredients"?: string[],
-    "allergens_excluded"?: string[]
+    "allergens_excluded"?: string[],
+    "avoid_sublabels"?: string[]
   },
   "soft_preferences": string[],
   "health_contexts": ("diabetic"|"pcos"|"kids"|"gym"|"fat_loss"|"bulk")[],
@@ -182,6 +184,10 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/veg|vegetarian/.test(lower)) parsed.hard_constraints.vegetarian = true;
   if (/palm oil/.test(lower)) parsed.hard_constraints.avoid_ingredients = ["palm oil"];
   if (/gluten/.test(lower)) parsed.hard_constraints.allergens_excluded = ["gluten"];
+  if (/hidden sweetener|no hidden sweetener|without hidden sweetener|artificial sweetener/.test(lower)) {
+    parsed.hard_constraints.avoid_sublabels = ["hidden_sweetener"];
+    parsed.sort_intent = "healthiest";
+  }
 
   if (/diabetic|diabetes/.test(lower)) parsed.health_contexts.push("diabetic");
   if (/pcos/.test(lower)) parsed.health_contexts.push("pcos");
@@ -235,6 +241,7 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
       vegetarian: typeof constraints.vegetarian === "boolean" ? constraints.vegetarian : undefined,
       avoid_ingredients: asStringArray(constraints.avoid_ingredients),
       allergens_excluded: asStringArray(constraints.allergens_excluded),
+      avoid_sublabels: asStringArray(constraints.avoid_sublabels),
     },
     soft_preferences: asStringArray(record.soft_preferences),
     health_contexts: contexts,

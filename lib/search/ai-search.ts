@@ -172,6 +172,16 @@ function constraintScore(p: ProductListItem, parsed: ParsedProductQuery): {
       score -= 28;
     }
   }
+  const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+  for (const avoid of c.avoid_sublabels ?? []) {
+    if (sublabels.includes(avoid)) {
+      failures.push(avoid.replace(/_/g, " "));
+      score -= 32;
+    } else {
+      score += 6;
+      reasons.push(`No ${avoid.replace(/_/g, " ")}`);
+    }
+  }
 
   return { score, reasons, failures };
 }

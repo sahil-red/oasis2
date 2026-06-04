@@ -102,10 +102,10 @@ const GOAL_TAGLINES: Record<GoalId, string> = {
 function buildFacts(products: ProductListItem[], totalScored: number): LandingFact[] {
   const facts: LandingFact[] = [];
   const scored = products.filter((p) => p.core_scores);
-
-  // 1. "Healthy"-marketed but weak
   const healthyRe =
     /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive|sugar free|no added sugar)\b/i;
+
+  // 1. "Healthy"-marketed but weak
   const healthyMarketed = scored.filter((p) =>
     healthyRe.test(`${p.name} ${p.attributes?.["Key Features"] ?? ""}`),
   );
@@ -115,24 +115,39 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `${pct}%`,
       headline: `of products marketed as “healthy” actually score below 50`,
-      prompt: "genuinely healthy snacks that score well",
+      prompt: "products marketed as healthy that score 60 or above",
       tone: "bad",
     });
   }
 
-  // 2. Skip rate
+  // 2. Healthy-marketed but hidden sweeteners (matches the card users see)
+  const hiddenSweetHealthy = scored.filter(
+    (p) =>
+      hasSublabel(p, "hidden_sweetener") &&
+      healthyRe.test(`${p.name} ${p.attributes?.["Key Features"] ?? ""}`),
+  );
+  if (hiddenSweetHealthy.length >= 5) {
+    facts.push({
+      stat: `${hiddenSweetHealthy.length}`,
+      headline: `“healthy” products still hide added sweeteners on the label`,
+      prompt: "healthy products without hidden sweeteners that score well",
+      tone: "bad",
+    });
+  }
+
+  // 3. Skip rate
   const skip = scored.filter((p) => p.core_scores?.verdict === "skip").length;
   if (skip > 0 && totalScored > 0) {
     const oneIn = Math.max(2, Math.round(totalScored / skip));
     facts.push({
       stat: `1 in ${oneIn}`,
       headline: `products here aren’t worth buying — Scout flags them so you skip them`,
-      prompt: "daily staples worth buying",
+      prompt: "daily staples worth buying that score above 60",
       tone: "bad",
     });
   }
 
-  // 3. Ultra-processed share
+  // 4. Ultra-processed share
   const ultra = scored.filter(
     (p) => hasSublabel(p, "ultra_processed") || hasSublabel(p, "mostly_nova_4"),
   ).length;
@@ -142,13 +157,13 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
       facts.push({
         stat: `${pct}%`,
         headline: `of everything on the shelf is ultra-processed`,
-        prompt: "whole-food snacks that aren’t ultra-processed",
+        prompt: "minimally processed foods that score well",
         tone: "bad",
       });
     }
   }
 
-  // 4. Low-sugar rarity in biscuits/snacks
+  // 5. Low-sugar rarity in biscuits
   const biscuits = scored.filter((p) => /biscuit|cookie/i.test(p.category ?? p.subcategory ?? ""));
   const lowSugarBiscuits = biscuits.filter((p) => {
     const s = sugarOf(p.nutrition);
@@ -158,20 +173,22 @@ function buildFacts(products: ProductListItem[], totalScored: number): LandingFa
     facts.push({
       stat: `${lowSugarBiscuits.length} of ${biscuits.length}`,
       headline: `biscuits have under 5g sugar per 100g`,
-      prompt: "biscuits with low sugar",
+      prompt: "biscuits with low sugar that score well",
       tone: "neutral",
     });
   }
 
-  // 5. Hidden sweeteners
-  const hidden = scored.filter((p) => hasSublabel(p, "hidden_sweetener")).length;
-  if (hidden >= 10) {
-    facts.push({
-      stat: `${hidden}`,
-      headline: `products hide added sweeteners you wouldn’t spot on the front`,
-      prompt: "snacks with no hidden sweeteners",
-      tone: "bad",
-    });
+  // 6. Hidden sweeteners (generic fallback if healthy+hidden didn't fire)
+  if (!hiddenSweetHealthy.length) {
+    const hidden = scored.filter((p) => hasSublabel(p, "hidden_sweetener")).length;
+    if (hidden >= 10) {
+      facts.push({
+        stat: `${hidden}`,
+        headline: `products hide added sweeteners you wouldn’t spot on the front`,
+        prompt: "products without hidden sweeteners that score well",
+        tone: "bad",
+      });
+    }
   }
 
   return facts.slice(0, 4);
