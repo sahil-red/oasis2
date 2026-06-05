@@ -1,8 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -13,60 +13,161 @@ import {
   Text,
   View,
 } from "react-native";
-import { PdpIngredients } from "@/components/pdp/PdpIngredients";
-import { PdpNutrition } from "@/components/pdp/PdpNutrition";
-import { PdpScoreWhy } from "@/components/pdp/PdpScoreWhy";
-import { PdpSwaps } from "@/components/pdp/PdpSwaps";
-import { ScoreBadge } from "@/components/ScoreBadge";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { VerdictPill } from "@/components/VerdictPill";
 import { Screen } from "@/components/Screen";
-import { Panel } from "@/components/ui/Panel";
-import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 import { fetchProduct } from "@/lib/api";
 import { useBasket } from "@/lib/basket";
-import { useTheme } from "@/lib/theme-context";
-import { labelForBand, bandFromScore } from "@/lib/score";
+import { bandFromScore, labelForBand } from "@/lib/score";
 import { VERDICT_COLORS, VERDICT_SHORT, formatPrice, resolveVerdict } from "@/lib/verdict";
-import { fonts, radius, spacing, type ThemeColors } from "@/theme";
-import type { ProductDetail, VerdictId } from "@/types/api";
+import { colors, fonts, radius, spacing } from "@/theme";
+import type { IngredientItem, PdpSwap, ProductDetail, VerdictId } from "@/types/api";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
-const CHIP_LABELS: Record<string, string> = {
-  high_protein: "High Protein",
-  low_sugar: "Low Sugar",
-  no_added_sugar: "No Added Sugar",
-  high_fiber: "High Fiber",
-  gluten_free: "Gluten Free",
-  vegan: "Vegan",
-  high_sugar: "High Sugar",
-  hidden_sweetener: "Hidden Sweetener",
-  artificial_colors: "Artificial Colours",
-  ultra_processed: "Ultra Processed",
-  contains_preservatives: "Preservatives",
-  high_sodium: "High Sodium",
+// ─── Risk system ─────────────────────────────────────────────────────────────
+const RISK_COLOR: Record<string, string> = {
+  "risk-free": "#34d399",
+  unknown: colors.fgDim,
+  limited: "#fbbf24",
+  moderate: "#f87171",
+  hazardous: "#ef4444",
 };
-const CHIP_GOOD = new Set([
-  "high_protein",
-  "low_sugar",
-  "no_added_sugar",
-  "high_fiber",
-  "gluten_free",
-  "vegan",
-]);
-const CHIP_BAD = new Set(["high_sugar", "hidden_sweetener", "ultra_processed"]);
+const RISK_BG: Record<string, string> = {
+  "risk-free": "rgba(52,211,153,0.1)",
+  unknown: "rgba(255,255,255,0.04)",
+  limited: "rgba(251,191,36,0.1)",
+  moderate: "rgba(248,113,113,0.1)",
+  hazardous: "rgba(239,68,68,0.14)",
+};
+
+// ─── Chip system ──────────────────────────────────────────────────────────────
+const CHIP_LABELS: Record<string, string> = {
+  high_protein: "High Protein", low_sugar: "Low Sugar", no_added_sugar: "No Added Sugar",
+  high_fiber: "High Fiber", gluten_free: "Gluten Free", vegan: "Vegan",
+  high_sugar: "High Sugar", hidden_sweetener: "Hidden Sweetener",
+  artificial_colors: "Artificial Colours", ultra_processed: "Ultra Processed",
+  contains_preservatives: "Preservatives", high_sodium: "High Sodium",
+  high_saturated_fat: "High Sat Fat", high_gi: "High GI", contains_nuts: "Contains Nuts",
+};
+const CHIP_GOOD = new Set(["high_protein","low_sugar","no_added_sugar","high_fiber","gluten_free","vegan"]);
+const CHIP_BAD = new Set(["high_sugar","hidden_sweetener","ultra_processed"]);
+
+function chipStyle(chip: string) {
+  if (CHIP_GOOD.has(chip)) return { bg: "rgba(52,211,153,0.12)", border: "rgba(52,211,153,0.4)", text: "#34d399" };
+  if (CHIP_BAD.has(chip)) return { bg: "rgba(248,113,113,0.12)", border: "rgba(248,113,113,0.35)", text: "#f87171" };
+  return { bg: "rgba(251,191,36,0.12)", border: "rgba(251,191,36,0.4)", text: "#fbbf24" };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function SectionLabel({ text }: { text: string }) {
+  return <Text style={styles.sectionLabel}>{text.toUpperCase()}</Text>;
+}
+
+function Divider() {
+  return <View style={styles.divider} />;
+}
+
+function SwapCard({ swap, onPress }: { swap: PdpSwap; onPress: () => void }) {
+  const delta = swap.score != null ? null : null;
+  const scoreDiff = swap.score != null ? Math.round(swap.goal_fit ?? 0) : null;
+  return (
+    <Pressable style={styles.swapCard} onPress={onPress}>
+      <View style={styles.swapImageWrap}>
+        {swap.image ? (
+          <Image source={{ uri: swap.image }} style={styles.swapImage} contentFit="contain" />
+        ) : (
+          <View style={[styles.swapImage, { backgroundColor: colors.bgSoft }]} />
+        )}
+      </View>
+      {swap.score != null && (
+        <View style={styles.swapScoreBadge}>
+          <Text style={styles.swapScoreText}>{swap.score}</Text>
+        </View>
+      )}
+      {swap.brand ? (
+        <Text style={styles.swapBrand} numberOfLines={1}>{swap.brand.toUpperCase()}</Text>
+      ) : null}
+      <Text style={styles.swapName} numberOfLines={2}>{swap.name}</Text>
+      {swap.deltas?.[0] ? (
+        <Text style={styles.swapDelta} numberOfLines={1}>{swap.deltas[0]}</Text>
+      ) : null}
+      {swap.price_inr != null ? (
+        <Text style={styles.swapPrice}>₹{swap.price_inr}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function IngredientRow({ item, expanded, onToggle }: {
+  item: IngredientItem;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const rc = RISK_COLOR[item.risk] ?? colors.fgDim;
+  const bg = RISK_BG[item.risk] ?? "transparent";
+  const showExpand = item.flagged && item.why;
+  return (
+    <Pressable
+      style={[styles.ingredientRow, expanded && { backgroundColor: bg }]}
+      onPress={showExpand ? onToggle : undefined}
+    >
+      <View style={[styles.riskDot, { backgroundColor: rc }]} />
+      <View style={styles.ingredientBody}>
+        <View style={styles.ingredientNameRow}>
+          <Text style={[styles.ingredientName, item.flagged && { color: colors.fg }]} numberOfLines={expanded ? undefined : 1}>
+            {item.display}
+            {item.e_number ? <Text style={styles.eNumber}> {item.e_number}</Text> : null}
+            {item.percent ? <Text style={styles.ingredientPct}> {item.percent}</Text> : null}
+          </Text>
+          <Text style={[styles.tierLabel, { color: rc }]}>{item.tier_label}</Text>
+        </View>
+        {expanded && item.why ? (
+          <Text style={styles.ingredientWhy}>{item.why}</Text>
+        ) : null}
+      </View>
+      {showExpand ? (
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={14}
+          color={colors.fgDim}
+          style={{ marginLeft: 4 }}
+        />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function NutritionRow({ label, value, unit, emphasis, indent, warn, good }: {
+  label: string; value?: number; unit?: string;
+  emphasis?: boolean; indent?: boolean; warn?: boolean; good?: boolean;
+}) {
+  if (value == null) return null;
+  const textColor = warn ? "#f87171" : good ? "#34d399" : colors.fg;
+  return (
+    <View style={[styles.nutRow, emphasis && styles.nutRowEmphasis]}>
+      <Text style={[styles.nutLabel, indent && styles.nutLabelIndent, { color: colors.fgMuted }]}>
+        {label}
+      </Text>
+      <Text style={[styles.nutValue, emphasis && styles.nutValueEmphasis, { color: textColor }]}>
+        {typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(1)) : value}
+        {unit ? <Text style={styles.nutUnit}> {unit}</Text> : null}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ProductScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const basket = useBasket();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageIndex, setImageIndex] = useState(0);
+  const [expandedIngredient, setExpandedIngredient] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -77,370 +178,523 @@ export default function ProductScreen() {
       .finally(() => setLoading(false));
   }, [slug]);
 
-  const verdict =
-    (product?.verdict_resolved as VerdictId | null) ??
-    (product ? resolveVerdict(product) : null);
+  const verdict = (product?.verdict_resolved as VerdictId | null) ?? (product ? resolveVerdict(product) : null);
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
   const core = product?.core_scores;
   const images = product?.image_urls?.length ? product.image_urls : [];
-  const chips = product?.deepseek_chips?.length
-    ? product.deepseek_chips
-    : (product?.core_scores?.verdict_sublabels ?? []);
-  const swapDesc = product?.subcategory
-    ? `Better options in ${product.subcategory}${product.brand ? ` — not just more ${product.brand}` : ""}.`
-    : "Alternatives with better nutrition or Scout score.";
+  const n = product?.nutrition;
+  const chips = product?.deepseek_chips ?? (core?.verdict_sublabels ?? []);
+  const why = product?.deepseek_why ?? product?.score_why ?? null;
+  const swaps = product?.swaps ?? [];
+  const similar = product?.similar_products ?? [];
+  const ingredients = product?.ingredient_items ?? [];
+  const inBasket = product ? basket.has(product.slug) : false;
+
+  if (loading) {
+    return (
+      <Screen edges={["top", "bottom"]}>
+        <View style={styles.nav}>
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.fg} />
+          </Pressable>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.accent} size="large" />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <Screen edges={["top"]}>
+        <View style={styles.nav}>
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.fg} />
+          </Pressable>
+        </View>
+        <Text style={styles.errorText}>{error ?? "Product not found"}</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={["top", "bottom"]}>
+      {/* Nav */}
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={28} color={colors.fg} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.navBtn}
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.fg} />
         </Pressable>
-        <View style={styles.navRight}>
-          <ThemeToggle />
-          <Pressable
-            onPress={() => product && basket.add(product.slug, product.name)}
-            hitSlop={12}
-          >
-            <Ionicons
-              name={product && basket.has(product.slug) ? "checkmark-circle" : "add-circle"}
-              size={30}
-              color={product && basket.has(product.slug) ? colors.good : colors.fg}
-            />
-          </Pressable>
-        </View>
+        <Pressable
+          hitSlop={12}
+          style={[styles.navBtn, inBasket && styles.navBtnActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            basket.add(product.slug, product.name);
+          }}
+        >
+          <Ionicons
+            name={inBasket ? "checkmark" : "bag-add-outline"}
+            size={22}
+            color={inBasket ? colors.good : colors.fg}
+          />
+        </Pressable>
       </View>
 
-      {loading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 80 }} />
-      ) : error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : product ? (
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={[styles.gallery, { backgroundColor: colors.bgSoft, borderColor: colors.line }]}>
-            {images.length ? (
-              <>
-                <FlatList
-                  data={images}
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  keyExtractor={(uri, i) => `${uri}-${i}`}
-                  onMomentumScrollEnd={(e) => {
-                    const i = Math.round(
-                      e.nativeEvent.contentOffset.x / (SCREEN_W - spacing.lg * 2),
-                    );
-                    setImageIndex(i);
-                  }}
-                  renderItem={({ item }) => (
-                    <Image
-                      source={{ uri: item }}
-                      style={styles.galleryImage}
-                      contentFit="contain"
-                    />
-                  )}
-                />
-                {images.length > 1 ? (
-                  <View style={styles.dots}>
-                    {images.map((_, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.dot,
-                          { backgroundColor: colors.line },
-                          i === imageIndex && { backgroundColor: colors.fg },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <View style={styles.galleryEmpty}>
-                <Text style={{ color: colors.fgDim }}>No image</Text>
-              </View>
-            )}
-          </View>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-          {product.brand ? (
-            <Text style={[styles.brandEyebrow, { color: colors.fgDim }]}>
-              {product.brand.toUpperCase()}
-            </Text>
-          ) : null}
-          <Text style={[styles.name, { color: colors.fg }]}>{product.name}</Text>
-
-          {chips.length ? <ChipsRow chips={chips} colors={colors} /> : null}
-
-          {product.deepseek_why ? (
-            <View style={[styles.whyBox, { borderLeftColor: colors.accent, backgroundColor: colors.accentSoft }]}>
-              <Text style={[styles.whyLabel, { color: colors.accent }]}>Scout says</Text>
-              <Text style={[styles.why, { color: colors.fg }]}>{product.deepseek_why}</Text>
+        {/* Gallery */}
+        <View style={styles.gallery}>
+          <FlatList
+            data={images.length ? images : [null]}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => String(i)}
+            onMomentumScrollEnd={(e) => {
+              setImageIndex(Math.round(e.nativeEvent.contentOffset.x / (SCREEN_W - spacing.lg * 2)));
+            }}
+            renderItem={({ item }) =>
+              item ? (
+                <Image source={{ uri: item }} style={styles.galleryImage} contentFit="contain" />
+              ) : (
+                <View style={[styles.galleryImage, { alignItems: "center", justifyContent: "center" }]}>
+                  <Ionicons name="image-outline" size={48} color={colors.fgDim} />
+                </View>
+              )
+            }
+          />
+          {images.length > 1 && (
+            <View style={styles.dots}>
+              {images.map((_, i) => (
+                <View key={i} style={[styles.dot, i === imageIndex && styles.dotActive]} />
+              ))}
             </View>
+          )}
+        </View>
+
+        {/* Header */}
+        <View style={styles.header}>
+          {product.brand ? (
+            <Text style={styles.brand}>{product.brand.toUpperCase()}</Text>
+          ) : null}
+          <Text style={styles.name}>{product.name}</Text>
+          {product.subcategory ? (
+            <Text style={styles.meta}>{[product.category, product.subcategory].filter(Boolean).join(" · ")}</Text>
           ) : null}
 
-          <Text style={[styles.price, { color: colors.fg }]}>{formatPrice(product)}</Text>
-          {product.mrp_inr && product.price_inr && product.mrp_inr > product.price_inr ? (
-            <Text style={[styles.mrp, { color: colors.fgDim }]}>MRP ₹{Math.round(product.mrp_inr)}</Text>
-          ) : null}
+          {/* Chips */}
+          {chips.length > 0 && (
+            <View style={styles.chipsRow}>
+              {chips.slice(0, 5).map((chip) => {
+                const label = CHIP_LABELS[chip] ?? chip.replace(/_/g, " ");
+                const s = chipStyle(chip);
+                return (
+                  <View key={chip} style={[styles.chip, { backgroundColor: s.bg, borderColor: s.border }]}>
+                    <Text style={[styles.chipText, { color: s.text }]}>{label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
-          <View style={styles.scoreRow}>
-            <VerdictPill product={product} />
-            <ScoreBadge score={core?.score} product={product} label="SCOUT" />
-          </View>
-
-          {verdict && vc ? (
-            <LinearGradient colors={[vc.bg, "transparent"]} style={styles.verdictBanner}>
-              <Text style={[styles.verdictTitle, { color: vc.fg }]}>{VERDICT_SHORT[verdict]}</Text>
-              <Text style={[styles.verdictDesc, { color: colors.fgMuted }]}>
-                {core?.band
-                  ? `${labelForBand(bandFromScore(core.score))} · Grade ${core.grade}`
-                  : "Based on label nutrition and ingredients"}
-              </Text>
+        {/* Verdict card */}
+        {verdict && vc && core ? (
+          <View style={styles.verdictCard}>
+            <LinearGradient
+              colors={[vc.bg + "CC", "transparent"]}
+              style={styles.verdictGradient}
+            >
+              <View style={styles.verdictTop}>
+                <View>
+                  <Text style={[styles.verdictLabel, { color: vc.fg }]}>
+                    {VERDICT_SHORT[verdict]}
+                  </Text>
+                  {core.grade ? (
+                    <View style={[styles.gradeBadge, { borderColor: vc.fg + "44" }]}>
+                      <Text style={[styles.gradeText, { color: vc.fg }]}>Grade {core.grade}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.bigScore}>
+                  <Text style={[styles.bigScoreNum, { color: vc.fg }]}>{core.score}</Text>
+                  <Text style={styles.bigScoreDenom}>/100</Text>
+                </View>
+              </View>
+              {typeof why === "string" && why ? (
+                <Text style={styles.whyText}>{why}</Text>
+              ) : null}
             </LinearGradient>
+          </View>
+        ) : null}
+
+        {/* Price */}
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{formatPrice(product)}</Text>
+          {product.mrp_inr && product.price_inr && product.mrp_inr > product.price_inr ? (
+            <Text style={styles.mrp}>MRP ₹{Math.round(product.mrp_inr)}</Text>
           ) : null}
+        </View>
 
-          <PdpScoreWhy explanation={product.score_why} deepseekWhy={product.deepseek_why} />
+        {/* Score breakdown */}
+        {core?.subscores ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Score breakdown" />
+              <SubscoreBar label="Nutrition" value={core.subscores.nutrition} />
+              <SubscoreBar label="Additives" value={core.subscores.additives} />
+              <SubscoreBar label="Labels" value={core.subscores.labels} />
+            </View>
+          </>
+        ) : null}
 
-          {product.swaps?.length ? (
-            <PdpSwaps title="Better swaps" description={swapDesc} swaps={product.swaps} />
-          ) : null}
+        {/* Better alternatives (swaps) */}
+        {swaps.length > 0 ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Better alternatives" />
+              <Text style={styles.sectionSub}>Products that score higher with similar purpose</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRail}>
+                {swaps.map((s) => (
+                  <SwapCard key={s.slug} swap={s} onPress={() => router.push(`/product/${s.slug}`)} />
+                ))}
+              </ScrollView>
+            </View>
+          </>
+        ) : null}
 
-          {core?.subscores ? (
-            <Panel style={styles.section}>
-              <Eyebrow>Score breakdown</Eyebrow>
-              <SubscoreBar label="Nutrition" value={core.subscores.nutrition} colors={colors} />
-              <SubscoreBar label="Additives" value={core.subscores.additives} colors={colors} />
-              <SubscoreBar label="Labels" value={core.subscores.labels} colors={colors} />
-            </Panel>
-          ) : null}
-
-          {product.nutrition_display?.rows.length ? (
-            <PdpNutrition
-              rows={product.nutrition_display.rows}
-              anomalies={product.nutrition_anomalies ?? []}
-              hasServe={product.nutrition_display.hasServe}
-              serveG={product.nutrition_display.serveG}
-              packLabel={product.nutrition_display.packLabel}
-            />
-          ) : null}
-
-          {product.ingredient_items?.length ? (
-            <PdpIngredients items={product.ingredient_items} />
-          ) : product.ingredients_raw ? (
-            <Panel style={styles.section}>
-              <SectionTitle style={styles.sectionTitleSm}>Ingredients</SectionTitle>
-              <Text style={[styles.ingredients, { color: colors.fgMuted }]}>
-                {product.ingredients_raw}
-              </Text>
-            </Panel>
-          ) : null}
-
-          {core?.concerns?.length ? (
-            <Panel style={styles.section}>
-              <SectionTitle style={styles.sectionTitleSm}>Flagged concerns</SectionTitle>
-              {core.concerns.map((c) => (
-                <View key={c.message} style={styles.concernRow}>
-                  <View
-                    style={[
-                      styles.concernDot,
-                      {
-                        backgroundColor:
-                          c.severity === "high"
-                            ? colors.bad
-                            : c.severity === "medium"
-                              ? colors.warn
-                              : colors.fgDim,
-                      },
-                    ]}
+        {/* Ingredients */}
+        {ingredients.length > 0 ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Ingredients" />
+              <Text style={styles.sectionSub}>Tap flagged items for details</Text>
+              <View style={styles.ingredientsList}>
+                {ingredients.map((item) => (
+                  <IngredientRow
+                    key={`${item.display}-${item.e_number}`}
+                    item={item}
+                    expanded={expandedIngredient === `${item.display}-${item.e_number}`}
+                    onToggle={() =>
+                      setExpandedIngredient(
+                        expandedIngredient === `${item.display}-${item.e_number}`
+                          ? null
+                          : `${item.display}-${item.e_number}`,
+                      )
+                    }
                   />
-                  <Text style={[styles.concern, { color: colors.fgMuted }]}>{c.message}</Text>
+                ))}
+              </View>
+            </View>
+          </>
+        ) : product.ingredients_raw ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Ingredients" />
+              <Text style={styles.rawIngredients}>{product.ingredients_raw}</Text>
+            </View>
+          </>
+        ) : null}
+
+        {/* Nutrition */}
+        {n ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Nutrition per 100g" />
+              <View style={styles.nutritionTable}>
+                <NutritionRow label="Energy" value={n.energy_kcal_100g} unit="kcal" emphasis />
+                <NutritionRow label="Total Fat" value={n.fat_g_100g} unit="g" emphasis
+                  warn={n.fat_g_100g != null && n.fat_g_100g > 20} />
+                <NutritionRow label="Carbohydrate" value={(n as any).carbs_g_100g} unit="g" emphasis />
+                <NutritionRow label="  of which sugar" value={n.sugar_g_100g} unit="g" indent
+                  warn={n.sugar_g_100g != null && n.sugar_g_100g > 10} />
+                {n.added_sugar_g_100g != null ? (
+                  <NutritionRow label="  added sugar" value={n.added_sugar_g_100g} unit="g" indent
+                    warn={n.added_sugar_g_100g > 5} />
+                ) : null}
+                <NutritionRow label="Protein" value={n.protein_g_100g} unit="g" emphasis
+                  good={n.protein_g_100g != null && n.protein_g_100g >= 15} />
+                <NutritionRow label="Dietary Fiber" value={n.fiber_g_100g} unit="g"
+                  good={n.fiber_g_100g != null && n.fiber_g_100g >= 5} />
+                <NutritionRow label="Sodium" value={n.sodium_mg_100g} unit="mg"
+                  warn={n.sodium_mg_100g != null && n.sodium_mg_100g > 600} />
+              </View>
+            </View>
+          </>
+        ) : null}
+
+        {/* Concerns */}
+        {core?.concerns?.length ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="Why Scout flagged this" />
+              {core.concerns.map((c, i) => (
+                <View key={i} style={styles.concernRow}>
+                  <View style={[styles.concernDot, {
+                    backgroundColor: c.severity === "high" ? colors.bad
+                      : c.severity === "medium" ? colors.warn : colors.fgDim,
+                  }]} />
+                  <Text style={styles.concernText}>{c.message}</Text>
                 </View>
               ))}
-            </Panel>
-          ) : null}
+            </View>
+          </>
+        ) : null}
 
-          {product.similar_products?.length ? (
-            <PdpSwaps title="Similar picks" swaps={product.similar_products} />
-          ) : null}
+        {/* More like this */}
+        {similar.length > 0 ? (
+          <>
+            <Divider />
+            <View style={styles.section}>
+              <SectionLabel text="More like this" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRail}>
+                {similar.map((s) => (
+                  <SwapCard key={s.slug} swap={s} onPress={() => router.push(`/product/${s.slug}`)} />
+                ))}
+              </ScrollView>
+            </View>
+          </>
+        ) : null}
 
-          <Pressable
-            style={[styles.basketCta, { backgroundColor: colors.fg }]}
-            onPress={() => basket.add(product.slug, product.name)}
-          >
-            <Text style={[styles.basketCtaText, { color: colors.bg }]}>
-              {basket.has(product.slug) ? "In your basket" : "Add to basket"}
-            </Text>
-          </Pressable>
-        </ScrollView>
-      ) : null}
+        <View style={{ height: spacing.xxl * 2 }} />
+      </ScrollView>
+
+      {/* Sticky CTA */}
+      <View style={styles.ctaBar}>
+        <Pressable
+          style={[styles.cta, inBasket && styles.ctaAdded]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            basket.add(product.slug, product.name);
+          }}
+        >
+          <Ionicons
+            name={inBasket ? "checkmark-circle" : "bag-add"}
+            size={20}
+            color={inBasket ? colors.good : colors.bg}
+          />
+          <Text style={[styles.ctaText, inBasket && { color: colors.good }]}>
+            {inBasket ? "In your basket" : "Add to basket"}
+          </Text>
+        </Pressable>
+      </View>
     </Screen>
   );
 }
 
-function ChipsRow({ chips, colors }: { chips: string[]; colors: ThemeColors }) {
+function SubscoreBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.min(100, Math.max(0, value));
+  const barColor = pct >= 70 ? "#34d399" : pct >= 45 ? "#fbbf24" : "#f87171";
   return (
-    <View style={chipStyles.row}>
-      {chips.slice(0, 8).map((chip) => {
-        const label = CHIP_LABELS[chip] ?? chip.replace(/_/g, " ");
-        const good = CHIP_GOOD.has(chip);
-        const bad = CHIP_BAD.has(chip);
-        const bg = good
-          ? `${colors.good}22`
-          : bad
-            ? `${colors.bad}22`
-            : `${colors.warn}22`;
-        const border = good ? `${colors.good}66` : bad ? `${colors.bad}55` : `${colors.warn}66`;
-        const text = good ? colors.good : bad ? colors.bad : colors.warn;
-        return (
-          <View key={chip} style={[chipStyles.chip, { backgroundColor: bg, borderColor: border }]}>
-            <Text style={[chipStyles.text, { color: text }]}>{label}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function SubscoreBar({
-  label,
-  value,
-  colors,
-}: {
-  label: string;
-  value: number;
-  colors: ThemeColors;
-}) {
-  return (
-    <View style={subStyles.row}>
-      <Text style={[subStyles.label, { color: colors.fgMuted }]}>{label}</Text>
-      <View style={[subStyles.track, { backgroundColor: colors.panel2 }]}>
-        <View
-          style={[subStyles.fill, { width: `${Math.min(100, value)}%`, backgroundColor: colors.accent }]}
-        />
+    <View style={styles.subscoreRow}>
+      <Text style={styles.subscoreLabel}>{label}</Text>
+      <View style={styles.subscoreTrack}>
+        <View style={[styles.subscoreFill, { width: `${pct}%`, backgroundColor: barColor }]} />
       </View>
-      <Text style={[subStyles.val, { color: colors.fg }]}>{Math.round(value)}</Text>
+      <Text style={[styles.subscoreVal, { color: barColor }]}>{Math.round(value)}</Text>
     </View>
   );
 }
 
-const chipStyles = StyleSheet.create({
-  row: {
+const styles = StyleSheet.create({
+  nav: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  navBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navBtnActive: { borderColor: colors.good },
+  scroll: { paddingBottom: 100 },
+  errorText: { fontFamily: fonts.sans, color: colors.bad, padding: spacing.lg, fontSize: 15 },
+
+  // Gallery
+  gallery: {
+    marginHorizontal: spacing.lg,
+    aspectRatio: 1,
+    backgroundColor: colors.bgSoft,
+    borderRadius: radius.xxl,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: "hidden",
+  },
+  galleryImage: { width: SCREEN_W - spacing.lg * 2, height: SCREEN_W - spacing.lg * 2 },
+  dots: { flexDirection: "row", justifyContent: "center", gap: 6, paddingBottom: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
+  dotActive: { backgroundColor: colors.fg, width: 18 },
+
+  // Header
+  header: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
+  brand: { fontFamily: fonts.sansMedium, fontSize: 10, letterSpacing: 1.4, color: colors.fgDim },
+  name: { fontFamily: fonts.display, fontSize: 28, lineHeight: 33, color: colors.fg, marginTop: 4 },
+  meta: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgDim, marginTop: 4 },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: spacing.sm },
+  chip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  chipText: { fontFamily: fonts.sansSemiBold, fontSize: 11 },
+
+  // Verdict card
+  verdictCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  verdictGradient: { padding: spacing.md },
+  verdictTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  verdictLabel: { fontFamily: fonts.display, fontSize: 22, lineHeight: 26 },
+  gradeBadge: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  gradeText: { fontFamily: fonts.sansSemiBold, fontSize: 11 },
+  bigScore: { flexDirection: "row", alignItems: "baseline", gap: 2 },
+  bigScoreNum: { fontFamily: fonts.display, fontSize: 52, lineHeight: 56 },
+  bigScoreDenom: { fontFamily: fonts.sans, fontSize: 16, color: colors.fgDim },
+  whyText: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.fgMuted,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
+
+  // Price
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     marginTop: spacing.md,
   },
-  chip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
-  text: { fontFamily: fonts.sansSemiBold, fontSize: 11 },
-});
+  price: { fontFamily: fonts.sansBold, fontSize: 26, color: colors.fg },
+  mrp: { fontFamily: fonts.sans, fontSize: 14, color: colors.fgDim, textDecorationLine: "line-through" },
 
-const subStyles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
-  label: { fontFamily: fonts.sans, width: 72, fontSize: 13 },
-  track: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
-  fill: { height: "100%", borderRadius: 3 },
-  val: { fontFamily: fonts.sansSemiBold, width: 28, textAlign: "right" },
-});
+  // Divider + sections
+  divider: { height: 1, backgroundColor: colors.line, marginVertical: spacing.lg, marginHorizontal: spacing.lg },
+  section: { paddingHorizontal: spacing.lg },
+  sectionLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: colors.fgDim,
+    marginBottom: spacing.sm,
+  },
+  sectionSub: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgDim, marginBottom: spacing.sm },
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    nav: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.sm,
-    },
-    navRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-    scroll: { paddingBottom: spacing.xxl * 2 },
-    gallery: {
-      marginHorizontal: spacing.lg,
-      aspectRatio: 1,
-      borderRadius: radius.xxl,
-      borderWidth: 1,
-      overflow: "hidden",
-    },
-    galleryImage: { width: SCREEN_W - spacing.lg * 2, height: SCREEN_W - spacing.lg * 2 },
-    galleryEmpty: { flex: 1, alignItems: "center", justifyContent: "center" },
-    dots: { flexDirection: "row", justifyContent: "center", gap: 6, paddingBottom: 10 },
-    dot: { width: 6, height: 6, borderRadius: 3 },
-    brandEyebrow: {
-      fontFamily: fonts.sansMedium,
-      fontSize: 10,
-      letterSpacing: 1.4,
-      paddingHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-    },
-    name: {
-      fontFamily: fonts.display,
-      fontSize: 28,
-      lineHeight: 32,
-      paddingHorizontal: spacing.lg,
-      marginTop: 4,
-    },
-    whyBox: {
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.lg,
-      borderLeftWidth: 2,
-    },
-    whyLabel: {
-      fontFamily: fonts.sansSemiBold,
-      fontSize: 10,
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      marginBottom: 3,
-    },
-    why: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
-    price: {
-      fontFamily: fonts.sansBold,
-      fontSize: 24,
-      paddingHorizontal: spacing.lg,
-      marginTop: spacing.sm,
-    },
-    mrp: {
-      fontFamily: fonts.sans,
-      fontSize: 14,
-      textDecorationLine: "line-through",
-      paddingHorizontal: spacing.lg,
-    },
-    scoreRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-      paddingHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      alignItems: "center",
-    },
-    verdictBanner: {
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-      padding: spacing.md,
-      borderRadius: radius.xl,
-    },
-    verdictTitle: { fontFamily: fonts.display, fontSize: 24 },
-    verdictDesc: { fontFamily: fonts.sans, marginTop: 4, fontSize: 14 },
-    section: { marginTop: spacing.lg, marginHorizontal: spacing.lg },
-    sectionTitleSm: { fontSize: 20, marginBottom: spacing.sm },
-    ingredients: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 22 },
-    concernRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-      marginTop: spacing.sm,
-      alignItems: "flex-start",
-    },
-    concernDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
-    concern: { flex: 1, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
-    basketCta: {
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.xl,
-      paddingVertical: 16,
-      borderRadius: radius.xl,
-      alignItems: "center",
-    },
-    basketCtaText: { fontFamily: fonts.sansBold, fontSize: 16 },
-    error: { fontFamily: fonts.sans, color: colors.bad, padding: spacing.lg },
-  });
-}
+  // Score bars
+  subscoreRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  subscoreLabel: { fontFamily: fonts.sans, width: 76, fontSize: 13, color: colors.fgMuted },
+  subscoreTrack: { flex: 1, height: 6, backgroundColor: colors.panel2, borderRadius: 3, overflow: "hidden" },
+  subscoreFill: { height: "100%", borderRadius: 3 },
+  subscoreVal: { fontFamily: fonts.sansSemiBold, width: 30, textAlign: "right", fontSize: 13 },
+
+  // Swaps / similar
+  horizontalRail: { gap: spacing.md, paddingVertical: spacing.xs },
+  swapCard: { width: 140, backgroundColor: colors.panel, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: spacing.sm },
+  swapImageWrap: { aspectRatio: 1, borderRadius: radius.lg, backgroundColor: colors.bgSoft, overflow: "hidden", position: "relative" },
+  swapImage: { width: "100%", height: "100%", padding: 6 },
+  swapScoreBadge: {
+    position: "absolute",
+    top: 6, right: 6,
+    backgroundColor: colors.panel2,
+    borderRadius: radius.md,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  swapScoreText: { fontFamily: fonts.sansBold, fontSize: 11, color: colors.fg },
+  swapBrand: { fontFamily: fonts.sansMedium, fontSize: 9, letterSpacing: 1, color: colors.fgDim, marginTop: 8 },
+  swapName: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.fg, marginTop: 2, lineHeight: 16, minHeight: 30 },
+  swapDelta: { fontFamily: fonts.sans, fontSize: 11, color: "#34d399", marginTop: 4 },
+  swapPrice: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.fg, marginTop: 3 },
+
+  // Ingredients
+  ingredientsList: { gap: 2 },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.md,
+    gap: spacing.sm,
+  },
+  riskDot: { width: 7, height: 7, borderRadius: 4, marginTop: 5 },
+  ingredientBody: { flex: 1 },
+  ingredientNameRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  ingredientName: { flex: 1, fontFamily: fonts.sans, fontSize: 13, color: colors.fgMuted, lineHeight: 18 },
+  eNumber: { fontFamily: fonts.sansMedium, color: colors.fgDim },
+  ingredientPct: { fontFamily: fonts.sansMedium, color: colors.fgDim },
+  tierLabel: { fontFamily: fonts.sansSemiBold, fontSize: 10, textAlign: "right" },
+  ingredientWhy: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgMuted, marginTop: 4, lineHeight: 17 },
+  rawIngredients: { fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 14, lineHeight: 22 },
+
+  // Nutrition
+  nutritionTable: { gap: 2 },
+  nutRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.md,
+  },
+  nutRowEmphasis: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  nutLabel: { fontFamily: fonts.sans, fontSize: 14, flex: 1 },
+  nutLabelIndent: { paddingLeft: 12, fontSize: 13 },
+  nutValue: { fontFamily: fonts.sansSemiBold, fontSize: 15 },
+  nutValueEmphasis: { fontFamily: fonts.sansBold, fontSize: 16 },
+  nutUnit: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgDim },
+
+  // Concerns
+  concernRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm, alignItems: "flex-start" },
+  concernDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  concernText: { flex: 1, fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 14, lineHeight: 20 },
+
+  // CTA
+  ctaBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.md,
+    backgroundColor: colors.bg + "F0",
+  },
+  cta: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    backgroundColor: colors.fg,
+    paddingVertical: 16,
+    borderRadius: radius.xl,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaAdded: { backgroundColor: colors.panel, borderWidth: 1.5, borderColor: colors.good },
+  ctaText: { fontFamily: fonts.sansBold, color: colors.bg, fontSize: 16 },
+});
