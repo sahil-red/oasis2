@@ -1,6 +1,7 @@
 import { isPlatformNutritionComplete, countNutritionFields } from "@/lib/nutrition/completeness";
 import { sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import type { ProductNutrition } from "@/lib/supabase/types";
+import { normalizeProductImageUrls } from "@/lib/products/catalog-hero-image";
 import type { ZeptoCsvRow } from "@/lib/zepto-import/csv-row";
 
 export type ExistingProduct = {
@@ -66,7 +67,9 @@ export function mergeCsvWithExisting(
   return {
     ingredients_raw,
     nutrition,
-    image_urls: images,
+    image_urls: normalizeProductImageUrls(images, {
+      ocrImageUrl: null,
+    }),
     attributes,
   };
 }

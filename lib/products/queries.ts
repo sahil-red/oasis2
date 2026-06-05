@@ -26,6 +26,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { requireSupabaseClient } from "@/lib/supabase/client";
 import type { CoreScore, Grade, Product, ProductNutrition, ScoreBand } from "@/lib/supabase/types";
 import { deepseekDisplayFromPayload } from "@/lib/ocr/deepseek-promote";
+import { normalizeProductImageUrls } from "@/lib/products/catalog-hero-image";
 
 export { isCatalogSourceRow } from "@/lib/products/catalog-eligibility";
 
@@ -351,7 +352,7 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     attributes: (row.attributes as Record<string, string> | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
-    image_urls: (row.image_urls as string[]) ?? [],
+    image_urls: normalizeProductImageUrls((row.image_urls as string[]) ?? []),
     nutrition: (row.nutrition as ProductNutrition | null) ?? null,
     ingredients_raw: (row.ingredients_raw as string | null) ?? null,
     ocr_payload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
@@ -1310,7 +1311,9 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     net_weight: (row.net_weight as string | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
-    image_urls: (row.image_urls as string[]) ?? [],
+    image_urls: normalizeProductImageUrls((row.image_urls as string[]) ?? [], {
+      ocrImageUrl: (row.ocr_image_url as string | null) ?? null,
+    }),
     product_url: (row.product_url as string | null) ?? null,
     barcode: (row.barcode as string | null) ?? null,
     ingredients_raw: (row.ingredients_raw as string | null) ?? null,

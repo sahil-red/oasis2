@@ -3,6 +3,7 @@
  * Zepto prints FSSAI-style ingredients + per-100g nutrition on the PDP — use
  * this before falling back to label OCR.
  */
+import { orderCatalogImageUrls } from "@/lib/products/catalog-hero-image";
 import { isPlausibleIngredientsList } from "@/lib/nutrition/completeness";
 import { mergeNutrition, parseServingNutritionBlock } from "./parse-nutrition-block";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
@@ -336,11 +337,13 @@ export function parseZeptoDetailPayload(
   }
   pushImg(asString(variant.imageUrl) ?? asString(root.imageUrl));
 
+  const orderedImages = orderCatalogImageUrls(image_urls);
+
   return {
     sku,
     name,
     brand,
-    thumb_url: image_urls[0] ?? null,
+    thumb_url: orderedImages[0] ?? null,
     price_inr: paiseToInr(variant.sellingPrice ?? root.sellingPrice),
     mrp_inr: paiseToInr(variant.mrp ?? root.mrp),
     net_weight,
@@ -348,7 +351,7 @@ export function parseZeptoDetailPayload(
     super_category: asString(root.primaryCategoryName) ?? null,
     category: asString(root.primaryCategoryName) ?? null,
     subcategory: asString(root.subcategoryName) ?? null,
-    image_urls,
+    image_urls: orderedImages,
     barcode: asString(variant.ean) ?? asString(variant.barcode) ?? null,
     ingredients_raw,
     nutrition,

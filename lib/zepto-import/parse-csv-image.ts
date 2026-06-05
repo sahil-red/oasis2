@@ -1,3 +1,5 @@
+import { orderCatalogImageUrls } from "@/lib/products/catalog-hero-image";
+
 /** Normalize image URL from CSV (Image_Link / image_links column). */
 export function parseCsvImageUrl(raw: string | null | undefined): string | null {
   if (!raw?.trim()) return null;
@@ -25,13 +27,13 @@ export function parseCsvImageUrls(raw: string | null | undefined): string[] {
         if (url) urls.push(url);
         if (urls.length >= MAX_CSV_IMAGES) break;
       }
-      return urls;
+      return orderCatalogImageUrls(urls);
     } catch {
-      return fallbackSingle(s);
+      return orderCatalogImageUrls(fallbackSingle(s));
     }
   }
 
-  return fallbackSingle(s);
+  return orderCatalogImageUrls(fallbackSingle(s));
 }
 
 function fallbackSingle(s: string): string[] {
