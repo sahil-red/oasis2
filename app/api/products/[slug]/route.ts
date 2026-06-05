@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseIngredientsForDisplayWithIntelligence } from "@/lib/ingredients/display-from-intelligence";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
 import { detectNutritionAnomalies } from "@/lib/nutrition/anomaly";
-import { reconcileNutrition } from "@/lib/nutrition/sanity";
+import { reconcileNutritionWithLlm } from "@/lib/nutrition/sanity";
 import { resolveNutritionDisplay } from "@/lib/nutrition/nutrition-display";
 import { reconcileDisplayIngredients } from "@/lib/ocr/deepseek-ingredients";
 import { deepseekDisplayFromPayload } from "@/lib/ocr/deepseek-promote";
@@ -67,14 +67,17 @@ export async function GET(
       })
     : null;
 
-  const displayNutrition = reconcileNutrition({
-    nutrition: product.nutrition,
-    attributes: product.attributes,
-    name: product.name,
-    category: product.category,
-    subcategory: product.subcategory,
-    net_weight: product.net_weight,
-  });
+  const displayNutrition = await reconcileNutritionWithLlm(
+    {
+      nutrition: product.nutrition,
+      attributes: product.attributes,
+      name: product.name,
+      category: product.category,
+      subcategory: product.subcategory,
+      net_weight: product.net_weight,
+    },
+    `nutrition:${product.id}`, // LLM result cache key
+  );
 
   const nutritionCtx = displayNutrition
     ? {

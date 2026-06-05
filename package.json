@@ -37,6 +37,7 @@
     "ocr:bench": "ocr-pipeline/.venv/bin/python ocr-pipeline/benchmark.py",
     "ocr:apple:raw": "tsx scripts/apple-ocr-raw.ts",
     "label:deepseek": "tsx scripts/deepseek-label-extract.ts",
+    "ingredient:reclassify": "tsx scripts/reclassify-ingredient-intelligence.ts",
     "label:deepseek:audit": "tsx scripts/audit-deepseek-batch.ts",
     "label:deepseek:promote": "tsx scripts/promote-deepseek-labels.ts",
     "gemini:batch": "tsx scripts/gemini-batch-extract.ts",

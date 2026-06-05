@@ -1,5 +1,5 @@
 import { mergeNutrition, parseServingNutritionBlock, fillMissingNutritionFields } from "@/lib/grocery/parse-nutrition-block";
-import { nutritionHasCriticalAnomalies, sanitizeNutrition } from "@/lib/nutrition/anomaly";
+import { nutritionHasCriticalAnomalies, sanitizeNutrition, sanitizeNutritionWithLlm } from "@/lib/nutrition/anomaly";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
 import {
   isReferenceNutritionEligible,
@@ -187,5 +187,39 @@ export function reconcileNutrition(opts: {
 
   const fixed = picked ? tryFixPaneerLabelErrors(picked, ctx) : null;
   const sanitized = sanitizeNutrition(fixed, ctx);
+  return supplementSparseNutrition(sanitized, ctx);
+}
+
+/**
+ * Async version of reconcileNutrition — uses LLM validation before discarding data.
+ * Use this in API routes. Falls back gracefully if LLM unavailable.
+ */
+export async function reconcileNutritionWithLlm(
+  opts: Parameters<typeof reconcileNutrition>[0],
+  cacheKey?: string,
+): Promise<ReturnType<typeof reconcileNutrition>> {
+  const fromAttrs = nutritionFromAttributes(opts.attributes);
+  const ctx = { name: opts.name, category: opts.category, subcategory: opts.subcategory };
+
+  const current = stripIneligibleReferenceNutrition(opts.nutrition, ctx);
+  if (!current && !fromAttrs) return null;
+
+  let picked: ReturnType<typeof reconcileNutrition>;
+
+  if (!fromAttrs) {
+    picked = current;
+  } else if (!current) {
+    picked = fromAttrs;
+  } else {
+    // Delegate to sync path for the complex reconcile logic, then re-sanitize with LLM
+    picked = reconcileNutrition(opts);
+    if (!picked && current) {
+      // The sync path discarded — try LLM rescue on the original data
+      picked = current;
+    }
+  }
+
+  const fixed = picked ? tryFixPaneerLabelErrors(picked, ctx) : null;
+  const sanitized = await sanitizeNutritionWithLlm(fixed, ctx, cacheKey);
   return supplementSparseNutrition(sanitized, ctx);
 }

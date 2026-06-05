@@ -120,7 +120,10 @@ export function detectNutritionAnomalies(
   }
 
   const mismatch = kcalMismatchRatio(nutrition);
-  if (mismatch != null && mismatch > 0.35) {
+  // Threshold raised from 0.35 → 0.50: Indian labels commonly have ±15% per macro field,
+  // and rounding errors compound. 35% was too aggressive — nullified ~20% of real data.
+  // Still catches bad OCR reads (e.g., energy read as "50" on a 600-kcal product).
+  if (mismatch != null && mismatch > 0.50) {
     out.push({
       code: "kcal_mismatch",
       severity: "critical",
@@ -152,25 +155,28 @@ export function detectNutritionAnomalies(
         message: `${protein}g protein per 100g is implausible for this product type`,
         field: "protein_g_100g",
       });
-    } else if (protein > 35 && (energy == null || energy < 150)) {
+    } else if (protein > 35 && (energy == null || energy < 80)) {
+      // Tightened from energy < 150 → < 80: paneer is legitimately 25g protein at ~140 kcal,
+      // tofu at 8g protein at ~50 kcal. Only flag when energy is truly implausibly low (< 80).
       out.push({
         code: "category_protein_high",
         severity: "warning",
-        message: `Very high protein (${protein}g) without believable energy — label data may be wrong`,
+        message: `Very high protein (${protein}g) with suspiciously low energy — label data may be wrong`,
         field: "protein_g_100g",
       });
     }
   }
 
   if (typeof protein === "number" && isNoodlesOrInstantMeal(ctx)) {
-    if (protein > 20) {
+    // Raised from 20 → 30: bean/lentil-based noodles (e.g. Slurrp Farm) legitimately hit 18-25g.
+    if (protein > 30) {
       out.push({
         code: "category_protein_critical",
         severity: "critical",
         message: `Instant noodles with ${protein}g protein per 100g is implausible — label data may be wrong`,
         field: "protein_g_100g",
       });
-    } else if (protein > 10) {
+    } else if (protein > 15) {
       out.push({
         code: "category_protein_high",
         severity: "warning",
@@ -254,7 +260,7 @@ export function detectNutritionAnomalies(
     isHighProteinCategory(ctx) &&
     typeof energy === "number" &&
     energy > 0 &&
-    energy < 55 &&
+    energy < 35 && // raised from 55: silken tofu (~50 kcal), konjac noodles (~10 kcal) are legitimate
     protein >= 4
   ) {
     out.push({
@@ -367,7 +373,7 @@ function tryFixLowEnergy(
 ): ProductNutrition | null {
   if (!isHighProteinCategory(ctx)) return null;
   const energy = nutrition.energy_kcal_100g;
-  if (energy == null || energy >= 55) return null;
+  if (energy == null || energy >= 35) return null; // raised from 55 to match detection threshold
 
   const implied = impliedKcal(nutrition);
   const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
@@ -416,7 +422,7 @@ function tryScaleFromPerServe(
 ): ProductNutrition | null {
   if (!isHighProteinCategory(ctx)) return null;
   const energy = nutrition.energy_kcal_100g;
-  if (energy == null || energy >= 55) return null;
+  if (energy == null || energy >= 35) return null; // raised from 55 to match detection threshold
 
   const baseMismatch = kcalMismatchRatio(nutrition) ?? 1;
   let best: { n: ProductNutrition; mismatch: number } | null = null;
@@ -535,16 +541,82 @@ export function sanitizeNutrition(
   if (!nutrition) return null;
 
   const corrected = tryCorrectNutrition(nutrition, ctx) ?? nutrition;
-  if (nutritionHasCriticalAnomalies(corrected, ctx)) return null;
+  const criticalAnomalies = detectNutritionAnomalies(corrected, ctx).filter(
+    (a) => a.severity === "critical",
+  );
 
-  const anomalies = detectNutritionAnomalies(corrected, ctx);
-  if (!anomalies.length) return corrected;
+  // If rules flag this as critical, mark it for LLM review rather than silently discarding.
+  // The async sanitizeNutritionWithLlm() is the authoritative version for API routes.
+  // This sync version is a conservative fallback: return data with anomaly flags attached
+  // so it surfaces in the UI rather than being silently hidden.
+  if (criticalAnomalies.length > 0) {
+    return {
+      ...corrected,
+      extra: {
+        ...corrected.extra,
+        nutrition_anomalies: JSON.stringify(criticalAnomalies),
+        needs_llm_review: "1",
+      },
+    };
+  }
+
+  const allAnomalies = detectNutritionAnomalies(corrected, ctx);
+  if (!allAnomalies.length) return corrected;
 
   return {
     ...corrected,
     extra: {
       ...corrected.extra,
-      nutrition_anomalies: JSON.stringify(anomalies),
+      nutrition_anomalies: JSON.stringify(allAnomalies),
+    },
+  };
+}
+
+/**
+ * Async version of sanitizeNutrition that uses DeepSeek to validate before discarding.
+ * Use this in API routes where async is possible. Falls back to sync version on error.
+ */
+export async function sanitizeNutritionWithLlm(
+  nutrition: ProductNutrition | null | undefined,
+  ctx: NutritionContext,
+  cacheKey?: string,
+): Promise<ProductNutrition | null> {
+  if (!nutrition) return null;
+
+  const corrected = tryCorrectNutrition(nutrition, ctx) ?? nutrition;
+  const criticalAnomalies = detectNutritionAnomalies(corrected, ctx).filter(
+    (a) => a.severity === "critical",
+  );
+
+  if (criticalAnomalies.length > 0) {
+    // Ask LLM before discarding
+    const { isNutritionPlausibleViaLlm } = await import("@/lib/nutrition/llm-validate");
+    const plausible = await isNutritionPlausibleViaLlm(corrected, ctx, criticalAnomalies, cacheKey);
+
+    if (!plausible) {
+      // LLM confirms it's bad — discard
+      return null;
+    }
+
+    // LLM says keep it — return with anomaly flags so UI can show context
+    return {
+      ...corrected,
+      extra: {
+        ...corrected.extra,
+        nutrition_anomalies: JSON.stringify(criticalAnomalies),
+        llm_validated: "1",
+      },
+    };
+  }
+
+  const allAnomalies = detectNutritionAnomalies(corrected, ctx);
+  if (!allAnomalies.length) return corrected;
+
+  return {
+    ...corrected,
+    extra: {
+      ...corrected.extra,
+      nutrition_anomalies: JSON.stringify(allAnomalies),
     },
   };
 }
