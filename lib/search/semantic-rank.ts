@@ -8,6 +8,7 @@ import type { ParsedHealthContext, ParsedProductQuery } from "@/lib/search/query
 import { passesHardConstraints } from "@/lib/search/ai-retrieval";
 import { passesNoAddedSugarRule } from "@/lib/search/added-sugar-scan";
 import {
+  l3IntentForProductTerm,
   l3IntentRelevanceBoost,
   passesL3IntentGate,
 } from "@/lib/search/l3-category-intent";
@@ -56,6 +57,32 @@ function ingredientMentionOnly(hay: string, term: string): boolean {
   return /(?:with|contains|in|made with|using)\b/.test(hay) && hay.includes(t);
 }
 
+const PRIMARY_TERM_SYNONYMS: Record<string, string[]> = {
+  buttermilk: ["chaas", "chaach", "chach", "mattha", "matthaa"],
+  chaas: ["buttermilk", "chaach", "chach", "mattha"],
+};
+
+function termMatchesInHaystack(hay: string, term: string): boolean {
+  const tl = term.toLowerCase();
+  if (matchesKeyword(hay, tl)) return true;
+  for (const syn of PRIMARY_TERM_SYNONYMS[tl] ?? []) {
+    if (matchesKeyword(hay, syn)) return true;
+  }
+  const rule = l3IntentForProductTerm(term);
+  if (rule?.allow.some((re) => re.test(hay))) return true;
+  return false;
+}
+
+/** Every gated result must match a primary product term (name, subcategory, or L3). */
+export function matchesPrimaryProductType(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+): boolean {
+  if (!parsed.product_terms.length) return true;
+  const hay = productTypeHaystack(p);
+  return parsed.product_terms.some((t) => termMatchesInHaystack(hay, t));
+}
+
 function passesPrimaryTypeGate(p: ProductListItem, parsed: ParsedProductQuery): boolean {
   if (!parsed.product_terms.length) return true;
 
@@ -68,19 +95,8 @@ function passesPrimaryTypeGate(p: ProductListItem, parsed: ParsedProductQuery): 
     return false;
   }
 
-  const l3 = productUsecase(p);
-  if (l3?.trim()) {
-    if (passesL3IntentGate(p, parsed)) return true;
-  }
-
-  const label = `${name} ${p.subcategory ?? ""}`;
-  return parsed.product_terms.some((t) => {
-    const tl = t.toLowerCase();
-    return (
-      matchesKeyword(label, tl) ||
-      Boolean(p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), tl))
-    );
-  });
+  if (!passesL3IntentGate(p, parsed)) return false;
+  return matchesPrimaryProductType(p, parsed);
 }
 
 /** Name / shelf / L3 only — omit L1 aisle strings like "Dairy, Bread & Eggs". */
@@ -446,7 +462,9 @@ function sortKey(
   switch (parsed.sort_intent) {
     case "highest_protein": {
       const milkTier = milkIntentSortTier(p, parsed.product_terms);
+      const typeTier = matchesPrimaryProductType(p, parsed) ? 1 : 0;
       return [
+        typeTier,
         milkTier || paneerIntentSortTier(p, parsed.product_terms),
         strictTier,
         protein ?? -1,

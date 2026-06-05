@@ -49,6 +49,13 @@ export const PARSE_CASES: ParseCase[] = [
       p.product_terms.includes("milk") && p.sort_intent === "highest_protein",
   },
   {
+    query: "high protein buttermilk",
+    check: (p) =>
+      p.product_terms.includes("buttermilk") &&
+      p.sort_intent === "highest_protein" &&
+      p.exclude_keywords.includes("dal"),
+  },
+  {
     query: "milk high protein",
     check: (p) =>
       p.product_terms.includes("milk") && p.sort_intent === "highest_protein",

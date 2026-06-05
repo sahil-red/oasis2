@@ -9,7 +9,10 @@ export type L3IntentRule = {
   block: RegExp[];
 };
 
-/** Zepto L3 / use-case labels → product-type intent (tighter than name alone). */
+/**
+ * Zepto L3 / use-case labels → product-type intent (tighter than name alone).
+ * Terms without an entry still go through `matchesPrimaryProductType` (name / subcategory / L3).
+ */
 export const L3_INTENT_BY_TERM: Record<string, L3IntentRule> = {
   paneer: {
     allow: [/paneer/i, /cottage cheese/i, /fresh cheese/i, /malai paneer/i],
@@ -63,6 +66,52 @@ export const L3_INTENT_BY_TERM: Record<string, L3IntentRule> = {
     allow: [/namkeen/i, /savory snack/i, /chips/i, /bhujia/i, /sev/i],
     block: [/soap/i, /detergent/i],
   },
+  buttermilk: {
+    allow: [/buttermilk/i, /chaas/i, /chaach/i, /lassi/i, /mattha/i, /curd drink/i, /dairy beverage/i],
+    block: [
+      /\bdal\b/i,
+      /pulse/i,
+      /lentil/i,
+      /masala/i,
+      /spice/i,
+      /seasoning/i,
+      /\boats\b/i,
+      /cereal/i,
+      /muesli/i,
+      /atta/i,
+      /flour/i,
+      /besan/i,
+      /sattu/i,
+      /toor/i,
+      /moong/i,
+      /urad/i,
+      /chana/i,
+      /kitchen king/i,
+    ],
+  },
+  chaas: {
+    allow: [/buttermilk/i, /chaas/i, /chaach/i, /lassi/i, /mattha/i, /curd drink/i, /dairy beverage/i],
+    block: [
+      /\bdal\b/i,
+      /pulse/i,
+      /lentil/i,
+      /masala/i,
+      /spice/i,
+      /seasoning/i,
+      /\boats\b/i,
+      /cereal/i,
+      /muesli/i,
+      /atta/i,
+      /flour/i,
+      /besan/i,
+      /sattu/i,
+      /toor/i,
+      /moong/i,
+      /urad/i,
+      /chana/i,
+      /kitchen king/i,
+    ],
+  },
 };
 
 export function l3IntentForProductTerm(term: string): L3IntentRule | null {
@@ -94,10 +143,11 @@ function nameMatchesProductTerm(p: ProductListItem, term: string, rule: L3Intent
   return false;
 }
 
-/** Hard gate: block wrong L3 use-cases; require allow only when name also fails to match. */
+/** Hard gate: block wrong L3 use-cases for every product that has an L3 label. */
 export function passesL3IntentGate(p: ProductListItem, parsed: ParsedProductQuery): boolean {
   const l3 = l3Label(p);
   if (!l3) return true;
+  if (!parsed.product_terms.length) return true;
 
   for (const term of parsed.product_terms) {
     const rule = l3IntentForProductTerm(term);

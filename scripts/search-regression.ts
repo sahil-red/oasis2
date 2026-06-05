@@ -10,7 +10,9 @@ import { buildMatchReasons } from "@/lib/search/match-reasons";
 import {
   healthContextGoalFit,
   healthIntentSortTier,
+  matchesPrimaryProductType,
   rankCandidatesSemantically,
+  relevanceScore,
 } from "@/lib/search/semantic-rank";
 import type { ProductListItem } from "@/lib/products/queries";
 import { INTENT_CASES, PARSE_CASES } from "@/lib/search/search-regression-cases";
@@ -174,12 +176,59 @@ if (kidsRank.rankings[0]?.product_id !== "clean-kids") {
   failed++;
 }
 
+const buttermilkQuery = heuristicParseProductQuery("high protein buttermilk");
+const buttermilkCandidates = [
+  {
+    id: "chaas",
+    slug: "chaas",
+    name: "Desi Farms Masala Chaas Bottle",
+    brand: "Desi Farms",
+    category: "Dairy",
+    subcategory: "Buttermilk & Chaas",
+    l3_category: "Buttermilk & Chaas",
+    ingredients_raw: "curd, water, spices",
+    price_inr: 45,
+    nutrition: { protein_g_100g: 3.5 },
+    core_scores: { score: 48, verdict: "occasional_treat", verdict_sublabels: [] },
+  },
+  {
+    id: "dal",
+    slug: "dal",
+    name: "DeHaat HF Unpolished Moong Dal",
+    brand: "DeHaat",
+    category: "Staples",
+    subcategory: "Dal & Pulses",
+    l3_category: "Moong Dal",
+    ingredients_raw: "moong dal",
+    price_inr: 120,
+    nutrition: { protein_g_100g: 24.5 },
+    core_scores: { score: 84, verdict: "good", verdict_sublabels: [] },
+  },
+] as ProductListItem[];
+
+if (relevanceScore(buttermilkCandidates[1]!, buttermilkQuery) > 0) {
+  console.error("[gate] FAIL moong dal should not match high protein buttermilk");
+  failed++;
+}
+if (!matchesPrimaryProductType(buttermilkCandidates[0]!, buttermilkQuery)) {
+  console.error("[gate] FAIL chaas should match buttermilk query");
+  failed++;
+}
+const buttermilkRank = rankCandidatesSemantically(buttermilkCandidates, buttermilkQuery, 2);
+if (buttermilkRank.rankings[0]?.product_id !== "chaas") {
+  console.error(
+    "[rank] FAIL high protein buttermilk: expected chaas first, got",
+    buttermilkRank.rankings.map((r) => r.product_id),
+  );
+  failed++;
+}
+
 if (failed > 0) {
   console.error(`\n${failed} regression check(s) failed`);
   process.exit(1);
 }
 
-const rankChecks = 3;
+const rankChecks = 4;
 console.log(
   `\nAll ${INTENT_CASES.length + PARSE_CASES.length + 2 + rankChecks} search regression checks passed.`,
 );

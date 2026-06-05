@@ -1,3 +1,4 @@
+import { l3IntentForProductTerm } from "@/lib/search/l3-category-intent";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 
 /** Wrong product types when the user asked for a primary food term. */
@@ -73,9 +74,20 @@ export function isFalsePositiveProductLabel(
   subcategory: string | null | undefined,
   term: string,
 ): boolean {
+  const label = name ?? "";
   const patterns = TERM_FALSE_POSITIVE[term.toLowerCase()];
-  if (!patterns?.length) return false;
-  return patterns.some((re) => re.test(name ?? ""));
+  if (patterns?.some((re) => re.test(label))) return true;
+
+  const rule = l3IntentForProductTerm(term);
+  if (rule) {
+    const blocked = (text: string) =>
+      rule.block.some((re) => re.test(text)) && !rule.allow.some((re) => re.test(text));
+    if (blocked(label)) return true;
+    const sub = subcategory?.trim() ?? "";
+    if (sub && blocked(sub)) return true;
+  }
+
+  return false;
 }
 
 function mergeExcludes(parsed: ParsedProductQuery, words: string[]) {
@@ -119,7 +131,43 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
     if (/grass.?fed|grass fed/.test(lower)) parsed.soft_preferences.push("grass fed");
   }
 
-  if (/\bmilk\b/.test(lower) && !/milkshake|milk chocolate|milkmaid/i.test(lower)) {
+  if (/\bbuttermilk\b|\bchaas\b|\bchaach\b|\bmattha\b/i.test(lower)) {
+    parsed.product_terms = [
+      "buttermilk",
+      ...parsed.product_terms.filter((t) => !/^(buttermilk|chaas|chaach|mattha)$/.test(t)),
+    ].slice(0, 4);
+    parsed.search_keywords = [
+      ...new Set([
+        ...parsed.search_keywords,
+        "buttermilk",
+        "chaas",
+        "chaach",
+        "lassi",
+        "mattha",
+        "masala chaas",
+      ]),
+    ];
+    mergeExcludes(parsed, [
+      "dal",
+      "moong",
+      "toor",
+      "masoor",
+      "urad",
+      "besan",
+      "sattu",
+      "masala powder",
+      "kitchen king",
+      "oats",
+      "muesli",
+      "cereal",
+      "atta",
+    ]);
+    if (/high protein|protein rich/i.test(lower)) {
+      parsed.sort_intent = "highest_protein";
+    }
+  }
+
+  if (/\bmilk\b/.test(lower) && !/milkshake|milk chocolate|milkmaid|buttermilk|chaas/i.test(lower)) {
     if (!parsed.product_terms.includes("milk")) parsed.product_terms.unshift("milk");
     mergeExcludes(parsed, [
       "masala",
