@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSupabaseClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 
 /** Google OAuth callback — exchange code for session, redirect to profile */
 export async function GET(req: NextRequest) {
@@ -8,8 +8,7 @@ export async function GET(req: NextRequest) {
 
   if (code) {
     try {
-      const supabase = requireSupabaseClient();
-      await supabase.auth.exchangeCodeForSession(code);
+      if (supabase) await supabase.auth.exchangeCodeForSession(code);
     } catch {
       /* ignore */
     }

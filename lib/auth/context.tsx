@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { requireSupabaseClient } from "@/lib/supabase/client";
+import { supabase as supabaseClient } from "@/lib/supabase/client";
 import type { UserProfile } from "@/lib/auth/profile";
 
 type AuthState = {
@@ -38,7 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const supabase = requireSupabaseClient();
+    // supabaseClient may be null if env vars aren't configured — degrade gracefully
+    if (!supabaseClient) {
+      setReady(true);
+      return;
+    }
+    const supabase = supabaseClient;
 
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
@@ -65,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const supabase = requireSupabaseClient();
+    if (!supabaseClient) throw new Error("Supabase not configured");
+    const supabase = supabaseClient;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
@@ -73,22 +79,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithPhone = useCallback(async (phone: string) => {
-    const supabase = requireSupabaseClient();
+    if (!supabaseClient) throw new Error("Supabase not configured");
+    const supabase = supabaseClient;
     const normalised = phone.startsWith("+") ? phone : `+91${phone.replace(/\D/g, "")}`;
     const { error } = await supabase.auth.signInWithOtp({ phone: normalised });
     if (error) throw error;
   }, []);
 
   const verifyOtp = useCallback(async (phone: string, token: string) => {
-    const supabase = requireSupabaseClient();
+    if (!supabaseClient) throw new Error("Supabase not configured");
+    const supabase = supabaseClient;
     const normalised = phone.startsWith("+") ? phone : `+91${phone.replace(/\D/g, "")}`;
     const { error } = await supabase.auth.verifyOtp({ phone: normalised, token, type: "sms" });
     if (error) throw error;
   }, []);
 
   const signOut = useCallback(async () => {
-    const supabase = requireSupabaseClient();
-    await supabase.auth.signOut();
+    if (supabaseClient) await supabaseClient.auth.signOut();
     setSession(null);
     setProfile(null);
   }, []);
