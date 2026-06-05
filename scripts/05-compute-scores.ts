@@ -61,9 +61,12 @@ async function main() {
     if (purged) console.log(`[05-compute-scores] purged ${purged} outdated core_scores rows`);
   }
 
-  const selectFields = args.labelResolved || args.deepseek
-    ? "id, name, category, subcategory, ingredients_raw, nutrition, attributes, ocr_payload, core_scores ( rule_version )"
-    : "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )";
+  const selectFields =
+    args.force && !args.labelResolved && !args.deepseek
+      ? "id, name, category, subcategory, ingredients_raw, nutrition, attributes"
+      : args.labelResolved || args.deepseek
+        ? "id, name, category, subcategory, ingredients_raw, nutrition, attributes, ocr_payload, core_scores ( rule_version )"
+        : "id, name, category, subcategory, ingredients_raw, nutrition, attributes, core_scores ( rule_version )";
 
   let query: any = supabase.from("products").select(selectFields).not("nutrition", "is", null);
   if (args.skus.length) {
@@ -89,28 +92,38 @@ async function main() {
     console.log("[05-compute-scores] --deepseek: validating supplied DeepSeek SKU(s).");
   }
 
-  const pageSize = args.deepseek && !args.skus.length ? 1000 : args.limit ?? 1000;
+  const pageSize = args.deepseek && !args.skus.length ? 500 : args.limit ?? 500;
   const deepseekTarget = args.deepseek && !args.skus.length ? args.limit : null;
   let deepseekSelected = 0;
   let scored = 0;
   let skipped = 0;
   let noNutrition = 0;
-  let offset = 0;
   let totalFetched = 0;
+  let cursorId: string | null = null;
+  const useKeyset = !args.skus.length && !args.limit;
 
   while (true) {
-    const { data: rows, error } = await query.range(offset, offset + pageSize - 1);
+    let pageQuery = query.order("id", { ascending: true }).limit(pageSize);
+    if (useKeyset && cursorId) {
+      pageQuery = pageQuery.gt("id", cursorId);
+    } else if (!useKeyset && totalFetched > 0) {
+      pageQuery = pageQuery.range(totalFetched, totalFetched + pageSize - 1);
+    }
+    const { data: rows, error } = await pageQuery;
     if (error) {
       console.error("[05-compute-scores] fetch failed:", error);
       process.exit(1);
     }
     if (!rows?.length) {
-      if (offset === 0) {
+      if (totalFetched === 0) {
         console.log("[05-compute-scores] no products with nutrition to score.");
       }
       break;
     }
     totalFetched += rows.length;
+    if (useKeyset) {
+      cursorId = rows[rows.length - 1]!.id as string;
+    }
 
     const toScore: ScoreableProduct[] = [];
     let reachedDeepseekTarget = false;
@@ -185,7 +198,6 @@ async function main() {
 
     if (reachedDeepseekTarget || rows.length < pageSize) break;
     if (args.limit && !(args.deepseek && !args.skus.length)) break;
-    offset += pageSize;
   }
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);

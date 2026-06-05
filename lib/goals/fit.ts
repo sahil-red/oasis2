@@ -6,6 +6,7 @@ import {
   goalCaption,
   type GoalFeatureInput,
 } from "./features";
+import { isInfantOrBabyProduct } from "@/lib/search/audience-gate";
 import { finalizeGoalFit } from "./health-penalties";
 import type { GoalId } from "./types";
 
@@ -58,11 +59,34 @@ function result(goal: GoalId, fit: number, _reasons: string[], f: ReturnType<typ
   };
 }
 
+function adultFitnessGoalMismatch(goal: GoalId, opts: GoalFeatureInput): boolean {
+  if (goal !== "bulk" && goal !== "gym" && goal !== "fat-loss") return false;
+  return isInfantOrBabyProduct({
+    id: "",
+    name: opts.name ?? null,
+    brand: null,
+    category: opts.category ?? null,
+    subcategory: opts.subcategory ?? null,
+    ingredients_raw: opts.ingredients_raw ?? null,
+    nutrition: opts.nutrition ?? null,
+    price_inr: opts.price_inr ?? null,
+    mrp_inr: null,
+    net_weight: opts.net_weight ?? null,
+    image_urls: null,
+    slug: null,
+    core_scores: null,
+    attributes: opts.attributes ?? null,
+  });
+}
+
 export function computeGoalFit(
   goal: GoalId,
   opts: GoalFeatureInput,
 ): GoalFitResult {
   const f = buildGoalFeatures(opts);
+  if (adultFitnessGoalMismatch(goal, opts)) {
+    return result(goal, 8, ["Not suited for adult fitness goals"], f);
+  }
   if (goal === "balanced") {
     return result(goal, opts.core_score ?? 50, ["Overall label quality"], f);
   }

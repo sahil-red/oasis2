@@ -204,12 +204,21 @@ export async function purgeOutdatedCoreScores(
     .neq("rule_version", ruleVersion);
   if (error || !data?.length) return 0;
   const ids = data.map((r) => r.product_id as string);
-  const { error: delErr } = await supabase.from("core_scores").delete().in("product_id", ids);
-  if (delErr) {
-    console.warn("[persist-core] purge outdated:", delErr.message);
-    return 0;
+  const DELETE_BATCH = 200;
+  let purged = 0;
+  for (let i = 0; i < ids.length; i += DELETE_BATCH) {
+    const chunk = ids.slice(i, i + DELETE_BATCH);
+    const { error: delErr } = await supabase
+      .from("core_scores")
+      .delete()
+      .in("product_id", chunk);
+    if (delErr) {
+      console.warn("[persist-core] purge outdated:", delErr.message);
+      break;
+    }
+    purged += chunk.length;
   }
-  return ids.length;
+  return purged;
 }
 
 export async function persistCoreScore(

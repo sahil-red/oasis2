@@ -23,6 +23,7 @@ import {
   paneerIntentSortTier,
   paneerRelevanceAdjust,
 } from "@/lib/search/paneer-intent";
+import { blockedForAdultHealthGoal } from "@/lib/search/audience-gate";
 import { isFalsePositiveProductLabel } from "@/lib/search/product-term-heuristics";
 import type { LlmRankedItem } from "@/lib/search/ai-rank";
 import { buildMatchReasons } from "@/lib/search/match-reasons";
@@ -115,6 +116,8 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
   }
 
   if (!passesPrimaryTypeGate(p, parsed)) return 0;
+
+  if (blockedForAdultHealthGoal(p, parsed)) return 0;
 
   if (
     parsed.product_terms.some((t) => t.toLowerCase() === "paneer") &&
@@ -406,7 +409,10 @@ export function healthIntentSortTier(
 
 function healthContextSortBoost(p: ProductListItem, parsed: ParsedProductQuery): number {
   if (!usesHealthIntentSort(parsed)) return 0;
-  return Math.round(healthIntentSortTier(p, parsed) * 0.2);
+  const tier = healthIntentSortTier(p, parsed);
+  // Goal-only queries (e.g. "food for bulking") have no product type — weight goal fit more.
+  const weight = parsed.product_terms.length ? 0.2 : 0.42;
+  return Math.round(tier * weight);
 }
 
 function healthIntentSugarSortKey(

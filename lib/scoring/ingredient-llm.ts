@@ -41,7 +41,12 @@ export type IngredientIntelligenceRow = {
 
 const SYSTEM_PROMPT = `Rate each grocery ingredient (India). Return JSON only: {"ingredients":[...]} — one object per input, same order.
 
-Fields: normalized_name (match input), display_name, nova_class 1-4, role (base_food|sweetener|fat|starch|thickener|emulsifier|preservative|color|flavor|acid_regulator|probiotic|vitamin_mineral|other), concern_tier (innocuous|watchful|problematic|hazardous), concern_reasons (max 2 short strings), intrinsic_quality 0-100, synonyms (array, optional).`;
+Fields: normalized_name (match input), display_name, nova_class 1-4, role (base_food|sweetener|fat|starch|thickener|emulsifier|preservative|color|flavor|acid_regulator|probiotic|vitamin_mineral|other), concern_tier (innocuous|watchful|problematic|hazardous), concern_reasons (max 2 short strings), intrinsic_quality 0-100, synonyms (array, optional).
+
+Role guidance:
+- role=flavor or color only for flavouring/colouring *additives* (e.g. "artificial flavouring substances", "natural flavouring substances", "permitted synthetic food colours") — NOT for whole spices (cumin, ginger, pepper, coriander, chilli, turmeric, masala → use other or base_food).
+- If an ingredient is explicitly artificial flavour/colour on Indian labels, say so in concern_reasons (e.g. "Artificial flavoring additive").
+- Natural flavouring substances alone are not artificial; do not use concern_reasons implying synthetic chemicals for whole spices.`;
 
 const LM_RETRY_SUFFIX =
   "\n\nReturn ONE JSON object only. No code fences. No explanation after the closing brace.";

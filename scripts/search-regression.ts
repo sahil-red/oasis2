@@ -223,12 +223,67 @@ if (buttermilkRank.rankings[0]?.product_id !== "chaas") {
   failed++;
 }
 
+const bulkingParsed = heuristicParseProductQuery("food for bulking");
+const bulkingCandidates: ProductListItem[] = [
+  {
+    id: "cerelac",
+    slug: "cerelac",
+    name: "Nestle Cerelac Multigrain Baby Food Cereal",
+    brand: "Nestle",
+    category: "Baby Care",
+    subcategory: "Infant Cereal",
+    ingredients_raw: "milk solids",
+    nutrition: {
+      protein_g_100g: 15,
+      energy_kcal_100g: 400,
+      sugar_g_100g: 20,
+      carbs_g_100g: 60,
+    },
+    price_inr: 322,
+    mrp_inr: null,
+    net_weight: null,
+    image_urls: null,
+    core_scores: { score: 81, grade: "B", band: "good", verdict_sublabels: [] },
+  } as ProductListItem,
+  {
+    id: "paneer",
+    slug: "paneer",
+    name: "Amul Fresh Paneer",
+    brand: "Amul",
+    category: "Dairy",
+    subcategory: "Paneer",
+    ingredients_raw: "milk",
+    nutrition: {
+      protein_g_100g: 18,
+      energy_kcal_100g: 265,
+      fat_g_100g: 20,
+    },
+    price_inr: 90,
+    mrp_inr: null,
+    net_weight: null,
+    image_urls: null,
+    core_scores: { score: 75, grade: "B", band: "good", verdict_sublabels: [] },
+  } as ProductListItem,
+];
+const bulkingRank = rankCandidatesSemantically(bulkingCandidates, bulkingParsed, 2);
+if (bulkingRank.rankings.some((r) => r.product_id === "cerelac")) {
+  console.error("[rank] FAIL food for bulking: infant cereal must not rank");
+  failed++;
+}
+if (bulkingRank.rankings[0]?.product_id !== "paneer") {
+  console.error(
+    "[rank] FAIL food for bulking: expected paneer first, got",
+    bulkingRank.rankings.map((r) => r.product_id),
+  );
+  failed++;
+}
+
 if (failed > 0) {
   console.error(`\n${failed} regression check(s) failed`);
   process.exit(1);
 }
 
-const rankChecks = 4;
+const rankChecks = 5;
 console.log(
   `\nAll ${INTENT_CASES.length + PARSE_CASES.length + 2 + rankChecks} search regression checks passed.`,
 );

@@ -1,4 +1,5 @@
 import { splitIngredientSegments } from "@/lib/ocr/format-ingredients";
+import { hasArtificialFlavorsFromIntelligence } from "@/lib/scoring/artificial-flavor";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 import type { PerServeNutrition } from "@/lib/scoring/serving";
 import type { RoleCohort } from "@/lib/scoring/role-cohort";
@@ -119,7 +120,6 @@ export const SUBLABEL_DISPLAY: Record<SublabelId, string> = {
 
 const REFINED_FIRST = /\b(maida|refined wheat flour|sugar|corn syrup|glucose syrup|invert syrup|liquid glucose)\b/i;
 const HIDDEN_SWEETENER = /\b(acesulfame|sucralose|aspartame|saccharin)\b/i;
-const ARTIFICIAL = /\b(artificial flavour|artificial flavor|artificial colour|artificial color)\b/i;
 const WHOLE_GRAIN = /\b(whole wheat|whole grain|ragi|bajra|jowar|millet|oats|atta)\b/i;
 
 export type SublabelContext = {
@@ -306,10 +306,7 @@ function matches(id: SublabelId, ctx: SublabelContext): boolean {
     case "ultra_processed":
       return nova4Share(rows) > 0.4;
     case "artificial_flavors":
-      return (
-        ARTIFICIAL.test(ing) ||
-        rows.some((r) => r.role === "flavor" || r.role === "color")
-      );
+      return hasArtificialFlavorsFromIntelligence(ing, rows);
     case "best_in_category":
       // True distinction: top 2% in cohorts ≥ 30 only.
       // History: 80%/8 → 8.3% catalog → 95%/20 → 4.6% catalog → 98%/30 → ~1.5% target

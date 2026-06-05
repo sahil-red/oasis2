@@ -1,5 +1,6 @@
 import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
 import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
+import { stripGoalMetaProductTerms } from "@/lib/search/goal-query-normalize";
 import { applyL3IntentToParsed } from "@/lib/search/l3-category-intent";
 import { applyProductTermHeuristics } from "@/lib/search/product-term-heuristics";
 
@@ -114,6 +115,7 @@ Rules:
 - Set min_protein_g_100g = 12 ONLY when the user is explicitly looking for protein supplements or high-protein products without naming a specific everyday food (e.g. "protein powder", "high protein snacks", "protein bar"). Never set it when a specific food is named.
 - "low sugar" for a specific food (e.g. "low sugar biscuits") means max_sugar_g_100g = 10 — apply as a hard constraint since biscuits can vary widely.
 - Map gym/high protein snacks to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"].
+- Do NOT use meta words as product_terms: food, bulking, bulk, gain, weight, fitness, snacks (when only describing a goal). Example: "food for bulking" → product_terms:[], health_contexts:["bulk"], exclude_keywords should include baby cereal brands.
 - Keep explanation under 22 words.
 `;
 
@@ -132,6 +134,21 @@ const NON_PRODUCT_TERMS = new Set([
   "healthy",
   "healthiest",
   "budget",
+  "food",
+  "foods",
+  "bulking",
+  "bulk",
+  "gain",
+  "weight",
+  "fitness",
+  "diet",
+  "snack",
+  "snacks",
+  "meal",
+  "meals",
+  "for",
+  "the",
+  "and",
 ]);
 
 function emptyParsed(prompt: string): ParsedProductQuery {
@@ -281,6 +298,8 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     );
     parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
   }
+  stripGoalMetaProductTerms(parsed);
+  stripGoalMetaProductTerms(parsed);
   applyProductTermHeuristics(parsed, lower);
   applyL3IntentToParsed(parsed);
 
@@ -353,6 +372,7 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
         ? record.explanation.trim().slice(0, 180)
         : fallback.explanation,
   };
+  stripGoalMetaProductTerms(parsed);
   applyL3IntentToParsed(parsed);
   return parsed;
 }
