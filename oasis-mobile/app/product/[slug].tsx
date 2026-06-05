@@ -17,12 +17,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { darkColors as colors } from "@/theme";
-import Animated, {
-  useDerivedValue,
-  useSharedValue,
-  withTiming,
-  useAnimatedProps,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { PdpIngredients } from "@/components/pdp/PdpIngredients";
 import { FadeInUp } from "@/components/motion/FadeInUp";
 import { PressableScale } from "@/components/motion/PressableScale";
@@ -145,15 +140,21 @@ export default function ProductScreen() {
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
   const core = product?.core_scores;
 
-  // Animated score count-up
-  const scoreAnim = useSharedValue(0);
+  // Animated score count-up using setState + setInterval (no Reanimated in JSX)
+  const [displayScore, setDisplayScore] = useState(0);
   useEffect(() => {
-    if (core?.score != null) {
-      scoreAnim.value = withTiming(core.score, { duration: 600 });
-    }
+    const target = core?.score ?? 0;
+    if (target === 0) return;
+    const steps = 20;
+    const stepMs = 600 / steps;
+    let current = 0;
+    const id = setInterval(() => {
+      current += 1;
+      setDisplayScore(Math.round((target * current) / steps));
+      if (current >= steps) clearInterval(id);
+    }, stepMs);
+    return () => clearInterval(id);
   }, [core?.score]);
-  const displayScore = useDerivedValue(() => String(Math.round(scoreAnim.value)));
-  const animatedScoreProps = useAnimatedProps(() => ({}));
   const images = product?.image_urls?.length ? product.image_urls : [];
   const n = product?.nutrition;
   const chips = product?.deepseek_chips ?? (core?.verdict_sublabels ?? []);
@@ -296,9 +297,9 @@ export default function ProductScreen() {
                   ) : null}
                 </View>
                 <View style={styles.bigScore}>
-                  <Animated.Text style={[styles.bigScoreNum, { color: vc.fg }]}>
-                    {displayScore.value}
-                  </Animated.Text>
+                  <Text style={[styles.bigScoreNum, { color: vc.fg }]}>
+                    {displayScore}
+                  </Text>
                   <Text style={[styles.bigScoreDenom, { color: colors.fgDim }]}>/100</Text>
                 </View>
               </View>

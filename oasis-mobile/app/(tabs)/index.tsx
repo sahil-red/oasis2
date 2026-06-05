@@ -13,6 +13,7 @@ import {
   Text,
   TouchableWithoutFeedback,
   View,
+  type ViewStyle,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -84,15 +85,13 @@ function MarqueeShowcase({ products }: { products: Array<{ slug: string; name: s
       <LinearGradient
         colors={[colors.bg, "transparent"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={styles.marqueeFadeL}
-        pointerEvents="none"
+        style={[styles.marqueeFadeL, { pointerEvents: "none" } as ViewStyle]}
       />
       {/* Right fade */}
       <LinearGradient
         colors={["transparent", colors.bg]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={styles.marqueeFadeR}
-        pointerEvents="none"
+        style={[styles.marqueeFadeR, { pointerEvents: "none" } as ViewStyle]}
       />
 
       <TouchableWithoutFeedback
