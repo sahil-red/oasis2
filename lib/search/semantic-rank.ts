@@ -11,6 +11,11 @@ import {
 } from "@/lib/search/l3-category-intent";
 import { productUsecase } from "@/lib/products/catalog-meta";
 import {
+  isMilkAdjacentProduct,
+  milkIntentSortTier,
+  milkRelevanceAdjust,
+} from "@/lib/search/milk-intent";
+import {
   isPlantPaneerSubstitute,
   paneerIntentSortTier,
   paneerRelevanceAdjust,
@@ -102,6 +107,13 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
     if (!/\bpaneer\b/i.test(name)) return 0;
   }
 
+  if (
+    parsed.product_terms.some((t) => t.toLowerCase() === "milk") &&
+    isMilkAdjacentProduct(p)
+  ) {
+    return 0;
+  }
+
   let score = 0;
   const terms = [
     ...parsed.product_terms,
@@ -136,6 +148,7 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
     preferPlant: parsed.hard_constraints.vegan === true,
     lowFatPreferred: parsed.soft_preferences.some((s) => /low fat/i.test(s)),
   });
+  score += milkRelevanceAdjust(p, parsed.product_terms, parsed.sort_intent);
   score += Math.min(12, (p.core_scores?.score ?? 0) * 0.02);
   return score;
 }
@@ -278,8 +291,17 @@ function sortKey(
   const lowFatPref = parsed.soft_preferences.some((s) => /low fat/i.test(s));
 
   switch (parsed.sort_intent) {
-    case "highest_protein":
-      return [strictTier, relevance, protein ?? -1, healthBoost, scout];
+    case "highest_protein": {
+      const milkTier = milkIntentSortTier(p, parsed.product_terms);
+      return [
+        milkTier || paneerIntentSortTier(p, parsed.product_terms),
+        strictTier,
+        protein ?? -1,
+        relevance,
+        healthBoost,
+        scout,
+      ];
+    }
     case "cheapest":
       return [strictTier, relevance, price === 999999 ? -1 : -price, healthBoost, scout];
     case "healthiest":

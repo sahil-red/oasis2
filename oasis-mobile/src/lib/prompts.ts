@@ -1,3 +1,8 @@
+/** Rotate example search chips every 15 minutes (same cadence as web). */
+export const PROMPT_ROTATION_MS = 15 * 60 * 1000;
+
+export const PROMPTS_PER_VIEW = 11;
+
 const SHORT_PROMPTS = [
   "zero sugar soft drinks",
   "ghee from grass fed cows",
@@ -11,15 +16,36 @@ const SHORT_PROMPTS = [
   "vegan protein snacks",
   "sugar free chocolate",
   "healthy namkeen low fat",
+  "paneer with low fat under ₹150",
+  "oats without added sugar",
+  "juice no added sugar no preservatives",
+  "peanut butter without palm oil",
+  "keto friendly snacks",
+  "almond milk no added sugar",
+  "low fat paneer for diet",
+  "multigrain bread no maida",
+  "tofu high protein vegetarian",
 ];
 
-/** Same rotation as web catalog — 11 prompts per day. */
-export function getDayPrompts(): string[] {
-  const dayIdx = Math.floor(Date.now() / 86_400_000);
-  const start = (dayIdx * 7) % SHORT_PROMPTS.length;
+export function promptRotationSlot(now = Date.now()): number {
+  return Math.floor(now / PROMPT_ROTATION_MS);
+}
+
+export function getRotatingPrompts(opts?: {
+  slot?: number;
+  count?: number;
+  now?: number;
+}): string[] {
+  const count = opts?.count ?? PROMPTS_PER_VIEW;
+  const slot = opts?.slot ?? promptRotationSlot(opts?.now);
+  const start = (slot * count) % SHORT_PROMPTS.length;
   const out: string[] = [];
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < count; i++) {
     out.push(SHORT_PROMPTS[(start + i) % SHORT_PROMPTS.length]!);
   }
   return out;
+}
+
+export function getDayPrompts(): string[] {
+  return getRotatingPrompts();
 }

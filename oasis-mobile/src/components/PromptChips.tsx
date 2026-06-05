@@ -1,5 +1,5 @@
 import { ScrollView, Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
-import { getDayPrompts } from "@/lib/prompts";
+import { useRotatingPrompts } from "@/hooks/useRotatingPrompts";
 import { colors, fonts, radius, spacing } from "@/theme";
 
 export function PromptChips({
@@ -11,7 +11,8 @@ export function PromptChips({
   prompts?: string[];
   style?: ViewStyle;
 }) {
-  const list = prompts ?? getDayPrompts();
+  const rotated = useRotatingPrompts();
+  const list = prompts ?? rotated;
   return (
     <ScrollView
       horizontal

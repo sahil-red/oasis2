@@ -52,6 +52,7 @@ export default async function ProductPage({
 }: {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{
+    prompt?: string;
     goal?: string;
     diet?: string;
     q?: string;

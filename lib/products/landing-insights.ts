@@ -70,6 +70,17 @@ export type LandingDodgeProduct = {
   reality: string;
 };
 
+export type LandingWorthItProduct = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number;
+  grade: string | null;
+  verdict: string | null;
+  reason: string;
+};
+
 export type LandingInsights = {
   totalScored: number;
   avgScore: number;
@@ -78,6 +89,7 @@ export type LandingInsights = {
   goalBoards: LandingGoalBoard[];
   bestInClass: LandingBestInClassCategory[];
   dodgeList: LandingDodgeProduct[];
+  worthItList: LandingWorthItProduct[];
 };
 
 function sugarOf(n: ProductNutrition | null | undefined): number | null {
@@ -336,20 +348,19 @@ function buildPickOfDay(ins: InsightLists): LandingPickOfDay | null {
 const HEALTH_CLAIMS_RE =
   /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive|sugar.?free|no.?added.?sugar|high.?fiber|organic|whole.?grain|multigrain|fortified|enriched|probiotic)\b/i;
 
-const TOP_CATEGORIES = [
-  "Dairy, Bread & Eggs",
-  "Munchies",
-  "Biscuits",
-  "Breakfast",
-  "Packaged Food",
-  "Cold Drinks & Juices",
-];
-
 function buildBestInClass(products: ProductListItem[]): LandingBestInClassCategory[] {
   const scored = products.filter((p) => p.core_scores);
+  const byCategory = new Map<string, ProductListItem[]>();
+  for (const p of scored) {
+    const cat = p.category?.trim();
+    if (!cat) continue;
+    const list = byCategory.get(cat) ?? [];
+    list.push(p);
+    byCategory.set(cat, list);
+  }
+
   const result: LandingBestInClassCategory[] = [];
-  for (const cat of TOP_CATEGORIES) {
-    const inCat = scored.filter((p) => p.category === cat);
+  for (const [cat, inCat] of byCategory) {
     if (inCat.length < 3) continue;
     const top = [...inCat]
       .sort((a, b) => (b.core_scores?.score ?? 0) - (a.core_scores?.score ?? 0))
@@ -377,7 +388,48 @@ function buildBestInClass(products: ProductListItem[]): LandingBestInClassCatego
       })),
     });
   }
-  return result;
+
+  return result.sort((a, b) => b.avgScore - a.avgScore || a.label.localeCompare(b.label));
+}
+
+function worthItReason(p: ProductListItem): string {
+  const parts: string[] = [];
+  const protein = p.nutrition?.protein_g_100g;
+  const fiber = p.nutrition?.fiber_g_100g;
+  const sug = sugarOf(p.nutrition);
+  if (typeof protein === "number" && protein >= 8) parts.push(`${Math.round(protein)}g protein`);
+  if (typeof fiber === "number" && fiber >= 5) parts.push(`${Math.round(fiber)}g fibre`);
+  if (typeof sug === "number" && sug <= 5) parts.push(`${sug.toFixed(1)}g sugar`);
+  if (hasSublabel(p, "whole_food")) parts.push("whole-food ingredients");
+  if (hasSublabel(p, "clean_protein")) parts.push("clean protein");
+  if (!parts.length && p.core_scores?.score != null) {
+    parts.push(`Core score ${p.core_scores.score}/100`);
+  }
+  return parts.slice(0, 2).join(" · ") || "Strong nutrition panel";
+}
+
+function buildWorthItList(products: ProductListItem[]): LandingWorthItProduct[] {
+  const scored = products.filter((p) => p.core_scores);
+  return scored
+    .filter((p) => {
+      const score = p.core_scores?.score ?? 0;
+      const verdict = p.core_scores?.verdict;
+      return (
+        score >= 70 &&
+        (verdict === "daily_staple" || verdict === "good_choice" || verdict === "occasional_treat")
+      );
+    })
+    .sort((a, b) => (b.core_scores?.score ?? 0) - (a.core_scores?.score ?? 0))
+    .map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      brand: p.brand ?? null,
+      image: p.image_urls?.[0] ?? null,
+      score: p.core_scores?.score ?? 0,
+      grade: p.core_scores?.grade ?? null,
+      verdict: p.core_scores?.verdict ?? null,
+      reason: worthItReason(p),
+    }));
 }
 
 function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
@@ -385,11 +437,10 @@ function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
   const dodgers = scored.filter(
     (p) =>
       HEALTH_CLAIMS_RE.test(p.name) &&
-      (p.core_scores?.score ?? 100) < 45,
+      (p.core_scores?.score ?? 100) < 50,
   );
   return dodgers
     .sort((a, b) => (a.core_scores?.score ?? 0) - (b.core_scores?.score ?? 0))
-    .slice(0, 6)
     .map((p) => {
       const score = p.core_scores?.score ?? 0;
       const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
@@ -435,5 +486,6 @@ export function buildLandingInsights(products: ProductListItem[]): LandingInsigh
     goalBoards: buildGoalBoards(products, ins),
     bestInClass: buildBestInClass(products),
     dodgeList: buildDodgeList(products),
+    worthItList: buildWorthItList(products),
   };
 }

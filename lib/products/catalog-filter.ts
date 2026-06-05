@@ -199,6 +199,18 @@ export function catalogParamsToSearch(
   return s ? `?${s}` : "";
 }
 
+/** Full /search path including AI prompt when in semantic search mode. */
+export function catalogSearchPath(
+  state: CatalogFilterState,
+  goal: string | undefined,
+  opts: { diet?: DietMode; aiMode?: boolean; aiPrompt?: string } = {},
+): string {
+  if (opts.aiMode && opts.aiPrompt?.trim()) {
+    return `/search?prompt=${encodeURIComponent(opts.aiPrompt.trim())}`;
+  }
+  return `/search${catalogParamsToSearch(state, goal, { diet: opts.diet })}`;
+}
+
 /** Preserve catalog filters on PDP links so back navigation restores context. */
 export function catalogContextQuery(
   state: CatalogFilterState,
@@ -210,6 +222,7 @@ export function catalogContextQuery(
 
 /** Rebuild /search URL from PDP query params (pass-through from catalog → product links). */
 export function catalogReturnHref(params: {
+  prompt?: string;
   q?: string;
   category?: string;
   subcategory?: string;
@@ -227,6 +240,9 @@ export function catalogReturnHref(params: {
   sublabel?: string;
   verdict?: string;
 }): string {
+  if (params.prompt?.trim()) {
+    return `/search?prompt=${encodeURIComponent(params.prompt.trim())}`;
+  }
   const state = parseCatalogParams(params);
   const goal = params.goal ? goalFromParam(params.goal) : "balanced";
   const diet = params.diet ? dietFromParam(params.diet) : "any";

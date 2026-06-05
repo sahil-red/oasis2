@@ -11,7 +11,16 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json(
-      { totalScored: 0, avgScore: 0, facts: [], pickOfDay: null, goalBoards: [] },
+      {
+        totalScored: 0,
+        avgScore: 0,
+        facts: [],
+        pickOfDay: null,
+        goalBoards: [],
+        bestInClass: [],
+        dodgeList: [],
+        worthItList: [],
+      },
       { status: 200 },
     );
   }

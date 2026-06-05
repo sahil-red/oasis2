@@ -47,6 +47,9 @@ export const TERM_FALSE_POSITIVE: Record<string, RegExp[]> = {
     /\bcandy\b/i,
     /\bbiscuit\b/i,
     /\bcookie\b/i,
+    /\bbread\b/i,
+    /\bmilk bread\b/i,
+    /\bbun\b/i,
     /\bsoap\b/i,
     /\bface wash\b/i,
     /\bmoistur/i,
@@ -124,11 +127,16 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
       "chocolate",
       "biscuit",
       "cookie",
+      "bread",
+      "bun",
       "soap",
       "moistur",
       "face wash",
       "candy",
     ]);
+    if (/high protein|protein rich/i.test(lower)) {
+      parsed.sort_intent = "highest_protein";
+    }
   }
 
   if (/\bjuice\b|\bjuices\b/.test(lower)) {

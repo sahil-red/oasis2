@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { flushCatalogSnapshotForNavigation } from "@/lib/catalog/search-session";
 import { catalogReturnHref } from "@/lib/products/catalog-filter";
 
 const SESSION_KEY = "scout-catalog-return";
 
 type CatalogParams = {
+  prompt?: string;
   q?: string;
   category?: string;
   subcategory?: string;
@@ -28,6 +30,7 @@ export function saveCatalogReturnUrl(href: string): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(SESSION_KEY, href);
+    flushCatalogSnapshotForNavigation(href);
   } catch {
     /* ignore */
   }

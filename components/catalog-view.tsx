@@ -14,10 +14,18 @@ import { writeDietMode } from "@/lib/diet/storage";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import {
   catalogContextQuery,
-  catalogParamsToSearch,
+  catalogSearchPath,
   parseCatalogParams,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
+import {
+  CATALOG_SNAPSHOT_VERSION,
+  catalogSnapshotForHref,
+  clearCatalogSnapshot,
+  isCatalogResultsView,
+  registerCatalogSnapshot,
+  type CatalogSearchSnapshot,
+} from "@/lib/catalog/search-session";
 import {
   fetchCatalogMeta,
   fetchAiCatalogSearch,
@@ -27,11 +35,9 @@ import {
   type CatalogGridItem,
   type CatalogMetaResponse,
 } from "@/lib/products/catalog-api";
-import type {
-  LandingFact,
-  LandingInsights,
-  LandingPick,
-} from "@/lib/products/landing-insights";
+import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
+import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
+import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import {
   canUseAiSearch,
@@ -51,6 +57,7 @@ import {
   type CatalogSort,
 } from "@/lib/products/catalog-sort";
 import type { CatalogFilters, CatalogSearchResult, ProductListItem } from "@/lib/products/queries";
+import { useRotatingPrompts } from "@/lib/catalog/use-rotating-prompts";
 import type { Grade } from "@/lib/supabase/types";
 
 type Params = {
@@ -88,73 +95,6 @@ const filterSelectClass =
 
 const CATALOG_PAGE_SIZE = 96;
 const SEARCH_DEBOUNCE_MS = 250;
-
-const ALL_PROMPT_EXAMPLES = [
-  "biscuits with low sugar",
-  "paneer with low fat under ₹150",
-  "high protein snacks for gym",
-  "kids snacks without artificial colours",
-  "zero sugar soft drinks",
-  "diabetic friendly breakfast cereals",
-  "oats without added sugar",
-  "clean protein bars no artificial sweeteners",
-  "full cream milk high protein",
-  "ghee from grass fed cows",
-  "chips without palm oil",
-  "curd high protein low fat",
-  "dark chocolate no added sugar",
-  "multigrain bread no maida",
-  "protein powder for bulking",
-  "juice no added sugar no preservatives",
-  "peanut butter without palm oil",
-  "greek yogurt high protein",
-  "baby food no preservatives no colours",
-  "green tea without artificial flavours",
-  "low sodium snacks",
-  "vegan protein snacks",
-  "keto friendly snacks",
-  "cheese with no preservatives",
-  "muesli without added sugar",
-  "rice cakes low calorie",
-  "almond milk no added sugar",
-  "coconut water natural no sugar",
-  "energy bars without high fructose corn syrup",
-  "tofu high protein vegetarian",
-  "instant oats no added flavours",
-  "low carb bread",
-  "whey protein isolate",
-  "seeds and nuts mix no salt",
-  "cold pressed juice no preservatives",
-  "kombucha low sugar",
-  "sourdough bread no maida",
-  "chickpea snacks high protein",
-  "trail mix no added sugar",
-  "probiotic yogurt no artificial flavours",
-  "dal high protein low price",
-  "sprouts mix protein rich",
-  "quinoa for weight loss",
-  "flax seeds omega 3",
-  "plant based milk alternatives",
-  "sugar free chocolate",
-  "healthy namkeen low fat",
-  "ragi biscuits for kids",
-  "millet based snacks",
-  "low fat paneer for diet",
-];
-
-// Show 11 prompts rotating by day — chosen to be short enough to fill exactly 2 rows
-const SHORT_PROMPTS = ALL_PROMPT_EXAMPLES.filter((p) => p.length <= 36);
-
-function getDayPrompts(): string[] {
-  const dayIdx = Math.floor(Date.now() / 86_400_000);
-  const start = (dayIdx * 7) % SHORT_PROMPTS.length;
-  const out: string[] = [];
-  for (let i = 0; i < 11; i++) {
-    out.push(SHORT_PROMPTS[(start + i) % SHORT_PROMPTS.length]!);
-  }
-  return out;
-}
-
 
 function countActiveFilters(state: CatalogFilterState): number {
   let n = 0;
@@ -372,6 +312,8 @@ export function CatalogView({
   const fetchGen = useRef(0);
   const skipParamsSync = useRef(true);
   const skipInitialSearch = useRef(Boolean(initialSearch));
+  const sessionReadyRef = useRef(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const autoPromptRan = useRef(false);
   const goalSentinelRef = useRef<HTMLDivElement>(null);
   const [goalStripScrolledPast, setGoalStripScrolledPast] = useState(false);
@@ -394,8 +336,48 @@ export function CatalogView({
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
+  const examplePrompts = useRotatingPrompts();
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
+
+  const applySessionSnapshot = useCallback((snap: CatalogSearchSnapshot) => {
+    setState(snap.state);
+    setGoal(snap.goal);
+    setDiet(snap.diet);
+    setItems(snap.items);
+    setGoalFits(snap.goalFits);
+    setTotal(snap.total);
+    setPage(snap.page);
+    setHasMore(snap.hasMore);
+    setAiMode(snap.aiMode);
+    setAiPrompt(snap.aiPrompt);
+    setAiSummary(snap.aiSummary);
+    setAiParseSource(snap.aiParseSource);
+    setAiRankSource(snap.aiRankSource);
+    setAiIntentTier(snap.aiIntentTier);
+    setAiRelaxed(snap.aiRelaxed);
+    setAiWarning(snap.aiWarning);
+    setAiRefinements(snap.aiRefinements);
+    setAiParsed(snap.aiParsed);
+    setFactBrowse(snap.factBrowse);
+    setLoading(false);
+    setRefreshing(false);
+    setLoadError(null);
+    skipInitialSearch.current = true;
+    if (snap.aiMode && snap.aiPrompt.trim()) {
+      autoPromptRan.current = true;
+    }
+  }, []);
+
+  const restoreSessionFromLocation = useCallback(() => {
+    const href = `${window.location.pathname}${window.location.search}`;
+    const snap = catalogSnapshotForHref(href);
+    if (snap && isCatalogResultsView(snap)) {
+      applySessionSnapshot(snap);
+      return true;
+    }
+    return false;
+  }, [applySessionSnapshot]);
 
   const initialKey = paramsKey(initialParams);
   useEffect(() => {
@@ -403,6 +385,7 @@ export function CatalogView({
       skipParamsSync.current = false;
       return;
     }
+    if (!sessionReadyRef.current) return;
     const next = syncFromParams(initialParams);
     setState(next.state);
     setGoal(next.goal);
@@ -410,14 +393,29 @@ export function CatalogView({
   }, [initialKey]);
 
   useEffect(() => {
+    restoreSessionFromLocation();
+    sessionReadyRef.current = true;
+    setSessionReady(true);
+  }, [restoreSessionFromLocation]);
+
+  useEffect(() => {
     const onPop = () => {
+      if (restoreSessionFromLocation()) return;
       const next = syncFromParams(paramsFromLocation());
       setState(next.state);
       setGoal(next.goal);
       setDiet(next.diet);
+      setAiMode(false);
+      setAiSummary(null);
+      setAiWarning(null);
+      setAiRefinements([]);
+      setAiParsed(null);
+      setFactBrowse(null);
+      skipInitialSearch.current = false;
     };
     const onPageShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return;
+      if (restoreSessionFromLocation()) return;
       const next = syncFromParams(paramsFromLocation());
       setState(next.state);
       setGoal(next.goal);
@@ -430,7 +428,7 @@ export function CatalogView({
       window.removeEventListener("popstate", onPop);
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, []);
+  }, [restoreSessionFromLocation]);
 
   useEffect(() => {
     setShowGoalHint(
@@ -458,10 +456,12 @@ export function CatalogView({
     return normalizeState(state, filterOptions);
   }, [state, filterOptions, metaReady]);
 
-  const productQuery = useMemo(
-    () => catalogContextQuery(activeState, goal, { diet }),
-    [activeState, goal, diet],
-  );
+  const productQuery = useMemo(() => {
+    if (aiMode && aiPrompt.trim()) {
+      return `?prompt=${encodeURIComponent(aiPrompt.trim())}`;
+    }
+    return catalogContextQuery(activeState, goal, { diet });
+  }, [aiMode, aiPrompt, activeState, goal, diet]);
 
   const searchKey = useMemo(
     () =>
@@ -527,6 +527,7 @@ export function CatalogView({
   }, [activeState.category, initialMeta]);
 
   useEffect(() => {
+    if (!sessionReady) return;
     if (aiMode) return;
     if (skipInitialSearch.current) {
       skipInitialSearch.current = false;
@@ -562,12 +563,13 @@ export function CatalogView({
         }
       }
     })();
-  }, [searchKey, aiMode]);
+  }, [searchKey, aiMode, sessionReady]);
 
   useEffect(() => {
+    if (!sessionReady) return;
     if (aiMode || !hasMore || loading || refreshing || loadError) return;
     prefetchCatalogSearch(buildSearchRequest(activeState, debouncedQ, goal, diet, page + 1));
-  }, [aiMode, hasMore, page, searchKey, loading, refreshing, loadError, activeState, debouncedQ, goal, diet]);
+  }, [aiMode, hasMore, page, searchKey, loading, refreshing, loadError, activeState, debouncedQ, goal, diet, sessionReady]);
 
   const loadMore = useCallback(async () => {
     if (aiMode) return;
@@ -588,17 +590,78 @@ export function CatalogView({
     }
   }, [aiMode, page, debouncedQ, activeState, goal, diet]);
 
+  const catalogHref = useMemo(
+    () => catalogSearchPath(activeState, goal, { diet, aiMode, aiPrompt }),
+    [activeState, goal, diet, aiMode, aiPrompt],
+  );
+
+  useEffect(() => {
+    if (!sessionReady) return;
+
+    const snapshot: CatalogSearchSnapshot = {
+      version: CATALOG_SNAPSHOT_VERSION,
+      href: catalogHref,
+      state: activeState,
+      goal,
+      diet,
+      items,
+      goalFits,
+      total,
+      page,
+      hasMore,
+      aiMode,
+      aiPrompt,
+      aiSummary,
+      aiParseSource,
+      aiRankSource,
+      aiIntentTier,
+      aiRelaxed,
+      aiWarning,
+      aiRefinements,
+      aiParsed,
+      factBrowse,
+    };
+
+    if (isCatalogResultsView(snapshot)) {
+      registerCatalogSnapshot(snapshot);
+    } else {
+      registerCatalogSnapshot(null);
+    }
+  }, [
+    sessionReady,
+    catalogHref,
+    activeState,
+    goal,
+    diet,
+    items,
+    goalFits,
+    total,
+    page,
+    hasMore,
+    aiMode,
+    aiPrompt,
+    aiSummary,
+    aiParseSource,
+    aiRankSource,
+    aiIntentTier,
+    aiRelaxed,
+    aiWarning,
+    aiRefinements,
+    aiParsed,
+    factBrowse,
+  ]);
+
   const prevUrlRef = useRef<string | null>(null);
   useEffect(() => {
-    const path = `/search${catalogParamsToSearch(activeState, goal, { diet })}`;
-    saveCatalogReturnUrl(path);
+    if (!sessionReady) return;
+    saveCatalogReturnUrl(catalogHref);
     const current = `${window.location.pathname}${window.location.search}`;
-    if (current !== path) {
+    if (current !== catalogHref) {
       // pushState so browser back button can restore this exact filter state via bfcache
-      window.history.pushState(null, "", path);
+      window.history.pushState(null, "", catalogHref);
     }
-    prevUrlRef.current = path;
-  }, [activeState, goal, diet]);
+    prevUrlRef.current = catalogHref;
+  }, [catalogHref, sessionReady]);
 
   const pickGoal = useCallback((g: GoalId) => {
     writeStoredGoal(g);
@@ -694,7 +757,6 @@ export function CatalogView({
       setAiRefinements(result.refinements);
       setAiParsed(result.parsed);
       setAiUsage(recordAiSearch());
-      saveCatalogReturnUrl("/search");
     } catch (e) {
       if (gen !== fetchGen.current) return;
       setLoadError((e as Error).message);
@@ -732,7 +794,6 @@ export function CatalogView({
           setTotal(products.length);
           setPage(1);
           setHasMore(false);
-          saveCatalogReturnUrl("/search");
         } catch (e) {
           setLoadError((e as Error).message);
         } finally {
@@ -781,6 +842,18 @@ export function CatalogView({
   );
 
   const clearAll = () => {
+    clearCatalogSnapshot();
+    registerCatalogSnapshot(null);
+    setAiMode(false);
+    setAiSummary(null);
+    setAiWarning(null);
+    setAiRefinements([]);
+    setAiParsed(null);
+    setFactBrowse(null);
+    setItems([]);
+    setTotal(0);
+    setHasMore(false);
+    setPage(1);
     setState({
       q: "",
       category: "",
@@ -868,7 +941,7 @@ export function CatalogView({
 
           {/* Prompt chips — 10 rotating from 50-prompt dataset */}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {getDayPrompts().map((example) => (
+            {examplePrompts.map((example) => (
               <button
                 key={example}
                 type="button"
@@ -1123,8 +1196,6 @@ export function CatalogView({
       {!aiMode && !hasFilters && !factBrowse ? (
         <ScoutLanding
           stats={stats ?? null}
-          goal={goal}
-          onGoalChange={pickGoal}
           hrefQuery={productQuery}
           onFactAction={(fact) => void handleFactAction(fact)}
         />
@@ -1203,84 +1274,20 @@ export function CatalogView({
   );
 }
 
-function scoreColor(score: number | null): string {
-  if (score == null) return "var(--color-fg-dim)";
-  if (score >= 65) return "var(--color-good)";
-  if (score >= 50) return "#7ab830";
-  if (score >= 40) return "var(--color-warn)";
-  return "var(--color-bad)";
-}
-
-function LandingScoreBadge({ score }: { score: number | null }) {
-  if (score == null) return null;
-  return (
-    <span
-      className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1.5 text-[13px] font-bold text-white"
-      style={{ backgroundColor: scoreColor(score) }}
-    >
-      {score}
-    </span>
-  );
-}
-
-function LandingPickCard({ pick, hrefQuery }: { pick: LandingPick; hrefQuery: string }) {
-  return (
-    <Link
-      href={`/product/${pick.slug}${hrefQuery}`}
-      onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-fg-dim) hover:shadow-md"
-    >
-      <div className="relative aspect-square photo-frame">
-        {pick.image ? (
-          <Image
-            src={pick.image}
-            alt={pick.name}
-            fill
-            sizes="(max-width: 640px) 50vw, 220px"
-            className="object-contain p-3 transition group-hover:scale-[1.03]"
-          />
-        ) : null}
-        <span className="absolute left-2 top-2">
-          <LandingScoreBadge score={pick.score} />
-        </span>
-      </div>
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        {pick.brand ? (
-          <span className="text-[10.5px] font-medium uppercase tracking-wide text-(--color-fg-dim)">
-            {pick.brand}
-          </span>
-        ) : null}
-        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-(--color-fg)">
-          {pick.name}
-        </span>
-        <div className="mt-auto flex items-center justify-between pt-1.5">
-          {pick.meta ? (
-            <span className="text-[12px] font-semibold text-(--color-fg-muted)">{pick.meta}</span>
-          ) : <span />}
-          {pick.price != null ? (
-            <span className="text-[12px] text-(--color-fg-dim)">₹{pick.price}</span>
-          ) : null}
-        </div>
-      </div>
-    </Link>
-  );
-}
+const LANDING_SECTION_COUNT = 6;
 
 function ScoutLanding({
   stats,
-  goal,
-  onGoalChange,
   hrefQuery,
   onFactAction,
 }: {
   stats: { scored: number; visible: number } | null;
-  goal: GoalId;
-  onGoalChange: (goal: GoalId) => void;
   hrefQuery: string;
   onFactAction: (fact: LandingFact) => void;
 }) {
   const [data, setData] = useState<LandingInsights | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const rotationSlot = useLandingRotationSlot();
 
   useEffect(() => {
     let alive = true;
@@ -1297,23 +1304,43 @@ function ScoutLanding({
     };
   }, []);
 
+  const bestInClass = useMemo(
+    () =>
+      pickRotatingSlice(data?.bestInClass ?? [], LANDING_SECTION_COUNT, {
+        slot: rotationSlot,
+        slotOffset: 0,
+      }),
+    [data?.bestInClass, rotationSlot],
+  );
+  const dodgeList = useMemo(
+    () =>
+      pickRotatingSlice(data?.dodgeList ?? [], LANDING_SECTION_COUNT, {
+        slot: rotationSlot,
+        slotOffset: 1,
+      }),
+    [data?.dodgeList, rotationSlot],
+  );
+  const worthItList = useMemo(
+    () =>
+      pickRotatingSlice(data?.worthItList ?? [], LANDING_SECTION_COUNT, {
+        slot: rotationSlot,
+        slotOffset: 2,
+      }),
+    [data?.worthItList, rotationSlot],
+  );
+
   if (!loaded && !data) {
     return (
       <div className="space-y-10 pt-2">
         <div className="h-48 animate-pulse rounded-2xl bg-(--color-bg-soft)" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl bg-(--color-bg-soft)" />
           ))}
         </div>
       </div>
     );
   }
-
-  const bestInClass = data?.bestInClass ?? [];
-  const dodgeList = data?.dodgeList ?? [];
-  const board =
-    data?.goalBoards.find((b) => b.goal === goal) ?? data?.goalBoards[0] ?? null;
 
   return (
     <div className="space-y-10 pt-2">
@@ -1324,7 +1351,7 @@ function ScoutLanding({
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">Best in class</p>
-              <h2 className="font-display mt-1 text-xl font-semibold text-(--color-fg)">Top pick in every aisle.</h2>
+              <h2 className="font-display mt-1 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[1.65rem]">Top pick in every aisle.</h2>
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1374,7 +1401,7 @@ function ScoutLanding({
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-500">Scout warning</p>
-              <h2 className="font-display mt-1 text-xl font-semibold text-(--color-fg)">The marketing&apos;s a lie.</h2>
+              <h2 className="font-display mt-1 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[1.65rem]">The marketing&apos;s a lie.</h2>
             </div>
             <Link href="/search?verdict=skip&sort=score-asc" className="text-[11px] text-(--color-fg-dim) hover:text-(--color-fg)">Full skip list →</Link>
           </div>
@@ -1412,36 +1439,63 @@ function ScoutLanding({
         </section>
       )}
 
-      {/* E — For your goal */}
-      {board && data ? (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-display text-xl font-semibold text-(--color-fg)">
-              Best for {board.label.toLowerCase()}
-            </h2>
-            <span className="text-[12.5px] text-(--color-fg-dim)">{board.tagline}</span>
+      {worthItList.length > 0 ? (
+        <section>
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-600">Scout verified</p>
+              <h2 className="font-display mt-1 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[1.65rem]">
+                The label checks out.
+              </h2>
+            </div>
+            <Link
+              href="/search?verdict=daily_staple&sort=score-desc"
+              className="text-[11px] text-(--color-fg-dim) hover:text-(--color-fg)"
+            >
+              Daily staples →
+            </Link>
           </div>
-
-          <div className="-mx-1 flex flex-wrap gap-2 px-1">
-            {data.goalBoards.map((b) => (
-              <button
-                key={b.goal}
-                type="button"
-                onClick={() => onGoalChange(b.goal)}
-                className={`rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
-                  b.goal === board.goal
-                    ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                    : "border border-(--color-line-strong) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-                }`}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {worthItList.map((p) => (
+              <Link
+                key={p.slug}
+                href={`/product/${p.slug}${hrefQuery}`}
+                onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+                className="group rounded-xl border border-emerald-500/20 bg-(--color-panel) p-3 transition hover:border-emerald-500/40"
               >
-                {b.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
-            {board.picks.map((p) => (
-              <LandingPickCard key={p.slug} pick={p} hrefQuery={hrefQuery} />
+                <div className="flex items-start gap-2.5">
+                  <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
+                    {p.image && (
+                      <Image src={p.image} alt={p.name} fill sizes="40px" className="object-contain p-0.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {p.brand && (
+                      <p className="truncate text-[9px] uppercase tracking-wide text-(--color-fg-dim)">{p.brand}</p>
+                    )}
+                    <p className="line-clamp-2 text-[12px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
+                      {p.name}
+                    </p>
+                  </div>
+                  <span className="flex-shrink-0 text-base font-bold tabular-nums text-emerald-600">{p.score}</span>
+                </div>
+                <div className="mt-2.5 space-y-1">
+                  <div className="flex gap-1.5 text-[11px]">
+                    <span className="rounded bg-emerald-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-emerald-600">
+                      Panel
+                    </span>
+                    <span className="text-(--color-fg-muted)">{p.reason}</span>
+                  </div>
+                  {p.grade ? (
+                    <div className="flex gap-1.5 text-[11px]">
+                      <span className="rounded bg-(--color-bg-soft) px-1 py-0.5 text-[9px] font-semibold uppercase text-(--color-fg-dim)">
+                        Grade
+                      </span>
+                      <span className="font-semibold text-emerald-600">{p.grade}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </Link>
             ))}
           </div>
         </section>

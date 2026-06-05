@@ -6,6 +6,7 @@ import { VERDICT_LABELS, type VerdictId } from "@/lib/scoring/verdict";
 import { productUsecase } from "@/lib/products/catalog-meta";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
+import { isHighProteinMilkSignal, isMilkAdjacentProduct } from "@/lib/search/milk-intent";
 import { isPlantPaneerSubstitute } from "@/lib/search/paneer-intent";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 function wantsNoPreservatives(parsed: ParsedProductQuery): boolean {
@@ -171,8 +172,20 @@ export function buildMatchReasons(p: ProductListItem, parsed: ParsedProductQuery
     reasons.push(`${fat}g fat per 100g`);
   }
 
+  if (
+    parsed.product_terms.some((t) => t.toLowerCase() === "milk") &&
+    isHighProteinMilkSignal(p)
+  ) {
+    reasons.push("High-protein milk");
+  }
+  if (
+    parsed.product_terms.some((t) => t.toLowerCase() === "milk") &&
+    isMilkAdjacentProduct(p)
+  ) {
+    reasons.push("Not dairy milk");
+  }
   if (parsed.sort_intent === "highest_protein" && protein != null) {
-    reasons.push(`${Math.round(protein)}g protein per 100g`);
+    reasons.push(`${Math.round(protein * 10) / 10}g protein per 100g`);
   } else if (protein != null && protein >= 10) {
     reasons.push(`${Math.round(protein)}g protein per 100g`);
   }

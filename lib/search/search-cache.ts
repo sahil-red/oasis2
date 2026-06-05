@@ -9,7 +9,7 @@ type CacheEntry<T> = { at: number; value: T };
 const parseCache = new Map<string, CacheEntry<QueryParseResult>>();
 const resultCache = new Map<string, CacheEntry<AiSearchResult>>();
 
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 
 function normalizeKey(prompt: string): string {
   return `${CACHE_VERSION}:${prompt.toLowerCase().replace(/\s+/g, " ").trim()}`;

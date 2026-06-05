@@ -49,6 +49,11 @@ export const PARSE_CASES: ParseCase[] = [
       p.product_terms.includes("milk") && p.sort_intent === "highest_protein",
   },
   {
+    query: "milk high protein",
+    check: (p) =>
+      p.product_terms.includes("milk") && p.sort_intent === "highest_protein",
+  },
+  {
     query: "low sugar biscuits",
     check: (p) =>
       p.hard_constraints.max_sugar_g_100g === 10 &&
@@ -106,8 +111,17 @@ export const LIVE_SEARCH_CASES: LiveSearchCase[] = [
   {
     query: "high protein milk",
     expectTier: "structured",
-    topMustMatch: /epigamia|frubon|phab|horlicks|protein milk|protein shake|max protein|slim milk|hi.?pro/i,
-    checkTop: 12,
+    topMustMatch: /epigamia|frubon|phab|horlicks|protein milk|protein shake|max protein|slim milk|hi.?pro|promilk|hilo|nourish/i,
+    topMustNotMatch: /milk bread|bread/i,
+    checkTop: 8,
+    minResults: 4,
+  },
+  {
+    query: "milk high protein",
+    expectTier: "structured",
+    topMustMatch: /frubon|promilk|protein milk|hilo|nourish|hi.?pro|epigamia|phab/i,
+    topMustNotMatch: /milk bread/i,
+    checkTop: 8,
     minResults: 4,
   },
   {
