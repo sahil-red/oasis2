@@ -1,17 +1,26 @@
-"use client";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  cancelAnimation,
+} from "react-native-reanimated";
 import {
   LandingBestInClass,
   LandingDodgeList,
@@ -19,32 +28,128 @@ import {
   LandingGoalBoards,
   LandingStatsStrip,
 } from "@/components/landing/LandingSections";
+import { FadeInUp } from "@/components/motion/FadeInUp";
+import { PressableScale } from "@/components/motion/PressableScale";
+import { SkeletonGrid, SkeletonSection, SkeletonStats } from "@/components/motion/Skeleton";
 import { ProductCard } from "@/components/ProductCard";
 import { PromptChips } from "@/components/PromptChips";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
+import { DisplayHero, Eyebrow } from "@/components/ui/Typography";
 import { fetchAiSearch, fetchLanding } from "@/lib/api";
 import { useAccessToken } from "@/lib/auth";
-import { colors, fonts, radius, spacing, typography } from "@/theme";
+import { useTheme } from "@/lib/theme-context";
+import { fonts, radius, spacing } from "@/theme";
+import { motion } from "@/theme/motion";
 import type { AiSearchResult, CatalogProduct, LandingInsights } from "@/types/api";
+
+const { width: SCREEN_W } = Dimensions.get("window");
+const MARQUEE_CARD_W = 160;
+const MARQUEE_GAP = 12;
+const MARQUEE_DURATION = 55000; // ms for one full cycle
+
+// ─── Marquee ─────────────────────────────────────────────────────────────────
+
+function MarqueeShowcase({ products }: { products: Array<{ slug: string; name: string; brand?: string | null; image?: string | null; score?: number | null }> }) {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const translateX = useSharedValue(0);
+  const paused = useSharedValue(false);
+
+  // Duplicate for seamless loop
+  const items = [...products, ...products];
+  const totalWidth = products.length * (MARQUEE_CARD_W + MARQUEE_GAP);
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    translateX.value = withRepeat(
+      withTiming(-totalWidth, { duration: MARQUEE_DURATION }),
+      -1,
+      false,
+    );
+  }, [products.length, totalWidth]);
+
+  const marStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  if (!products.length) return null;
+
+  return (
+    <View style={styles.marqueeOuter}>
+      {/* Left fade */}
+      <LinearGradient
+        colors={[colors.bg, "transparent"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={styles.marqueeFadeL}
+        pointerEvents="none"
+      />
+      {/* Right fade */}
+      <LinearGradient
+        colors={["transparent", colors.bg]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={styles.marqueeFadeR}
+        pointerEvents="none"
+      />
+
+      <TouchableWithoutFeedback
+        onPressIn={() => { cancelAnimation(translateX); }}
+        onPressOut={() => {
+          // Resume from current position
+          const remaining = Math.abs(-totalWidth - translateX.value);
+          const durationLeft = (remaining / totalWidth) * MARQUEE_DURATION;
+          translateX.value = withRepeat(
+            withTiming(-totalWidth, { duration: durationLeft }),
+            -1,
+            false,
+          );
+        }}
+      >
+        <Animated.View style={[styles.marqueeTrack, marStyle]}>
+          {items.map((p, i) => (
+            <Pressable
+              key={`${p.slug}-${i}`}
+              style={styles.marqueeCard}
+              onPress={() => router.push(`/product/${p.slug}`)}
+            >
+              <View style={[styles.marqueeImageWrap, { backgroundColor: colors.bgSoft, borderColor: colors.line }]}>
+                {p.image ? (
+                  <Image source={{ uri: p.image }} style={styles.marqueeImage} contentFit="contain" />
+                ) : null}
+              </View>
+              {p.brand ? (
+                <Text style={[styles.marqueeBrand, { color: colors.fgDim }]} numberOfLines={1}>
+                  {p.brand.toUpperCase()}
+                </Text>
+              ) : null}
+              <Text style={[styles.marqueeName, { color: colors.fg }]} numberOfLines={2}>
+                {p.name}
+              </Text>
+            </Pressable>
+          ))}
+        </Animated.View>
+      </TouchableWithoutFeedback>
+    </View>
+  );
+}
+
+// ─── Main tab ────────────────────────────────────────────────────────────────
 
 export default function HomeTab() {
   const router = useRouter();
   const token = useAccessToken();
+  const { colors } = useTheme();
 
-  // Landing data
   const [landing, setLanding] = useState<LandingInsights | null>(null);
   const [loadingLanding, setLoadingLanding] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Search state — kept so back-from-PDP restores it
   const [prompt, setPrompt] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<AiSearchResult | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
-
 
   const loadLanding = useCallback(async () => {
     try {
@@ -99,44 +204,56 @@ export default function HomeTab() {
 
   const isSearchActive = searchResult !== null || searching || searchError !== null;
 
+  // Marquee products: flatten bestInClass
+  const marqueeProducts = (landing?.bestInClass ?? [])
+    .flatMap((cat) => cat.products.map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      brand: p.brand,
+      image: p.image,
+      score: p.score,
+    })))
+    .slice(0, 12);
+
   // ── Search results view ──────────────────────────────────────────────────
   if (isSearchActive) {
     return (
       <Screen>
-        {/* Sticky header */}
-        <View style={styles.searchHeader}>
-          <Pressable onPress={clearSearch} hitSlop={12} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.fg} />
-          </Pressable>
-          <View style={styles.searchBarWrap}>
-            <ScoutSearchBar
-              value={prompt}
-              onChangeText={setPrompt}
-              onSubmit={() => void runSearch(prompt)}
-              loading={searching}
-            />
+        <FadeInUp delay={0}>
+          <View style={[styles.searchHeader, { borderBottomColor: colors.line }]}>
+            <PressableScale onPress={clearSearch} haptic="light">
+              <View style={[styles.backBtn, { backgroundColor: colors.panel, borderColor: colors.line }]}>
+                <Ionicons name="arrow-back" size={20} color={colors.fg} />
+              </View>
+            </PressableScale>
+            <View style={styles.searchBarWrap}>
+              <ScoutSearchBar
+                value={prompt}
+                onChangeText={setPrompt}
+                onSubmit={() => void runSearch(prompt)}
+                loading={searching}
+              />
+            </View>
           </View>
-        </View>
+        </FadeInUp>
 
         {searching ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={styles.loadingText}>Reading labels and ranking matches…</Text>
+          <View style={styles.searchLoadingWrap}>
+            <SkeletonGrid rows={2} />
           </View>
         ) : searchError ? (
-          <View style={styles.center}>
+          <FadeInUp>
             <Panel style={styles.errorBox}>
-              <Text style={styles.errorText}>{searchError}</Text>
+              <Text style={[styles.errorText, { color: colors.bad }]}>{searchError}</Text>
               {searchError.includes("Plus") ? (
-                <Pressable
-                  style={styles.upgradeBtn}
-                  onPress={() => router.push("/subscribe")}
-                >
-                  <Text style={styles.upgradeBtnText}>Get Scout Plus</Text>
-                </Pressable>
+                <PressableScale onPress={() => router.push("/subscribe")} haptic="medium">
+                  <View style={[styles.upgradeBtn, { backgroundColor: colors.fg }]}>
+                    <Text style={[styles.upgradeBtnText, { color: colors.bg }]}>Get Scout Plus</Text>
+                  </View>
+                </PressableScale>
               ) : null}
             </Panel>
-          </View>
+          </FadeInUp>
         ) : searchResult ? (
           <FlatList
             data={searchResult.items}
@@ -145,9 +262,9 @@ export default function HomeTab() {
             contentContainerStyle={styles.resultsGrid}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
-              <View>
+              <FadeInUp delay={0}>
                 <Panel style={styles.summaryPanel}>
-                  <Text style={styles.summaryText}>{searchResult.summary}</Text>
+                  <Text style={[styles.summaryText, { color: colors.fg }]}>{searchResult.summary}</Text>
                   {searchResult.refinements?.length ? (
                     <ScrollView
                       horizontal
@@ -156,28 +273,36 @@ export default function HomeTab() {
                       contentContainerStyle={{ gap: spacing.xs }}
                     >
                       {searchResult.refinements.map((r) => (
-                        <Pressable
+                        <PressableScale
                           key={r}
-                          style={styles.refineChip}
+                          haptic="light"
                           onPress={() => {
                             const next = `${prompt.trim()} ${r.replace(/^Add /i, "")}`.trim();
                             setPrompt(next);
                             void runSearch(next);
                           }}
                         >
-                          <Text style={styles.refineText}>{r}</Text>
-                        </Pressable>
+                          <View style={[styles.refineChip, { borderColor: colors.line, backgroundColor: colors.bgSoft }]}>
+                            <Text style={[styles.refineText, { color: colors.fg }]}>{r}</Text>
+                          </View>
+                        </PressableScale>
                       ))}
                     </ScrollView>
                   ) : null}
                 </Panel>
-              </View>
+              </FadeInUp>
             }
-            renderItem={({ item }) => (
-              <ProductCard product={item} aiReasons={item.ai_match_reasons} />
+            renderItem={({ item, index }) => (
+              <FadeInUp delay={Math.min(index, 8) * motion.stagger}>
+                <ProductCard product={item} aiReasons={item.ai_match_reasons} />
+              </FadeInUp>
             )}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>No products found for this search.</Text>
+              <FadeInUp>
+                <Text style={[styles.emptyText, { color: colors.fgDim }]}>
+                  No products matched. Try rephrasing your search.
+                </Text>
+              </FadeInUp>
             }
           />
         ) : null}
@@ -196,43 +321,79 @@ export default function HomeTab() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <SiteHeader />
+        <FadeInUp delay={0}>
+          <SiteHeader />
+        </FadeInUp>
 
-        <View style={styles.hero}>
-          <Text style={styles.kicker}>Ask Scout</Text>
-          <Text style={styles.heroText}>
-            We read the back label{"\n"}
-            <Text style={styles.heroAccent}>so you don&apos;t have to</Text>.
-          </Text>
-        </View>
+        {/* Editorial hero */}
+        <FadeInUp delay={motion.stagger}>
+          <View style={styles.heroWrap}>
+            <Eyebrow style={{ paddingHorizontal: spacing.lg }}>Ask Scout</Eyebrow>
+            <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.sm }}>
+              <DisplayHero
+                text="We read the back label"
+                accent="so you don't have to"
+              />
+            </View>
+          </View>
+        </FadeInUp>
 
-        <View style={styles.searchBlock}>
-          <ScoutSearchBar
-            value={prompt}
-            onChangeText={setPrompt}
-            onSubmit={() => void runSearch(prompt)}
+        {/* Search */}
+        <FadeInUp delay={motion.stagger * 2}>
+          <View style={styles.searchBlock}>
+            <ScoutSearchBar value={prompt} onChangeText={setPrompt} onSubmit={() => void runSearch(prompt)} />
+          </View>
+        </FadeInUp>
+
+        <FadeInUp delay={motion.stagger * 3}>
+          <PromptChips
+            style={styles.chipsBlock}
+            onSelect={(p) => {
+              setPrompt(p);
+              void runSearch(p);
+            }}
           />
-        </View>
+        </FadeInUp>
 
-        <PromptChips
-          style={styles.chipsBlock}
-          onSelect={(p) => {
-            setPrompt(p);
-            void runSearch(p);
-          }}
-        />
+        {/* Marquee showcase */}
+        {marqueeProducts.length > 0 && (
+          <FadeInUp delay={motion.stagger * 4}>
+            <MarqueeShowcase products={marqueeProducts} />
+          </FadeInUp>
+        )}
 
+        {/* Landing sections */}
         {loadingLanding && !landing ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
-        ) : null}
-
-        {landing ? (
+          <View>
+            <SkeletonStats />
+            <SkeletonSection />
+            <SkeletonSection />
+          </View>
+        ) : landing ? (
           <>
-            <LandingStatsStrip totalScored={landing.totalScored} avgScore={landing.avgScore} />
-            {landing.facts?.length > 0 && <LandingFacts facts={landing.facts} />}
-            {landing.goalBoards?.length > 0 && <LandingGoalBoards boards={landing.goalBoards} />}
-            {landing.bestInClass?.length > 0 && <LandingBestInClass categories={landing.bestInClass} />}
-            {landing.dodgeList?.length > 0 && <LandingDodgeList items={landing.dodgeList} />}
+            <FadeInUp delay={0}>
+              <LandingStatsStrip totalScored={landing.totalScored} avgScore={landing.avgScore} />
+            </FadeInUp>
+            {landing.facts?.length > 0 && (
+              <FadeInUp delay={motion.stagger}>
+                <LandingFacts facts={landing.facts} />
+              </FadeInUp>
+            )}
+            {landing.goalBoards?.length > 0 && (
+              <FadeInUp delay={motion.stagger * 2}>
+                <LandingGoalBoards boards={landing.goalBoards} />
+              </FadeInUp>
+            )}
+            {landing.bestInClass?.length > 0 && (
+              <FadeInUp delay={motion.stagger * 3}>
+                <LandingBestInClass categories={landing.bestInClass} />
+              </FadeInUp>
+            )}
+            {landing.dodgeList?.length > 0 && (
+              <FadeInUp delay={motion.stagger * 4}>
+                <LandingDodgeList items={landing.dodgeList} />
+              </FadeInUp>
+            )}
           </>
         ) : null}
       </ScrollView>
@@ -241,21 +402,49 @@ export default function HomeTab() {
 }
 
 const styles = StyleSheet.create({
-  // Landing
   scroll: { paddingBottom: spacing.xxl * 2 },
-  hero: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
-  kicker: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 11,
-    letterSpacing: 2.4,
-    textTransform: "uppercase",
-    color: colors.fgDim,
-    marginBottom: spacing.sm,
-  },
-  heroText: { ...typography.hero, color: colors.fg, marginBottom: spacing.lg },
-  heroAccent: { ...typography.heroAccent, color: colors.accent },
+  heroWrap: { marginTop: spacing.sm, marginBottom: spacing.lg },
   searchBlock: { paddingHorizontal: spacing.lg },
-  chipsBlock: { paddingHorizontal: spacing.lg },
+  chipsBlock: { paddingHorizontal: spacing.lg, marginTop: spacing.sm },
+
+  // Marquee
+  marqueeOuter: {
+    marginTop: spacing.xl,
+    overflow: "hidden",
+    height: 220,
+  },
+  marqueeTrack: {
+    flexDirection: "row",
+    gap: MARQUEE_GAP,
+    paddingHorizontal: spacing.lg,
+  },
+  marqueeCard: { width: MARQUEE_CARD_W },
+  marqueeImageWrap: {
+    width: MARQUEE_CARD_W,
+    height: MARQUEE_CARD_W,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  marqueeImage: { width: "100%", height: "100%", padding: 8 },
+  marqueeBrand: { fontFamily: fonts.sansMedium, fontSize: 9, letterSpacing: 1.2, marginTop: 8 },
+  marqueeName: { fontFamily: fonts.sansSemiBold, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  marqueeFadeL: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    zIndex: 10,
+  },
+  marqueeFadeR: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    zIndex: 10,
+  },
 
   // Search results
   searchHeader: {
@@ -264,61 +453,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: radius.full,
-    backgroundColor: colors.panel,
     borderWidth: 1,
-    borderColor: colors.line,
     alignItems: "center",
     justifyContent: "center",
   },
   searchBarWrap: { flex: 1 },
-  center: { flex: 1, padding: spacing.xl, alignItems: "center", justifyContent: "center" },
-  loadingText: {
-    fontFamily: fonts.sans,
-    color: colors.fgMuted,
-    marginTop: spacing.md,
-    textAlign: "center",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  errorBox: { width: "100%" },
-  errorText: { fontFamily: fonts.sans, color: colors.bad, fontSize: 15, lineHeight: 22 },
+  searchLoadingWrap: { flex: 1 },
+  errorBox: { margin: spacing.lg },
+  errorText: { fontFamily: fonts.sans, fontSize: 15, lineHeight: 22 },
   upgradeBtn: {
     marginTop: spacing.md,
-    backgroundColor: colors.fg,
     paddingVertical: 12,
     borderRadius: radius.lg,
     alignItems: "center",
   },
-  upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg, fontSize: 15 },
+  upgradeBtnText: { fontFamily: fonts.sansBold, fontSize: 15 },
   resultsGrid: { padding: spacing.sm, paddingBottom: spacing.xxl },
   summaryPanel: { margin: spacing.sm, marginBottom: 0 },
-  summaryText: {
-    fontFamily: fonts.sans,
-    color: colors.fg,
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  summaryText: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
   refineChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.bgSoft,
   },
-  refineText: { fontFamily: fonts.sansMedium, color: colors.fg, fontSize: 12 },
+  refineText: { fontFamily: fonts.sansMedium, fontSize: 12 },
   emptyText: {
     fontFamily: fonts.sans,
-    color: colors.fgDim,
     textAlign: "center",
     padding: spacing.xl,
     fontSize: 15,
+    lineHeight: 22,
   },
 });

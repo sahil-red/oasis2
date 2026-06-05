@@ -12,14 +12,16 @@ function RootStack() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bg },
+        animation: "slide_from_right",
+        animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="product/[slug]" options={{ presentation: "card" }} />
-      <Stack.Screen name="search" options={{ presentation: "card" }} />
-      <Stack.Screen name="subscribe" options={{ presentation: "modal" }} />
+      <Stack.Screen name="index" options={{ animation: "fade" }} />
+      <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+      <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+      <Stack.Screen name="product/[slug]" options={{ presentation: "card", animation: "slide_from_right" }} />
+      <Stack.Screen name="search" options={{ presentation: "card", animation: "fade" }} />
+      <Stack.Screen name="subscribe" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
     </Stack>
   );
 }

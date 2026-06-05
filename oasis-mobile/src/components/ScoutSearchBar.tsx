@@ -1,13 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
-import { colors, fonts, radius, spacing, typography } from "@/theme";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useTheme } from "@/lib/theme-context";
+import { motion } from "@/theme/motion";
+import { fonts, radius, spacing, typography } from "@/theme";
 
 export function ScoutSearchBar({
   value,
@@ -22,35 +22,45 @@ export function ScoutSearchBar({
   loading?: boolean;
   placeholder?: string;
 }) {
-  const [focused, setFocused] = useState(false);
+  const { colors } = useTheme();
+  const focusAnim = useSharedValue(0);
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: focusAnim.value === 1 ? colors.accent + "88" : colors.line,
+    shadowOpacity: focusAnim.value * 0.12,
+  }));
 
   return (
-    <View style={[styles.wrap, focused && styles.wrapFocused]}>
-      <Ionicons name="sparkles" size={20} color={colors.accent} style={styles.icon} />
+    <Animated.View style={[
+      styles.wrap,
+      { backgroundColor: colors.panel, shadowColor: colors.accent },
+      borderStyle,
+    ]}>
+      <Ionicons name="sparkles" size={19} color={colors.accent} style={styles.icon} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, { color: colors.fg }]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.fgDim}
         returnKeyType="search"
         onSubmitEditing={onSubmit}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onFocus={() => { focusAnim.value = withTiming(1, motion.timingFast); }}
+        onBlur={() => { focusAnim.value = withTiming(0, motion.timingFast); }}
         editable={!loading}
       />
       <Pressable
-        style={[styles.btn, (!value.trim() || loading) && styles.btnDisabled]}
+        style={[styles.btn, { backgroundColor: colors.fg }, loading && styles.btnLoading]}
         onPress={onSubmit}
-        disabled={!value.trim() || loading}
+        disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color={colors.bg} size="small" />
         ) : (
-          <Ionicons name="arrow-forward" size={20} color={colors.bg} />
+          <Ionicons name="arrow-forward" size={19} color={colors.bg} />
         )}
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -58,32 +68,28 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.panel,
     borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.line,
     paddingLeft: spacing.md,
     paddingRight: 4,
     minHeight: 52,
-  },
-  wrapFocused: {
-    borderColor: colors.lineStrong,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 12,
+    elevation: 0,
   },
   icon: { marginRight: spacing.sm },
   input: {
     flex: 1,
     fontFamily: fonts.sans,
     fontSize: typography.body.fontSize,
-    color: colors.fg,
     paddingVertical: spacing.sm,
   },
   btn: {
-    backgroundColor: colors.fg,
     borderRadius: radius.lg,
     width: 44,
     height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  btnDisabled: { opacity: 0.45 },
+  btnLoading: { opacity: 0.6 },
 });

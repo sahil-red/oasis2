@@ -9,7 +9,7 @@ export function SiteHeader() {
     <View style={styles.row}>
       <View style={styles.left}>
         <View style={[styles.logo, { backgroundColor: colors.fg }]}>
-          <Text style={[styles.logoText, { color: colors.bg }]}>S</Text>
+          <Text style={[styles.logoText, { color: colors.bg, fontFamily: fonts.display }]}>S</Text>
         </View>
         <Text style={[styles.brand, { color: colors.fg }]}>Scout</Text>
       </View>
@@ -24,24 +24,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
-  left: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  left: { flexDirection: "row", alignItems: "center", gap: 10 },
   logo: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   logoText: {
-    fontFamily: fonts.sansBold,
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 20,
   },
   brand: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 15,
-    letterSpacing: -0.2,
+    fontFamily: fonts.display,
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
 });

@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -13,15 +14,29 @@ import {
   Text,
   View,
 } from "react-native";
+import { darkColors as colors } from "@/theme";
+import Animated, {
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+  useAnimatedProps,
+} from "react-native-reanimated";
 import { PdpIngredients } from "@/components/pdp/PdpIngredients";
+import { FadeInUp } from "@/components/motion/FadeInUp";
+import { PressableScale } from "@/components/motion/PressableScale";
 import { Screen } from "@/components/Screen";
+import { Hairline } from "@/components/ui/Hairline";
 import { fetchProduct } from "@/lib/api";
 import { useBasket } from "@/lib/basket";
+import { useTheme } from "@/lib/theme-context";
 import { bandFromScore, labelForBand } from "@/lib/score";
 import { VERDICT_COLORS, VERDICT_SHORT, formatPrice, resolveVerdict } from "@/lib/verdict";
-import { colors, fonts, radius, spacing } from "@/theme";
+import { fonts, radius, spacing } from "@/theme";
+import { motion } from "@/theme/motion";
 import type { PdpSwap, ProductDetail, VerdictId } from "@/types/api";
 import { Ionicons } from "@expo/vector-icons";
+
+const AnimatedText = Animated.createAnimatedComponent(Text);
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -50,7 +65,7 @@ function SectionLabel({ text }: { text: string }) {
 }
 
 function Divider() {
-  return <View style={styles.divider} />;
+  return <Hairline style={styles.divider} />;
 }
 
 function SwapCard({ swap, onPress }: { swap: PdpSwap; onPress: () => void }) {
@@ -123,9 +138,20 @@ export default function ProductScreen() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  const { colors, isDark } = useTheme();
   const verdict = (product?.verdict_resolved as VerdictId | null) ?? (product ? resolveVerdict(product) : null);
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
   const core = product?.core_scores;
+
+  // Animated score count-up
+  const scoreAnim = useSharedValue(0);
+  useEffect(() => {
+    if (core?.score != null) {
+      scoreAnim.value = withTiming(core.score, { duration: 600 });
+    }
+  }, [core?.score]);
+  const displayScore = useDerivedValue(() => String(Math.round(scoreAnim.value)));
+  const animatedScoreProps = useAnimatedProps(() => ({}));
   const images = product?.image_urls?.length ? product.image_urls : [];
   const n = product?.nutrition;
   const chips = product?.deepseek_chips ?? (core?.verdict_sublabels ?? []);
@@ -267,8 +293,10 @@ export default function ProductScreen() {
                   ) : null}
                 </View>
                 <View style={styles.bigScore}>
-                  <Text style={[styles.bigScoreNum, { color: vc.fg }]}>{core.score}</Text>
-                  <Text style={styles.bigScoreDenom}>/100</Text>
+                  <Animated.Text style={[styles.bigScoreNum, { color: vc.fg }]}>
+                    {displayScore.value}
+                  </Animated.Text>
+                  <Text style={[styles.bigScoreDenom, { color: colors.fgDim }]}>/100</Text>
                 </View>
               </View>
               {typeof why === "string" && why ? (
@@ -385,25 +413,33 @@ export default function ProductScreen() {
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>
 
-      {/* Sticky CTA */}
-      <View style={styles.ctaBar}>
-        <Pressable
-          style={[styles.cta, inBasket && styles.ctaAdded]}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            basket.add(product.slug, product.name);
-          }}
+      {/* Sticky glass CTA */}
+      <BlurView
+        tint={isDark ? "dark" : "light"}
+        intensity={50}
+        style={[styles.ctaBar, { borderTopColor: colors.line }]}
+      >
+        <View style={[StyleSheet.absoluteFillObject, {
+          backgroundColor: isDark ? "rgba(10,10,11,0.72)" : "rgba(250,247,242,0.72)",
+        }]} />
+        <PressableScale
+          haptic="medium"
+          onPress={() => { basket.add(product.slug, product.name); }}
+          style={styles.ctaPressable}
         >
-          <Ionicons
-            name={inBasket ? "checkmark-circle" : "bag-add"}
-            size={20}
-            color={inBasket ? colors.good : colors.bg}
-          />
-          <Text style={[styles.ctaText, inBasket && { color: colors.good }]}>
-            {inBasket ? "In your basket" : "Add to basket"}
-          </Text>
-        </Pressable>
-      </View>
+          <View style={[styles.cta, { backgroundColor: inBasket ? "transparent" : colors.fg },
+            inBasket && { borderWidth: 1.5, borderColor: colors.good }]}>
+            <Ionicons
+              name={inBasket ? "checkmark-circle" : "bag-add"}
+              size={20}
+              color={inBasket ? colors.good : colors.bg}
+            />
+            <Text style={[styles.ctaText, { color: inBasket ? colors.good : colors.bg }]}>
+              {inBasket ? "In your basket" : "Add to basket"}
+            </Text>
+          </View>
+        </PressableScale>
+      </BlurView>
     </Screen>
   );
 }
@@ -590,7 +626,7 @@ const styles = StyleSheet.create({
   concernDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   concernText: { flex: 1, fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 14, lineHeight: 20 },
 
-  // CTA
+  // CTA bar (glass)
   ctaBar: {
     position: "absolute",
     bottom: 0,
@@ -598,18 +634,19 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
-    paddingTop: spacing.md,
-    backgroundColor: colors.bg + "F0",
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
+  ctaPressable: { width: "100%" },
   cta: {
     flexDirection: "row",
     gap: spacing.sm,
-    backgroundColor: colors.fg,
     paddingVertical: 16,
     borderRadius: radius.xl,
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaAdded: { backgroundColor: colors.panel, borderWidth: 1.5, borderColor: colors.good },
-  ctaText: { fontFamily: fonts.sansBold, color: colors.bg, fontSize: 16 },
+  ctaAdded: {},
+  ctaText: { fontFamily: fonts.sansBold, fontSize: 16 },
 });
