@@ -918,7 +918,8 @@ export function CatalogView({
               >
                 <SlidersHorizontal className="h-3 w-3 opacity-70" aria-hidden />
                 Refine
-                {activeFilterCount > 0 ? (
+                {/* Don't show filter badge in AI mode — filters don't affect AI results */}
+                {activeFilterCount > 0 && !aiMode ? (
                   <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-bg) px-1 text-[9px] font-bold text-(--color-fg)">
                     {activeFilterCount}
                   </span>
