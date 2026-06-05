@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
+import { SearchScoreTabs } from "@/components/search-score-tabs";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
@@ -52,6 +53,10 @@ export const ProductCard = memo(function ProductCard({
   const chipLabels = deepseekChipLabels.length ? deepseekChipLabels : scoreChipLabels;
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
   const aiMatchScore = "ai_match_score" in product ? product.ai_match_score : undefined;
+  const aiHealthScore =
+    "ai_health_score" in product && typeof product.ai_health_score === "number"
+      ? product.ai_health_score
+      : goalFit ?? core?.score;
   const aiReasons =
     "ai_match_reasons" in product && Array.isArray(product.ai_match_reasons)
       ? product.ai_match_reasons
@@ -60,6 +65,7 @@ export const ProductCard = memo(function ProductCard({
     "ai_match_warning" in product && typeof product.ai_match_warning === "string"
       ? product.ai_match_warning
       : null;
+  const aiReasonLines = aiReasons.filter((r) => !/^Scout(\s+score)?\s*\d/i.test(r)).slice(0, 3);
 
   return (
     <article className="group flex h-full flex-col">
@@ -99,14 +105,12 @@ export const ProductCard = memo(function ProductCard({
 
         {/* score badge, top-right (subtle, not screaming) */}
         {aiMatchScore != null ? (
-          <div className="absolute right-2 top-2 rounded-xl border border-(--color-line) bg-(--color-panel)/95 px-2 py-1 text-right shadow-sm">
-            <p className="font-display text-xl leading-none tabular-nums text-(--color-fg)">
-              {aiMatchScore}
-            </p>
-            <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-(--color-fg-dim)">
-              match
-            </p>
-          </div>
+          <SearchScoreTabs
+            className="absolute right-2 top-2"
+            matchScore={aiMatchScore}
+            healthScore={aiHealthScore}
+            verdict={verdict}
+          />
         ) : goalFit != null ? (
           <div className="absolute right-2 top-2">
             <GoalFitBadge fit={goalFit} />
@@ -137,9 +141,9 @@ export const ProductCard = memo(function ProductCard({
           </h3>
 
           {/* chips — subtle, monochrome, no verdict color */}
-          {aiReasons.length > 0 ? (
+          {aiReasonLines.length > 0 ? (
             <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
-              {aiReasons.slice(0, 3).join(" · ")}
+              {aiReasonLines.join(" · ")}
             </p>
           ) : chipLabels.length > 0 ? (
             <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">

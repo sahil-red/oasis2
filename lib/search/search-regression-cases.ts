@@ -81,6 +81,20 @@ export const PARSE_CASES: ParseCase[] = [
       p.soft_preferences.some((s) => /low fat/i.test(s)) &&
       p.health_contexts.includes("fat_loss"),
   },
+  {
+    query: "diabetic friendly breakfast cereals",
+    check: (p) =>
+      p.health_contexts.includes("diabetic") &&
+      p.hard_constraints.max_sugar_g_100g === 5 &&
+      p.sort_intent === "healthiest",
+  },
+  {
+    query: "healthy ragi biscuits for kids",
+    check: (p) =>
+      p.health_contexts.includes("kids") &&
+      p.sort_intent === "healthiest" &&
+      (p.product_terms.includes("ragi") || p.product_terms.includes("biscuits")),
+  },
 ];
 
 /** Live DB checks — run via pnpm search:regression:live */

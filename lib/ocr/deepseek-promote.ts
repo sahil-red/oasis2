@@ -332,9 +332,13 @@ export function buildDeepseekPromotionPatch(
         chips_evidence: extracted.chips_evidence,
         why: extracted.why,
         extracted,
+        raw_response: result.raw_response,
         usage: result.usage,
         response_metadata: result.response_metadata,
         local_json: result.local_json ?? options.sourcePath ?? null,
+        has_apple_ocr_raw: Boolean(
+          previousPayload.apple_ocr_raw && typeof previousPayload.apple_ocr_raw === "object",
+        ),
         promoted: {
           nutrition: promoteNutrition,
           ingredients: promoteIngredients,

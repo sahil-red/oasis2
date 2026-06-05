@@ -2,7 +2,9 @@ import { matchAdditives } from "@/lib/scoring/rules";
 import { insCodesFromText } from "@/lib/scoring/intelligence-row-resolve";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
-import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
+import type { GoalId } from "@/lib/goals/types";
+import type { ParsedHealthContext, ParsedProductQuery } from "@/lib/search/query-parse";
 import { passesHardConstraints } from "@/lib/search/ai-retrieval";
 import { passesNoAddedSugarRule } from "@/lib/search/added-sugar-scan";
 import {
@@ -149,6 +151,7 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
     lowFatPreferred: parsed.soft_preferences.some((s) => /low fat/i.test(s)),
   });
   score += milkRelevanceAdjust(p, parsed.product_terms, parsed.sort_intent);
+  score += healthContextSortBoost(p, parsed);
   score += Math.min(12, (p.core_scores?.score ?? 0) * 0.02);
   return score;
 }
@@ -253,18 +256,167 @@ export function passesSemanticConstraints(
   return true;
 }
 
-function healthContextSortBoost(p: ProductListItem, parsed: ParsedProductQuery): number {
-  const ctx = parsed.health_contexts;
-  if (!ctx.includes("diabetic") && !ctx.includes("pcos")) return 0;
-  const subs = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
-  let boost = 0;
-  if (subs.includes("hidden_sweetener")) boost -= 25;
-  const sugar =
+function productSugarG(p: ProductListItem): number | null {
+  return (
     nutritionValue(p.nutrition, "sugar_g_100g") ??
-    nutritionValue(p.nutrition, "added_sugar_g_100g");
-  if (sugar != null && sugar <= 10) boost += 12;
-  else if (sugar != null && sugar > 15) boost -= 8;
-  return boost;
+    nutritionValue(p.nutrition, "added_sugar_g_100g")
+  );
+}
+
+function kidsAdditivePenalty(ingredients: string | null | undefined): number {
+  if (!ingredients?.trim()) return 0;
+  const text = ingredients.toLowerCase();
+  let n = 0;
+  if (/\bpreserv/i.test(text)) n += 2;
+  const codes = insCodesFromText(text);
+  if (
+    codes.some((c) => {
+      const num = Number(c.replace(/\D/g, ""));
+      return num >= 200 && num <= 299;
+    })
+  ) {
+    n += 2;
+  }
+  n += matchAdditives(ingredients).filter(
+    (h) => h.tier === "moderate" || h.tier === "hazardous",
+  ).length;
+  return n;
+}
+
+export function usesHealthIntentSort(parsed: ParsedProductQuery): boolean {
+  return healthContextGoalId(parsed.health_contexts) != null;
+}
+
+/** Map AI search health context to the Scout goal used on PDP / catalog goal boards. */
+export function healthContextGoalId(contexts: ParsedHealthContext[]): GoalId | null {
+  if (contexts.includes("diabetic")) return "diabetic";
+  if (contexts.includes("pcos")) return "pcos";
+  if (contexts.includes("kids")) return "kids";
+  if (contexts.includes("fat_loss")) return "fat-loss";
+  if (contexts.includes("gym")) return "gym";
+  if (contexts.includes("bulk")) return "bulk";
+  return null;
+}
+
+function hasGoalFitSignals(p: ProductListItem): boolean {
+  const n = p.nutrition;
+  if (
+    n &&
+    [
+      n.sugar_g_100g,
+      n.added_sugar_g_100g,
+      n.protein_g_100g,
+      n.fat_g_100g,
+      n.fiber_g_100g,
+      n.sodium_mg_100g,
+    ].some((v) => typeof v === "number" && Number.isFinite(v))
+  ) {
+    return true;
+  }
+  if (p.ingredients_raw?.trim()) return true;
+  return typeof p.core_scores?.score === "number";
+}
+
+/** Per-goal Scout fit (0–100) when we have label data to score it. */
+export function healthContextGoalFit(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+): number | null {
+  const goal = healthContextGoalId(parsed.health_contexts);
+  if (!goal || !hasGoalFitSignals(p)) return null;
+  return computeGoalFit(goal, goalFitInputs(p)).fit;
+}
+
+function heuristicHealthIntentTier(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+): number {
+  const ctx = parsed.health_contexts;
+  const sugar = productSugarG(p);
+  const subs = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+  const ing = (p.ingredients_raw ?? "").toLowerCase();
+
+  if (ctx.includes("diabetic") || ctx.includes("pcos")) {
+    if (subs.includes("hidden_sweetener")) return 0;
+    if (sugar == null) return 18;
+    if (sugar <= 1) return 100;
+    if (sugar <= 3) return 88;
+    if (sugar <= 5) return 72;
+    if (sugar <= 8) return 48;
+    if (sugar <= 10) return 28;
+    if (sugar <= 15) return 8;
+    return 0;
+  }
+
+  if (ctx.includes("fat_loss")) {
+    if (sugar == null) return 25;
+    if (sugar <= 3) return 90;
+    if (sugar <= 8) return 65;
+    if (sugar <= 12) return 35;
+    return Math.max(0, 20 - Math.round(sugar));
+  }
+
+  if (ctx.includes("kids")) {
+    let tier = Math.round((p.core_scores?.score ?? 45) * 0.55);
+    if (subs.includes("hidden_sweetener")) tier -= 28;
+    if (sugar != null) {
+      if (sugar <= 3) tier += 38;
+      else if (sugar <= 8) tier += 18;
+      else if (sugar <= 12) tier += 2;
+      else if (sugar <= 18) tier -= 18;
+      else tier -= 32;
+    } else {
+      tier -= 8;
+    }
+    if (/maida|refined wheat flour/i.test(ing)) tier -= 32;
+    tier -= Math.min(28, kidsAdditivePenalty(p.ingredients_raw) * 9);
+    const verdict = p.core_scores?.verdict;
+    if (verdict === "occasional_treat" || verdict === "limit") tier -= 12;
+    return Math.max(0, Math.min(100, tier));
+  }
+
+  return 0;
+}
+
+/** 0–100 — higher means better fit for diabetic / kids / fat-loss intent. */
+export function healthIntentSortTier(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+): number {
+  const goalFit = healthContextGoalFit(p, parsed);
+  if (goalFit != null) return goalFit;
+  return heuristicHealthIntentTier(p, parsed);
+}
+
+function healthContextSortBoost(p: ProductListItem, parsed: ParsedProductQuery): number {
+  if (!usesHealthIntentSort(parsed)) return 0;
+  return Math.round(healthIntentSortTier(p, parsed) * 0.2);
+}
+
+function healthIntentSugarSortKey(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+): number {
+  const sugar = productSugarG(p);
+  if (sugar != null) return -sugar;
+  return usesHealthIntentSort(parsed) ? -999 : -1;
+}
+
+function healthIntentSortKey(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+  relevance: number,
+  strictMatch: boolean,
+  extras: number[],
+): number[] {
+  const healthTier = healthIntentSortTier(p, parsed);
+  return [
+    strictMatch ? 1 : 0,
+    healthTier,
+    healthIntentSugarSortKey(p, parsed),
+    relevance,
+    ...extras,
+  ];
 }
 
 function sortKey(
@@ -289,6 +441,7 @@ function sortKey(
   const strictTier = strictMatch ? 1 : 0;
   const paneerTier = paneerIntentSortTier(p, parsed.product_terms);
   const lowFatPref = parsed.soft_preferences.some((s) => /low fat/i.test(s));
+  const healthIntent = usesHealthIntentSort(parsed);
 
   switch (parsed.sort_intent) {
     case "highest_protein": {
@@ -305,9 +458,25 @@ function sortKey(
     case "cheapest":
       return [strictTier, relevance, price === 999999 ? -1 : -price, healthBoost, scout];
     case "healthiest":
+      if (healthIntent) {
+        const goalScout = healthContextGoalFit(p, parsed) ?? scout;
+        return healthIntentSortKey(p, parsed, relevance, strictMatch, [
+          goalScout,
+          healthBoost,
+          protein ?? 0,
+        ]);
+      }
       return [strictTier, relevance, scout, healthBoost, protein ?? 0];
     case "best_match":
     default:
+      if (healthIntent) {
+        const goalScout = healthContextGoalFit(p, parsed) ?? scout;
+        return healthIntentSortKey(p, parsed, relevance, strictMatch, [
+          preservTier,
+          goalScout,
+          protein ?? 0,
+        ]);
+      }
       if (paneerTier > 0) {
         const fatKey = lowFatPref || parsed.hard_constraints.max_fat_g_100g != null;
         return [
@@ -323,7 +492,7 @@ function sortKey(
       if (parsed.hard_constraints.max_fat_g_100g != null) {
         return [strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
       }
-      if (parsed.hard_constraints.max_sugar_g_100g != null) {
+      if (parsed.hard_constraints.max_sugar_g_100g != null && !healthIntent) {
         return [strictTier, relevance, preservTier, sugar != null ? -sugar : -1, healthBoost, scout];
       }
       if (lowFatPref) {
@@ -390,9 +559,17 @@ export function rankCandidatesSemantically(
     ...(useRelaxed ? sortScored(relaxedOnly, parsed) : []),
   ].slice(0, limit);
 
-  const rankings: LlmRankedItem[] = ordered.map(({ p, relevance, strict: isStrict }) => ({
+  const healthWeighted = usesHealthIntentSort(parsed);
+  const rankings: LlmRankedItem[] = ordered.map(({ p, relevance, strict: isStrict }) => {
+    const goalFit = healthContextGoalFit(p, parsed);
+    const score = healthWeighted
+      ? goalFit != null
+        ? Math.min(100, Math.round(relevance * 0.22 + goalFit * 0.78))
+        : Math.min(100, Math.round(relevance * 0.4 + healthIntentSortTier(p, parsed) * 0.6))
+      : Math.min(100, Math.round(relevance + (p.core_scores?.score ?? 0) * 0.15));
+    return {
     product_id: p.id,
-    score: Math.min(100, Math.round(relevance + (p.core_scores?.score ?? 0) * 0.15)),
+    score,
     reasons: deterministicReasons(p, parsed),
     warning:
       useRelaxed && !isStrict
@@ -401,7 +578,8 @@ export function rankCandidatesSemantically(
           ? `Over ₹${parsed.hard_constraints.max_price} — close option`
           : "Close match"
         : null,
-  }));
+  };
+  });
 
   const summary = useRelaxed
     ? `Few exact matches for "${parsed.product_terms.join(" ") || "your request"}" — showing close options.`

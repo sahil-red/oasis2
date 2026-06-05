@@ -179,8 +179,10 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   const sugarLimit = firstNumberNear(lower, /(?:sugar|sugars)\D{0,12}(\d{1,3})\s*g/);
   if (/zero sugar|no sugar/.test(lower)) parsed.hard_constraints.max_sugar_g_100g = 1;
   else if (sugarLimit) parsed.hard_constraints.max_sugar_g_100g = sugarLimit;
-  else if (/low sugar|less sugar|diabetic|diabetes|pcos/.test(lower)) {
+  else if (/low sugar|less sugar/.test(lower)) {
     parsed.hard_constraints.max_sugar_g_100g = 10;
+  } else if (/diabetic|diabetes|pcos/.test(lower)) {
+    parsed.hard_constraints.max_sugar_g_100g = 5;
   }
 
   const fatLimit = firstNumberNear(lower, /(?:fat)\D{0,12}(\d{1,3})\s*g/);
@@ -212,6 +214,22 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/diabetic|diabetes/.test(lower)) parsed.health_contexts.push("diabetic");
   if (/pcos/.test(lower)) parsed.health_contexts.push("pcos");
   if (/kids|children|child/.test(lower)) parsed.health_contexts.push("kids");
+
+  if (
+    (parsed.health_contexts.includes("diabetic") ||
+      parsed.health_contexts.includes("pcos")) &&
+    parsed.sort_intent !== "cheapest" &&
+    parsed.sort_intent !== "highest_protein"
+  ) {
+    parsed.sort_intent = "healthiest";
+  }
+  if (
+    parsed.health_contexts.includes("kids") &&
+    /healthy|healthiest|tiffin|school|snack|nutritious|wholesome/.test(lower) &&
+    parsed.sort_intent !== "cheapest"
+  ) {
+    parsed.sort_intent = "healthiest";
+  }
   if (/gym/.test(lower)) parsed.health_contexts.push("gym");
   if (/fat loss|weight loss|diet/.test(lower)) parsed.health_contexts.push("fat_loss");
   if (/bulk|bulking|weight gain/.test(lower)) parsed.health_contexts.push("bulk");

@@ -3,6 +3,7 @@ import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
 import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { rankCandidatesWithDeepseek } from "@/lib/search/ai-rank";
 import {
+  healthContextGoalFit,
   mergeDeterministicWithLlmRankings,
   rankCandidatesSemantically,
 } from "@/lib/search/semantic-rank";
@@ -12,6 +13,8 @@ import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-pa
 
 export type AiSearchItem = CatalogGridItem & {
   ai_match_score: number;
+  /** Goal-fit or core score — shown on the Health tab in search cards. */
+  ai_health_score?: number;
   ai_match_reasons: string[];
   ai_match_warning?: string | null;
 };
@@ -35,7 +38,15 @@ export type AiSearchResult = {
 
 const STRUCTURED_ESCALATE_MIN = 6;
 
-function toAiGridItem(p: ProductListItem, score: number, reasons: string[], warning: string | null): AiSearchItem {
+function toAiGridItem(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+  score: number,
+  reasons: string[],
+  warning: string | null,
+): AiSearchItem {
+  const healthScore =
+    healthContextGoalFit(p, parsed) ?? p.core_scores?.score ?? undefined;
   return {
     id: p.id,
     slug: p.slug,
@@ -59,6 +70,7 @@ function toAiGridItem(p: ProductListItem, score: number, reasons: string[], warn
         }
       : null,
     ai_match_score: score,
+    ai_health_score: healthScore,
     ai_match_reasons: reasons,
     ai_match_warning: warning,
   };
@@ -123,7 +135,7 @@ export async function runAiProductSearch(
   for (const row of rankings) {
     const p = byId.get(row.product_id);
     if (!p) continue;
-    items.push(toAiGridItem(p, row.score, row.reasons, row.warning ?? null));
+    items.push(toAiGridItem(p, parsed, row.score, row.reasons, row.warning ?? null));
   }
 
   return {

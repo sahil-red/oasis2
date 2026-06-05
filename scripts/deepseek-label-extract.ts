@@ -19,7 +19,6 @@ import { finished } from "node:stream/promises";
 import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import type { AppleRawOcrProduct } from "@/lib/ocr/apple-raw";
 import {
   buildDeepseekUserPrompt,
   DeepseekExtractionError,
@@ -27,13 +26,19 @@ import {
   validateExtractedLabel,
   type DeepseekExtractionResult,
 } from "@/lib/ocr/deepseek-label-extract";
+import { adminClient } from "@/lib/supabase/admin";
+import type { AppleRawOcrProduct } from "@/lib/ocr/apple-raw";
+import {
+  loadAppleRawOcrForSku,
+  loadAppleRawOcrFromDb,
+  safeSkuFileName,
+} from "@/lib/ocr/load-apple-raw-ocr";
 import { csvRecordToRow, dedupeCsvRows, resolveCsvColumns, type ZeptoCsvRow } from "@/lib/zepto-import/csv-row";
 import { readCsvFile } from "@/lib/zepto-import/read-csv";
 import { scriptArgv } from "@/lib/util/script-argv";
 
 loadEnv({ path: ".env.local" });
 
-const OCR_PRODUCT_DIR = resolve(process.cwd(), "data/cache/apple-ocr-raw/products");
 const OUT_DIR = resolve(process.cwd(), "data/cache/deepseek-label-extract");
 const PRODUCT_OUT_DIR = resolve(OUT_DIR, "products");
 const RESULTS_PATH = resolve(OUT_DIR, "results.jsonl");
@@ -59,6 +64,7 @@ type WorkItem = {
   row: ZeptoCsvRow;
   rawPath: string;
   raw: AppleRawOcrProduct;
+  rawSource: "local" | "db";
 };
 
 function parseArgs(): Args {
@@ -123,10 +129,6 @@ function csvInputPath(): string {
   return resolve(homedir(), "Downloads", "data.csv");
 }
 
-function safeSku(sku: string): string {
-  return sku.replace(/[^\w.-]/g, "_");
-}
-
 async function loadDoneSkus(): Promise<Set<string>> {
   const done = new Set<string>();
   try {
@@ -155,19 +157,6 @@ async function loadCatalogRows(): Promise<ZeptoCsvRow[]> {
   return dedupeCsvRows(
     rows.map((row) => csvRecordToRow(row, cols)).filter((row): row is ZeptoCsvRow => row != null),
   );
-}
-
-async function readRawOcr(sku: string): Promise<{ raw: AppleRawOcrProduct; path: string } | null> {
-  const path = resolve(OCR_PRODUCT_DIR, `${safeSku(sku)}.json`);
-  try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as {
-      apple_ocr_raw?: AppleRawOcrProduct;
-    };
-    if (!parsed.apple_ocr_raw) return null;
-    return { raw: parsed.apple_ocr_raw, path };
-  } catch {
-    return null;
-  }
 }
 
 function validationScore(item: WorkItem): number {
@@ -318,12 +307,28 @@ async function main() {
   await mkdir(PRODUCT_OUT_DIR, { recursive: true });
 
   const rows = await loadCatalogRows();
+  const dbRaw = await loadAppleRawOcrFromDb(
+    adminClient(),
+    rows.map((r) => r.zepto_sku),
+  );
   const items: WorkItem[] = [];
+  let fromLocal = 0;
+  let fromDb = 0;
   for (const row of rows) {
-    const raw = await readRawOcr(row.zepto_sku);
-    if (!raw) continue;
-    items.push({ row, raw: raw.raw, rawPath: raw.path });
+    const loaded = await loadAppleRawOcrForSku(row.zepto_sku, dbRaw);
+    if (!loaded) continue;
+    if (loaded.source === "local") fromLocal++;
+    else fromDb++;
+    items.push({
+      row,
+      raw: loaded.raw,
+      rawPath: loaded.path,
+      rawSource: loaded.source,
+    });
   }
+  console.log(
+    `[deepseek-label] apple_raw sources: local=${fromLocal} db=${fromDb} missing=${rows.length - items.length}`,
+  );
 
   const done = args.resume && !args.fresh ? await loadDoneSkus() : new Set<string>();
   // When resuming a large sequential batch, pick the next N pending SKUs (not the first N catalog rows).
@@ -389,8 +394,22 @@ async function main() {
           );
           result.validation = validateExtractedLabel(result.extracted);
           completed.push(result);
-          const productPath = resolve(PRODUCT_OUT_DIR, `${safeSku(item.row.zepto_sku)}.json`);
-          await writeFile(productPath, JSON.stringify(result, null, 2), "utf8");
+          const productPath = resolve(PRODUCT_OUT_DIR, `${safeSkuFileName(item.row.zepto_sku)}.json`);
+          await writeFile(
+            productPath,
+            JSON.stringify(
+              {
+                ...result,
+                source_apple_ocr_path: item.rawPath,
+                source_apple_ocr: item.rawSource,
+                apple_ocr_combined_text_chars: item.raw.combined_text.length,
+                apple_ocr_image_count: item.raw.image_count,
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
           out.write(`${JSON.stringify({ ...result, local_json: productPath })}\n`);
         }
         processed++;

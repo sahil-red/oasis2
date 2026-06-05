@@ -1,8 +1,6 @@
 import { matchAdditives } from "@/lib/scoring/rules";
 import { insCodesFromText } from "@/lib/scoring/intelligence-row-resolve";
 import { sublabelChipLabels } from "@/lib/scoring/verdict-display";
-import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
-import { VERDICT_LABELS, type VerdictId } from "@/lib/scoring/verdict";
 import { productUsecase } from "@/lib/products/catalog-meta";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -101,22 +99,6 @@ const WARN_SUBLABELS = new Set([
   "trans_fat_present",
   "excessive_sodium",
 ]);
-
-function verdictChip(p: ProductListItem): string | null {
-  const score = p.core_scores?.score;
-  if (score == null) return null;
-  const id: VerdictId | null = p.core_scores?.verdict
-    ? resolveProductVerdict({
-        verdict: p.core_scores.verdict,
-        score,
-        name: p.name,
-        category: p.category,
-        subcategory: p.subcategory,
-      })
-    : null;
-  if (id) return `Scout ${Math.round(score)} · ${VERDICT_LABELS[id].title}`;
-  return `Scout score ${Math.round(score)}`;
-}
 
 function termMatchesQuery(label: string, parsed: ParsedProductQuery): boolean {
   const l = label.toLowerCase();
@@ -225,9 +207,6 @@ export function buildMatchReasons(p: ProductListItem, parsed: ParsedProductQuery
     }
   }
 
-  const vChip = verdictChip(p);
-  if (vChip) reasons.push(vChip);
-
   const l3 = productUsecase(p);
   if (l3 && !termMatchesQuery(l3, parsed)) reasons.push(l3);
 
@@ -236,8 +215,8 @@ export function buildMatchReasons(p: ProductListItem, parsed: ParsedProductQuery
     (r) => !/^₹\d+(\s*—\s*under\s*₹\d+)?$/i.test(r) && !/under ₹\d+/i.test(r),
   );
 
-  if (!withoutPrice.length && p.core_scores?.score != null) {
-    return [`Scout score ${Math.round(p.core_scores.score)}`];
+  if (!withoutPrice.length) {
+    return ["Matches your search"];
   }
 
   return withoutPrice.slice(0, 3);

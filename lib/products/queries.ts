@@ -115,14 +115,14 @@ async function catalogHasVisibleColumn(): Promise<boolean> {
 }
 
 const LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
+  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, ocr_image_url, nutrition, ingredients_raw, zepto_sku, platform";
 
 /** Grid list — omits heavy nutrition/ingredients when diet + goal fit are unused. */
 const GRID_LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, net_weight, price_inr, mrp_inr, image_urls, zepto_sku, platform";
+  "id, slug, name, brand, super_category, category, subcategory, net_weight, price_inr, mrp_inr, image_urls, ocr_image_url, zepto_sku, platform";
 
 const GOAL_LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
+  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, ocr_image_url, nutrition, ingredients_raw, zepto_sku, platform";
 
 const LABEL_FILTER_EXTRA = ", ocr_payload";
 
@@ -217,6 +217,7 @@ export type ProductListItem = Pick<
   deepseek_chips?: string[];
   deepseek_why?: string | null;
   ai_match_score?: number;
+  ai_health_score?: number;
   ai_match_reasons?: string[];
   ai_match_warning?: string | null;
 };
@@ -352,7 +353,10 @@ function mapListRow(row: Record<string, unknown>): ProductListItem {
     attributes: (row.attributes as Record<string, string> | null) ?? null,
     price_inr: row.price_inr != null ? Number(row.price_inr) : null,
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
-    image_urls: normalizeProductImageUrls((row.image_urls as string[]) ?? []),
+    image_urls: normalizeProductImageUrls((row.image_urls as string[]) ?? [], {
+      ocrImageUrl: (row.ocr_image_url as string | null) ?? null,
+      ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
+    }),
     nutrition: (row.nutrition as ProductNutrition | null) ?? null,
     ingredients_raw: (row.ingredients_raw as string | null) ?? null,
     ocr_payload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
@@ -1313,6 +1317,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
     image_urls: normalizeProductImageUrls((row.image_urls as string[]) ?? [], {
       ocrImageUrl: (row.ocr_image_url as string | null) ?? null,
+      ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null,
     }),
     product_url: (row.product_url as string | null) ?? null,
     barcode: (row.barcode as string | null) ?? null,

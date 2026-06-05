@@ -1,7 +1,7 @@
 /** Rotate example search chips every 15 minutes (client + SSR-safe slot math). */
 export const PROMPT_ROTATION_MS = 15 * 60 * 1000;
 
-export const PROMPTS_PER_VIEW = 11;
+export const PROMPTS_PER_VIEW = 12;
 
 const MAX_PROMPT_LENGTH = 36;
 
