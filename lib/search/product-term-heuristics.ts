@@ -17,6 +17,25 @@ export const TERM_FALSE_POSITIVE: Record<string, RegExp[]> = {
     /\bsorbet\b/i,
     /\bbiscuit\b/i,
     /\bcracker\b/i,
+    /\bice cream\b/i,
+    /\bsundae\b/i,
+    /\bfrozen dessert\b/i,
+    /\bparatha\b/i,
+    /\broll\b/i,
+    /\bkit\b/i,
+    /\bready to eat\b/i,
+    /\bcurry\b/i,
+    /\bgravy\b/i,
+    /\bmutter\b/i,
+    /\bmomo\b/i,
+    /\bbiryani\b/i,
+    /\bpops\b/i,
+    /\btikka\b/i,
+    /\bsnack\b/i,
+    /\bfrozen party\b/i,
+    /\bnugget\b/i,
+    /\bburger\b/i,
+    /\bpatty\b/i,
   ],
   ghee: [/\bladdu\b/i, /\bladoo\b/i, /\bbarfi\b/i, /\bmitai\b/i, /\bnamkeen\b/i, /\bbiscuit\b/i],
   milk: [
@@ -53,8 +72,7 @@ export function isFalsePositiveProductLabel(
 ): boolean {
   const patterns = TERM_FALSE_POSITIVE[term.toLowerCase()];
   if (!patterns?.length) return false;
-  const label = `${name} ${subcategory ?? ""}`;
-  return patterns.some((re) => re.test(label));
+  return patterns.some((re) => re.test(name ?? ""));
 }
 
 function mergeExcludes(parsed: ParsedProductQuery, words: string[]) {
@@ -66,7 +84,6 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
   if (/\bpaneer\b/.test(lower) && !/\bpaneer masala\b|\bbhurji\b/i.test(lower)) {
     parsed.product_terms = ["paneer"];
     parsed.search_keywords = ["paneer", "cottage cheese", "malai paneer", "fresh paneer"];
-    parsed.categories = [...new Set([...parsed.categories, "dairy"])];
     mergeExcludes(parsed, [
       "masala",
       "marinade",
@@ -85,6 +102,9 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
       "nan",
       "paratha",
       "sorbet",
+      "ice cream",
+      "sundae",
+      "frozen dessert",
     ]);
   }
 

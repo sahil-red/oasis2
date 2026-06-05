@@ -1,5 +1,6 @@
 import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
 import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
+import { applyL3IntentToParsed } from "@/lib/search/l3-category-intent";
 import { applyProductTermHeuristics } from "@/lib/search/product-term-heuristics";
 
 export type ParsedHealthContext =
@@ -23,6 +24,10 @@ export type ParsedProductQuery = {
   /** Product types to deprioritize or exclude (e.g. water, laddu, biscuit when user wants ghee). */
   exclude_keywords: string[];
   categories: string[];
+  /** Regex source strings for allowed Zepto L3 / use-case labels. */
+  l3_allow_patterns?: string[];
+  /** Regex source strings for blocked L3 labels. */
+  l3_block_patterns?: string[];
   hard_constraints: {
     max_price?: number;
     max_sugar_g_100g?: number;
@@ -140,6 +145,8 @@ function emptyParsed(prompt: string): ParsedProductQuery {
     search_keywords: terms,
     exclude_keywords: [],
     categories: [],
+    l3_allow_patterns: [],
+    l3_block_patterns: [],
     hard_constraints: {},
     soft_preferences: [],
     health_contexts: [],
@@ -258,6 +265,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
   }
   applyProductTermHeuristics(parsed, lower);
+  applyL3IntentToParsed(parsed);
 
   parsed.explanation = "I parsed your request into product terms, limits, and health context.";
   return normalizeParsedProductQuery(parsed, prompt);
@@ -291,11 +299,13 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
     ? asStringArray(record.product_terms)
     : fallback.product_terms;
   const searchKeywords = asStringArray(record.search_keywords);
-  return {
+  const parsed: ParsedProductQuery = {
     product_terms: productTerms,
     search_keywords: searchKeywords.length ? searchKeywords : productTerms,
     exclude_keywords: asStringArray(record.exclude_keywords),
     categories: asStringArray(record.categories),
+    l3_allow_patterns: asStringArray(record.l3_allow_patterns),
+    l3_block_patterns: asStringArray(record.l3_block_patterns),
     hard_constraints: {
       max_price: asNumber(constraints.max_price),
       max_sugar_g_100g: asNumber(constraints.max_sugar_g_100g),
@@ -315,6 +325,8 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
         ? record.explanation.trim().slice(0, 180)
         : fallback.explanation,
   };
+  applyL3IntentToParsed(parsed);
+  return parsed;
 }
 
 export async function parseProductQueryWithDeepseek(

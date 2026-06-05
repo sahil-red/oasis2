@@ -849,13 +849,19 @@ export async function extractLabelWithDeepseek(params: {
 }): Promise<DeepseekExtractionResult> {
   const opts: Required<DeepseekExtractOptions> = {
     baseUrl: params.opts?.baseUrl ?? process.env.DEEPSEEK_BASE_URL ?? DEFAULT_DEEPSEEK_BASE_URL,
-    apiKey: params.opts?.apiKey ?? process.env.DEEPSEEK_API_KEY ?? "",
+    apiKey:
+      params.opts?.apiKey ??
+      process.env.DEEPSEEK_LABEL_API_KEY?.trim() ??
+      process.env.DEEPSEEK_API_KEY?.trim() ??
+      "",
     model: params.opts?.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL,
     temperature: params.opts?.temperature ?? 0,
     maxTokens: params.opts?.maxTokens ?? 6000,
     timeoutMs: params.opts?.timeoutMs ?? 120_000,
   };
-  if (!opts.apiKey) throw new Error("Missing DEEPSEEK_API_KEY");
+  if (!opts.apiKey) {
+    throw new Error("Missing DEEPSEEK_LABEL_API_KEY or DEEPSEEK_API_KEY");
+  }
 
   const promptContext = buildDeepseekPromptContext({
     product: params.product,

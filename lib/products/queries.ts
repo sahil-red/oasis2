@@ -110,14 +110,14 @@ async function catalogHasVisibleColumn(): Promise<boolean> {
 }
 
 const LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
+  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
 
 /** Grid list — omits heavy nutrition/ingredients when diet + goal fit are unused. */
 const GRID_LIST_FIELDS =
   "id, slug, name, brand, super_category, category, subcategory, net_weight, price_inr, mrp_inr, image_urls, zepto_sku, platform";
 
 const GOAL_LIST_FIELDS =
-  "id, slug, name, brand, super_category, category, subcategory, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
+  "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, nutrition, ingredients_raw, zepto_sku, platform";
 
 const LABEL_FILTER_EXTRA = ", ocr_payload";
 

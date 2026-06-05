@@ -136,6 +136,7 @@ export type AiSearchResult = {
   parsed: unknown;
   parse_source: string;
   rank_source: string;
+  intent_tier?: string;
   relaxed: boolean;
   refinements: string[];
 };

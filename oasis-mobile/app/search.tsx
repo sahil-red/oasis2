@@ -110,6 +110,11 @@ export default function SearchScreen() {
       {result ? (
         <Panel style={styles.summaryPanel}>
           <Text style={styles.summary}>{result.summary}</Text>
+          {result.parse_source ? (
+            <Text style={styles.meta}>
+              {result.intent_tier ?? "semantic"} · parse {result.parse_source} · rank {result.rank_source}
+            </Text>
+          ) : null}
           {result.relaxed ? (
             <Text style={styles.relaxed}>Showing closest matches — criteria relaxed slightly.</Text>
           ) : null}
@@ -177,6 +182,12 @@ const styles = StyleSheet.create({
   upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg },
   summaryPanel: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   summary: { fontFamily: fonts.sans, color: colors.fg, fontSize: 15, lineHeight: 22 },
+  meta: {
+    fontFamily: fonts.sans,
+    color: colors.fgDim,
+    fontSize: 11,
+    marginTop: 6,
+  },
   relaxed: { fontFamily: fonts.sans, color: colors.fgDim, fontSize: 12, marginTop: spacing.sm },
   refineRow: { marginTop: spacing.md, maxHeight: 40 },
   refineChip: {

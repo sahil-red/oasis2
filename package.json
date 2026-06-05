@@ -44,6 +44,7 @@
     "audit:ingredient-sku-coverage": "tsx scripts/audit-ingredient-sku-coverage.ts",
     "score:v9:diff": "tsx scripts/score-v9-diff.ts",
     "search:regression": "tsx scripts/search-regression.ts",
+    "search:regression:live": "tsx scripts/search-regression-live.ts",
     "lm:status": "tsx scripts/lm-run-status.ts",
     "mobile:env": "tsx scripts/sync-mobile-env.ts",
     "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:tunnel"

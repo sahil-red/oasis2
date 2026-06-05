@@ -30,6 +30,12 @@ git push -u origin main
 | `SUPABASE_SERVICE_ROLE_KEY` | From Supabase → Settings → API → `service_role` |
 | `NEXT_PUBLIC_SITE_URL` | Leave empty on first deploy; after deploy set to `https://YOUR-APP.vercel.app` and redeploy |
 
+Optional (AI search — use separate keys so label batch jobs do not starve live search):
+
+| `DEEPSEEK_SEARCH_API_KEY` | Live search parse + rank (`/api/search/ai`) |
+| `DEEPSEEK_LABEL_API_KEY` | Batch label extraction (`pnpm label:deepseek`) |
+| `DEEPSEEK_API_KEY` | Fallback if the keys above are unset |
+
 Optional (only if you add client-side Supabase later):
 
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → API → `anon` `public` |
@@ -59,6 +65,8 @@ Paste the same env vars when prompted, or add them in the Vercel dashboard → P
 
 - Open `https://YOUR-APP.vercel.app/search`
 - Set `NEXT_PUBLIC_SITE_URL` to that URL, then **Redeploy** once (Vercel → Deployments → Redeploy) so metadata picks up the env var.
+- Smoke search: `namkeen` (instant catalog), `high protein milk`, `paneer under ₹150`
+- Local regression: `pnpm search:regression` and `pnpm search:regression:live` (needs `.env.local`)
 
 ## Does scraping / OCR update the live site?
 

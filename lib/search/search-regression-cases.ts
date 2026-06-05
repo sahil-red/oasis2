@@ -1,6 +1,17 @@
 import type { SearchIntentTier } from "@/lib/search/intent-classify";
 import type { ParsedSortIntent } from "@/lib/search/query-parse";
 
+export type LiveSearchCase = {
+  query: string;
+  expectTier?: SearchIntentTier;
+  tier?: SearchIntentTier;
+  limit?: number;
+  minResults?: number;
+  checkTop?: number;
+  topMustNotMatch?: RegExp;
+  topMustMatch?: RegExp;
+};
+
 export type IntentCase = {
   query: string;
   expect: SearchIntentTier;
@@ -62,5 +73,50 @@ export const PARSE_CASES: ParseCase[] = [
     check: (p) =>
       p.product_terms.includes("juice") &&
       p.soft_preferences.some((s) => /preserv/i.test(s)),
+  },
+];
+
+/** Live DB checks — run via pnpm search:regression:live */
+export const LIVE_SEARCH_CASES: LiveSearchCase[] = [
+  { query: "namkeen", expectTier: "lexical" },
+  { query: "amul", expectTier: "lexical" },
+  {
+    query: "malai paneer",
+    tier: "structured",
+    expectTier: "structured",
+    topMustMatch: /\bpaneer\b/i,
+    topMustNotMatch: /masala|momo|biryani|burger|patty|tikka masala|ready to eat/i,
+    checkTop: 8,
+    minResults: 3,
+  },
+  { query: "paneer under ₹150", expectTier: "structured" },
+  {
+    query: "paneer with low fat under ₹150",
+    expectTier: "structured",
+  },
+  { query: "ghee", expectTier: "lexical" },
+  {
+    query: "cow ghee under ₹500",
+    expectTier: "structured",
+    topMustNotMatch: /laddu|ladoo|barfi|mithai|soan|papdi|biscuit|namkeen/i,
+    minResults: 4,
+  },
+  {
+    query: "high protein milk",
+    expectTier: "structured",
+    topMustMatch: /epigamia|frubon|phab|horlicks|protein milk|protein shake|max protein|slim milk|hi.?pro/i,
+    checkTop: 12,
+    minResults: 4,
+  },
+  {
+    query: "low sugar biscuits",
+    expectTier: "structured",
+    topMustNotMatch: /chocolate spread|masala|noodle/i,
+    minResults: 4,
+  },
+  {
+    query: "cheapest oats",
+    expectTier: "structured",
+    minResults: 4,
   },
 ];

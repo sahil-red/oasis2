@@ -5,6 +5,11 @@ import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import { passesHardConstraints } from "@/lib/search/ai-retrieval";
 import { passesNoAddedSugarRule } from "@/lib/search/added-sugar-scan";
+import {
+  l3IntentRelevanceBoost,
+  passesL3IntentGate,
+} from "@/lib/search/l3-category-intent";
+import { productUsecase } from "@/lib/products/catalog-meta";
 import { isFalsePositiveProductLabel } from "@/lib/search/product-term-heuristics";
 import type { LlmRankedItem } from "@/lib/search/ai-rank";
 
@@ -38,18 +43,55 @@ function ingredientMentionOnly(hay: string, term: string): boolean {
   return /(?:with|contains|in|made with|using)\b/.test(hay) && hay.includes(t);
 }
 
-/** Product-type relevance for retrieval — Scout score must not dominate. */
+function passesPrimaryTypeGate(p: ProductListItem, parsed: ParsedProductQuery): boolean {
+  if (!parsed.product_terms.length) return true;
+
+  const name = p.name ?? "";
+  if (
+    parsed.product_terms.some((t) =>
+      isFalsePositiveProductLabel(name, p.subcategory, t),
+    )
+  ) {
+    return false;
+  }
+
+  const l3 = productUsecase(p);
+  if (l3?.trim()) {
+    if (passesL3IntentGate(p, parsed)) return true;
+  }
+
+  const label = `${name} ${p.subcategory ?? ""}`;
+  return parsed.product_terms.some((t) => {
+    const tl = t.toLowerCase();
+    return (
+      matchesKeyword(label, tl) ||
+      Boolean(p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), tl))
+    );
+  });
+}
+
+/** Name / shelf / L3 only — omit L1 aisle strings like "Dairy, Bread & Eggs". */
+function productTypeHaystack(p: ProductListItem): string {
+  return [p.name, p.brand, p.subcategory, productUsecase(p)]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): number {
   const hay = haystack(p);
+  const typeHay = productTypeHaystack(p);
   for (const ex of parsed.exclude_keywords) {
-    if (matchesKeyword(hay, ex)) return -1000;
+    if (matchesKeyword(typeHay, ex)) return -1000;
   }
+
+  if (!passesPrimaryTypeGate(p, parsed)) return 0;
 
   let score = 0;
   const terms = [
     ...parsed.product_terms,
     ...parsed.search_keywords,
-    ...parsed.categories,
+    ...(parsed.product_terms.length ? [] : parsed.categories),
   ];
 
   for (const term of terms) {
@@ -62,7 +104,10 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
       score -= 1000;
       continue;
     }
-    if (p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), t)) {
+    const l3 = (productUsecase(p) ?? "").toLowerCase();
+    if (l3 && matchesKeyword(l3, t)) {
+      score += parsed.product_terms.some((pt) => pt.toLowerCase() === t) ? 80 : 65;
+    } else if (p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), t)) {
       score += parsed.product_terms.some((pt) => pt.toLowerCase() === t) ? 72 : 60;
     } else if (matchesKeyword((p.name ?? "").toLowerCase(), t) || matchesKeyword((p.brand ?? "").toLowerCase(), t)) {
       score += parsed.product_terms.some((pt) => pt.toLowerCase() === t) ? 48 : 42;
@@ -71,6 +116,7 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
     else if (p.category && matchesKeyword(p.category.toLowerCase(), t)) score += 10;
   }
 
+  score += l3IntentRelevanceBoost(p, parsed);
   score += Math.min(12, (p.core_scores?.score ?? 0) * 0.02);
   return score;
 }
@@ -125,12 +171,24 @@ export function wantsNoAddedSugar(parsed: ParsedProductQuery): boolean {
   );
 }
 
+function passesHardConstraintsForMode(
+  p: ProductListItem,
+  parsed: ParsedProductQuery,
+  mode: "strict" | "relaxed",
+): boolean {
+  if (mode === "relaxed" && parsed.hard_constraints.max_price != null) {
+    const { max_price: _drop, ...rest } = parsed.hard_constraints;
+    return passesHardConstraints(p, { ...parsed, hard_constraints: rest });
+  }
+  return passesHardConstraints(p, parsed);
+}
+
 export function passesSemanticConstraints(
   p: ProductListItem,
   parsed: ParsedProductQuery,
   mode: "strict" | "relaxed",
 ): boolean {
-  if (!passesHardConstraints(p, parsed)) return false;
+  if (!passesHardConstraintsForMode(p, parsed, mode)) return false;
 
   if (mode === "relaxed") return true;
 
@@ -256,7 +314,9 @@ function deterministicReasons(p: ProductListItem, parsed: ParsedProductQuery): s
     else if (status === "unknown") reasons.push("Preservative status not confirmed");
   }
   if (parsed.hard_constraints.vegan) reasons.push("Plant-based / vegan");
-  if (p.subcategory) reasons.push(p.subcategory);
+  const l3 = productUsecase(p);
+  if (l3) reasons.push(l3);
+  else if (p.subcategory) reasons.push(p.subcategory);
   else if (parsed.product_terms[0]) reasons.push(parsed.product_terms[0]);
 
   if (!reasons.length && p.core_scores?.score != null) {
@@ -314,7 +374,13 @@ export function rankCandidatesSemantically(
     product_id: p.id,
     score: Math.min(100, Math.round(relevance + (p.core_scores?.score ?? 0) * 0.15)),
     reasons: deterministicReasons(p, parsed),
-    warning: useRelaxed && !isStrict ? "Close match" : null,
+    warning:
+      useRelaxed && !isStrict
+        ? parsed.hard_constraints.max_price != null &&
+            (p.price_inr ?? p.mrp_inr ?? 0) > parsed.hard_constraints.max_price
+          ? `Over ₹${parsed.hard_constraints.max_price} — close option`
+          : "Close match"
+        : null,
   }));
 
   const summary = useRelaxed

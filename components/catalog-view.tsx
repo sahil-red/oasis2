@@ -389,7 +389,9 @@ export function CatalogView({
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiParseSource, setAiParseSource] = useState<"deepseek" | "heuristic" | null>(null);
+  const [aiRankSource, setAiRankSource] = useState<string | null>(null);
   const [aiIntentTier, setAiIntentTier] = useState<string | null>(null);
+  const [aiRelaxed, setAiRelaxed] = useState(false);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
@@ -653,6 +655,8 @@ export function CatalogView({
       setAiRefinements([]);
       setAiParsed(null);
       setAiParseSource(null);
+      setAiRankSource(null);
+      setAiRelaxed(false);
       patch({ q: prompt });
       return;
     }
@@ -686,6 +690,9 @@ export function CatalogView({
       setFactBrowse(null);
       setAiSummary(result.summary);
       setAiParseSource(result.parse_source);
+      setAiRankSource(result.rank_source);
+      setAiIntentTier(result.intent_tier);
+      setAiRelaxed(result.relaxed);
       setAiWarning(result.parse_warning ?? null);
       setAiRefinements(result.refinements);
       setAiParsed(result.parsed);
@@ -886,6 +893,14 @@ export function CatalogView({
           {aiMode && aiSummary ? (
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
               <p className="text-[13px] font-medium text-(--color-fg)">{aiSummary}</p>
+              {aiIntentTier ? (
+                <p className="w-full text-[10px] text-(--color-fg-dim)">
+                  {aiIntentTier} search
+                  {aiParseSource ? ` · parse ${aiParseSource}` : ""}
+                  {aiRankSource ? ` · rank ${aiRankSource}` : ""}
+                  {aiRelaxed ? " · relaxed matches" : ""}
+                </p>
+              ) : null}
               {aiWarning ? (
                 <p className="text-[11px] text-(--color-fg-dim)">{aiWarning}</p>
               ) : null}

@@ -1,6 +1,6 @@
 # Search Overhaul — Fix Plan
 
-**Status:** Ready to execute
+**Status:** Shipped (see `pnpm search:regression` + `pnpm search:regression:live`)
 **Goal:** Make search trustworthy for every query class, stop calling the LLM when it isn't needed, and keep one search box.
 
 ---
