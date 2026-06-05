@@ -326,7 +326,19 @@ async function main() {
   }
 
   const done = args.resume && !args.fresh ? await loadDoneSkus() : new Set<string>();
-  let work = selectWork(items, args).filter((item) => !done.has(item.row.zepto_sku));
+  // When resuming a large sequential batch, pick the next N pending SKUs (not the first N catalog rows).
+  let pool = items;
+  if (
+    args.resume &&
+    !args.fresh &&
+    args.sample === "sequential" &&
+    args.limitExplicit &&
+    !args.sku &&
+    !args.nameQuery
+  ) {
+    pool = items.filter((item) => !done.has(item.row.zepto_sku));
+  }
+  let work = selectWork(pool, args).filter((item) => !done.has(item.row.zepto_sku));
 
   if (args.sku && work.length === 0) {
     throw new Error(`No work found for --sku=${args.sku}; OCR JSON may be missing or already done.`);
