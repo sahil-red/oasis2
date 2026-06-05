@@ -520,7 +520,8 @@ function sortKey(
       ];
     }
     case "cheapest":
-      return [iv, strictTier, relevance, price === 999999 ? -1 : -price, healthBoost, scout];
+      // Unknown-price products (999999 sentinel) rank LAST not first — -999999 sorts below any real price.
+      return [iv, strictTier, relevance, price === 999999 ? -999999 : -price, healthBoost, scout];
     case "healthiest":
       if (healthIntent) {
         const goalScout = healthContextGoalFit(p, parsed) ?? scout;
@@ -662,7 +663,12 @@ export function rankCandidatesSemantically(
   return { rankings, summary, relaxed: useRelaxed };
 }
 
-/** Blend match, health, and LLM intent for sort order (display scores stay on `det`). */
+/** Blend match, health, and LLM intent for sort order (display scores stay on `det`).
+ *
+ * LLM intent weight raised to 0.45 — we have DeepSeek, use it properly.
+ * For complex/ambiguous queries the LLM has the best understanding of intent.
+ * Deterministic match is a recall signal; LLM score is a precision signal.
+ */
 export function blendedSearchRankScore(
   matchScore: number,
   healthScore: number,
@@ -671,7 +677,7 @@ export function blendedSearchRankScore(
   const match = Math.max(0, Math.min(100, matchScore));
   const health = Math.max(0, Math.min(100, healthScore));
   const intent = Math.max(0, Math.min(100, intentScore));
-  return match * 0.45 + health * 0.35 + intent * 0.2;
+  return match * 0.3 + health * 0.25 + intent * 0.45;
 }
 
 /** Re-rank gated SKUs by blended scores — LLM reasons only; order is not LLM-first. */

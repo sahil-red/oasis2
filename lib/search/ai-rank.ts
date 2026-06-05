@@ -47,7 +47,8 @@ Rules:
 - When health_contexts includes a goal (parents, kids, diabetic, gym, etc.), rank by how well the product fits that goal — practical staples over baby food or irrelevant matches.
 - score is 0-100 for how well the product matches what the user asked for (product TYPE and constraints), not just keyword overlap.
 - Prefer the actual product type: jar/tin of ghee beats sweets that contain ghee; soft drinks/sodas beat plain water; Coke Zero beats sugary soda.
-- CRITICAL — avoid_ingredients: score = 0 and omit any product whose ingredients_snippet contains an avoided ingredient in ANY form (e.g. avoid "palm oil" → also exclude "palmolein", "palm fat", "palm kernel", "Rapeseed and Palm", "(Palm)", "Hydrogenated Palm"). These are hard constraints, not preferences.
+- CRITICAL — avoid_ingredients: score = 0 and omit any product whose ingredients_snippet contains an avoided ingredient in ANY form (e.g. avoid "palm oil" → also exclude "palmolein", "palm fat", "palm kernel", "palmoleo", "Rapeseed and Palm", "(Palm)", "Hydrogenated Palm"). These are hard constraints, not preferences.
+- If ingredients_snippet is null or empty, you cannot verify absence of an avoided ingredient. Score such products 25 max and add warning "Ingredient data unavailable — cannot confirm absence of [avoided ingredient]".
 - reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "No palm oil confirmed", "22g protein").
 - If the user wrote in Hindi/Hinglish (e.g. "bina palm oil", "maida nahi", "preservative nahi"), parse the intent correctly — these mean the same as English negations.
 - warning: null, or a brief trade-off if the product only partially fits.

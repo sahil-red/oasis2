@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
   const tier =
     body?.tier === "structured" || body?.tier === "complex" ? body.tier : "structured";
 
-  const cached = getCachedAiResult(prompt, limit ?? 24, tier);
+  const preferences = body?.preferences ?? null;
+
+  // Cache key includes preferences so User A's vegan-filtered results never leak to User B.
+  const cached = getCachedAiResult(prompt, limit ?? 24, tier, preferences);
   if (cached) {
     return NextResponse.json(cached, { headers: CACHE_HEADERS });
   }
@@ -60,7 +63,6 @@ export async function POST(req: NextRequest) {
     setCachedParse(prompt, parsed);
   }
 
-  const preferences = body?.preferences ?? null;
   const parseForSearch = {
     ...parsed,
     parsed: mergeSavedPreferences(parsed.parsed, preferences),
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   const result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
 
-  setCachedAiResult(prompt, limit ?? 24, tier, result);
+  setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
 
   return NextResponse.json(result, { headers: CACHE_HEADERS });
 }

@@ -41,12 +41,27 @@ export function setCachedParse(prompt: string, value: QueryParseResult) {
   set(parseCache, normalizeKey(prompt), value);
 }
 
+import type { AiSearchPreferences } from "@/lib/search/ai-usage";
+
+/** Stable, order-independent fingerprint of user preferences for cache isolation. */
+function prefKey(prefs: AiSearchPreferences | null | undefined): string {
+  if (!prefs || !Object.keys(prefs).length) return "";
+  const parts: string[] = [];
+  if (prefs.diet) parts.push(`diet:${prefs.diet}`);
+  if (prefs.budget) parts.push(`budget:${prefs.budget}`);
+  if (prefs.healthContexts?.length) parts.push(`ctx:${[...prefs.healthContexts].sort().join(",")}`);
+  if (prefs.avoidIngredients?.length) parts.push(`avoid:${[...prefs.avoidIngredients].sort().join(",")}`);
+  return parts.join("|");
+}
+
 export function getCachedAiResult(
   prompt: string,
   limit: number,
   tier: string,
+  prefs?: AiSearchPreferences | null,
 ): AiSearchResult | null {
-  return get(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}`, RESULT_TTL_MS);
+  const pk = prefKey(prefs);
+  return get(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}|${pk}`, RESULT_TTL_MS);
 }
 
 export function setCachedAiResult(
@@ -54,6 +69,8 @@ export function setCachedAiResult(
   limit: number,
   tier: string,
   value: AiSearchResult,
+  prefs?: AiSearchPreferences | null,
 ) {
-  set(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}`, value);
+  const pk = prefKey(prefs);
+  set(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}|${pk}`, value);
 }

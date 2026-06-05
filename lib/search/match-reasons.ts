@@ -6,6 +6,7 @@ import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { isHighProteinMilkSignal, isMilkAdjacentProduct } from "@/lib/search/milk-intent";
 import { isPlantPaneerSubstitute } from "@/lib/search/paneer-intent";
+import { ingredientPresent } from "@/lib/search/ai-retrieval";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 function wantsNoPreservatives(parsed: ParsedProductQuery): boolean {
   const q = [...parsed.soft_preferences, parsed.explanation, ...parsed.product_terms]
@@ -53,11 +54,9 @@ function ingredientsText(p: ProductListItem): string {
   return (p.ingredients_raw ?? "").toLowerCase();
 }
 
+/** Delegates to the same broad ingredientPresent() used by the filter, so reasons are consistent. */
 function containsAvoidedIngredient(ingredients: string, avoid: string): boolean {
-  const a = avoid.toLowerCase();
-  if (a.includes("palm")) return /palm oil|palmolein|palm fat/i.test(ingredients);
-  if (a.includes("maida")) return /maida|refined wheat flour/i.test(ingredients);
-  return ingredients.includes(a);
+  return ingredientPresent(ingredients, avoid);
 }
 
 function additiveSignal(ingredients: string | null | undefined): number {

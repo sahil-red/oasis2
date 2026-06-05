@@ -32,8 +32,14 @@ export function isDairyMilkProduct(
   return false;
 }
 
-export function isHighProteinMilkSignal(p: Pick<ProductListItem, "name">): boolean {
-  return PROTEIN_MILK_RE.test(p.name ?? "");
+export function isHighProteinMilkSignal(
+  p: Pick<ProductListItem, "name" | "nutrition">,
+): boolean {
+  if (PROTEIN_MILK_RE.test(p.name ?? "")) return true;
+  // Also flag products where actual nutrition data confirms high protein (≥8g/100g).
+  // This catches genuine high-protein milks that don't say "high protein" in the name.
+  const prot = (p as { nutrition?: { protein_g_100g?: number | null } }).nutrition?.protein_g_100g;
+  return typeof prot === "number" && prot >= 8;
 }
 
 export function milkIntentSortTier(p: ProductListItem, productTerms: string[]): number {

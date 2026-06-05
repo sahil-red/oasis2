@@ -30,9 +30,12 @@ export function ingredientPresent(ingredientsText: string, avoidTerm: string): b
   const a = avoidTerm.toLowerCase().trim();
   const t = ingredientsText.toLowerCase();
 
-  // Palm oil family — catches all label forms
+  // Palm oil family — catches all label forms found on Indian packaged food:
+  //   "Palm Oil", "Palmolein", "Palm Stearin", "Palm Kernel Oil",
+  //   "Hydrogenated Vegetable Oils (Rapeseed and Palm)", "PALMOLEO FRACTION",
+  //   "Vegetable Oil (Palm)", "Palm Fat", "Refined Palmolein"
   if (a.includes("palm")) {
-    return /\bpalm\b(?:\s*(?:oil|kernel|stearin|fat|olein|hard))?|\bpalmolein\b/i.test(t);
+    return /\bpalm\b(?:\s*(?:oil|kernel|stearin|fat|olein|hard))?|\bpalmolein\b|\bpalmoleo\b/i.test(t);
   }
 
   // Maida / refined wheat flour family
