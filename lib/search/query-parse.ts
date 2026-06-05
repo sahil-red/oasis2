@@ -406,6 +406,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   stripGoalMetaProductTerms(parsed);
   applyProductTermHeuristics(parsed, lower);
   applyL3IntentToParsed(parsed);
+  stripAvoidedTermsFromSearchTerms(parsed);
 
   const namedFreshDairy = parsed.product_terms.some((t) =>
     ["paneer", "milk", "ghee", "curd", "yogurt", "cheese"].includes(t.toLowerCase()),
@@ -431,6 +432,32 @@ function asStringArray(value: unknown): string[] {
 function asNumber(value: unknown): number | undefined {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
+ * Remove terms from product_terms and search_keywords that also appear
+ * in avoid_ingredients, so "no maida" / "no palm oil" etc. do NOT become
+ * keyword signals that boost "Zero Maida" or "Zero Palm Oil" branded products.
+ *
+ * Strips exact matches AND partial-root matches
+ * (avoiding "palm oil" also strips "palm" from search terms).
+ */
+function stripAvoidedTermsFromSearchTerms(parsed: ParsedProductQuery): void {
+  const avoidRoots = (parsed.hard_constraints.avoid_ingredients ?? [])
+    .map((a) => a.toLowerCase().split(/\s+/)[0]!)   // e.g. "palm oil" → "palm"
+    .filter(Boolean);
+
+  if (!avoidRoots.length) return;
+
+  const isAvoided = (term: string): boolean => {
+    const t = term.toLowerCase();
+    return avoidRoots.some(
+      (root) => t === root || t.startsWith(root + " ") || t.endsWith(" " + root) || t.includes(" " + root + " "),
+    );
+  };
+
+  parsed.product_terms = parsed.product_terms.filter((t) => !isAvoided(t));
+  parsed.search_keywords = parsed.search_keywords.filter((t) => !isAvoided(t));
 }
 
 export function normalizeParsedProductQuery(raw: unknown, prompt: string): ParsedProductQuery {
@@ -478,6 +505,10 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
   };
   stripGoalMetaProductTerms(parsed);
   applyL3IntentToParsed(parsed);
+  // Remove avoided ingredients from search terms so they don't become
+  // positive keyword signals. E.g. "no maida" must not boost "Zero Maida" branded products.
+  // Also removes partial-match roots: avoiding "palm oil" strips "palm" too.
+  stripAvoidedTermsFromSearchTerms(parsed);
   return parsed;
 }
 

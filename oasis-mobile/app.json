@@ -35,6 +35,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "apiUrl": "https://oasis-phi-one.vercel.app",
       "router": {
         "origin": false
       }

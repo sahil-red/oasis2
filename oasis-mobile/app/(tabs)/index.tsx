@@ -38,8 +38,8 @@ import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { DisplayHero, Eyebrow } from "@/components/ui/Typography";
-import { fetchAiSearch, fetchCatalogMeta, fetchLanding, fetchLexicalSearch } from "@/lib/api";
-import { classifyIntent } from "@/lib/search-intent";
+import { fetchCatalogMeta, fetchLanding } from "@/lib/api";
+import { runCatalogSearch } from "@/lib/run-search";
 import { useAccessToken } from "@/lib/auth";
 import { useTheme } from "@/lib/theme-context";
 import { fonts, radius, spacing } from "@/theme";
@@ -146,6 +146,7 @@ export default function HomeTab() {
   const [landing, setLanding] = useState<LandingInsights | null>(null);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const [loadingLanding, setLoadingLanding] = useState(true);
+  const [landingError, setLandingError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const [prompt, setPrompt] = useState("");
@@ -154,6 +155,7 @@ export default function HomeTab() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const loadLanding = useCallback(async () => {
+    setLandingError(null);
     try {
       const data = await fetchLanding();
       setLanding({
@@ -162,8 +164,9 @@ export default function HomeTab() {
         bestInClass: data.bestInClass ?? [],
         dodgeList: data.dodgeList ?? [],
       });
-    } catch {
+    } catch (e) {
       setLanding(null);
+      setLandingError(e instanceof Error ? e.message : "Could not load home feed.");
     }
   }, []);
 
@@ -187,19 +190,16 @@ export default function HomeTab() {
     setSearchError(null);
     setSearchResult(null);
     try {
-      const intent = classifyIntent(trimmed, {
-        brands: catalogMeta?.filters.brands,
-        subcategories: catalogMeta?.filters.subcategories,
-      });
-      const data =
-        intent === "lexical"
-          ? await fetchLexicalSearch(trimmed, 24)
-          : await fetchAiSearch(trimmed, token, 24, intent === "complex" ? "complex" : "structured");
+      const data = await runCatalogSearch(trimmed, token, catalogMeta, 24);
       setSearchResult(data);
     } catch (e) {
-      const err = e as Error & { code?: string; status?: number };
+      const err = e as Error & { code?: string; status?: number; name?: string };
       if (err.code === "quota_exceeded" || err.status === 402) {
-        setSearchError("Daily AI limit reached. Upgrade to Scout Plus for unlimited searches.");
+        setSearchError(
+          "Free AI searches used for today. Upgrade to Scout Plus for unlimited searches.",
+        );
+      } else if (err.name === "AbortError") {
+        setSearchError("Search took too long — try again in a moment.");
       } else {
         setSearchError(err.message ?? "Search failed — try again.");
       }
@@ -252,6 +252,9 @@ export default function HomeTab() {
         {searching ? (
           <View style={styles.searchLoadingWrap}>
             <SkeletonGrid rows={2} />
+            <Text style={[styles.searchWaitHint, { color: colors.fgMuted }]}>
+              Scout is ranking matches — this can take up to a minute on first search.
+            </Text>
           </View>
         ) : searchError ? (
           <FadeInUp>
@@ -277,6 +280,11 @@ export default function HomeTab() {
               <FadeInUp delay={0}>
                 <Panel style={styles.summaryPanel}>
                   <Text style={[styles.summaryText, { color: colors.fg }]}>{searchResult.summary}</Text>
+                  {searchResult.parse_warning ? (
+                    <Text style={[styles.parseWarning, { color: colors.fgMuted }]}>
+                      {searchResult.parse_warning}
+                    </Text>
+                  ) : null}
                   {searchResult.refinements?.length ? (
                     <ScrollView
                       horizontal
@@ -381,6 +389,17 @@ export default function HomeTab() {
             <SkeletonSection />
             <SkeletonSection />
           </View>
+        ) : landingError ? (
+          <FadeInUp>
+            <Panel style={styles.errorBox}>
+              <Text style={[styles.errorText, { color: colors.bad }]}>{landingError}</Text>
+              <PressableScale onPress={() => void loadLanding()} haptic="light">
+                <View style={[styles.upgradeBtn, { backgroundColor: colors.fg }]}>
+                  <Text style={[styles.upgradeBtnText, { color: colors.bg }]}>Retry</Text>
+                </View>
+              </PressableScale>
+            </Panel>
+          </FadeInUp>
         ) : landing ? (
           <>
             <FadeInUp delay={0}>
@@ -476,7 +495,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   searchBarWrap: { flex: 1 },
-  searchLoadingWrap: { flex: 1 },
+  searchLoadingWrap: { flex: 1, paddingHorizontal: spacing.lg },
+  searchWaitHint: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: spacing.md,
+  },
   errorBox: { margin: spacing.lg },
   errorText: { fontFamily: fonts.sans, fontSize: 15, lineHeight: 22 },
   upgradeBtn: {
@@ -489,6 +515,7 @@ const styles = StyleSheet.create({
   resultsGrid: { padding: spacing.sm, paddingBottom: spacing.xxl },
   summaryPanel: { margin: spacing.sm, marginBottom: 0 },
   summaryText: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
+  parseWarning: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 18, marginTop: spacing.xs },
   refineChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,

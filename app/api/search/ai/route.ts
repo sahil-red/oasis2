@@ -68,9 +68,13 @@ export async function POST(req: NextRequest) {
     parsed: mergeSavedPreferences(parsed.parsed, preferences),
   };
 
-  const result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
-
-  setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
-
-  return NextResponse.json(result, { headers: CACHE_HEADERS });
+  try {
+    const result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
+    setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
+    return NextResponse.json(result, { headers: CACHE_HEADERS });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "AI search failed";
+    console.error("[search/ai]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

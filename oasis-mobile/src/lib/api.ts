@@ -1,4 +1,5 @@
 import { API_BASE } from "@/lib/config";
+import type { AiSearchPreferences } from "@/lib/ai-usage";
 import type {
   AiSearchResult,
   CatalogMeta,
@@ -10,17 +11,50 @@ import type {
   SubscriptionCheckout,
 } from "@/types/api";
 
+const DEFAULT_TIMEOUT_MS = 25_000;
+/** Match web `fetchAiCatalogSearch` in `lib/products/catalog-api.ts`. */
+const AI_SEARCH_TIMEOUT_MS = 55_000;
+
+export function isTimeoutError(e: unknown): boolean {
+  return e instanceof Error && (e.name === "AbortError" || /timed out|timeout/i.test(e.message));
+}
+
 async function apiFetch<T>(
   path: string,
-  init?: RequestInit & { token?: string | null },
+  init?: RequestInit & { token?: string | null; timeoutMs?: number },
 ): Promise<T> {
+  const { token, timeoutMs: timeoutOverride, ...fetchInit } = init ?? {};
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    ...(init?.headers as Record<string, string>),
+    ...(fetchInit.headers as Record<string, string> | undefined),
   };
-  if (init?.token) headers.authorization = `Bearer ${init.token}`;
+  if (token) headers.authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const timeoutMs = timeoutOverride ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...fetchInit,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (isTimeoutError(e)) {
+      throw new Error("Search took too long — try again in a moment.");
+    }
+    if (e instanceof TypeError) {
+      throw new Error(
+        `Cannot reach Scout API at ${API_BASE}. Run pnpm mobile:env from the repo root or set EXPO_PUBLIC_API_URL.`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     const msg =
@@ -66,31 +100,26 @@ export function fetchMe(token: string): Promise<MeResponse> {
   return apiFetch("/api/me", { token });
 }
 
+/** Same contract as web `fetchAiCatalogSearch`. */
 export function fetchAiSearch(
   prompt: string,
   token: string | null,
   limit = 24,
-  tier?: "structured" | "complex",
+  tier: "structured" | "complex" = "structured",
+  preferences?: AiSearchPreferences | null,
 ): Promise<AiSearchResult> {
   return apiFetch("/api/search/ai", {
     method: "POST",
-    body: JSON.stringify({ prompt, limit, tier }),
+    headers: { "cache-control": "no-store" },
+    body: JSON.stringify({
+      prompt,
+      limit,
+      tier,
+      preferences: preferences ?? undefined,
+    }),
     token,
+    timeoutMs: AI_SEARCH_TIMEOUT_MS,
   });
-}
-
-/** Instant catalog search shaped like AI results for one-box UX. */
-export async function fetchLexicalSearch(prompt: string, limit = 24): Promise<AiSearchResult> {
-  const result = await fetchCatalogSearch({ q: prompt, limit, sort: "score-desc" });
-  return {
-    summary: `Showing catalog matches for “${prompt}”.`,
-    items: result.items,
-    parsed: {},
-    parse_source: "lexical",
-    rank_source: "catalog",
-    relaxed: false,
-    refinements: [],
-  };
 }
 
 export function createSubscription(token: string): Promise<SubscriptionCheckout> {

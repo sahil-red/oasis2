@@ -11,7 +11,12 @@ import {
   rankCandidatesSemantically,
 } from "@/lib/search/semantic-rank";
 import type { SearchIntentTier } from "@/lib/search/intent-classify";
-import { getAiSearchProductPool, type CatalogGridItem, type ProductListItem } from "@/lib/products/queries";
+import {
+  getAiSearchProductPool,
+  searchProducts,
+  type CatalogGridItem,
+  type ProductListItem,
+} from "@/lib/products/queries";
 import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-parse";
 
 export type AiSearchItem = CatalogGridItem & {
@@ -39,6 +44,38 @@ export type AiSearchResult = {
 };
 
 const LLM_CANDIDATE_CAP = 40;
+const TERM_SEARCH_LIMIT = 400;
+const MIN_TERM_POOL = 30;
+
+/** SQL-backed pool from parsed product terms — avoids loading 10k rows on cold start. */
+async function getCatalogPoolForParsed(parsed: ParsedProductQuery): Promise<ProductListItem[]> {
+  const terms = [
+    ...parsed.product_terms,
+    ...(parsed.search_keywords ?? []),
+  ]
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+  if (terms.length === 0) {
+    return getAiSearchProductPool();
+  }
+
+  const byId = new Map<string, ProductListItem>();
+  const queries = [...new Set(terms)].slice(0, 4);
+  const pools = await Promise.all(
+    queries.map((q) =>
+      searchProducts({ q, limit: TERM_SEARCH_LIMIT, onlyWithDetail: true, onlyScored: false }),
+    ),
+  );
+  for (const pool of pools) {
+    for (const p of pool) byId.set(p.id, p);
+  }
+
+  if (byId.size >= MIN_TERM_POOL) {
+    return [...byId.values()];
+  }
+
+  return getAiSearchProductPool();
+}
 
 function toAiGridItem(
   p: ProductListItem,
@@ -100,7 +137,7 @@ async function runAiProductSearchPass(
   const prompt = opts.prompt?.trim() || parsed.explanation;
   const tier = opts.tier ?? "structured";
 
-  const catalog = await getAiSearchProductPool();
+  const catalog = await getCatalogPoolForParsed(parsed);
   const candidates = retrieveCandidates(catalog, parsed, 120);
   const byId = new Map(candidates.map((p) => [p.id, p]));
 

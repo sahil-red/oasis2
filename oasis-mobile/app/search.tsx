@@ -14,8 +14,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
 import { Panel } from "@/components/ui/Panel";
-import { fetchAiSearch, fetchCatalogMeta, fetchLexicalSearch } from "@/lib/api";
-import { classifyIntent } from "@/lib/search-intent";
+import { fetchCatalogMeta } from "@/lib/api";
+import { runCatalogSearch } from "@/lib/run-search";
 import { useAccessToken } from "@/lib/auth";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
 import type { AiSearchResult, CatalogMeta, CatalogProduct } from "@/types/api";
@@ -41,20 +41,17 @@ export default function SearchScreen() {
       setLoading(true);
       setError(null);
       try {
-        const intent = classifyIntent(trimmed, {
-          brands: catalogMeta?.filters.brands,
-          subcategories: catalogMeta?.filters.subcategories,
-        });
-        const data =
-          intent === "lexical"
-            ? await fetchLexicalSearch(trimmed, 24)
-            : await fetchAiSearch(trimmed, token, 24, intent === "complex" ? "complex" : "structured");
+        const data = await runCatalogSearch(trimmed, token, catalogMeta, 24);
         setResult(data);
         setPrompt(trimmed);
       } catch (e) {
-        const err = e as Error & { code?: string; status?: number };
+        const err = e as Error & { code?: string; status?: number; name?: string };
         if (err.code === "quota_exceeded" || err.status === 402) {
-          setError("Daily AI limit reached. Upgrade to Scout Plus for unlimited search.");
+          setError(
+            "Free AI searches used for today. Upgrade to Scout Plus for unlimited searches.",
+          );
+        } else if (err.name === "AbortError") {
+          setError("Search took too long — try again in a moment.");
         } else {
           setError(err.message);
         }
@@ -110,6 +107,9 @@ export default function SearchScreen() {
       {result ? (
         <Panel style={styles.summaryPanel}>
           <Text style={styles.summary}>{result.summary}</Text>
+          {result.parse_warning ? (
+            <Text style={styles.parseWarning}>{result.parse_warning}</Text>
+          ) : null}
           {result.parse_source ? (
             <Text style={styles.meta}>
               {result.intent_tier ?? "semantic"} · parse {result.parse_source} · rank {result.rank_source}
@@ -182,6 +182,13 @@ const styles = StyleSheet.create({
   upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg },
   summaryPanel: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   summary: { fontFamily: fonts.sans, color: colors.fg, fontSize: 15, lineHeight: 22 },
+  parseWarning: {
+    fontFamily: fonts.sans,
+    color: colors.fgMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
   meta: {
     fontFamily: fonts.sans,
     color: colors.fgDim,

@@ -33,7 +33,7 @@ function main() {
   const apiUrl =
     vars.get("EXPO_PUBLIC_API_URL") ??
     vars.get("NEXT_PUBLIC_SITE_URL") ??
-    "http://localhost:3000";
+    "https://oasis-phi-one.vercel.app";
   const supabaseUrl = vars.get("EXPO_PUBLIC_SUPABASE_URL") ?? vars.get("NEXT_PUBLIC_SUPABASE_URL");
   const anonKey =
     vars.get("EXPO_PUBLIC_SUPABASE_ANON_KEY") ?? vars.get("NEXT_PUBLIC_SUPABASE_ANON_KEY");

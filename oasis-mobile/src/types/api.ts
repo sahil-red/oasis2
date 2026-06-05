@@ -138,6 +138,8 @@ export type AiSearchResult = {
   parse_source: string;
   rank_source: string;
   intent_tier?: string;
+  parse_warning?: string;
+  rank_warning?: string;
   relaxed: boolean;
   refinements: string[];
 };
