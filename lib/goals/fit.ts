@@ -6,7 +6,7 @@ import {
   goalCaption,
   type GoalFeatureInput,
 } from "./features";
-import { isInfantOrBabyProduct } from "@/lib/search/audience-gate";
+import { isInfantOrBabyProductLabels } from "@/lib/search/audience-gate";
 import { finalizeGoalFit } from "./health-penalties";
 import type { GoalId } from "./types";
 
@@ -61,21 +61,10 @@ function result(goal: GoalId, fit: number, _reasons: string[], f: ReturnType<typ
 
 function adultFitnessGoalMismatch(goal: GoalId, opts: GoalFeatureInput): boolean {
   if (goal !== "bulk" && goal !== "gym" && goal !== "fat-loss") return false;
-  return isInfantOrBabyProduct({
-    id: "",
-    name: opts.name ?? null,
-    brand: null,
-    category: opts.category ?? null,
-    subcategory: opts.subcategory ?? null,
-    ingredients_raw: opts.ingredients_raw ?? null,
-    nutrition: opts.nutrition ?? null,
-    price_inr: opts.price_inr ?? null,
-    mrp_inr: null,
-    net_weight: opts.net_weight ?? null,
-    image_urls: null,
-    slug: null,
-    core_scores: null,
-    attributes: opts.attributes ?? null,
+  return isInfantOrBabyProductLabels({
+    name: opts.name,
+    category: opts.category,
+    subcategory: opts.subcategory,
   });
 }
 
