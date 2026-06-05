@@ -1,4 +1,6 @@
 import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
+import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
+import { applyProductTermHeuristics } from "@/lib/search/product-term-heuristics";
 
 export type ParsedHealthContext =
   | "diabetic"
@@ -27,6 +29,7 @@ export type ParsedProductQuery = {
     max_fat_g_100g?: number;
     min_protein_g_100g?: number;
     vegetarian?: boolean;
+    vegan?: boolean;
     avoid_ingredients?: string[];
     allergens_excluded?: string[];
     avoid_sublabels?: string[];
@@ -187,7 +190,12 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     else parsed.hard_constraints.min_protein_g_100g = 12;
   }
 
-  if (/veg|vegetarian/.test(lower)) parsed.hard_constraints.vegetarian = true;
+  if (/\bvegan\b/.test(lower)) {
+    parsed.hard_constraints.vegan = true;
+    parsed.hard_constraints.vegetarian = true;
+  } else if (/veg|vegetarian/.test(lower)) {
+    parsed.hard_constraints.vegetarian = true;
+  }
   if (/palm oil/.test(lower)) parsed.hard_constraints.avoid_ingredients = ["palm oil"];
   if (/gluten/.test(lower)) parsed.hard_constraints.allergens_excluded = ["gluten"];
   if (/hidden sweetener|no hidden sweetener|without hidden sweetener|artificial sweetener/.test(lower)) {
@@ -249,44 +257,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     );
     parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
   }
-  if (/\bghee\b/.test(lower)) {
-    parsed.search_keywords.push("ghee", "cow ghee", "a2 ghee", "bilona", "desi ghee");
-    parsed.exclude_keywords = [
-      "laddu",
-      "ladoo",
-      "barfi",
-      "mithai",
-      "biscuit",
-      "cookie",
-      "namkeen",
-    ];
-    if (/grass.?fed|grass fed/.test(lower)) parsed.soft_preferences.push("grass fed");
-  }
-  if (/\bpaneer\b/.test(lower) && !/\bpaneer masala\b|\bbhurji\b/i.test(lower)) {
-    parsed.product_terms = ["paneer"];
-    parsed.search_keywords = ["paneer", "cottage cheese", "malai paneer", "fresh paneer"];
-    parsed.categories = [...new Set([...parsed.categories, "dairy"])];
-    parsed.exclude_keywords = [
-      ...(parsed.exclude_keywords ?? []),
-      "masala",
-      "marinade",
-      "spice",
-      "seasoning",
-      "soda",
-      "goli",
-      "drink",
-      "pop",
-      "bread",
-      "pav",
-      "bhaji",
-      "mix",
-      "biscuit",
-      "cracker",
-      "nan",
-      "paratha",
-      "sorbet",
-    ];
-  }
+  applyProductTermHeuristics(parsed, lower);
 
   parsed.explanation = "I parsed your request into product terms, limits, and health context.";
   return normalizeParsedProductQuery(parsed, prompt);
@@ -331,6 +302,7 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
       max_fat_g_100g: asNumber(constraints.max_fat_g_100g),
       min_protein_g_100g: asNumber(constraints.min_protein_g_100g),
       vegetarian: typeof constraints.vegetarian === "boolean" ? constraints.vegetarian : undefined,
+      vegan: typeof constraints.vegan === "boolean" ? constraints.vegan : undefined,
       avoid_ingredients: asStringArray(constraints.avoid_ingredients),
       allergens_excluded: asStringArray(constraints.allergens_excluded),
       avoid_sublabels: asStringArray(constraints.avoid_sublabels),
@@ -349,7 +321,7 @@ export async function parseProductQueryWithDeepseek(
   prompt: string,
   opts: DeepseekOptions = {},
 ): Promise<QueryParseResult> {
-  const apiKey = opts.apiKey ?? process.env.DEEPSEEK_API_KEY;
+  const apiKey = opts.apiKey ?? resolveDeepseekApiKey("search");
   if (!apiKey) {
     return {
       parsed: heuristicParseProductQuery(prompt),
@@ -361,6 +333,7 @@ export async function parseProductQueryWithDeepseek(
   try {
     const { content, usage } = await deepseekChat({
       apiKey,
+      usageKind: "search",
       baseUrl: opts.baseUrl,
       model: opts.model,
       timeoutMs: opts.timeoutMs ?? 18_000,

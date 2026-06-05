@@ -1,7 +1,11 @@
 import { mergeUsage } from "@/lib/search/deepseek-client";
+import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
 import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { rankCandidatesWithDeepseek } from "@/lib/search/ai-rank";
-import { rankCandidatesSemantically } from "@/lib/search/semantic-rank";
+import {
+  mergeDeterministicWithLlmRankings,
+  rankCandidatesSemantically,
+} from "@/lib/search/semantic-rank";
 import type { SearchIntentTier } from "@/lib/search/intent-classify";
 import { getAiSearchProductPool, type CatalogGridItem, type ProductListItem } from "@/lib/products/queries";
 import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-parse";
@@ -28,6 +32,8 @@ export type AiSearchResult = {
   total: number;
   relaxed: boolean;
 };
+
+const STRUCTURED_ESCALATE_MIN = 6;
 
 function toAiGridItem(p: ProductListItem, score: number, reasons: string[], warning: string | null): AiSearchItem {
   return {
@@ -63,7 +69,9 @@ function suggestedRefinements(parsed: ParsedProductQuery): string[] {
   if (!parsed.hard_constraints.max_price) out.push("Add a budget, e.g. under ₹150");
   if (!parsed.hard_constraints.max_sugar_g_100g) out.push("Add a sugar limit");
   if (!parsed.health_contexts.length) out.push("Add a goal like diabetic, kids, gym, or fat loss");
-  if (!parsed.hard_constraints.vegetarian) out.push("Specify vegetarian or vegan if needed");
+  if (!parsed.hard_constraints.vegetarian && !parsed.hard_constraints.vegan) {
+    out.push("Specify vegetarian or vegan if needed");
+  }
   return out.slice(0, 3);
 }
 
@@ -90,26 +98,23 @@ export async function runAiProductSearch(
   let rankSource: AiSearchResult["rank_source"] = "semantic";
   let rankWarning: string | undefined;
 
+  const gatedIds = new Set(deterministic.rankings.map((r) => r.product_id));
   const gatedForLlm = deterministic.rankings
     .map((r) => byId.get(r.product_id))
     .filter((p): p is ProductListItem => !!p);
 
-  if (tier === "complex" && process.env.DEEPSEEK_API_KEY && gatedForLlm.length > 0) {
+  if (tier === "complex" && resolveDeepseekApiKey("search") && gatedForLlm.length > 0) {
     const llm = await rankCandidatesWithDeepseek(prompt, parsed, gatedForLlm, limit);
+    usage = llm.usage;
+    rankWarning = llm.warning;
     if (llm.rankings.length > 0) {
       summary = llm.summary;
-      usage = llm.usage;
-      rankWarning = llm.warning;
-      const llmById = new Map(llm.rankings.map((r) => [r.product_id, r]));
-      rankings = rankingsForUi.map((row) => {
-        const polished = llmById.get(row.product_id);
-        if (!polished) return row;
-        return {
-          ...row,
-          reasons: polished.reasons.length ? polished.reasons : row.reasons,
-          warning: polished.warning ?? row.warning,
-        };
-      });
+      rankings = mergeDeterministicWithLlmRankings(
+        rankingsForUi,
+        llm.rankings,
+        gatedIds,
+        limit,
+      );
       rankSource = llm.source === "deepseek" ? "deepseek" : "semantic";
     }
   }
@@ -139,4 +144,15 @@ export async function runAiProductSearch(
     total: candidates.length,
     relaxed: deterministic.relaxed,
   };
+}
+
+/** Structured first; escalate to complex when results are sparse and search key exists. */
+export function shouldEscalateStructuredToComplex(
+  tier: SearchIntentTier,
+  result: AiSearchResult,
+  limit: number,
+): boolean {
+  if (tier !== "structured") return false;
+  if (!resolveDeepseekApiKey("search")) return false;
+  return result.items.length < Math.min(STRUCTURED_ESCALATE_MIN, Math.max(4, Math.floor(limit / 2)));
 }

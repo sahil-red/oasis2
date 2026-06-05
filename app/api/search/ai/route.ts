@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeAiSearch } from "@/lib/auth/profile";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
-import { runAiProductSearch } from "@/lib/search/ai-search";
+import { runAiProductSearch, shouldEscalateStructuredToComplex } from "@/lib/search/ai-search";
 import { classifyIntent } from "@/lib/search/intent-classify";
 import {
   getCachedAiResult,
@@ -16,6 +16,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+};
+
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     prompt?: unknown;
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const limit = typeof body?.limit === "number" ? body.limit : undefined;
-  const tier =
+  let tier =
     body?.tier === "lexical" || body?.tier === "structured" || body?.tier === "complex"
       ? body.tier
       : classifyIntent(prompt);
@@ -42,9 +46,7 @@ export async function POST(req: NextRequest) {
 
   const cached = getCachedAiResult(prompt, limit ?? 24);
   if (cached) {
-    return NextResponse.json(cached, {
-      headers: { "Cache-Control": "private, max-age=300" },
-    });
+    return NextResponse.json(cached, { headers: CACHE_HEADERS });
   }
 
   const client = supabaseFromBearer(req.headers.get("authorization"));
@@ -70,12 +72,23 @@ export async function POST(req: NextRequest) {
     setCachedParse(prompt, parsed);
   }
 
-  const result = await runAiProductSearch(parsed, { limit, prompt, tier });
+  let result = await runAiProductSearch(parsed, { limit, prompt, tier });
+
+  if (shouldEscalateStructuredToComplex(tier, result, limit ?? 24)) {
+    const complexParse =
+      parsed.source === "deepseek"
+        ? parsed
+        : await parseProductQueryWithDeepseek(prompt).catch(() => parsed);
+    if (complexParse.source === "deepseek") setCachedParse(prompt, complexParse);
+    result = await runAiProductSearch(complexParse, {
+      limit,
+      prompt,
+      tier: "complex",
+    });
+    result = { ...result, intent_tier: "complex" };
+  }
+
   setCachedAiResult(prompt, limit ?? 24, result);
 
-  return NextResponse.json(result, {
-    headers: {
-      "Cache-Control": "private, max-age=300",
-    },
-  });
+  return NextResponse.json(result, { headers: CACHE_HEADERS });
 }

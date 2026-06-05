@@ -38,13 +38,13 @@ import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { DisplayHero, Eyebrow } from "@/components/ui/Typography";
-import { fetchAiSearch, fetchLanding, fetchLexicalSearch } from "@/lib/api";
+import { fetchAiSearch, fetchCatalogMeta, fetchLanding, fetchLexicalSearch } from "@/lib/api";
 import { classifyIntent } from "@/lib/search-intent";
 import { useAccessToken } from "@/lib/auth";
 import { useTheme } from "@/lib/theme-context";
 import { fonts, radius, spacing } from "@/theme";
 import { motion } from "@/theme/motion";
-import type { AiSearchResult, CatalogProduct, LandingInsights } from "@/types/api";
+import type { AiSearchResult, CatalogMeta, CatalogProduct, LandingInsights } from "@/types/api";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const MARQUEE_CARD_W = 160;
@@ -144,6 +144,7 @@ export default function HomeTab() {
   const { colors } = useTheme();
 
   const [landing, setLanding] = useState<LandingInsights | null>(null);
+  const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const [loadingLanding, setLoadingLanding] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -167,7 +168,10 @@ export default function HomeTab() {
   }, []);
 
   useEffect(() => {
-    loadLanding().finally(() => setLoadingLanding(false));
+    Promise.all([
+      loadLanding(),
+      fetchCatalogMeta().then(setCatalogMeta).catch(() => setCatalogMeta(null)),
+    ]).finally(() => setLoadingLanding(false));
   }, [loadLanding]);
 
   const onRefresh = useCallback(async () => {
@@ -183,7 +187,10 @@ export default function HomeTab() {
     setSearchError(null);
     setSearchResult(null);
     try {
-      const intent = classifyIntent(trimmed);
+      const intent = classifyIntent(trimmed, {
+        brands: catalogMeta?.filters.brands,
+        subcategories: catalogMeta?.filters.subcategories,
+      });
       const data =
         intent === "lexical"
           ? await fetchLexicalSearch(trimmed, 24)
@@ -199,7 +206,7 @@ export default function HomeTab() {
     } finally {
       setSearching(false);
     }
-  }, [token]);
+  }, [token, catalogMeta?.filters.brands, catalogMeta?.filters.subcategories]);
 
   const clearSearch = useCallback(() => {
     setPrompt("");

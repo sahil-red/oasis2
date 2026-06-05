@@ -85,7 +85,7 @@ const filterSelectClass =
   "w-full cursor-pointer appearance-none rounded-lg border border-(--color-line) bg-(--color-bg) py-2 pl-3 pr-9 text-sm text-(--color-fg) outline-none transition hover:border-(--color-line-strong) focus:border-(--color-fg-muted) focus:ring-1 focus:ring-(--color-line-strong) disabled:cursor-not-allowed disabled:opacity-50";
 
 const CATALOG_PAGE_SIZE = 96;
-const SEARCH_DEBOUNCE_MS = 120;
+const SEARCH_DEBOUNCE_MS = 250;
 
 const ALL_PROMPT_EXAMPLES = [
   "biscuits with low sugar",
@@ -640,8 +640,10 @@ export function CatalogView({
     if (!prompt) return;
     setLoadError(null);
 
-    const brands = meta?.filters.brands;
-    const intent = classifyIntent(prompt, { brands });
+    const intent = classifyIntent(prompt, {
+      brands: meta?.filters.brands,
+      subcategories: meta?.filters.subcategories,
+    });
     setAiIntentTier(intent);
 
     if (intent === "lexical") {
@@ -699,7 +701,7 @@ export function CatalogView({
         setLoading(false);
       }
     }
-  }, [aiPrompt, items.length, savedPrefs, meta?.filters.brands, patch]);
+  }, [aiPrompt, items.length, savedPrefs, meta?.filters.brands, meta?.filters.subcategories, patch]);
 
   const handleFactAction = useCallback(
     async (fact: LandingFact) => {
@@ -838,7 +840,11 @@ export function CatalogView({
                 disabled={aiSearching}
                 className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
               >
-                {aiSearching ? "Searching…" : "Search"}
+                {aiSearching
+                  ? aiIntentTier === "lexical"
+                    ? "Searching…"
+                    : "Scout is matching on nutrition…"
+                  : "Search"}
               </button>
               <button
                 type="button"

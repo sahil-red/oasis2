@@ -14,11 +14,11 @@ import { ProductCard } from "@/components/ProductCard";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
 import { Panel } from "@/components/ui/Panel";
-import { fetchAiSearch, fetchLexicalSearch } from "@/lib/api";
+import { fetchAiSearch, fetchCatalogMeta, fetchLexicalSearch } from "@/lib/api";
 import { classifyIntent } from "@/lib/search-intent";
 import { useAccessToken } from "@/lib/auth";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
-import type { AiSearchResult, CatalogProduct } from "@/types/api";
+import type { AiSearchResult, CatalogMeta, CatalogProduct } from "@/types/api";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -28,6 +28,11 @@ export default function SearchScreen() {
   const [result, setResult] = useState<AiSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
+
+  useEffect(() => {
+    fetchCatalogMeta().then(setCatalogMeta).catch(() => setCatalogMeta(null));
+  }, []);
 
   const run = useCallback(
     async (q: string) => {
@@ -36,7 +41,10 @@ export default function SearchScreen() {
       setLoading(true);
       setError(null);
       try {
-        const intent = classifyIntent(trimmed);
+        const intent = classifyIntent(trimmed, {
+          brands: catalogMeta?.filters.brands,
+          subcategories: catalogMeta?.filters.subcategories,
+        });
         const data =
           intent === "lexical"
             ? await fetchLexicalSearch(trimmed, 24)
@@ -55,7 +63,7 @@ export default function SearchScreen() {
         setLoading(false);
       }
     },
-    [token],
+    [token, catalogMeta?.filters.brands, catalogMeta?.filters.subcategories],
   );
 
   useEffect(() => {

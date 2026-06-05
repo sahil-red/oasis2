@@ -3,6 +3,7 @@ import {
   extractJsonObject,
   type DeepseekUsage,
 } from "@/lib/search/deepseek-client";
+import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import { rankCandidatesSemantically } from "@/lib/search/semantic-rank";
@@ -107,7 +108,7 @@ export async function rankCandidatesWithDeepseek(
     };
   }
 
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (!resolveDeepseekApiKey("search")) {
     return semanticFallbackRank(parsed, candidates, limit, "DEEPSEEK_API_KEY is missing");
   }
 
@@ -123,6 +124,7 @@ export async function rankCandidatesWithDeepseek(
 
   try {
     const { content, usage } = await deepseekChat({
+      usageKind: "search",
       maxTokens: 1400,
       timeoutMs: 28_000,
       jsonObject: true,
@@ -139,16 +141,27 @@ export async function rankCandidatesWithDeepseek(
       }>;
     };
     const idSet = new Set(candidates.map((p) => p.id));
+    const semanticReasons = new Map(
+      rankCandidatesSemantically(candidates, parsed, limit).rankings.map((r) => [
+        r.product_id,
+        r.reasons,
+      ]),
+    );
+
     const rankings: LlmRankedItem[] = (raw.rankings ?? [])
       .filter((r) => r.product_id && idSet.has(r.product_id))
-      .map((r) => ({
-        product_id: r.product_id!,
-        score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))),
-        reasons: Array.isArray(r.reasons)
+      .map((r) => {
+        const llmReasons = Array.isArray(r.reasons)
           ? r.reasons.map(String).filter(Boolean).slice(0, 3)
-          : ["Good match"],
-        warning: r.warning ?? null,
-      }))
+          : [];
+        const fallbackReasons = semanticReasons.get(r.product_id!) ?? [];
+        return {
+          product_id: r.product_id!,
+          score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))),
+          reasons: llmReasons.length ? llmReasons : fallbackReasons,
+          warning: r.warning ?? null,
+        };
+      })
       .slice(0, limit);
 
     return {

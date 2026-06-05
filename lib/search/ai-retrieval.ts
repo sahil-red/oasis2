@@ -30,9 +30,12 @@ export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQ
     const namedFood = parsed.product_terms.length > 0;
     if (!namedFood) return false;
   }
-  if (c.vegetarian && !isDietCompatible("veg", p).ok) return false;
+  if (c.vegan && !isDietCompatible("vegan", p).ok) return false;
+  if (c.vegetarian && !c.vegan && !isDietCompatible("veg", p).ok) return false;
   for (const avoid of c.avoid_ingredients ?? []) {
-    if (ingredients.includes(avoid.toLowerCase())) return false;
+    const a = avoid.toLowerCase();
+    if (a.includes("palm") && /palm oil|palmolein|palm fat/i.test(ingredients)) return false;
+    if (ingredients.includes(a)) return false;
   }
   for (const allergen of c.allergens_excluded ?? []) {
     if (ingredients.includes(allergen.toLowerCase())) return false;

@@ -1,5 +1,7 @@
 /** Mirror of lib/search/intent-classify.ts for client-side routing. */
 
+import { buildProductTypeSet, normalizeBrandSet } from "@/lib/catalog-intent-signals";
+
 export type SearchIntentTier = "lexical" | "structured" | "complex";
 
 const CONSTRAINT_PATTERNS = [
@@ -13,16 +15,6 @@ const CONSTRAINT_PATTERNS = [
   /\badded sugar\b/i,
   /\bno added\b/i,
 ];
-
-const PRODUCT_TYPE_NOUNS = new Set([
-  "namkeen", "biscuit", "biscuits", "cookie", "cookies", "oats", "oat", "milk", "paneer",
-  "curd", "yogurt", "ghee", "butter", "cheese", "bread", "rice", "atta", "flour", "oil",
-  "juice", "chips", "snack", "snacks", "chocolate", "protein", "powder", "masala", "tea",
-  "coffee", "honey", "jam", "pickle", "noodles", "pasta", "cereal", "muesli", "granola",
-  "bar", "bars", "drink", "drinks", "soda", "cola", "water", "lassi", "buttermilk",   "tofu",
-  "soya",
-  "soy",
-]);
 
 function normalizeQuery(raw: string): string {
   return raw.toLowerCase().replace(/\s+/g, " ").trim();
@@ -41,19 +33,21 @@ function looksLikeBrandToken(token: string, brands?: Set<string>): boolean {
   return token.length >= 3 && token.length <= 18 && /^[a-z][a-z0-9&'.-]*$/i.test(token);
 }
 
-function isProductTypeNoun(token: string): boolean {
-  return PRODUCT_TYPE_NOUNS.has(token.toLowerCase());
-}
+export type IntentOpts = {
+  brands?: string[];
+  subcategories?: string[];
+  productTypes?: Set<string>;
+};
 
-export function classifyIntent(
-  raw: string,
-  opts?: { brands?: Iterable<string> },
-): SearchIntentTier {
+export function classifyIntent(raw: string, opts?: IntentOpts): SearchIntentTier {
   const q = normalizeQuery(raw);
   if (q.length < 2) return "lexical";
 
+  const brandSet = normalizeBrandSet(opts?.brands);
+  const productTypes = opts?.productTypes ?? buildProductTypeSet(opts?.subcategories);
+  const isProductTypeNoun = (token: string) => productTypes.has(token.toLowerCase());
+
   const tokens = tokenize(q);
-  const brandSet = opts?.brands ? new Set([...opts.brands].map((b) => b.toLowerCase())) : null;
   const hasConstraints = hasConstraintLexicon(q);
 
   if (!hasConstraints) {

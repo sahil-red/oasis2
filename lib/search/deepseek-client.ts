@@ -1,4 +1,5 @@
 import { Agent, fetch as undiciFetch } from "undici";
+import { resolveDeepseekApiKey, type DeepseekUsageKind } from "@/lib/search/deepseek-keys";
 
 const DEFAULT_BASE_URL = "https://api.deepseek.com/v1";
 const DEFAULT_MODEL = "deepseek-v4-flash";
@@ -17,6 +18,7 @@ export type DeepseekUsage = {
 
 export type DeepseekChatOptions = {
   apiKey?: string;
+  usageKind?: DeepseekUsageKind;
   baseUrl?: string;
   model?: string;
   system: string;
@@ -40,7 +42,7 @@ export function extractJsonObject(text: string): unknown {
 }
 
 export async function deepseekChat(opts: DeepseekChatOptions): Promise<DeepseekChatResult> {
-  const apiKey = opts.apiKey ?? process.env.DEEPSEEK_API_KEY;
+  const apiKey = opts.apiKey ?? resolveDeepseekApiKey(opts.usageKind ?? "search");
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY is missing");
 
   const controller = new AbortController();
