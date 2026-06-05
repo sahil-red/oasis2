@@ -39,7 +39,18 @@ const CASES: Case[] = [
   { query: "chips without palm oil", expectTier: "structured", ilikeContains: "chip" },
   { query: "no preservatives juice", expectTier: "structured", ilikeContains: "juice" },
   { query: "keto friendly snacks", expectTier: "structured" },
-  { query: "food for bulking", expectTier: "structured", parseCheck: (p) => p.health_contexts.includes("bulk") },
+  {
+    query: "food for bulking",
+    expectTier: "structured",
+    parseCheck: (p) => p.health_contexts.includes("bulk"),
+  },
+  {
+    query: "protein for parents",
+    expectTier: "structured",
+    parseCheck: (p) =>
+      !p.product_terms.includes("parents") &&
+      (p.hard_constraints.min_protein_g_100g ?? 0) >= 10,
+  },
   { query: "high protein milk", expectTier: "structured", ilikeContains: "milk" },
   { query: "best paneer", expectTier: "structured", ilikeContains: "paneer" },
   { query: "clean protein bars", expectTier: "structured", ilikeContains: "bars" },

@@ -15,6 +15,7 @@ import {
   relevanceScore,
 } from "@/lib/search/semantic-rank";
 import type { ProductListItem } from "@/lib/products/queries";
+import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { INTENT_CASES, PARSE_CASES } from "@/lib/search/search-regression-cases";
 
 const productTypes = buildProductTypeSet(["Fresh Paneer", "Biscuits & Cookies", "Fruit Juices"]);
@@ -278,12 +279,7 @@ if (bulkingRank.rankings[0]?.product_id !== "paneer") {
   failed++;
 }
 
-if (failed > 0) {
-  console.error(`\n${failed} regression check(s) failed`);
-  process.exit(1);
-}
-
-const rankChecks = 7;
+const rankChecks = 8;
 
 const maggiParsed = heuristicParseProductQuery("healthy maggi noodles");
 const maggiRank = rankCandidatesSemantically(
@@ -362,6 +358,44 @@ if (healthyNoodleRank.rankings[0]?.product_id !== "whole-wheat") {
     healthyNoodleRank.rankings.map((r) => r.product_id),
   );
   failed++;
+}
+
+const parentsParsed = heuristicParseProductQuery("protein for parents");
+const parentsPool: ProductListItem[] = [
+  {
+    id: "baby",
+    slug: "b",
+    name: "Nestle Cerelac Baby Cereal",
+    brand: "Nestle",
+    category: "Baby",
+    subcategory: "Infant Cereal",
+    nutrition: { protein_g_100g: 15 },
+    core_scores: { score: 80, grade: "B", band: "good", verdict_sublabels: [] },
+  } as ProductListItem,
+  {
+    id: "dal",
+    slug: "d",
+    name: "Tata Sampann Toor Dal",
+    brand: "Tata",
+    category: "Staples",
+    subcategory: "Dal",
+    nutrition: { protein_g_100g: 22 },
+    core_scores: { score: 78, grade: "B", band: "good", verdict_sublabels: [] },
+  } as ProductListItem,
+];
+const parentsCands = retrieveCandidates(parentsPool, parentsParsed, 10);
+if (!parentsCands.some((p) => p.id === "dal")) {
+  console.error("[retrieve] FAIL protein for parents: expected high-protein staples in pool");
+  failed++;
+}
+if (parentsCands.some((p) => p.id === "baby") && parentsCands[0]?.id === "baby") {
+  console.error("[retrieve] FAIL protein for parents: baby cereal should not top pool");
+  failed++;
+}
+
+if (failed > 0) {
+  console.error(`\n${failed} regression check(s) failed`);
+  process.exit(1);
 }
 
 console.log(

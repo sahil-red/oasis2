@@ -13,7 +13,6 @@ import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-pa
 
 export type AiSearchItem = CatalogGridItem & {
   ai_match_score: number;
-  /** Goal-fit or core score — shown on the Health tab in search cards. */
   ai_health_score?: number;
   ai_match_reasons: string[];
   ai_match_warning?: string | null;
@@ -36,7 +35,7 @@ export type AiSearchResult = {
   relaxed: boolean;
 };
 
-const STRUCTURED_ESCALATE_MIN = 6;
+const LLM_CANDIDATE_CAP = 40;
 
 function toAiGridItem(
   p: ProductListItem,
@@ -80,7 +79,9 @@ function suggestedRefinements(parsed: ParsedProductQuery): string[] {
   const out: string[] = [];
   if (!parsed.hard_constraints.max_price) out.push("Add a budget, e.g. under ₹150");
   if (!parsed.hard_constraints.max_sugar_g_100g) out.push("Add a sugar limit");
-  if (!parsed.health_contexts.length) out.push("Add a goal like diabetic, kids, gym, or fat loss");
+  if (!parsed.health_contexts.length && !parsed.soft_preferences.some((s) => /parents/i.test(s))) {
+    out.push("Add a goal like diabetic, kids, gym, or fat loss");
+  }
   if (!parsed.hard_constraints.vegetarian && !parsed.hard_constraints.vegan) {
     out.push("Specify vegetarian or vegan if needed");
   }
@@ -97,11 +98,14 @@ export async function runAiProductSearch(
   const tier = opts.tier ?? "structured";
 
   const catalog = await getAiSearchProductPool();
-  const candidates = retrieveCandidates(catalog, parsed, 100);
+  const candidates = retrieveCandidates(catalog, parsed, 120);
   const byId = new Map(candidates.map((p) => [p.id, p]));
 
-  const semanticCap = Math.min(40, Math.max(limit, limit * 2));
-  const deterministic = rankCandidatesSemantically(candidates, parsed, semanticCap);
+  const deterministic = rankCandidatesSemantically(
+    candidates,
+    parsed,
+    Math.min(LLM_CANDIDATE_CAP, Math.max(limit * 2, 24)),
+  );
   const rankingsForUi = deterministic.rankings.slice(0, limit);
 
   let summary = deterministic.summary;
@@ -115,7 +119,7 @@ export async function runAiProductSearch(
     .map((r) => byId.get(r.product_id))
     .filter((p): p is ProductListItem => !!p);
 
-  if (tier === "complex" && resolveDeepseekApiKey("search") && gatedForLlm.length > 0) {
+  if (resolveDeepseekApiKey("search") && gatedForLlm.length > 0) {
     const llm = await rankCandidatesWithDeepseek(prompt, parsed, gatedForLlm, limit);
     usage = llm.usage;
     rankWarning = llm.warning;
@@ -129,6 +133,8 @@ export async function runAiProductSearch(
       );
       rankSource = llm.source === "deepseek" ? "deepseek" : "semantic";
     }
+  } else if (candidates.length === 0) {
+    summary = "No products in the catalog matched your gates — try broadening the request.";
   }
 
   const items: AiSearchItem[] = [];
@@ -150,7 +156,7 @@ export async function runAiProductSearch(
     reasons_by_product_id: Object.fromEntries(
       rankings.map((r) => [r.product_id, r.reasons]),
     ),
-    refinements: tier === "complex" ? suggestedRefinements(parsed) : [],
+    refinements: suggestedRefinements(parsed),
     usage: mergeUsage(parseResult.usage, usage),
     limit,
     total: candidates.length,
@@ -158,15 +164,11 @@ export async function runAiProductSearch(
   };
 }
 
-/** Structured first; escalate to complex when results are sparse and search key exists. */
+/** @deprecated All searches use DeepSeek rank when a key is present. */
 export function shouldEscalateStructuredToComplex(
-  tier: SearchIntentTier,
-  result: AiSearchResult,
-  limit: number,
+  _tier: SearchIntentTier,
+  _result: AiSearchResult,
+  _limit: number,
 ): boolean {
-  if (tier !== "structured") return false;
-  if (!resolveDeepseekApiKey("search")) return false;
-  // Named product type (e.g. buttermilk, paneer): sparse matches are OK — don't re-parse + LLM rank.
-  if (result.parsed.product_terms.length > 0) return false;
-  return result.items.length < Math.min(STRUCTURED_ESCALATE_MIN, Math.max(4, Math.floor(limit / 2)));
+  return false;
 }

@@ -27,8 +27,7 @@ export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQ
   if (c.max_sugar_g_100g != null && sugar != null && sugar > c.max_sugar_g_100g) return false;
   if (c.max_fat_g_100g != null && fat != null && fat > c.max_fat_g_100g) return false;
   if (c.min_protein_g_100g != null && protein != null && protein < c.min_protein_g_100g) {
-    const namedFood = parsed.product_terms.length > 0;
-    if (!namedFood) return false;
+    return false;
   }
   if (c.vegan && !isDietCompatible("vegan", p).ok) return false;
   if (c.vegetarian && !c.vegan && !isDietCompatible("veg", p).ok) return false;
@@ -47,14 +46,41 @@ export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQ
   return true;
 }
 
+function isGoalOnlyQuery(parsed: ParsedProductQuery): boolean {
+  return (
+    !parsed.product_terms.length &&
+    (parsed.health_contexts.length > 0 ||
+      parsed.hard_constraints.min_protein_g_100g != null ||
+      parsed.sort_intent === "highest_protein" ||
+      parsed.soft_preferences.some((s) => /parents|elderly/i.test(s)))
+  );
+}
+
+/** When there is no product noun, score by protein density and Scout label. */
+function goalOnlyRetrievalScore(p: ProductListItem, parsed: ParsedProductQuery): number {
+  const protein = nutritionValue(p.nutrition, "protein_g_100g") ?? 0;
+  const scout = p.core_scores?.score ?? 0;
+  const minP = parsed.hard_constraints.min_protein_g_100g;
+  if (minP != null && protein < minP) return 0;
+  return protein * 6 + scout * 0.45;
+}
+
 /** Pull a bounded candidate set using product-type relevance + hard constraints. */
 export function retrieveCandidates(
   catalog: ProductListItem[],
   parsed: ParsedProductQuery,
   maxCandidates = 100,
 ): ProductListItem[] {
+  const goalOnly = isGoalOnlyQuery(parsed);
+
   const scored = catalog
-    .map((p) => ({ p, score: relevanceScore(p, parsed) }))
+    .map((p) => {
+      let score = relevanceScore(p, parsed);
+      if (goalOnly && score <= 0) {
+        score = goalOnlyRetrievalScore(p, parsed);
+      }
+      return { p, score };
+    })
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 

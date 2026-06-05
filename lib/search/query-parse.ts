@@ -1,5 +1,6 @@
 import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
 import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
+import { applyAudienceHeuristics } from "@/lib/search/audience-parse";
 import { stripGoalMetaProductTerms } from "@/lib/search/goal-query-normalize";
 import { applyL3IntentToParsed } from "@/lib/search/l3-category-intent";
 import { applyProductTermHeuristics } from "@/lib/search/product-term-heuristics";
@@ -149,6 +150,15 @@ const NON_PRODUCT_TERMS = new Set([
   "for",
   "the",
   "and",
+  "parents",
+  "parent",
+  "elderly",
+  "senior",
+  "seniors",
+  "mom",
+  "dad",
+  "mother",
+  "father",
 ]);
 
 function emptyParsed(prompt: string): ParsedProductQuery {
@@ -210,7 +220,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     parsed.product_terms.length > 0 &&
     !/protein powder|protein bar|whey|supplement/.test(lower);
   if (proteinMin) parsed.hard_constraints.min_protein_g_100g = proteinMin;
-  else if (/high protein|protein rich/.test(lower)) {
+  else if (/high protein|protein rich|\bprotein\s+for\b|\bfor\s+.*\bprotein\b/i.test(lower)) {
     if (namedFood) parsed.sort_intent = "highest_protein";
     else parsed.hard_constraints.min_protein_g_100g = 12;
   }
@@ -303,7 +313,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     );
     parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
   }
-  stripGoalMetaProductTerms(parsed);
+  applyAudienceHeuristics(parsed, lower);
   stripGoalMetaProductTerms(parsed);
   applyProductTermHeuristics(parsed, lower);
   applyL3IntentToParsed(parsed);

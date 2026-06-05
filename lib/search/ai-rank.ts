@@ -6,6 +6,7 @@ import {
 import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import { deterministicSearchBrief } from "@/lib/search/deterministic-brief";
 import { rankCandidatesSemantically } from "@/lib/search/semantic-rank";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -41,7 +42,9 @@ Schema:
 }
 
 Rules:
-- Candidates are already filtered for product type and hard constraints; only rank and explain within this list.
+- You receive a deterministic local parse (product type, hard gates, soft prefs) — treat those as ground truth.
+- Candidates already passed hard gates; rank and explain within this list only.
+- For audience queries (e.g. protein for parents), prefer practical high-protein staples (dal, milk, paneer, eggs, health drinks) over baby food or unrelated matches.
 - score is 0-100 for how well the product matches what the user asked for (product TYPE and constraints), not just keyword overlap.
 - Prefer the actual product type: jar/tin of ghee beats sweets that contain ghee; soft drinks/sodas beat plain water; Coke Zero beats sugary soda.
 - reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "Grass-fed on label").
@@ -115,9 +118,8 @@ export async function rankCandidatesWithDeepseek(
   const payload = candidates.map(compactCandidate);
   const user = [
     `Shopper request: ${prompt}`,
-    `Parsed intent: ${parsed.explanation}`,
-    `Primary product type: ${parsed.product_terms.join(", ") || "any"}`,
-    `Hard constraints:\n${constraintsBlock(parsed)}`,
+    `Local deterministic parse:\n${deterministicSearchBrief(parsed)}`,
+    `Legacy constraint block:\n${constraintsBlock(parsed)}`,
     `Return up to ${limit} rankings.`,
     `Candidates JSON:\n${JSON.stringify(payload)}`,
   ].join("\n\n");

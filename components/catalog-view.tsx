@@ -708,19 +708,6 @@ export function CatalogView({
     });
     setAiIntentTier(intent);
 
-    if (intent === "lexical") {
-      setAiMode(false);
-      setAiSummary(null);
-      setAiWarning(null);
-      setAiRefinements([]);
-      setAiParsed(null);
-      setAiParseSource(null);
-      setAiRankSource(null);
-      setAiRelaxed(false);
-      patch({ q: prompt });
-      return;
-    }
-
     if (!canUseAiSearch()) {
       const usage = readAiSearchUsage();
       setAiUsage(usage);
@@ -737,7 +724,7 @@ export function CatalogView({
       const result = await fetchAiCatalogSearch(
         prompt,
         CATALOG_PAGE_SIZE,
-        intent === "complex" ? "complex" : "structured",
+        "structured",
         savedPrefs,
       );
       if (gen !== fetchGen.current) return;
@@ -922,11 +909,7 @@ export function CatalogView({
                 disabled={aiSearching}
                 className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
               >
-                {aiSearching
-                  ? aiIntentTier === "lexical"
-                    ? "Searching…"
-                    : "Scout is matching on nutrition…"
-                  : "Search"}
+                {aiSearching ? "Scout is matching on nutrition…" : "Search"}
               </button>
               <button
                 type="button"

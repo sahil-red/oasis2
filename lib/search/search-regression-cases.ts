@@ -115,6 +115,13 @@ export const PARSE_CASES: ParseCase[] = [
       p.sort_intent === "healthiest" &&
       (p.product_terms.includes("ragi") || p.product_terms.includes("biscuits")),
   },
+  {
+    query: "protein for parents",
+    check: (p) =>
+      !p.product_terms.includes("parents") &&
+      (p.hard_constraints.min_protein_g_100g ?? 0) >= 10 &&
+      p.sort_intent === "highest_protein",
+  },
 ];
 
 /** Live DB checks — run via pnpm search:regression:live */

@@ -27,6 +27,11 @@ export const GOAL_META_PRODUCT_TERMS = new Set([
   "for",
   "the",
   "and",
+  "parents",
+  "parent",
+  "elderly",
+  "senior",
+  "seniors",
 ]);
 
 const ADULT_GOAL_CONTEXTS = new Set<ParsedHealthContext>([
