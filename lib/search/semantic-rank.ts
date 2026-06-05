@@ -371,7 +371,7 @@ function heuristicHealthIntentTier(
     if (/maida|refined wheat flour/i.test(ing)) tier -= 32;
     tier -= Math.min(28, kidsAdditivePenalty(p.ingredients_raw) * 9);
     const verdict = p.core_scores?.verdict;
-    if (verdict === "occasional_treat" || verdict === "limit") tier -= 12;
+    if (verdict === "occasional_treat" || verdict === "skip") tier -= 12;
     return Math.max(0, Math.min(100, tier));
   }
 
