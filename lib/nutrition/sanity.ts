@@ -2,8 +2,10 @@ import { mergeNutrition, parseServingNutritionBlock, fillMissingNutritionFields 
 import { nutritionHasCriticalAnomalies, sanitizeNutrition } from "@/lib/nutrition/anomaly";
 import { nutritionIsSparse } from "@/lib/nutrition/completeness";
 import {
+  isReferenceNutritionEligible,
   matchReferenceFood,
   referenceToNutrition,
+  stripIneligibleReferenceNutrition,
 } from "@/lib/nutrition/reference-seed";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -97,6 +99,10 @@ function supplementSparseNutrition(
   nutrition: ProductNutrition | null,
   ctx: { name: string; category: string | null; subcategory?: string | null },
 ): ProductNutrition | null {
+  if (!isReferenceNutritionEligible(ctx.name, ctx.category, ctx.subcategory, nutrition)) {
+    return stripIneligibleReferenceNutrition(nutrition, ctx);
+  }
+
   const ref = matchReferenceFood(ctx.name, {
     category: ctx.category,
     subcategory: ctx.subcategory,
@@ -115,7 +121,7 @@ function supplementSparseNutrition(
     extra: {
       ...(filled.extra ?? {}),
       nutrition_gap_fill: ref.entry.id,
-      nutrition_gap_fill_note: "Missing label fields filled from IFCT paneer reference",
+      nutrition_gap_fill_note: "Missing label fields filled from IFCT/USDA reference",
     },
   };
 }
@@ -131,7 +137,7 @@ export function reconcileNutrition(opts: {
   const fromAttrs = nutritionFromAttributes(opts.attributes);
   const ctx = { name: opts.name, category: opts.category, subcategory: opts.subcategory };
 
-  const current = opts.nutrition;
+  const current = stripIneligibleReferenceNutrition(opts.nutrition, ctx);
   if (!current && !fromAttrs) return null;
 
   let picked: ProductNutrition | null;

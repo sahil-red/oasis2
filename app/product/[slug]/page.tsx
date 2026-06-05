@@ -23,6 +23,7 @@ import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
 import { PdpSourceDataPanel } from "@/components/pdp-source-data-panel";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
+import { reconcileDisplayIngredients } from "@/lib/ocr/deepseek-ingredients";
 import {
   deepseekDisplayFromPayload,
   deepseekLabelFromPayload,
@@ -107,12 +108,17 @@ export default async function ProductPage({
   const subscores = score?.subscores as SubScores | undefined;
   const attrs = product.attributes ?? {};
   const attrEntries = Object.entries(attrs).filter(([k]) => !DETAIL_SKIP.has(k));
+  const displayIngredients = reconcileDisplayIngredients({
+    ingredients_raw: product.ingredients_raw,
+    ocr_payload: product.ocr_payload,
+    productName: product.name,
+  });
   const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
-    product.ingredients_raw,
+    displayIngredients,
   );
   const provenance = buildProductProvenance({
-    nutrition: product.nutrition,
-    ingredients_raw: product.ingredients_raw,
+    nutrition: displayNutrition ?? product.nutrition,
+    ingredients_raw: displayIngredients,
     platform: product.platform,
     data_source: product.data_source,
     ocr_status: product.ocr_status,
@@ -141,7 +147,7 @@ export default async function ProductPage({
         concerns: score.concerns,
         breakdown: score.breakdown,
         nutrition: product.nutrition,
-        ingredients_raw: product.ingredients_raw,
+        ingredients_raw: displayIngredients,
         productName: product.name,
         category: product.category,
         subcategory: product.subcategory,
@@ -254,7 +260,7 @@ export default async function ProductPage({
             </p>
             <div className="mt-5">
               <IngredientPanel
-                ingredientsRaw={product.ingredients_raw}
+                ingredientsRaw={displayIngredients}
                 intelligenceRows={ingredientIntelligence}
               />
             </div>

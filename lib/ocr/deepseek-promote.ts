@@ -1,8 +1,11 @@
+import { buildIngredientsFromDeepseekLabel } from "@/lib/ocr/deepseek-ingredients";
 import type {
   DeepseekExtractionResult,
   ExtractedLabel,
   ValidationResult,
 } from "@/lib/ocr/deepseek-label-extract";
+import { splitIngredientSegments } from "@/lib/ocr/format-ingredients";
+import { isMarketingIngredientList } from "@/lib/ocr/ingredients-quality";
 import type { OcrCompareSummary, FieldCompareStatus } from "@/lib/ocr/compare-platform";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -118,11 +121,7 @@ export function nutritionFromDeepseek(extracted: ExtractedLabel): ProductNutriti
 }
 
 export function ingredientsFromDeepseek(extracted: ExtractedLabel): string | null {
-  const text = extracted.ingredients.raw_list
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .join(", ");
-  return text.length >= 10 ? text : null;
+  return buildIngredientsFromDeepseekLabel(extracted);
 }
 
 function countNutritionFields(nutrition: ProductNutrition | null | undefined): number {
@@ -258,12 +257,28 @@ function shouldPromoteIngredients(
   next: string | null,
   extracted: ExtractedLabel,
   force: boolean,
+  productName?: string | null,
 ): boolean {
   if (!next) return false;
   if (force) return true;
   if (!existing?.trim()) return true;
   if (extracted.confidence.ingredients !== "high") return false;
-  return next.length >= existing.length * 0.5;
+
+  const existingBad = isMarketingIngredientList(existing, productName);
+  const nextBad = isMarketingIngredientList(next, productName);
+  if (existingBad && !nextBad) return true;
+  if (!existingBad && nextBad) return false;
+
+  const exSeg = splitIngredientSegments(existing);
+  const nxSeg = splitIngredientSegments(next);
+  if (nxSeg.length > exSeg.length) return true;
+  if (nxSeg.length < exSeg.length) return false;
+
+  const nextHasPct = nxSeg.some((s) => /\d+\s*%/.test(s));
+  const exHasPct = exSeg.some((s) => /\d+\s*%/.test(s));
+  if (nextHasPct && !exHasPct) return true;
+
+  return next.length >= existing.length * 0.85;
 }
 
 export function buildDeepseekPromotionPatch(
@@ -288,6 +303,7 @@ export function buildDeepseekPromotionPatch(
     ingredients,
     extracted,
     Boolean(options.force),
+    product.name,
   );
 
   const compare: OcrCompareSummary = {

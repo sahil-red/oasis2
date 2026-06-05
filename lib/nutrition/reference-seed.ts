@@ -1,6 +1,7 @@
 import produceData from "@/data/fresh-produce.json";
 import referenceData from "@/data/reference-foods.json";
 import { isPackagedProduceLike } from "@/lib/catalog/packaged-produce";
+import { hasReferenceNutrition } from "@/lib/nutrition/completeness";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 export type ProduceKind =
@@ -206,6 +207,7 @@ function tryCategoryHint(
       ...entry.aliases.map((a) => tokenOverlapScore(normalized, a)),
     );
     if (overlap < 0.4) continue;
+    if (STAPLE_KINDS.has(entry.kind) && !hasSpecificStapleToken(normalized, entry)) continue;
     const confidence = confidenceForMatch("category_hint", overlap, hintScore);
     if (!best || confidence > best.confidence) {
       best = {
@@ -249,6 +251,115 @@ function isAllowedForReferenceFill(
 const PROCESSED_NAME_RE =
   /\b(milkshake|smoothie|drink|protein|powder|mix|shake|biscuit|cookie|cake|chocolate|ice\s*cream|noodle|chip|snack|bar|wafer|cracker|cereal|muesli|granola|yogurt|peanut\s+butter|jam|spread|sauce|ketchup|pickle|masala\s+mix|instant|fortified|flavoured|flavored)\b/i;
 
+/** Ready meals, tadka jars, curry pastes — not dry whole staples. */
+const PREPARED_PACKAGED_RE =
+  /\b(tadka|tempering|quick\s*fry|fry\s*dried|ready\s*to\s*(?:eat|cook|serve)|rte\b|heat\s*(?:and|&)\s*(?:eat|serve)|just\s*add\s*water|curry\s*(?:paste|mix|powder)|gravy\s*(?:mix|base)|meal\s*(?:kit|mixer)|dal\s*makhani|kitchen\s*ready|in\s*\d+\s*min(?:ute)?s|precooked|pre\s*cooked|retort|cup\s*noodles?|cook\s*in\s*\d+)\b/i;
+
+const STAPLE_KINDS = new Set<ReferenceKind>(["pulse", "grain", "fat", "protein", "dairy", "nut"]);
+
+const GENERIC_STAPLE_TOKENS = new Set([
+  "dal",
+  "pulse",
+  "lentil",
+  "lentils",
+  "rice",
+  "atta",
+  "flour",
+  "gram",
+  "bean",
+  "beans",
+  "pea",
+  "peas",
+  "split",
+  "whole",
+  "dry",
+  "raw",
+  "fresh",
+  "organic",
+  "premium",
+  "unpolished",
+  "polished",
+]);
+
+export function isPreparedOrPackagedFoodName(name: string | null | undefined): boolean {
+  if (!name?.trim()) return false;
+  if (PREPARED_PACKAGED_RE.test(name) || PROCESSED_NAME_RE.test(name)) return true;
+  if (
+    /\b(jar|bottle|tin|pouch|sachet)\b/i.test(name) &&
+    /\b(dal|curry|paste|gravy|tadka|ready|meal)\b/i.test(name)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function hasSpecificStapleToken(normalized: string, entry: ReferenceEntry): boolean {
+  if (!STAPLE_KINDS.has(entry.kind)) return true;
+  for (const alias of entry.aliases) {
+    for (const t of tokenize(alias.replace(/[^a-z\s-]/g, " "))) {
+      if (GENERIC_STAPLE_TOKENS.has(t)) continue;
+      if (t.length < 3) continue;
+      if (normalized.includes(t)) return true;
+    }
+  }
+  return false;
+}
+
+function referenceExtra(nutrition: ProductNutrition): Record<string, number | string> {
+  const extra = nutrition.extra;
+  return extra && typeof extra === "object" ? (extra as Record<string, number | string>) : {};
+}
+
+/** Whether stored or new IFCT/USDA reference nutrition is appropriate for this SKU. */
+export function isReferenceNutritionEligible(
+  name: string | null | undefined,
+  category?: string | null,
+  subcategory?: string | null,
+  nutrition?: ProductNutrition | null,
+): boolean {
+  if (isPreparedOrPackagedFoodName(name)) return false;
+  if (!isAllowedForReferenceFill(category, subcategory)) return false;
+  if (nutrition && hasReferenceNutrition(nutrition)) {
+    const extra = referenceExtra(nutrition);
+    if (extra.reference_match_type === "category_hint") {
+      const refId = String(extra.reference_id ?? "");
+      const entry = refId ? getReferenceById(refId) : null;
+      const normalized = normalizeProductName(name);
+      if (entry && normalized && !hasSpecificStapleToken(normalized, entry)) return false;
+    }
+  }
+  return true;
+}
+
+/** Drop IFCT reference rows that should not apply (e.g. dal tadka jar matched as toor dal). */
+export function stripIneligibleReferenceNutrition(
+  nutrition: ProductNutrition | null,
+  ctx: { name: string; category: string | null; subcategory?: string | null },
+): ProductNutrition | null {
+  if (!nutrition || !hasReferenceNutrition(nutrition)) return nutrition;
+  if (isReferenceNutritionEligible(ctx.name, ctx.category, ctx.subcategory, nutrition)) {
+    return nutrition;
+  }
+  const extra = referenceExtra(nutrition);
+  if (extra.nutrition_gap_fill) {
+    const nextExtra = { ...extra };
+    for (const k of [
+      "reference",
+      "reference_id",
+      "reference_match",
+      "reference_match_type",
+      "reference_confidence",
+      "nutrition_gap_fill",
+      "nutrition_gap_fill_note",
+    ]) {
+      delete nextExtra[k];
+    }
+    const next = { ...nutrition, extra: Object.keys(nextExtra).length ? nextExtra : undefined };
+    return next;
+  }
+  return null;
+}
+
 /** Match a product name (and optional category hints) to a reference food entry. */
 export function matchReferenceFood(
   name: string | null | undefined,
@@ -261,6 +372,8 @@ export function matchReferenceFood(
   const normalized = normalizeProductName(name);
   if (!normalized) return null;
 
+  if (isPreparedOrPackagedFoodName(name)) return null;
+
   // Only block reference fill for packaged items miscategorized as produce — not dairy paneer/tofu.
   if (isPackagedProduceLike(name, opts?.subcategory)) {
     const aisle = `${opts?.category ?? ""} ${opts?.subcategory ?? ""}`.toLowerCase();
@@ -270,9 +383,6 @@ export function matchReferenceFood(
   // HARD GUARD: only match raw-food categories. Packaged/branded products must
   // get nutrition from OCR/OpenFoodFacts/CSV, never from raw reference data.
   if (!isAllowedForReferenceFill(opts?.category, opts?.subcategory)) return null;
-
-  // Even within allowed categories, reject branded/processed names.
-  if (name && PROCESSED_NAME_RE.test(name)) return null;
 
   const minConfidence = opts?.minConfidence ?? 0.55;
   const exact = tryExactAlias(normalized);

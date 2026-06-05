@@ -4,6 +4,7 @@ import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-int
 import { detectNutritionAnomalies } from "@/lib/nutrition/anomaly";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { resolveNutritionDisplay } from "@/lib/nutrition/nutrition-display";
+import { reconcileDisplayIngredients } from "@/lib/ocr/deepseek-ingredients";
 import { deepseekDisplayFromPayload } from "@/lib/ocr/deepseek-promote";
 import { findAlternatives, findSimilarProducts } from "@/lib/products/alternatives";
 import { explainScore } from "@/lib/products/score-explain";
@@ -109,9 +110,15 @@ export async function GET(
       })
     : null;
 
-  const intelligenceRows = await loadIngredientIntelligenceForDisplay(product.ingredients_raw);
+  const displayIngredients = reconcileDisplayIngredients({
+    ingredients_raw: product.ingredients_raw,
+    ocr_payload: product.ocr_payload,
+    productName: product.name,
+  });
+
+  const intelligenceRows = await loadIngredientIntelligenceForDisplay(displayIngredients);
   const ingredientItems = parseIngredientsForDisplayWithIntelligence(
-    product.ingredients_raw,
+    displayIngredients,
     intelligenceRows,
   ).map((item) => ({
     display: item.display,
@@ -138,6 +145,7 @@ export async function GET(
     {
       ...product,
       zepto_buy_url,
+      ingredients_raw: displayIngredients,
       nutrition: displayNutrition,
       verdict_resolved: verdict,
       deepseek_why: deepseek?.why ?? null,

@@ -3,6 +3,9 @@ dotenv.config({ path: ".env.local" });
 dotenv.config();
 
 import { adminClient } from "@/lib/supabase/admin";
+import { reconcileDisplayIngredients } from "@/lib/ocr/deepseek-ingredients";
+import { buildIngredientsFromDeepseekLabel } from "@/lib/ocr/deepseek-ingredients";
+import type { ExtractedLabel } from "@/lib/ocr/deepseek-label-extract";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 
 async function main() {
@@ -45,6 +48,15 @@ async function main() {
     return;
   }
 
+  const deepseekExtracted = (
+    product.ocr_payload as { deepseek_label?: { extracted?: ExtractedLabel } } | null
+  )?.deepseek_label?.extracted;
+  const displayIngredients = reconcileDisplayIngredients({
+    ingredients_raw: product.ingredients_raw,
+    ocr_payload: product.ocr_payload,
+    productName: product.name,
+  });
+
   const display = reconcileNutrition({
     nutrition: product.nutrition,
     attributes: product.attributes,
@@ -65,7 +77,12 @@ async function main() {
       platform: product.platform,
       stored_nutrition: product.nutrition,
       display_nutrition_after_reconcile: display,
-      ingredients_raw: product.ingredients_raw,
+      ingredients_raw_stored: product.ingredients_raw,
+      ingredients_raw_display: displayIngredients,
+      deepseek_ingredients_enriched: deepseekExtracted
+        ? buildIngredientsFromDeepseekLabel(deepseekExtracted)
+        : null,
+      deepseek_raw_list: deepseekExtracted?.ingredients.raw_list ?? null,
       nutrition_attributes: Object.fromEntries(
         Object.entries(product.attributes ?? {}).filter(([k]) => /nutri/i.test(k)),
       ),
