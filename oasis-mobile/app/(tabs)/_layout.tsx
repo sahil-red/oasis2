@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useBasket } from "@/lib/basket";
-import { colors, fonts } from "@/theme";
+import { useTheme } from "@/lib/theme-context";
+import { fonts } from "@/theme";
 
 export default function TabLayout() {
   const basket = useBasket();
+  const { colors } = useTheme();
 
   return (
     <Tabs

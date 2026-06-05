@@ -1,5 +1,6 @@
-/** Scout mobile — matches web dark mode tokens (globals.css html.dark). */
-export const colors = {
+/** Scout palettes — match web globals.css light + html.dark */
+
+export const darkColors = {
   bg: "#0a0a0b",
   bgSoft: "#141416",
   panel: "#1c1c1e",
@@ -19,6 +20,34 @@ export const colors = {
   scorePoor: "#c9842f",
   scoreBad: "#c85f5f",
 } as const;
+
+export const lightColors = {
+  bg: "#faf7f2",
+  bgSoft: "#f1ece2",
+  panel: "#fbf9f4",
+  panel2: "#f1ece2",
+  line: "rgba(60, 40, 20, 0.10)",
+  lineStrong: "rgba(60, 40, 20, 0.18)",
+  fg: "#1c1612",
+  fgMuted: "#5e544b",
+  fgDim: "#8a7f74",
+  accent: "#b45309",
+  accentSoft: "rgba(180, 83, 9, 0.10)",
+  good: "#15803d",
+  warn: "#b45309",
+  bad: "#991b1b",
+  scoreExcellent: "#16a34a",
+  scoreGood: "#84a822",
+  scorePoor: "#d97706",
+  scoreBad: "#dc2626",
+} as const;
+
+export type ThemeColors = {
+  [K in keyof typeof darkColors]: string;
+};
+
+/** @deprecated use useTheme().colors */
+export const colors = darkColors;
 
 export const spacing = {
   xs: 4,

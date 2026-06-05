@@ -57,6 +57,52 @@ export type ProductNutrition = {
   sodium_mg_100g?: number;
 };
 
+export type ScoreWhy = {
+  reasons: string[];
+  tradeoffs: string[];
+};
+
+export type NutritionDisplayRow = {
+  id: string;
+  label: string;
+  unit: string;
+  emphasis: boolean;
+  indent: boolean;
+  per100?: number;
+  perServe?: number;
+  perPack?: number;
+};
+
+export type NutritionAnomalyDto = {
+  code: string;
+  severity: "critical" | "warning";
+  message: string;
+  field?: string;
+};
+
+export type IngredientItem = {
+  display: string;
+  risk: string;
+  tier_label: string;
+  why: string | null;
+  e_number: string | null;
+  percent: string | null;
+  flagged: boolean;
+  source: string;
+};
+
+export type PdpSwap = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number | null;
+  grade: string | null;
+  price_inr: number | null;
+  goal_fit: number;
+  deltas: string[];
+};
+
 export type ProductDetail = CatalogProduct & {
   ingredients_raw: string | null;
   nutrition: ProductNutrition | null;
@@ -64,6 +110,19 @@ export type ProductDetail = CatalogProduct & {
   deepseek_chips?: string[];
   attributes: Record<string, string> | null;
   verdict_resolved: VerdictId | null;
+  score_why?: ScoreWhy | null;
+  nutrition_display?: {
+    rows: NutritionDisplayRow[];
+    hasServe: boolean;
+    serveG: number | null;
+    hasPack: boolean;
+    packGrams: number | null;
+    packLabel: string;
+  } | null;
+  nutrition_anomalies?: NutritionAnomalyDto[];
+  ingredient_items?: IngredientItem[];
+  swaps?: PdpSwap[];
+  similar_products?: PdpSwap[];
   core_scores: CoreScoreSummary & {
     subscores?: { nutrition: number; additives: number; labels: number };
     concerns?: Array<{ type: string; message: string; severity: string }>;
