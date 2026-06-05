@@ -23,6 +23,7 @@ import {
   replaceInBasket,
 } from "@/lib/basket/storage";
 import type { ProductListItem } from "@/lib/products/queries";
+import { ZeptoConnectPanel } from "@/components/zepto-connect";
 import { bandFromScore, cn } from "@/lib/utils";
 
 export function BasketView() {
@@ -165,6 +166,8 @@ export function BasketView() {
 
   return (
     <div className="space-y-6">
+      <ZeptoConnectPanel returnPath="/basket" />
+
       {unresolvedEntries.length > 0 ? (
         <div className="rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm">
           <p className="font-medium text-(--color-fg)">
