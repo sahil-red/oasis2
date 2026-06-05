@@ -43,7 +43,9 @@
     "rate:ingredients": "tsx scripts/rate-ingredients.ts",
     "audit:ingredient-sku-coverage": "tsx scripts/audit-ingredient-sku-coverage.ts",
     "score:v9:diff": "tsx scripts/score-v9-diff.ts",
-    "lm:status": "tsx scripts/lm-run-status.ts"
+    "lm:status": "tsx scripts/lm-run-status.ts",
+    "mobile:env": "tsx scripts/sync-mobile-env.ts",
+    "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm start"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",

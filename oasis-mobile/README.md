@@ -13,13 +13,14 @@ Built with **Expo Router** (React Native). No WebView: native screens, product g
    pnpm install
    ```
 
-2. **Environment** — copy `.env.example` to `.env`:
+2. **Environment** — uses the **same Supabase project** as the web app (one database):
 
    ```bash
-   EXPO_PUBLIC_API_URL=https://your-deployed-scout.vercel.app
-   EXPO_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   # From repo root — copies NEXT_PUBLIC_* from .env.local → oasis-mobile/.env
+   pnpm mobile:env
    ```
+
+   This sets `EXPO_PUBLIC_API_URL` from `NEXT_PUBLIC_SITE_URL` (your Vercel deploy) and the same Supabase URL + anon key.
 
 3. **Backend** (parent `oasis2` repo):
 
