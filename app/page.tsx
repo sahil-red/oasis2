@@ -7,6 +7,7 @@ import { LandingGoalBoards } from "@/components/landing-goal-boards";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { getCachedLandingInsights } from "@/lib/products/catalog-cache";
+import { EMPTY_LANDING_INSIGHTS, type LandingInsights } from "@/lib/products/landing-insights";
 import { getHomeShelves } from "@/lib/products/queries";
 
 export const revalidate = 600;
@@ -20,10 +21,13 @@ const PROMPTS = [
 ];
 
 export default async function Home() {
-  const [shelves, insights] = await Promise.all([
-    getHomeShelves(),
-    getCachedLandingInsights(),
-  ]);
+  const shelves = await getHomeShelves();
+  let insights: LandingInsights = EMPTY_LANDING_INSIGHTS;
+  try {
+    insights = await getCachedLandingInsights();
+  } catch (err) {
+    console.warn("[home] landing insights skipped:", err);
+  }
 
   // Rotate the featured goal board each hour so it feels fresh each visit
   const hourIndex = Math.floor(Date.now() / 3_600_000);

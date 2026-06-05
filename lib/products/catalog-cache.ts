@@ -5,6 +5,7 @@ import { buildLandingInsights } from "@/lib/products/landing-insights";
 import { sortFromParam } from "@/lib/products/catalog-sort";
 import {
   getCatalogMeta,
+  getScoredCatalogStats,
   getScoredProductsForInsights,
   searchCatalogGrid,
   type CatalogMeta,
@@ -33,8 +34,16 @@ export async function getCachedScoredCatalogForInsights() {
 
 export async function getCachedLandingInsights() {
   return unstable_cache(
-    async () => buildLandingInsights(await getScoredProductsForInsights()),
-    ["catalog-landing-insights"],
+    async () => {
+      const [products, stats] = await Promise.all([
+        getScoredProductsForInsights(),
+        getScoredCatalogStats().catch(() => ({ totalScored: 0 })),
+      ]);
+      return buildLandingInsights(products, {
+        totalScored: stats.totalScored || products.filter((p) => p.core_scores).length,
+      });
+    },
+    ["catalog-landing-insights-v2"],
     { revalidate: 3600 },
   )();
 }

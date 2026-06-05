@@ -124,6 +124,13 @@ const GRID_LIST_FIELDS =
 const GOAL_LIST_FIELDS =
   "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, attributes, price_inr, mrp_inr, image_urls, ocr_image_url, nutrition, ingredients_raw, zepto_sku, platform";
 
+/** Insights / landing — no gallery blobs; capped row count at query time. */
+const INSIGHTS_LIST_FIELDS =
+  "id, slug, name, brand, category, subcategory, l3_category, net_weight, attributes, price_inr, image_urls, nutrition, ingredients_raw, platform";
+
+/** Max rows loaded for landing + insights aggregation (avoids build-time DB timeouts). */
+export const INSIGHTS_CATALOG_SAMPLE_LIMIT = 6_000;
+
 const LABEL_FILTER_EXTRA = ", ocr_payload";
 
 /** Drop multi-KB attribute blobs from catalog JSON (Vercel cache limit is 2MB). */
@@ -1071,34 +1078,46 @@ export async function searchCatalogGrid(opts: {
   };
 }
 
-/** Scored visible products for insights — server-side only, slim fields. */
-export async function getScoredProductsForInsights(): Promise<ProductListItem[]> {
+export type ScoredCatalogStats = {
+  totalScored: number;
+};
+
+/** Fast head count for landing stats (full catalog, not the insights sample). */
+export async function getScoredCatalogStats(): Promise<ScoredCatalogStats> {
   const supabase = db();
-  const pageSize = 1000;
-  const max = 30_000;
-  const all: ProductListItem[] = [];
   const sqlVisible = await catalogHasVisibleColumn();
 
-  for (let offset = 0; offset < max; offset += pageSize) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase as any)
-      .from("products")
-      .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
-      .eq("platform", "zepto")
-      .not("core_scores", "is", null)
-      .order("name", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-    if (sqlVisible) q = q.eq("catalog_visible", true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("products")
+    .select("id, core_scores!inner(product_id)", { count: "exact", head: true })
+    .eq("platform", "zepto");
+  if (sqlVisible) q = q.eq("catalog_visible", true);
 
-    const { data, error } = await q;
+  const { count, error } = await q;
+  if (error) throw new Error(error.message);
+  return { totalScored: count ?? 0 };
+}
 
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as unknown as Record<string, unknown>[];
-    all.push(...mapVisibleBatch(rows));
-    if (rows.length < pageSize) break;
-  }
+/** Scored visible products for insights — single bounded query, slim fields. */
+export async function getScoredProductsForInsights(): Promise<ProductListItem[]> {
+  const supabase = db();
+  const sqlVisible = await catalogHasVisibleColumn();
 
-  return all.map(slimListItemForCatalog);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("products")
+    .select(`${INSIGHTS_LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+    .eq("platform", "zepto")
+    .not("core_scores", "is", null)
+    .order("id", { ascending: true })
+    .limit(INSIGHTS_CATALOG_SAMPLE_LIMIT);
+  if (sqlVisible) q = q.eq("catalog_visible", true);
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return mapVisibleBatch(rows).map(slimListItemForCatalog);
 }
 
 export async function searchProducts(opts: {

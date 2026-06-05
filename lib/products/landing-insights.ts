@@ -92,6 +92,17 @@ export type LandingInsights = {
   worthItList: LandingWorthItProduct[];
 };
 
+export const EMPTY_LANDING_INSIGHTS: LandingInsights = {
+  totalScored: 0,
+  avgScore: 0,
+  facts: [],
+  pickOfDay: null,
+  goalBoards: [],
+  bestInClass: [],
+  dodgeList: [],
+  worthItList: [],
+};
+
 function sugarOf(n: ProductNutrition | null | undefined): number | null {
   const s = n?.sugar_g_100g ?? n?.added_sugar_g_100g;
   return typeof s === "number" ? s : null;
@@ -470,11 +481,14 @@ function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
     });
 }
 
-export function buildLandingInsights(products: ProductListItem[]): LandingInsights {
+export function buildLandingInsights(
+  products: ProductListItem[],
+  opts?: { totalScored?: number },
+): LandingInsights {
   const scored = products.filter((p) => p.core_scores);
-  const totalScored = scored.length;
-  const avgScore = totalScored
-    ? Math.round(scored.reduce((s, p) => s + (p.core_scores?.score ?? 0), 0) / totalScored)
+  const totalScored = opts?.totalScored ?? scored.length;
+  const avgScore = scored.length
+    ? Math.round(scored.reduce((s, p) => s + (p.core_scores?.score ?? 0), 0) / scored.length)
     : 0;
   const ins = buildInsights(products);
 
