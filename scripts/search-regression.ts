@@ -8,12 +8,15 @@ import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import { isFalsePositiveProductLabel } from "@/lib/search/product-term-heuristics";
 import { buildMatchReasons } from "@/lib/search/match-reasons";
 import {
+  blendedSearchRankScore,
   healthContextGoalFit,
   healthIntentSortTier,
   matchesPrimaryProductType,
+  mergeDeterministicWithLlmRankings,
   rankCandidatesSemantically,
   relevanceScore,
 } from "@/lib/search/semantic-rank";
+import { shouldUseLlmRank } from "@/lib/search/llm-rank-gate";
 import type { ProductListItem } from "@/lib/products/queries";
 import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { INTENT_CASES, PARSE_CASES } from "@/lib/search/search-regression-cases";
@@ -279,7 +282,7 @@ if (bulkingRank.rankings[0]?.product_id !== "paneer") {
   failed++;
 }
 
-const rankChecks = 8;
+const rankChecks = 11;
 
 const maggiParsed = heuristicParseProductQuery("healthy maggi noodles");
 const maggiRank = rankCandidatesSemantically(
@@ -390,6 +393,66 @@ if (!parentsCands.some((p) => p.id === "dal")) {
 }
 if (parentsCands.some((p) => p.id === "baby") && parentsCands[0]?.id === "baby") {
   console.error("[retrieve] FAIL protein for parents: baby cereal should not top pool");
+  failed++;
+}
+
+const mergePool = new Map<string, ProductListItem>([
+  [
+    "strong",
+    {
+      id: "strong",
+      slug: "strong",
+      name: "Whole Wheat Noodles",
+      brand: "A",
+      category: "Snacks",
+      subcategory: "Noodles",
+      nutrition: { protein_g_100g: 12, sugar_g_100g: 2 },
+      core_scores: { score: 97, grade: "A", band: "excellent", verdict_sublabels: [] },
+    } as ProductListItem,
+  ],
+  [
+    "weak",
+    {
+      id: "weak",
+      slug: "weak",
+      name: "Instant Masala Noodles",
+      brand: "B",
+      category: "Snacks",
+      subcategory: "Noodles",
+      nutrition: { protein_g_100g: 3, sugar_g_100g: 1 },
+      core_scores: { score: 40, grade: "D", band: "poor", verdict_sublabels: [] },
+    } as ProductListItem,
+  ],
+]);
+const mergeParsed = heuristicParseProductQuery("healthy noodles");
+const detRank = rankCandidatesSemantically([...mergePool.values()], mergeParsed, 10);
+const gated = new Set(detRank.rankings.map((r) => r.product_id));
+const merged = mergeDeterministicWithLlmRankings(
+  detRank.rankings,
+  [
+    { product_id: "weak", score: 95, reasons: ["LLM pick"], warning: null },
+    { product_id: "strong", score: 30, reasons: [], warning: null },
+  ],
+  gated,
+  10,
+  { byId: mergePool, parsed: mergeParsed },
+);
+if (merged[0]?.product_id !== "strong") {
+  console.error("[merge] FAIL high match+health should beat LLM-first weak pick, got", merged[0]?.product_id);
+  failed++;
+}
+if (blendedSearchRankScore(100, 97, 30) <= blendedSearchRankScore(40, 40, 95)) {
+  console.error("[merge] FAIL blend weights favor match+health over intent alone");
+  failed++;
+}
+const namedNoodleParsed = heuristicParseProductQuery("maggi noodles");
+const namedRank = rankCandidatesSemantically([...mergePool.values()], namedNoodleParsed, 12);
+if (
+  shouldUseLlmRank("structured", namedNoodleParsed, namedRank, 2, 24) &&
+  namedRank.rankings.length >= 2 &&
+  !namedRank.relaxed
+) {
+  console.error("[llm-gate] FAIL structured named product with solid matches should skip LLM rank");
   failed++;
 }
 

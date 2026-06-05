@@ -1,7 +1,10 @@
 import { mergeUsage } from "@/lib/search/deepseek-client";
-import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
 import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { rankCandidatesWithDeepseek } from "@/lib/search/ai-rank";
+import {
+  shouldEscalateStructuredToComplex,
+  shouldUseLlmRank,
+} from "@/lib/search/llm-rank-gate";
 import {
   healthContextGoalFit,
   mergeDeterministicWithLlmRankings,
@@ -88,9 +91,9 @@ function suggestedRefinements(parsed: ParsedProductQuery): string[] {
   return out.slice(0, 3);
 }
 
-export async function runAiProductSearch(
+async function runAiProductSearchPass(
   parseResult: QueryParseResult,
-  opts: { limit?: number; prompt?: string; tier?: SearchIntentTier } = {},
+  opts: { limit?: number; prompt?: string; tier?: SearchIntentTier },
 ): Promise<AiSearchResult> {
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const parsed = parseResult.parsed;
@@ -119,17 +122,26 @@ export async function runAiProductSearch(
     .map((r) => byId.get(r.product_id))
     .filter((p): p is ProductListItem => !!p);
 
-  if (resolveDeepseekApiKey("search") && gatedForLlm.length > 0) {
+  const useLlmRank = shouldUseLlmRank(
+    tier,
+    parsed,
+    deterministic,
+    candidates.length,
+    limit,
+  );
+
+  if (useLlmRank && gatedForLlm.length > 0) {
     const llm = await rankCandidatesWithDeepseek(prompt, parsed, gatedForLlm, limit);
     usage = llm.usage;
     rankWarning = llm.warning;
     if (llm.rankings.length > 0) {
       summary = llm.summary;
       rankings = mergeDeterministicWithLlmRankings(
-        rankingsForUi,
+        deterministic.rankings,
         llm.rankings,
         gatedIds,
         limit,
+        { byId, parsed },
       );
       rankSource = llm.source === "deepseek" ? "deepseek" : "semantic";
     }
@@ -156,7 +168,7 @@ export async function runAiProductSearch(
     reasons_by_product_id: Object.fromEntries(
       rankings.map((r) => [r.product_id, r.reasons]),
     ),
-    refinements: suggestedRefinements(parsed),
+    refinements: tier === "complex" ? suggestedRefinements(parsed) : [],
     usage: mergeUsage(parseResult.usage, usage),
     limit,
     total: candidates.length,
@@ -164,11 +176,36 @@ export async function runAiProductSearch(
   };
 }
 
-/** @deprecated All searches use DeepSeek rank when a key is present. */
-export function shouldEscalateStructuredToComplex(
-  _tier: SearchIntentTier,
-  _result: AiSearchResult,
-  _limit: number,
-): boolean {
-  return false;
+export async function runAiProductSearch(
+  parseResult: QueryParseResult,
+  opts: { limit?: number; prompt?: string; tier?: SearchIntentTier } = {},
+): Promise<AiSearchResult> {
+  const requestedTier = opts.tier ?? "structured";
+  const first = await runAiProductSearchPass(parseResult, { ...opts, tier: requestedTier });
+
+  if (
+    requestedTier === "structured" &&
+    first.rank_source === "semantic" &&
+    shouldEscalateStructuredToComplex(
+      "structured",
+      first.items.length,
+      first.parsed,
+      first.limit,
+    )
+  ) {
+    const escalated = await runAiProductSearchPass(parseResult, {
+      ...opts,
+      tier: "complex",
+    });
+    if (
+      escalated.items.length > first.items.length ||
+      escalated.rank_source !== "semantic"
+    ) {
+      return { ...escalated, intent_tier: "complex" };
+    }
+  }
+
+  return first;
 }
+
+export { shouldEscalateStructuredToComplex } from "@/lib/search/llm-rank-gate";

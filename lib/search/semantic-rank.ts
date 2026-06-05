@@ -637,35 +637,50 @@ export function rankCandidatesSemantically(
   return { rankings, summary, relaxed: useRelaxed };
 }
 
-/** Merge LLM order with deterministic rows — only SKUs from the gated list. */
+/** Blend match, health, and LLM intent for sort order (display scores stay on `det`). */
+export function blendedSearchRankScore(
+  matchScore: number,
+  healthScore: number,
+  intentScore: number,
+): number {
+  const match = Math.max(0, Math.min(100, matchScore));
+  const health = Math.max(0, Math.min(100, healthScore));
+  const intent = Math.max(0, Math.min(100, intentScore));
+  return match * 0.45 + health * 0.35 + intent * 0.2;
+}
+
+/** Re-rank gated SKUs by blended scores — LLM reasons only; order is not LLM-first. */
 export function mergeDeterministicWithLlmRankings(
   deterministic: LlmRankedItem[],
   llm: LlmRankedItem[],
   gatedIds: Set<string>,
   limit: number,
+  ctx: {
+    byId: Map<string, ProductListItem>;
+    parsed: ParsedProductQuery;
+  },
 ): LlmRankedItem[] {
-  const detById = new Map(deterministic.map((r) => [r.product_id, r]));
-  const seen = new Set<string>();
-  const out: LlmRankedItem[] = [];
+  const llmById = new Map(llm.map((r) => [r.product_id, r]));
+  const pool = deterministic.filter((d) => gatedIds.has(d.product_id));
 
-  for (const lr of llm) {
-    if (!gatedIds.has(lr.product_id)) continue;
-    const base = detById.get(lr.product_id);
-    if (!base) continue;
-    seen.add(lr.product_id);
-    out.push({
-      ...base,
-      reasons: lr.reasons.length ? lr.reasons : base.reasons,
-      warning: lr.warning ?? base.warning,
-    });
-    if (out.length >= limit) break;
-  }
+  const scored = pool.map((det) => {
+    const p = ctx.byId.get(det.product_id);
+    const llmRow = llmById.get(det.product_id);
+    const health =
+      (p ? healthContextGoalFit(p, ctx.parsed) : null) ?? p?.core_scores?.score ?? 0;
+    const intent = llmRow?.score ?? det.score * 0.85;
+    return {
+      det,
+      llmRow,
+      blend: blendedSearchRankScore(det.score, health, intent),
+    };
+  });
 
-  for (const dr of deterministic) {
-    if (seen.has(dr.product_id)) continue;
-    out.push(dr);
-    if (out.length >= limit) break;
-  }
+  scored.sort((a, b) => b.blend - a.blend);
 
-  return out;
+  return scored.slice(0, limit).map(({ det, llmRow }) => ({
+    ...det,
+    reasons: llmRow?.reasons.length ? llmRow.reasons : det.reasons,
+    warning: llmRow?.warning ?? det.warning,
+  }));
 }

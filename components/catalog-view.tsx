@@ -724,7 +724,7 @@ export function CatalogView({
       const result = await fetchAiCatalogSearch(
         prompt,
         CATALOG_PAGE_SIZE,
-        "structured",
+        intent === "complex" ? "complex" : "structured",
         savedPrefs,
       );
       if (gen !== fetchGen.current) return;
