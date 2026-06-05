@@ -13,6 +13,50 @@ function nutritionValue(
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ingredient avoidance matching
+//
+// Indian packaged food labels write the same ingredient many ways.
+// We need broad matching for each avoid category so the filter is reliable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if `ingredientsText` contains the ingredient that `avoidTerm` refers to.
+ *
+ * Uses category-aware regex so forms like "Hydrogenated Vegetable Oils (Rapeseed and Palm)"
+ * are caught by avoidTerm="palm oil", even though the literal string "palm oil" is absent.
+ */
+export function ingredientPresent(ingredientsText: string, avoidTerm: string): boolean {
+  const a = avoidTerm.toLowerCase().trim();
+  const t = ingredientsText.toLowerCase();
+
+  // Palm oil family — catches all label forms
+  if (a.includes("palm")) {
+    return /\bpalm\b(?:\s*(?:oil|kernel|stearin|fat|olein|hard))?|\bpalmolein\b/i.test(t);
+  }
+
+  // Maida / refined wheat flour family
+  if (a.includes("maida") || a.includes("refined wheat") || a.includes("refined flour") || a.includes("all purpose")) {
+    return /\bmaida\b|\brefined\s+wheat\s+flour\b|\ball[\s-]+purpose\s+flour\b|\bwheat\s+flour\s*\(\s*refined\b/i.test(t);
+  }
+
+  // MSG family
+  if (a.includes("msg") || a.includes("monosodium") || a.includes("ajinomoto")) {
+    return /\bmonosodium\s+glutamate\b|\bmsg\b|\bajinomoto\b|\b(?:e|ins)\s*621\b/i.test(t);
+  }
+
+  // Aspartame
+  if (a.includes("aspartame")) {
+    return /\baspartame\b|\b(?:e|ins)\s*951\b/i.test(t);
+  }
+
+  // Default: word-boundary match (safer than includes for short terms)
+  if (a.length >= 4) {
+    return new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t);
+  }
+  return t.includes(a);
+}
+
 /** Objective filters only — nutrition and diet flags we can verify from data. */
 export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQuery): boolean {
   const c = parsed.hard_constraints;
@@ -33,9 +77,9 @@ export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQ
   if (c.vegan && !isDietCompatible("vegan", p).ok) return false;
   if (c.vegetarian && !c.vegan && !isDietCompatible("veg", p).ok) return false;
   for (const avoid of c.avoid_ingredients ?? []) {
-    const a = avoid.toLowerCase();
-    if (a.includes("palm") && /palm oil|palmolein|palm fat/i.test(ingredients)) return false;
-    if (ingredients.includes(a)) return false;
+    // Only filter if we have ingredient data. If ingredients_raw is empty/null,
+    // we can't confirm absence — skip the hard exclude but the ranker will deprioritize.
+    if (ingredients && ingredientPresent(ingredients, avoid)) return false;
   }
   for (const allergen of c.allergens_excluded ?? []) {
     if (ingredients.includes(allergen.toLowerCase())) return false;

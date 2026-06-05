@@ -119,6 +119,15 @@ Rules:
 - "low sugar" for a specific food (e.g. "low sugar biscuits") means max_sugar_g_100g = 10 — apply as a hard constraint since biscuits can vary widely.
 - Map gym/high protein snacks to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"]; parents/elderly/for mom/for dad to ["parents"].
 - Do NOT use meta words as product_terms: food, bulking, bulk, gain, weight, fitness, snacks (when only describing a goal). Example: "food for bulking" → product_terms:[], health_contexts:["bulk"], exclude_keywords should include baby cereal brands.
+- CRITICAL — avoid_ingredients: when user says "no X", "without X", "X free", "bina X" (Hindi), or "X nahi" (Hindi/Hinglish), populate avoid_ingredients with the FULL synonym family, not just the literal word:
+  - "no palm oil" / "bina palm oil" / "palm oil nahi" → avoid_ingredients: ["palm oil","palmolein","palm stearin","palm kernel","palm fat","palm"]
+  - "no maida" / "bina maida" / "maida nahi" → avoid_ingredients: ["maida","refined wheat flour","all purpose flour","refined flour"]
+  - "no preservatives" / "bina preservative" / "preservative nahi" → avoid_sublabels: ["contains_preservatives"]
+  - "no artificial colours" / "artificial rang nahi" → avoid_sublabels: ["artificial_colors"]
+  - "no artificial flavours" / "artificial flavour nahi" → avoid_sublabels: ["artificial_flavors"]
+  - "no artificial additives" / "koi artificial nahi" → avoid_sublabels: ["artificial_colors","artificial_flavors"]
+  - "no msg" / "ajinomoto nahi" → avoid_ingredients: ["monosodium glutamate","msg","ajinomoto","e621","ins621"]
+- Hindi/Hinglish queries: treat "bina X", "X nahi", "X mat", "X ke bina" as meaning "without X" — same as English negation.
 - Keep explanation under 22 words.
 `;
 
@@ -191,6 +200,125 @@ function firstNumberNear(prompt: string, pattern: RegExp): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Negation constraint detection — applied in both heuristic + LLM fallback paths.
+// Handles English AND Hindi/Hinglish phrasing for each ingredient to avoid.
+//
+// HOW IT WORKS:
+//   Each entry maps a set of user-phrase patterns → the canonical avoid_ingredients
+//   strings that the ingredient-check functions know how to match against.
+//   The ingredient-check functions then use broad regex (not just string.includes)
+//   to catch all labelling variants (e.g. "palmolein", "Rapeseed and Palm", etc.).
+// ────────────────────────────────────────────────────────────────────────────
+
+type NegationRule = {
+  /** Regex matching user phrases that mean "avoid this ingredient" */
+  detect: RegExp;
+  /** Canonical avoid_ingredients tokens passed to the filter */
+  ingredients?: string[];
+  /** Sublabels (from Scout scoring) that indicate presence */
+  sublabels?: string[];
+  /** Human-readable soft_preference note */
+  preference?: string;
+};
+
+const NEGATION_RULES: NegationRule[] = [
+  // ── Palm oil ──────────────────────────────────────────────────────────
+  // English: no palm oil, without palm oil, palm oil free, palm-oil-free
+  // Hindi/Hinglish: bina palm oil, palm oil nahi, palm oil mat, palm tel nahi
+  {
+    detect: /\b(no|without|free(\s+from)?|bina|nahi|mat|avoid)\b.*\bpalm\b|\bpalm\b.*(free|nahi|nah[i]?|mat)\b|\bpalm.?oil.?free\b/i,
+    ingredients: ["palm oil", "palmolein", "palm stearin", "palm kernel", "palm fat", "palm"],
+  },
+  // ── Maida / refined flour ─────────────────────────────────────────────
+  // English: no maida, without maida, maida-free, no refined flour
+  // Hindi: bina maida, maida nahi, maida mat
+  {
+    detect: /\b(no|without|free(\s+from)?|bina|nahi|mat)\b.*\bmaida\b|\bmaida\b.*(free|nahi|mat)\b|\bno refined (wheat )?flour\b/i,
+    ingredients: ["maida", "refined wheat flour", "refined flour", "all purpose flour", "wheat flour (refined)", "refined wheat"],
+  },
+  // ── Preservatives ─────────────────────────────────────────────────────
+  // English: no preservatives, without preservatives, preservative-free
+  // Hindi: bina parirakshak, preservative nahi
+  {
+    detect: /\b(no|without|free(\s+from)?|bina|nahi|mat)\b.*\bpreservat|\bpreservat.*\b(free|nahi|mat)\b|\bparirakshak\b/i,
+    ingredients: [],
+    sublabels: ["contains_preservatives"],
+    preference: "no preservatives",
+  },
+  // ── Artificial colours/colors ────────────────────────────────────────
+  // English: no artificial colour/color, without artificial colours
+  // Hindi: artificial rang nahi, rang nahi, nakli rang nahi
+  {
+    detect: /\b(no|without|bina|nahi|mat)\b.*\b(artificial|synthetic|nakli)\b.*\b(colo(?:u)?r|rang)\b|\b(artificial|nakli)\b.*\b(colo(?:u)?r|rang)\b.*\b(nahi|free|mat)\b/i,
+    sublabels: ["artificial_colors"],
+    preference: "no artificial colours",
+  },
+  // ── Artificial flavours/flavors ──────────────────────────────────────
+  // English: no artificial flavour/flavor, without artificial flavouring
+  // Hindi: artificial flavour nahi, nakli swad nahi
+  {
+    detect: /\b(no|without|bina|nahi|mat)\b.*\b(artificial|synthetic|nakli)\b.*\b(flavou?r|swad)\b|\b(artificial|nakli)\b.*\b(flavou?r|swad)\b.*\b(nahi|free|mat)\b/i,
+    sublabels: ["artificial_flavors"],
+    preference: "no artificial flavours",
+  },
+  // ── Artificial additives (both colour + flavour) ─────────────────────
+  {
+    detect: /\b(no|without|bina|nahi)\b.*\bartificial\b(?!.*natural)|\bartificial.*(free|nahi|mat)\b/i,
+    sublabels: ["artificial_colors", "artificial_flavors"],
+    preference: "no artificial additives",
+  },
+  // ── Added sugar ───────────────────────────────────────────────────────
+  // (also handled in main body for max_sugar — this catches sublabel path)
+  {
+    detect: /\b(no|without|bina|nahi)\b.*\badded sugar\b|\badded sugar.*(nahi|free|mat)\b|\bchini nahi\b|\bbina chini\b/i,
+    sublabels: ["hidden_sweetener"],
+    preference: "no added sugar",
+  },
+  // ── MSG / monosodium glutamate ────────────────────────────────────────
+  {
+    detect: /\b(no|without|bina|nahi)\b.*\b(msg|monosodium glutamate|ajinomoto)\b/i,
+    ingredients: ["monosodium glutamate", "msg", "ajinomoto", "e621", "ins621"],
+  },
+  // ── Artificial sweeteners ─────────────────────────────────────────────
+  {
+    detect: /\b(no|without|bina|nahi)\b.*\b(artificial sweetener|aspartame|sucralose|saccharin|acesulfame|stevia(?:\s+nahi)?)\b/i,
+    sublabels: ["hidden_sweetener"],
+    preference: "no artificial sweeteners",
+  },
+];
+
+/**
+ * Apply all negation constraint rules to a parsed query.
+ * Called from both the heuristic parser and as a post-processing step.
+ * Idempotent — safe to call multiple times.
+ */
+export function applyNegationConstraints(parsed: ParsedProductQuery, lower: string): void {
+  for (const rule of NEGATION_RULES) {
+    if (!rule.detect.test(lower)) continue;
+
+    if (rule.ingredients?.length) {
+      const existing = new Set(parsed.hard_constraints.avoid_ingredients ?? []);
+      for (const ing of rule.ingredients) {
+        existing.add(ing);
+      }
+      parsed.hard_constraints.avoid_ingredients = [...existing];
+    }
+
+    if (rule.sublabels?.length) {
+      const existing = new Set(parsed.hard_constraints.avoid_sublabels ?? []);
+      for (const s of rule.sublabels) {
+        existing.add(s);
+      }
+      parsed.hard_constraints.avoid_sublabels = [...existing];
+    }
+
+    if (rule.preference && !parsed.soft_preferences.includes(rule.preference)) {
+      parsed.soft_preferences.push(rule.preference);
+    }
+  }
+}
+
 export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   const lower = prompt.toLowerCase();
   const parsed = emptyParsed(prompt);
@@ -233,7 +361,9 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   } else if (/veg|vegetarian/.test(lower)) {
     parsed.hard_constraints.vegetarian = true;
   }
-  if (/palm oil/.test(lower)) parsed.hard_constraints.avoid_ingredients = ["palm oil"];
+  // ── Negation constraints — English + Hindi/Hinglish ────────────────────
+  applyNegationConstraints(parsed, lower);
+
   if (/gluten/.test(lower)) parsed.hard_constraints.allergens_excluded = ["gluten"];
   if (/hidden sweetener|no hidden sweetener|without hidden sweetener|artificial sweetener/.test(lower)) {
     parsed.hard_constraints.avoid_sublabels = ["hidden_sweetener"];
@@ -250,27 +380,6 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/no added sugar|without added sugar/.test(lower)) {
     parsed.hard_constraints.max_sugar_g_100g = 1;
     parsed.soft_preferences.push("no added sugar");
-  }
-  if (/no preserv|without preserv|preservative.?free/.test(lower)) {
-    parsed.soft_preferences.push("no preservatives");
-    parsed.hard_constraints.avoid_sublabels = [
-      ...(parsed.hard_constraints.avoid_sublabels ?? []),
-      "contains_preservatives",
-    ];
-  }
-  if (/no maida|without maida/.test(lower)) {
-    parsed.hard_constraints.avoid_ingredients = [
-      ...(parsed.hard_constraints.avoid_ingredients ?? []),
-      "maida",
-      "refined wheat flour",
-    ];
-  }
-  if (/no palm oil|without palm oil/.test(lower)) {
-    parsed.hard_constraints.avoid_ingredients = [
-      ...(parsed.hard_constraints.avoid_ingredients ?? []),
-      "palm oil",
-      "palmolein",
-    ];
   }
   if (/healthy|healthiest|best/.test(lower)) {
     parsed.sort_intent = "healthiest";

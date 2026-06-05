@@ -47,11 +47,13 @@ Rules:
 - When health_contexts includes a goal (parents, kids, diabetic, gym, etc.), rank by how well the product fits that goal — practical staples over baby food or irrelevant matches.
 - score is 0-100 for how well the product matches what the user asked for (product TYPE and constraints), not just keyword overlap.
 - Prefer the actual product type: jar/tin of ghee beats sweets that contain ghee; soft drinks/sodas beat plain water; Coke Zero beats sugary soda.
-- reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "Grass-fed on label").
+- CRITICAL — avoid_ingredients: score = 0 and omit any product whose ingredients_snippet contains an avoided ingredient in ANY form (e.g. avoid "palm oil" → also exclude "palmolein", "palm fat", "palm kernel", "Rapeseed and Palm", "(Palm)", "Hydrogenated Palm"). These are hard constraints, not preferences.
+- reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "No palm oil confirmed", "22g protein").
+- If the user wrote in Hindi/Hinglish (e.g. "bina palm oil", "maida nahi", "preservative nahi"), parse the intent correctly — these mean the same as English negations.
 - warning: null, or a brief trade-off if the product only partially fits.
 - Only include product_ids from the candidate list. Omit poor matches entirely.
 - Order rankings best-first. Return at most the number requested.
-- summary: one sentence for the user about what you found (max 28 words).`;
+- summary: one sentence for the user about what you found (max 28 words). If no products match, say so clearly.`;
 
 function compactCandidate(p: ProductListItem) {
   const n = p.nutrition;

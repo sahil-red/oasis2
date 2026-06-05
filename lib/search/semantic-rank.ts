@@ -12,7 +12,7 @@ import {
 } from "@/lib/search/goal-intent-registry";
 
 export { healthContextGoalId } from "@/lib/search/goal-intent-registry";
-import { passesHardConstraints } from "@/lib/search/ai-retrieval";
+import { passesHardConstraints, ingredientPresent } from "@/lib/search/ai-retrieval";
 import { passesNoAddedSugarRule } from "@/lib/search/added-sugar-scan";
 import {
   l3IntentForProductTerm,
@@ -292,11 +292,10 @@ export function passesSemanticConstraints(
   }
 
   for (const avoid of parsed.hard_constraints.avoid_ingredients ?? []) {
-    const a = avoid.toLowerCase();
     const ing = (p.ingredients_raw ?? "").toLowerCase();
-    if (a.includes("maida") && /maida|refined wheat flour/i.test(ing)) return false;
-    if (a.includes("palm") && /palm oil|palmolein|palm fat/i.test(ing)) return false;
-    if (ing.includes(a)) return false;
+    // Only hard-exclude if we have data confirming the ingredient is present.
+    // Missing ingredients_raw → product survives strict pass but gets penalized in scoring.
+    if (ing && ingredientPresent(ing, avoid)) return false;
   }
 
   return true;
@@ -476,15 +475,27 @@ function sortKey(
     ? preservativeSortTier(preservativeStatus(p.ingredients_raw))
     : 0;
 
+  // When the user asked to avoid specific ingredients, products with confirmed-clean
+  // ingredient lists rank above products with missing/unverified data.
+  const avoidTerms = parsed.hard_constraints.avoid_ingredients ?? [];
+  const ingredientVerifiedTier = avoidTerms.length > 0
+    ? (p.ingredients_raw ? 1 : 0)   // 1 = has data (confirmed clean since it passed filter), 0 = unverified
+    : 0;
+
   const strictTier = strictMatch ? 1 : 0;
   const paneerTier = paneerIntentSortTier(p, parsed.product_terms);
   const lowFatPref = parsed.soft_preferences.some((s) => /low fat/i.test(s));
   const healthIntent = usesHealthIntentSort(parsed);
 
+  // ingredientVerifiedTier is prepended to every sort key so confirmed-clean products
+  // (when an avoidance filter is active) always float above unverified ones.
+  const iv = ingredientVerifiedTier;
+
   if (shouldSortPrimaryByGoalFit(parsed)) {
     const goalId = healthContextGoalId(parsed.health_contexts)!;
     const goalFit = healthContextGoalFit(p, parsed) ?? scout;
     return [
+      iv,
       strictTier,
       goalFit,
       ...goalSortTieBreakers(goalId, p, protein, sugar),
@@ -500,6 +511,7 @@ function sortKey(
       return [
         typeTier,
         milkTier || paneerIntentSortTier(p, parsed.product_terms),
+        iv,
         strictTier,
         protein ?? -1,
         relevance,
@@ -508,23 +520,24 @@ function sortKey(
       ];
     }
     case "cheapest":
-      return [strictTier, relevance, price === 999999 ? -1 : -price, healthBoost, scout];
+      return [iv, strictTier, relevance, price === 999999 ? -1 : -price, healthBoost, scout];
     case "healthiest":
       if (healthIntent) {
         const goalScout = healthContextGoalFit(p, parsed) ?? scout;
         return healthIntentSortKey(p, parsed, relevance, strictMatch, [
+          iv,
           goalScout,
           healthBoost,
           protein ?? 0,
         ]);
       }
-      // "healthy noodles" etc. — Scout score first, not keyword relevance alone.
-      return [strictTier, scout, relevance, healthBoost, protein ?? 0];
+      return [iv, strictTier, scout, relevance, healthBoost, protein ?? 0];
     case "best_match":
     default:
       if (healthIntent) {
         const goalScout = healthContextGoalFit(p, parsed) ?? scout;
         return healthIntentSortKey(p, parsed, relevance, strictMatch, [
+          iv,
           preservTier,
           goalScout,
           protein ?? 0,
@@ -534,6 +547,7 @@ function sortKey(
         const fatKey = lowFatPref || parsed.hard_constraints.max_fat_g_100g != null;
         return [
           paneerTier,
+          iv,
           strictTier,
           relevance,
           preservTier,
@@ -543,15 +557,15 @@ function sortKey(
         ];
       }
       if (parsed.hard_constraints.max_fat_g_100g != null) {
-        return [strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
+        return [iv, strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
       }
       if (parsed.hard_constraints.max_sugar_g_100g != null && !healthIntent) {
-        return [strictTier, relevance, preservTier, sugar != null ? -sugar : -1, healthBoost, scout];
+        return [iv, strictTier, relevance, preservTier, sugar != null ? -sugar : -1, healthBoost, scout];
       }
       if (lowFatPref) {
-        return [strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
+        return [iv, strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
       }
-      return [strictTier, relevance, preservTier, healthBoost, scout, protein ?? 0];
+      return [iv, strictTier, relevance, preservTier, healthBoost, scout, protein ?? 0];
   }
 }
 
