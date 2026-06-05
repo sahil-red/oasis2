@@ -61,7 +61,13 @@ function isHighProteinCategory(ctx: NutritionContext): boolean {
 }
 
 function macroSum(n: ProductNutrition): number {
-  return (n.protein_g_100g ?? 0) + (n.carbs_g_100g ?? 0) + (n.fat_g_100g ?? 0);
+  // On Indian nutrition labels, dietary fiber is often listed as a sub-row of
+  // total carbohydrates. When both carbs_g_100g and fiber_g_100g are present,
+  // fiber is already included in carbs — subtracting it avoids false positives
+  // (e.g. peanut butter with 29g carbs including 6g fiber + 41g fat + 30g protein
+  // = 100.6g which is NOT anomalous, just rounding). Allow a small tolerance (2g).
+  const carbs = (n.carbs_g_100g ?? 0) - (n.fiber_g_100g ?? 0);
+  return (n.protein_g_100g ?? 0) + Math.max(0, carbs) + (n.fat_g_100g ?? 0);
 }
 
 function impliedKcal(n: ProductNutrition): number | null {
