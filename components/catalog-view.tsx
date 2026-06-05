@@ -927,61 +927,75 @@ export function CatalogView({
             </div>
           </form>
 
-          {aiMode && aiParsed ? (
-            <p className="mt-1 text-[12px] leading-none text-(--color-fg-muted)">
-              <button
-                type="button"
-                title="Remember diet, health goals, ingredient avoids, and budget from this search for future AI queries on this device"
-                onClick={() => {
-                  const prefs = preferencesFromParsed(aiParsed);
-                  writeAiSearchPreferences(prefs);
-                  setSavedPrefs(prefs);
-                }}
-                className="text-(--color-fg) underline decoration-(--color-line-strong) underline-offset-[3px] transition hover:decoration-(--color-fg-muted)"
-              >
-                Save preferences
-                {hasSavedPreferences(preferencesFromParsed(aiParsed))
-                  ? " from this search"
-                  : ""}
-              </button>
-            </p>
-          ) : null}
-
-          {/* Prompt chips — rotating from 50-prompt dataset */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {examplePrompts.map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => {
-                  setAiPrompt(example);
-                  void runAiSearch(example);
-                }}
-                className="rounded-full border border-(--color-line) px-3 py-1 text-[11px] text-(--color-fg-dim) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-              >
-                {example}
-              </button>
-            ))}
-          </div>
+          {/* Prompt chips — single scroll row, hidden when results are showing */}
+          {!aiMode && (
+            <div className="mt-3 -mx-1 overflow-x-auto px-1 pb-0.5 scrollbar-none">
+              <div className="flex gap-1.5 whitespace-nowrap">
+                {examplePrompts.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => {
+                      setAiPrompt(example);
+                      void runAiSearch(example);
+                    }}
+                    className="flex-shrink-0 rounded-full border border-(--color-line) px-3 py-1 text-[11px] text-(--color-fg-dim) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
-            <div className="mt-4 space-y-1">
-              <p className="text-[13px] leading-snug text-(--color-fg-muted)">{aiSummary}</p>
-              {aiIntentTier ? (
-                <p className="text-[10px] text-(--color-fg-dim)">
-                  {aiIntentTier} search
-                  {aiParseSource ? ` · parse ${aiParseSource}` : ""}
-                  {aiRankSource ? ` · rank ${aiRankSource}` : ""}
-                  {aiRelaxed ? " · relaxed matches" : ""}
+            <div className="mt-3">
+              {/* Summary + save preferences in one tight row */}
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-[13px] leading-snug text-(--color-fg-muted)">
+                  {/* Filter out robotic fallback text, show clean human sentence */}
+                  {/parsed your request|closest matches/i.test(aiSummary)
+                    ? aiParsed
+                      ? (() => {
+                          const terms = aiParsed.product_terms.join(", ") || "products";
+                          const sortLabel: Record<string, string> = {
+                            highest_protein: "· by protein",
+                            cheapest: "· by price",
+                            healthiest: "· by health score",
+                            best_match: "",
+                          };
+                          const sort = sortLabel[aiParsed.sort_intent] ?? "";
+                          return `${terms}${sort ? " " + sort : ""}`.trim();
+                        })()
+                      : null
+                    : aiSummary}
+                </p>
+                {aiParsed ? (
+                  <button
+                    type="button"
+                    title="Save diet, goals, and budget from this search"
+                    onClick={() => {
+                      const prefs = preferencesFromParsed(aiParsed);
+                      writeAiSearchPreferences(prefs);
+                      setSavedPrefs(prefs);
+                    }}
+                    className="flex-shrink-0 text-[11px] text-(--color-fg-dim) underline decoration-(--color-line) underline-offset-2 transition hover:text-(--color-fg)"
+                  >
+                    Save preferences
+                  </button>
+                ) : null}
+              </div>
+              {/* Relaxed warning only — no pipeline debug strings */}
+              {aiRelaxed ? (
+                <p className="mt-0.5 text-[11px] text-(--color-fg-dim)">
+                  Exact matches were limited — showing closest options.
                 </p>
               ) : null}
-              {aiWarning ? (
-                <p className="text-[11px] text-(--color-fg-dim)">{aiWarning}</p>
-              ) : null}
+              {/* Refinement chips */}
               {aiRefinements.length > 0 ? (
-                <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-0.5">
+                <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5">
                   {aiRefinements.map((refinement) => (
                     <button
                       key={refinement}
