@@ -199,4 +199,28 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
     if (!parsed.product_terms.length) parsed.product_terms = [term];
     mergeExcludes(parsed, ["masala", "noodle", "soup", "cake mix"]);
   }
+
+  if (/\bnoodles?\b/i.test(lower) && !/\bbiscuit/i.test(lower)) {
+    if (!parsed.product_terms.includes("noodles")) parsed.product_terms.unshift("noodles");
+    parsed.search_keywords = [
+      ...new Set([
+        ...parsed.search_keywords,
+        "noodles",
+        "noodle",
+        "instant noodles",
+        "ramen",
+        "vermicelli",
+        "hakka",
+      ]),
+    ];
+    mergeExcludes(parsed, ["masala powder", "soup mix", "cake mix"]);
+  }
+
+  if (/\bmaggi\b/i.test(lower)) {
+    parsed.product_terms = ["maggi", ...parsed.product_terms.filter((t) => t !== "maggi")].slice(0, 4);
+    parsed.search_keywords = [
+      ...new Set([...parsed.search_keywords, "maggi", "2 minute", "instant noodles", "noodles"]),
+    ];
+    mergeExcludes(parsed, ["masala powder", "ketchup", "sauce"]);
+  }
 }

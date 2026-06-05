@@ -16,6 +16,7 @@ import {
   productMatchesUsecase,
   productUsecase,
 } from "@/lib/products/catalog-meta";
+import { catalogSearchIlikeTerm } from "@/lib/search/catalog-query-text";
 import {
   compareCatalogItems,
   sortCatalogItems,
@@ -616,9 +617,9 @@ function buildCatalogDbQuery(
   if (state.maxPrice > 0) {
     q = q.lte("price_inr", state.maxPrice);
   }
-  if (state.q.trim()) {
-    const term = state.q.trim().replace(/[%_]/g, "");
-    if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
+  const searchTerm = catalogSearchIlikeTerm(state.q);
+  if (searchTerm) {
+    q = q.or(`name.ilike.%${searchTerm}%,brand.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%`);
   }
   return q;
 }
@@ -694,11 +695,12 @@ function applyScoreCatalogFilters(q: any, state: CatalogFilterState): any {
     q = q.filter("products.attributes->>L3 Category", "eq", state.usecase);
   }
   if (state.maxPrice > 0) q = q.lte("products.price_inr", state.maxPrice);
-  if (state.q.trim()) {
-    const term = state.q.trim().replace(/[%_]/g, "");
-    if (term) {
-      q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`, { referencedTable: "products" });
-    }
+  const searchTerm = catalogSearchIlikeTerm(state.q);
+  if (searchTerm) {
+    q = q.or(
+      `name.ilike.%${searchTerm}%,brand.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%`,
+      { referencedTable: "products" },
+    );
   }
   return q;
 }
@@ -803,9 +805,9 @@ async function countCatalogMatches(
     q = q.filter("attributes->>L3 Category", "eq", state.usecase);
   }
   if (state.maxPrice > 0) q = q.lte("price_inr", state.maxPrice);
-  if (state.q.trim()) {
-    const term = state.q.trim().replace(/[%_]/g, "");
-    if (term) q = q.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
+  const searchTerm = catalogSearchIlikeTerm(state.q);
+  if (searchTerm) {
+    q = q.or(`name.ilike.%${searchTerm}%,brand.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%`);
   }
   if (!scoreJoin && (state.sort === "score-desc" || state.sort === "score-asc")) {
     q = q.not("core_scores", "is", null);

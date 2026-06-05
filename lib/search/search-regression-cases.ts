@@ -29,6 +29,8 @@ export const INTENT_CASES: IntentCase[] = [
   { query: "paneer with low fat under ₹150", expect: "structured" },
   { query: "high protein milk", expect: "structured" },
   { query: "oats no added sugar", expect: "structured" },
+  { query: "healthy noodles", expect: "structured" },
+  { query: "healthy maggi", expect: "structured" },
   {
     query: "something healthy for my kids tiffin with options",
     expect: "complex",

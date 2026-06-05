@@ -13,7 +13,7 @@ const CONSTRAINT_PATTERNS = [
   /\b(sugar|protein|fat|sodium|salt|fibre|fiber|calorie|calories|kcal|carb|carbs)\b/i,
   /\b(preservative|additives?|palm oil|maida|gluten|vegan|vegetarian|veg\b|jaggery|sweetener)\b/i,
   /\b(diabetic|diabetes|pcos|keto|gym|kids|children|weight loss|fat loss|bulk|bulking)\b/i,
-  /\b(healthiest|healthier|cleanest|best|cheapest|budget)\b/i,
+  /\b(healthy|healthiest|healthier|cleanest|clean|nutritious|wholesome|best|cheapest|budget)\b/i,
   /(?:₹|rs\.?|inr)\s*\d{2,5}/i,
   /\d{1,3}\s*g\b/i,
   /\badded sugar\b/i,
