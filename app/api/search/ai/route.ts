@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { consumeAiSearch } from "@/lib/auth/profile";
+import { supabaseFromBearer } from "@/lib/auth/supabase-user";
 import { runAiProductSearch } from "@/lib/search/ai-search";
 import { parseProductQueryWithDeepseek } from "@/lib/search/query-parse";
 
@@ -17,6 +19,21 @@ export async function POST(req: NextRequest) {
   }
 
   const limit = typeof body?.limit === "number" ? body.limit : undefined;
+
+  const client = supabaseFromBearer(req.headers.get("authorization"));
+  if (client) {
+    const { data: userData } = await client.auth.getUser();
+    if (userData.user) {
+      const gate = await consumeAiSearch(client, userData.user.id);
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: gate.reason, code: "quota_exceeded" },
+          { status: 402 },
+        );
+      }
+    }
+  }
+
   const parsed = await parseProductQueryWithDeepseek(prompt);
   const result = await runAiProductSearch(parsed, { limit, prompt });
 
