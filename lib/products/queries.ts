@@ -126,7 +126,7 @@ const GOAL_LIST_FIELDS =
 
 /** Insights / landing — no gallery blobs; capped row count at query time. */
 const INSIGHTS_LIST_FIELDS =
-  "id, slug, name, brand, category, subcategory, l3_category, net_weight, attributes, price_inr, image_urls, nutrition, ingredients_raw, platform";
+  "id, slug, name, brand, category, subcategory, l3_category, net_weight, attributes, price_inr, image_urls, nutrition, ingredients_raw, platform, zepto_sku, catalog_visible";
 
 /** Max rows loaded for landing + insights aggregation (avoids build-time DB timeouts). */
 export const INSIGHTS_CATALOG_SAMPLE_LIMIT = 6_000;
@@ -1117,7 +1117,8 @@ export async function getScoredProductsForInsights(): Promise<ProductListItem[]>
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
-  return mapVisibleBatch(rows).map(slimListItemForCatalog);
+  const mapped = sqlVisible ? rows.map(mapListRow) : mapVisibleBatch(rows);
+  return mapped.map(slimListItemForCatalog);
 }
 
 export async function searchProducts(opts: {

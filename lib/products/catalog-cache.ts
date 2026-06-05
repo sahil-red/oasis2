@@ -27,7 +27,7 @@ export async function getCachedCatalogMeta(category?: string): Promise<CatalogMe
 export async function getCachedScoredCatalogForInsights() {
   return unstable_cache(
     () => getScoredProductsForInsights(),
-    ["catalog-insights-scored"],
+    ["catalog-insights-scored-v2"],
     { revalidate: 300 },
   )();
 }

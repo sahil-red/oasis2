@@ -940,7 +940,7 @@ export function CatalogView({
           </form>
 
           {aiMode && aiParsed ? (
-            <p className="mt-2 text-[12px] text-(--color-fg-muted)">
+            <p className="mt-1 text-[12px] leading-none text-(--color-fg-muted)">
               <button
                 type="button"
                 title="Remember diet, health goals, ingredient avoids, and budget from this search for future AI queries on this device"
@@ -960,7 +960,7 @@ export function CatalogView({
           ) : null}
 
           {/* Prompt chips — rotating from 50-prompt dataset */}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {examplePrompts.map((example) => (
               <button
                 key={example}
@@ -979,7 +979,7 @@ export function CatalogView({
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
-            <div className="mt-1.5 space-y-0.5">
+            <div className="mt-4 space-y-1">
               <p className="text-[13px] leading-snug text-(--color-fg-muted)">{aiSummary}</p>
               {aiIntentTier ? (
                 <p className="text-[10px] text-(--color-fg-dim)">

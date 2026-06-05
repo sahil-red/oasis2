@@ -27,7 +27,12 @@ import { buildInsights } from "@/lib/products/insights";
 export const revalidate = 600;
 
 export default async function InsightsPage() {
-  const products = await getCachedScoredCatalogForInsights();
+  let products: Awaited<ReturnType<typeof getCachedScoredCatalogForInsights>> = [];
+  try {
+    products = await getCachedScoredCatalogForInsights();
+  } catch (err) {
+    console.warn("[insights] catalog load failed:", err);
+  }
   const ins = buildInsights(products.filter((p) => p.core_scores));
 
   const topCategories = ins.categoryStats.slice(0, 5);

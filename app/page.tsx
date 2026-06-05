@@ -6,6 +6,7 @@ import { LandingIntel } from "@/components/landing-intel";
 import { LandingGoalBoards } from "@/components/landing-goal-boards";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
+import { SuggestProductType } from "@/components/suggest-product-type";
 import { getCachedLandingInsights } from "@/lib/products/catalog-cache";
 import { EMPTY_LANDING_INSIGHTS, type LandingInsights } from "@/lib/products/landing-insights";
 import { getHomeShelves } from "@/lib/products/queries";
@@ -93,6 +94,8 @@ export default async function Home() {
                 </Link>
               ))}
             </div>
+
+            <SuggestProductType />
           </div>
         </div>
 
