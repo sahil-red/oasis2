@@ -282,7 +282,7 @@ if (bulkingRank.rankings[0]?.product_id !== "paneer") {
   failed++;
 }
 
-const rankChecks = 11;
+const rankChecks = 13;
 
 const maggiParsed = heuristicParseProductQuery("healthy maggi noodles");
 const maggiRank = rankCandidatesSemantically(
@@ -453,6 +453,52 @@ if (
   !namedRank.relaxed
 ) {
   console.error("[llm-gate] FAIL structured named product with solid matches should skip LLM rank");
+  failed++;
+}
+
+const parentsProfileParsed = heuristicParseProductQuery("protein for parents");
+if (!parentsProfileParsed.health_contexts.includes("parents")) {
+  console.error("[parse] FAIL protein for parents should set parents health context");
+  failed++;
+}
+const parentsRankPool = new Map<string, ProductListItem>([
+  [
+    "gym-whey",
+    {
+      id: "gym-whey",
+      slug: "gym-whey",
+      name: "Budget Whey Isolate 80g protein",
+      brand: "Gym",
+      category: "Supplements",
+      subcategory: "Protein",
+      nutrition: { protein_g_100g: 78, sugar_g_100g: 4 },
+      core_scores: { score: 42, grade: "D", band: "poor", verdict_sublabels: [] },
+    } as ProductListItem,
+  ],
+  [
+    "clean-whey",
+    {
+      id: "clean-whey",
+      slug: "clean-whey",
+      name: "The Whole Truth Whey Protein Light Cocoa",
+      brand: "The Whole Truth",
+      category: "Supplements",
+      subcategory: "Protein",
+      nutrition: { protein_g_100g: 62, sugar_g_100g: 3 },
+      core_scores: { score: 76, grade: "B", band: "good", verdict_sublabels: [] },
+    } as ProductListItem,
+  ],
+]);
+const parentsRank = rankCandidatesSemantically(
+  [...parentsRankPool.values()],
+  parentsProfileParsed,
+  10,
+);
+if (parentsRank.rankings[0]?.product_id !== "clean-whey") {
+  console.error(
+    "[parents-rank] FAIL parents profile should rank higher Scout whey above low-quality isolate",
+    parentsRank.rankings.map((r) => r.product_id),
+  );
   failed++;
 }
 

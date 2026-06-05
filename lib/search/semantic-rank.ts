@@ -4,7 +4,14 @@ import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
-import type { ParsedHealthContext, ParsedProductQuery } from "@/lib/search/query-parse";
+import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import {
+  goalSortTieBreakers,
+  healthContextGoalId,
+  shouldSortPrimaryByGoalFit,
+} from "@/lib/search/goal-intent-registry";
+
+export { healthContextGoalId } from "@/lib/search/goal-intent-registry";
 import { passesHardConstraints } from "@/lib/search/ai-retrieval";
 import { passesNoAddedSugarRule } from "@/lib/search/added-sugar-scan";
 import {
@@ -326,17 +333,6 @@ export function usesHealthIntentSort(parsed: ParsedProductQuery): boolean {
   return healthContextGoalId(parsed.health_contexts) != null;
 }
 
-/** Map AI search health context to the Scout goal used on PDP / catalog goal boards. */
-export function healthContextGoalId(contexts: ParsedHealthContext[]): GoalId | null {
-  if (contexts.includes("diabetic")) return "diabetic";
-  if (contexts.includes("pcos")) return "pcos";
-  if (contexts.includes("kids")) return "kids";
-  if (contexts.includes("fat_loss")) return "fat-loss";
-  if (contexts.includes("gym")) return "gym";
-  if (contexts.includes("bulk")) return "bulk";
-  return null;
-}
-
 function hasGoalFitSignals(p: ProductListItem): boolean {
   const n = p.nutrition;
   if (
@@ -484,6 +480,18 @@ function sortKey(
   const paneerTier = paneerIntentSortTier(p, parsed.product_terms);
   const lowFatPref = parsed.soft_preferences.some((s) => /low fat/i.test(s));
   const healthIntent = usesHealthIntentSort(parsed);
+
+  if (shouldSortPrimaryByGoalFit(parsed)) {
+    const goalId = healthContextGoalId(parsed.health_contexts)!;
+    const goalFit = healthContextGoalFit(p, parsed) ?? scout;
+    return [
+      strictTier,
+      goalFit,
+      ...goalSortTieBreakers(goalId, p, protein, sugar),
+      relevance,
+      scout,
+    ];
+  }
 
   switch (parsed.sort_intent) {
     case "highest_protein": {

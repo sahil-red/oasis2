@@ -1,4 +1,5 @@
-import type { ParsedHealthContext, ParsedProductQuery } from "@/lib/search/query-parse";
+import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import { contextsWithDefaultInfantExcludes, isAudienceMetaTerm } from "@/lib/search/goal-intent-registry";
 
 /** Words that describe a goal, not a product type — must not gate search results. */
 export const GOAL_META_PRODUCT_TERMS = new Set([
@@ -34,14 +35,6 @@ export const GOAL_META_PRODUCT_TERMS = new Set([
   "seniors",
 ]);
 
-const ADULT_GOAL_CONTEXTS = new Set<ParsedHealthContext>([
-  "bulk",
-  "gym",
-  "fat_loss",
-  "diabetic",
-  "pcos",
-]);
-
 const DEFAULT_BULK_EXCLUDES = [
   "cerelac",
   "baby food",
@@ -55,7 +48,7 @@ const DEFAULT_BULK_EXCLUDES = [
 /** Drop meta terms like "food"/"bulking" when the query is really a health goal. */
 export function stripGoalMetaProductTerms(parsed: ParsedProductQuery): void {
   const realTerms = parsed.product_terms.filter(
-    (t) => !GOAL_META_PRODUCT_TERMS.has(t.toLowerCase()),
+    (t) => !GOAL_META_PRODUCT_TERMS.has(t.toLowerCase()) && !isAudienceMetaTerm(t),
   );
 
   if (realTerms.length === 0 && parsed.product_terms.length > 0) {
@@ -66,7 +59,7 @@ export function stripGoalMetaProductTerms(parsed: ParsedProductQuery): void {
     parsed.search_keywords = realTerms;
   }
 
-  if (parsed.health_contexts.some((c) => ADULT_GOAL_CONTEXTS.has(c))) {
+  if (parsed.health_contexts.some((c) => contextsWithDefaultInfantExcludes().includes(c))) {
     const existing = new Set(parsed.exclude_keywords.map((k) => k.toLowerCase()));
     for (const kw of DEFAULT_BULK_EXCLUDES) {
       if (!existing.has(kw)) parsed.exclude_keywords.push(kw);

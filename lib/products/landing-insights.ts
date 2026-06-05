@@ -158,6 +158,7 @@ const GOAL_TAGLINES: Record<GoalId, string> = {
   pcos: "Low sugar, minimally processed",
   "protein-budget": "Most protein per rupee",
   kids: "Clean labels, no artificial colours",
+  parents: "Protein-forward staples for elders",
 };
 
 function buildFacts(products: ProductListItem[], totalScored: number): LandingFact[] {
@@ -320,6 +321,16 @@ function buildGoalBoards(products: ProductListItem[], ins: InsightLists): Landin
     ),
     "protein-budget": ins.proteinPerRupee.slice(0, 6).map((r) => toPick(r.product, proteinMeta(r.product))),
     kids: ins.kidFriendly.slice(0, 6).map((r) => toPick(r.product, scoreMeta(r.product))),
+    parents: rankBy(
+      scored.filter(
+        (p) =>
+          (p.nutrition?.protein_g_100g ?? 0) >= 10 &&
+          (p.core_scores?.score ?? 0) >= 55 &&
+          (sugarOf(p.nutrition) ?? 99) < 12,
+      ),
+      (p) => (p.core_scores?.score ?? 0) + (p.nutrition?.protein_g_100g ?? 0) * 1.5,
+      proteinMeta,
+    ),
   };
 
   return GOAL_PROFILES.map((g) => ({

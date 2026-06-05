@@ -1,13 +1,8 @@
 import type { ProductListItem } from "@/lib/products/queries";
-import type { ParsedHealthContext, ParsedProductQuery } from "@/lib/search/query-parse";
+import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import { healthContextsBlockingInfant } from "@/lib/search/goal-intent-registry";
 
-const ADULT_FITNESS_CONTEXTS = new Set<ParsedHealthContext>([
-  "bulk",
-  "gym",
-  "fat_loss",
-  "diabetic",
-  "pcos",
-]);
+const ADULT_GOAL_CONTEXTS = new Set(healthContextsBlockingInfant());
 
 export type ProductAudienceLabels = {
   name?: string | null;
@@ -45,6 +40,6 @@ export function blockedForAdultHealthGoal(
   parsed: ParsedProductQuery,
 ): boolean {
   if (parsed.health_contexts.includes("kids")) return false;
-  if (!parsed.health_contexts.some((c) => ADULT_FITNESS_CONTEXTS.has(c))) return false;
+  if (!parsed.health_contexts.some((c) => ADULT_GOAL_CONTEXTS.has(c))) return false;
   return isInfantOrBabyProduct(p) || isPetFoodProduct(p);
 }

@@ -1,6 +1,9 @@
 /**
  * Nutrition goals. Diet preferences (vegetarian / vegan) are a separate
  * cross-cutting filter (see `lib/diet/types.ts`), not a goal.
+ *
+ * Search: add detect/audience/sort flags in `lib/search/goal-intent-registry.ts`.
+ * Scoring: add a case in `lib/goals/fit.ts` (+ captions/penalties as needed).
  */
 export type GoalId =
   | "balanced"
@@ -10,7 +13,8 @@ export type GoalId =
   | "fat-loss"
   | "pcos"
   | "protein-budget"
-  | "kids";
+  | "kids"
+  | "parents";
 
 export type GoalProfile = {
   id: GoalId;
@@ -67,6 +71,13 @@ export const GOAL_PROFILES: GoalProfile[] = [
     label: "Kids",
     short: "Kids",
     description: "Heavily penalises flagged additives and artificial colours.",
+  },
+  {
+    id: "parents",
+    label: "Parents & elderly",
+    short: "Parents",
+    description:
+      "Adequate protein with low sugar, minimal artificial additives, and label quality over gym-style isolates.",
   },
 ];
 

@@ -82,6 +82,7 @@ const HEALTH_CONTEXT_LABELS: Record<string, string> = {
   gym: "gym",
   fat_loss: "diet / fat loss",
   bulk: "bulking",
+  parents: "parents / elderly",
 };
 
 export function hasSavedPreferences(prefs: AiSearchPreferences | null | undefined): boolean {

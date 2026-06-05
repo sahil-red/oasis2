@@ -30,7 +30,7 @@ function buildHeroReasons(goal: GoalId, f: ReturnType<typeof buildGoalFeatures>,
     if (out.length >= 2) return;
     if (s && !out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s);
   };
-  if (goal === "balanced" || goal === "kids" || goal === "pcos") {
+  if (goal === "balanced" || goal === "kids" || goal === "pcos" || goal === "parents") {
     if (f.additiveBurden >= 2 && !captionLower.includes("additive")) add("Several processing additives");
     if (goal === "kids" && f.sodium >= 500 && !captionLower.includes("salt")) add("High sodium for children");
   }
@@ -267,6 +267,54 @@ export function computeGoalFit(
       }
       break;
     }
+    case "parents": {
+      const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+      const core = opts.core_score ?? 50;
+      const n = opts.nutrition;
+      const calcium =
+        typeof n?.calcium_mg_100g === "number" && Number.isFinite(n.calcium_mg_100g)
+          ? n.calcium_mg_100g
+          : 0;
+      const iron =
+        typeof n?.iron_mg_100g === "number" && Number.isFinite(n.iron_mg_100g)
+          ? n.iron_mg_100g
+          : 0;
+
+      fit =
+        core * 0.52 +
+        18 +
+        Math.min(12, f.fiber * 1.3) -
+        sugarLoad * 2.4 -
+        f.additiveBurden * 10 -
+        f.hazardousAdditiveCount * 14 -
+        Math.max(0, f.sodium - 400) * 0.012;
+
+      if (f.protein >= 8 && f.protein <= 32) {
+        fit += Math.min(20, (f.protein - 8) * 1.5);
+      } else if (f.protein > 32 && f.protein < 55) {
+        fit += 10;
+      } else if (f.protein < 8) {
+        fit -= 10;
+      }
+
+      if (calcium >= 80) fit += Math.min(8, calcium / 40);
+      if (iron >= 1.5) fit += Math.min(8, iron * 2.5);
+
+      if (f.processingNotes.some((note) => /artificial/i.test(note))) fit -= 22;
+      if (f.isStaple && f.protein >= 8) fit += 14;
+      if (f.isSugaryDrink || f.isSweetSnack) fit -= 16;
+      if (f.isDessert) fit -= 14;
+
+      if (f.isProteinPowder) {
+        if (core >= 68) fit += 10;
+        else if (core < 50) fit = Math.min(fit, 48);
+        else fit = Math.min(fit, 58);
+      }
+
+      if (sugarLoad >= 12) fit = Math.min(fit, 48);
+      if (sugarLoad >= 18) fit = Math.min(fit, 35);
+      break;
+    }
   }
 
   fit = finalizeGoalFit(goal, fit, f);
@@ -319,6 +367,12 @@ function freshProduceFit(
       // Fresh produce is the canonical clean kid-friendly option.
       let fit = 88 + Math.min(8, f.fiber);
       if (f.sugar >= 14) fit -= 4;
+      return fit;
+    }
+    case "parents": {
+      let fit = 82 + Math.min(10, f.fiber) + Math.min(8, f.protein * 1.2);
+      if (f.sugar >= 14) fit -= 8;
+      if (f.protein >= 4) fit += 4;
       return fit;
     }
     case "protein-budget": {

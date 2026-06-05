@@ -20,6 +20,7 @@ const PDP_GOAL_ORDER: GoalId[] = [
   "diabetic",
   "pcos",
   "kids",
+  "parents",
   "balanced",
 ];
 

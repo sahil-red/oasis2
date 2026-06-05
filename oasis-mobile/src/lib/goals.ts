@@ -8,7 +8,8 @@ export type GoalId =
   | "fat-loss"
   | "pcos"
   | "protein-budget"
-  | "kids";
+  | "kids"
+  | "parents";
 
 export const GOAL_OPTIONS: { id: GoalId; label: string }[] = [
   { id: "balanced", label: "Balanced" },
@@ -19,6 +20,7 @@ export const GOAL_OPTIONS: { id: GoalId; label: string }[] = [
   { id: "pcos", label: "PCOS" },
   { id: "protein-budget", label: "Protein budget" },
   { id: "kids", label: "Kids" },
+  { id: "parents", label: "Parents" },
 ];
 
 const STORAGE_KEY = "scout-goal";

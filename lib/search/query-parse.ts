@@ -1,6 +1,6 @@
 import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
 import { resolveDeepseekApiKey } from "@/lib/search/deepseek-keys";
-import { applyAudienceHeuristics } from "@/lib/search/audience-parse";
+import { applyGoalIntentHeuristics } from "@/lib/search/goal-intent-registry";
 import { stripGoalMetaProductTerms } from "@/lib/search/goal-query-normalize";
 import { applyL3IntentToParsed } from "@/lib/search/l3-category-intent";
 import { applyProductTermHeuristics } from "@/lib/search/product-term-heuristics";
@@ -11,7 +11,8 @@ export type ParsedHealthContext =
   | "kids"
   | "gym"
   | "fat_loss"
-  | "bulk";
+  | "bulk"
+  | "parents";
 
 export type ParsedSortIntent =
   | "best_match"
@@ -68,6 +69,7 @@ const VALID_CONTEXTS = new Set<ParsedHealthContext>([
   "gym",
   "fat_loss",
   "bulk",
+  "parents",
 ]);
 
 const VALID_SORTS = new Set<ParsedSortIntent>([
@@ -98,7 +100,7 @@ Schema:
     "avoid_sublabels"?: string[]
   },
   "soft_preferences": string[],
-  "health_contexts": ("diabetic"|"pcos"|"kids"|"gym"|"fat_loss"|"bulk")[],
+  "health_contexts": ("diabetic"|"pcos"|"kids"|"gym"|"fat_loss"|"bulk"|"parents")[],
   "sort_intent": "best_match"|"healthiest"|"cheapest"|"highest_protein",
   "explanation": string
 }
@@ -115,7 +117,7 @@ Rules:
 - CRITICAL: "high protein [specific food]" (e.g. "high protein milk", "high protein curd", "high protein bread") means the user wants that food sorted by protein content. Set sort_intent:"highest_protein" ONLY. Do NOT set min_protein_g_100g — milk/curd/bread naturally have low protein, the user wants the best option within that food type.
 - Set min_protein_g_100g = 12 ONLY when the user is explicitly looking for protein supplements or high-protein products without naming a specific everyday food (e.g. "protein powder", "high protein snacks", "protein bar"). Never set it when a specific food is named.
 - "low sugar" for a specific food (e.g. "low sugar biscuits") means max_sugar_g_100g = 10 — apply as a hard constraint since biscuits can vary widely.
-- Map gym/high protein snacks to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"].
+- Map gym/high protein snacks to health_contexts:["gym"]; fat loss/weight loss to ["fat_loss"]; diabetic/diabetes to ["diabetic"]; PCOS to ["pcos"]; kids/children to ["kids"]; bulking/weight gain to ["bulk"]; parents/elderly/for mom/for dad to ["parents"].
 - Do NOT use meta words as product_terms: food, bulking, bulk, gain, weight, fitness, snacks (when only describing a goal). Example: "food for bulking" → product_terms:[], health_contexts:["bulk"], exclude_keywords should include baby cereal brands.
 - Keep explanation under 22 words.
 `;
@@ -238,28 +240,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     parsed.sort_intent = "healthiest";
   }
 
-  if (/diabetic|diabetes/.test(lower)) parsed.health_contexts.push("diabetic");
-  if (/pcos/.test(lower)) parsed.health_contexts.push("pcos");
-  if (/kids|children|child/.test(lower)) parsed.health_contexts.push("kids");
-
-  if (
-    (parsed.health_contexts.includes("diabetic") ||
-      parsed.health_contexts.includes("pcos")) &&
-    parsed.sort_intent !== "cheapest" &&
-    parsed.sort_intent !== "highest_protein"
-  ) {
-    parsed.sort_intent = "healthiest";
-  }
-  if (
-    parsed.health_contexts.includes("kids") &&
-    /healthy|healthiest|tiffin|school|snack|nutritious|wholesome/.test(lower) &&
-    parsed.sort_intent !== "cheapest"
-  ) {
-    parsed.sort_intent = "healthiest";
-  }
-  if (/gym/.test(lower)) parsed.health_contexts.push("gym");
-  if (/fat loss|weight loss|diet/.test(lower)) parsed.health_contexts.push("fat_loss");
-  if (/bulk|bulking|weight gain/.test(lower)) parsed.health_contexts.push("bulk");
+  applyGoalIntentHeuristics(parsed, lower);
 
   if (/\b(cheap|cheapest|budget)\b/.test(lower)) parsed.sort_intent = "cheapest";
   if (/high protein|protein rich/.test(lower) && parsed.sort_intent !== "highest_protein") {
@@ -313,7 +294,6 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
     );
     parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
   }
-  applyAudienceHeuristics(parsed, lower);
   stripGoalMetaProductTerms(parsed);
   applyProductTermHeuristics(parsed, lower);
   applyL3IntentToParsed(parsed);

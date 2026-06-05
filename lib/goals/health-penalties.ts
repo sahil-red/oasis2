@@ -6,9 +6,11 @@ import { HAZARDOUS_HARD_CAP } from "@/lib/utils";
 export function goalHealthPenalty(goal: GoalId, f: GoalFeatures): number {
   let penalty = 0;
 
-  penalty += f.hazardousAdditiveCount * (goal === "kids" ? 14 : 10);
-  penalty += f.moderateAdditiveCount * (goal === "kids" ? 4 : 2.5);
-  penalty += Math.max(0, f.additiveBurden - f.hazardousAdditiveCount * 4) * (goal === "kids" ? 3 : 2);
+  penalty += f.hazardousAdditiveCount * (goal === "kids" ? 14 : goal === "parents" ? 12 : 10);
+  penalty += f.moderateAdditiveCount * (goal === "kids" ? 4 : goal === "parents" ? 3 : 2.5);
+  penalty +=
+    Math.max(0, f.additiveBurden - f.hazardousAdditiveCount * 4) *
+    (goal === "kids" ? 3 : goal === "parents" ? 2.5 : 2);
 
   if (f.transFat > 0.05) penalty += goal === "kids" ? 18 : 12;
 
@@ -53,6 +55,7 @@ export function applyGoalHealthCaps(goal: GoalId, fit: number, f: GoalFeatures):
   if (f.hazardousAdditiveCount > 0) {
     const hazCap: Partial<Record<GoalId, number>> = {
       kids: 28,
+      parents: 38,
       bulk: 38,
       gym: 52,
       "fat-loss": 45,
@@ -91,6 +94,15 @@ export function applyGoalHealthCaps(goal: GoalId, fit: number, f: GoalFeatures):
     if (f.kcal >= 350) capped = Math.min(capped, 35);
     if (f.sodium >= 1200) capped = Math.min(capped, 38);
     else if (f.sodium >= 800) capped = Math.min(capped, 48);
+  } else if (goal === "parents") {
+    if (f.addedSugar >= 12) capped = Math.min(capped, 42);
+    else if (f.addedSugar >= 8) capped = Math.min(capped, 55);
+    if (f.sodium >= 1200) capped = Math.min(capped, 28);
+    else if (f.sodium >= 800) capped = Math.min(capped, 40);
+    if (f.additiveBurden >= 5) capped = Math.min(capped, 35);
+    if (f.isProteinSnack && f.additiveBurden >= 3 && (f.coreScore ?? 50) < 55) {
+      capped = Math.min(capped, 52);
+    }
   } else if (goal === "diabetic" || goal === "pcos") {
     const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
     if (f.isDessert) capped = Math.min(capped, 32);
@@ -102,8 +114,10 @@ export function applyGoalHealthCaps(goal: GoalId, fit: number, f: GoalFeatures):
     else if (f.sodium >= 800) capped = Math.min(capped, 50);
   }
 
-  if (f.processingNotes.some((n) => /artificial/i.test(n)) && (goal === "kids" || goal === "bulk")) {
-    capped = Math.min(capped, goal === "kids" ? 32 : 48);
+  if (f.processingNotes.some((n) => /artificial/i.test(n))) {
+    if (goal === "kids") capped = Math.min(capped, 32);
+    else if (goal === "parents") capped = Math.min(capped, 42);
+    else if (goal === "bulk") capped = Math.min(capped, 48);
   }
 
   return capped;

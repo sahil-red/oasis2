@@ -119,8 +119,9 @@ export const PARSE_CASES: ParseCase[] = [
     query: "protein for parents",
     check: (p) =>
       !p.product_terms.includes("parents") &&
+      p.health_contexts.includes("parents") &&
       (p.hard_constraints.min_protein_g_100g ?? 0) >= 10 &&
-      p.sort_intent === "highest_protein",
+      p.sort_intent === "best_match",
   },
 ];
 

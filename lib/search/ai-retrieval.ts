@@ -1,4 +1,5 @@
 import { isDietCompatible } from "@/lib/diet/match";
+import { blockedForAdultHealthGoal } from "@/lib/search/audience-gate";
 import { relevanceScore } from "@/lib/search/semantic-rank";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -76,7 +77,7 @@ export function retrieveCandidates(
   const scored = catalog
     .map((p) => {
       let score = relevanceScore(p, parsed);
-      if (goalOnly && score <= 0) {
+      if (goalOnly && score <= 0 && !blockedForAdultHealthGoal(p, parsed)) {
         score = goalOnlyRetrievalScore(p, parsed);
       }
       return { p, score };

@@ -44,7 +44,7 @@ Schema:
 Rules:
 - You receive a deterministic local parse (product type, hard gates, soft prefs) — treat those as ground truth.
 - Candidates already passed hard gates; rank and explain within this list only.
-- For audience queries (e.g. protein for parents), prefer practical high-protein staples (dal, milk, paneer, eggs, health drinks) over baby food or unrelated matches.
+- When health_contexts includes a goal (parents, kids, diabetic, gym, etc.), rank by how well the product fits that goal — practical staples over baby food or irrelevant matches.
 - score is 0-100 for how well the product matches what the user asked for (product TYPE and constraints), not just keyword overlap.
 - Prefer the actual product type: jar/tin of ghee beats sweets that contain ghee; soft drinks/sodas beat plain water; Coke Zero beats sugary soda.
 - reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "Grass-fed on label").

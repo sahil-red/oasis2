@@ -320,6 +320,8 @@ export function goalCaption(goal: GoalId, f: GoalFeatures): string {
       return pcosCaption(f);
     case "kids":
       return kidsCaption(f);
+    case "parents":
+      return parentsCaption(f);
     case "protein-budget":
       return proteinBudgetCaption(f);
     default:
@@ -355,6 +357,10 @@ function freshProduceCaption(goal: GoalId, f: GoalFeatures): string {
       return "Whole food for PCOS";
     case "kids":
       return "Whole food — kid-friendly";
+    case "parents":
+      if (f.protein >= 12 && f.addedSugar < 8) return "Protein-forward, lower sugar";
+      if (f.isStaple) return "Everyday staple for elders";
+      return "Moderate fit for parents";
     case "protein-budget":
       if (f.protein >= 5) return "Cheap plant protein";
       return "Low protein per rupee";
@@ -474,6 +480,21 @@ function kidsCaption(f: GoalFeatures): string {
     return "Clean kid-friendly";
   }
   return "Average for kids";
+}
+
+function parentsCaption(f: GoalFeatures): string {
+  const sugarLoad = Math.max(f.addedSugar, f.effectiveAddedSugar);
+  if (f.processingNotes.some((n) => /artificial/i.test(n))) return "Artificial colours/flavours";
+  if (f.hazardousAdditiveCount > 0) return "Risky additives for elders";
+  if (sugarLoad >= 15) return "High sugar for daily use";
+  if (f.sodium >= 900) return "Very salty for elders";
+  if (f.additiveBurden >= 4) return "Heavily processed";
+  if (f.isStaple && f.protein >= 10 && sugarLoad < 10) return "Staple protein, lower sugar";
+  if (f.isProteinPowder && (f.coreScore ?? 0) >= 65) return "Clean protein supplement";
+  if (f.isProteinPowder && (f.coreScore ?? 0) < 50) return "Low-quality supplement";
+  if (f.protein >= 12 && sugarLoad < 8) return "Good protein, moderate sugar";
+  if (f.fiber >= 6) return "Fibre-rich option";
+  return "Average for parents";
 }
 
 function proteinBudgetCaption(f: GoalFeatures): string {
