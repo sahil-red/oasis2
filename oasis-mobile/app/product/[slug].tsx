@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ViewStyle,
 } from "react-native";
 import { darkColors as colors } from "@/theme";
 import Animated, {
@@ -160,6 +162,7 @@ export default function ProductScreen() {
   const similar = product?.similar_products ?? [];
   const ingredients = product?.ingredient_items ?? [];
   const inBasket = product ? basket.has(product.slug) : false;
+  const zeptoBuyUrl = product?.zepto_buy_url ?? null;
 
   if (loading) {
     return (
@@ -314,6 +317,17 @@ export default function ProductScreen() {
           ) : null}
         </View>
 
+        {zeptoBuyUrl ? (
+          <PressableScale
+            haptic="light"
+            onPress={() => void Linking.openURL(zeptoBuyUrl)}
+            style={styles.zeptoInlineBtn}
+          >
+            <Text style={[styles.zeptoInlineText, { color: colors.accent }]}>Buy on Zepto</Text>
+            <Ionicons name="open-outline" size={16} color={colors.accent} />
+          </PressableScale>
+        ) : null}
+
         {/* Score breakdown */}
         {core?.subscores ? (
           <>
@@ -422,23 +436,42 @@ export default function ProductScreen() {
         <View style={[StyleSheet.absoluteFillObject, {
           backgroundColor: isDark ? "rgba(10,10,11,0.72)" : "rgba(250,247,242,0.72)",
         }]} />
-        <PressableScale
-          haptic="medium"
-          onPress={() => { basket.add(product.slug, product.name); }}
-          style={styles.ctaPressable}
-        >
-          <View style={[styles.cta, { backgroundColor: inBasket ? "transparent" : colors.fg },
-            inBasket && { borderWidth: 1.5, borderColor: colors.good }]}>
-            <Ionicons
-              name={inBasket ? "checkmark-circle" : "bag-add"}
-              size={20}
-              color={inBasket ? colors.good : colors.bg}
-            />
-            <Text style={[styles.ctaText, { color: inBasket ? colors.good : colors.bg }]}>
-              {inBasket ? "In your basket" : "Add to basket"}
-            </Text>
-          </View>
-        </PressableScale>
+        <View style={styles.ctaRow}>
+          {zeptoBuyUrl ? (
+            <PressableScale
+              haptic="light"
+              onPress={() => void Linking.openURL(zeptoBuyUrl)}
+              style={styles.ctaZeptoPressable}
+            >
+              <View style={[styles.ctaZepto, { borderColor: colors.line, backgroundColor: colors.panel }]}>
+                <Ionicons name="cart-outline" size={18} color={colors.fg} />
+                <Text style={[styles.ctaZeptoText, { color: colors.fg }]}>Zepto</Text>
+                <Ionicons name="open-outline" size={14} color={colors.fgDim} />
+              </View>
+            </PressableScale>
+          ) : null}
+          <PressableScale
+            haptic="medium"
+            onPress={() => { basket.add(product.slug, product.name); }}
+            style={
+              zeptoBuyUrl
+                ? ([styles.ctaPressable, styles.ctaPressableSplit] as ViewStyle[])
+                : styles.ctaPressable
+            }
+          >
+            <View style={[styles.cta, { backgroundColor: inBasket ? "transparent" : colors.fg },
+              inBasket && { borderWidth: 1.5, borderColor: colors.good }]}>
+              <Ionicons
+                name={inBasket ? "checkmark-circle" : "bag-add"}
+                size={20}
+                color={inBasket ? colors.good : colors.bg}
+              />
+              <Text style={[styles.ctaText, { color: inBasket ? colors.good : colors.bg }]}>
+                {inBasket ? "In basket" : "Add to basket"}
+              </Text>
+            </View>
+          </PressableScale>
+        </View>
       </BlurView>
     </Screen>
   );
@@ -638,7 +671,31 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  ctaPressable: { width: "100%" },
+  ctaRow: { flexDirection: "row", gap: spacing.sm, alignItems: "stretch" },
+  ctaPressable: { flex: 1 },
+  ctaPressableSplit: { flex: 1.4 },
+  ctaZeptoPressable: { flex: 1 },
+  ctaZepto: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 16,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaZeptoText: { fontFamily: fonts.sansSemiBold, fontSize: 15 },
+  zeptoInlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.lg,
+    alignSelf: "flex-start",
+  },
+  zeptoInlineText: { fontFamily: fonts.sansSemiBold, fontSize: 15 },
   cta: {
     flexDirection: "row",
     gap: spacing.sm,

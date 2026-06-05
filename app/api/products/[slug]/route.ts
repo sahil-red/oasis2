@@ -9,6 +9,7 @@ import { findAlternatives, findSimilarProducts } from "@/lib/products/alternativ
 import { explainScore } from "@/lib/products/score-explain";
 import { displayPriceInr } from "@/lib/products/display-price";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
+import { resolveZeptoBuyUrl } from "@/lib/products/zepto-product-url";
 import { goalFromParam } from "@/lib/goals/types";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import type { SubScores } from "@/lib/supabase/types";
@@ -131,9 +132,12 @@ export async function GET(
     excludeIds: new Set(swaps.map((s) => s.slug)),
   }).map(mapSwap);
 
+  const zepto_buy_url = resolveZeptoBuyUrl(product);
+
   return NextResponse.json(
     {
       ...product,
+      zepto_buy_url,
       nutrition: displayNutrition,
       verdict_resolved: verdict,
       deepseek_why: deepseek?.why ?? null,

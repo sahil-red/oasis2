@@ -104,6 +104,7 @@ export type PdpSwap = {
 };
 
 export type ProductDetail = CatalogProduct & {
+  zepto_buy_url?: string | null;
   ingredients_raw: string | null;
   nutrition: ProductNutrition | null;
   deepseek_why?: string | null;
