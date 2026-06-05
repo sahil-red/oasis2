@@ -10,6 +10,76 @@ import { colors, fonts, radius, spacing } from "@/theme";
 import type { CatalogProduct } from "@/types/api";
 import { Ionicons } from "@expo/vector-icons";
 
+// Maps chip ids to display labels
+const CHIP_LABELS: Record<string, string> = {
+  high_protein: "High Protein",
+  low_sugar: "Low Sugar",
+  no_added_sugar: "No Added Sugar",
+  high_fiber: "High Fiber",
+  gluten_free: "Gluten Free",
+  vegan: "Vegan",
+  high_sugar: "High Sugar",
+  hidden_sweetener: "Hidden Sweetener",
+  artificial_colors: "Artificial Colours",
+  artificial_flavors: "Artificial Flavours",
+  contains_preservatives: "Preservatives",
+  ultra_processed: "Ultra Processed",
+  high_saturated_fat: "High Sat Fat",
+  high_sodium: "High Sodium",
+  high_gi: "High GI",
+  contains_nuts: "Contains Nuts",
+};
+
+const CHIP_TONE: Record<string, "good" | "warn" | "bad"> = {
+  high_protein: "good",
+  low_sugar: "good",
+  no_added_sugar: "good",
+  high_fiber: "good",
+  gluten_free: "good",
+  vegan: "good",
+  high_sugar: "bad",
+  hidden_sweetener: "bad",
+  artificial_colors: "warn",
+  artificial_flavors: "warn",
+  contains_preservatives: "warn",
+  ultra_processed: "bad",
+  high_saturated_fat: "warn",
+  high_sodium: "warn",
+  high_gi: "warn",
+};
+
+const TONE_COLORS = {
+  good: { bg: "rgba(52, 211, 153, 0.12)", border: "rgba(52, 211, 153, 0.4)", text: "#34d399" },
+  warn: { bg: "rgba(251, 191, 36, 0.12)", border: "rgba(251, 191, 36, 0.4)", text: "#fbbf24" },
+  bad: { bg: "rgba(248, 113, 113, 0.12)", border: "rgba(248, 113, 113, 0.35)", text: "#f87171" },
+  neutral: { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.1)", text: colors.fgMuted },
+};
+
+function ChipRow({ chips }: { chips: string[] }) {
+  const visible = chips.slice(0, 3);
+  if (!visible.length) return null;
+  return (
+    <View style={chipStyles.row}>
+      {visible.map((chip) => {
+        const label = CHIP_LABELS[chip] ?? chip.replace(/_/g, " ");
+        const tone = CHIP_TONE[chip] ?? "neutral";
+        const c = TONE_COLORS[tone];
+        return (
+          <View key={chip} style={[chipStyles.chip, { backgroundColor: c.bg, borderColor: c.border }]}>
+            <Text style={[chipStyles.chipText, { color: c.text }]}>{label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 },
+  chip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  chipText: { fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 0.2 },
+});
+
 export function ProductCard({
   product,
   aiReasons,
@@ -21,8 +91,11 @@ export function ProductCard({
   const basket = useBasket();
   const thumb = product.image_urls[0];
   const displayScore = product.ai_match_score ?? product.core_scores?.score;
+  const chips = product.deepseek_chips ?? (product.core_scores?.verdict_sublabels ?? []);
+  const why = product.deepseek_why;
   const reasons = aiReasons ?? product.ai_match_reasons;
   const isMatch = product.ai_match_score != null;
+  const inBasket = basket.has(product.slug);
 
   return (
     <Pressable
@@ -44,29 +117,26 @@ export function ProductCard({
           <ScoreBadge score={displayScore} product={product} match={isMatch} />
         </View>
       </View>
+
       {product.brand ? (
-        <Text style={styles.brand} numberOfLines={1}>
-          {product.brand.toUpperCase()}
+        <Text style={styles.brand} numberOfLines={1}>{product.brand.toUpperCase()}</Text>
+      ) : null}
+      <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
+
+      {/* Chips — health attribute labels */}
+      {chips.length > 0 && <ChipRow chips={chips} />}
+
+      {/* Scout's one-liner or AI reason */}
+      {(why || reasons?.[0]) ? (
+        <Text style={styles.why} numberOfLines={2}>
+          {why ?? reasons![0]}
         </Text>
       ) : null}
-      <Text style={styles.name} numberOfLines={2}>
-        {product.name}
-      </Text>
-      {product.subcategory ? (
-        <Text style={styles.meta} numberOfLines={1}>
-          {product.subcategory}
-        </Text>
-      ) : null}
-      {reasons?.length ? (
-        <Text style={styles.reason} numberOfLines={2}>
-          {reasons[0]}
-        </Text>
-      ) : null}
+
       {product.ai_match_warning ? (
-        <Text style={styles.warn} numberOfLines={1}>
-          {product.ai_match_warning}
-        </Text>
+        <Text style={styles.warn} numberOfLines={1}>{product.ai_match_warning}</Text>
       ) : null}
+
       <View style={styles.footer}>
         <Text style={styles.price}>{formatPrice(product)}</Text>
         <Pressable
@@ -76,12 +146,12 @@ export function ProductCard({
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             basket.add(product.slug);
           }}
-          style={[styles.addBtn, basket.has(product.slug) && styles.addBtnOn]}
+          style={[styles.addBtn, inBasket && styles.addBtnOn]}
         >
           <Ionicons
-            name={basket.has(product.slug) ? "checkmark" : "add"}
-            size={20}
-            color={basket.has(product.slug) ? colors.good : colors.bg}
+            name={inBasket ? "checkmark" : "add"}
+            size={18}
+            color={inBasket ? colors.good : colors.bg}
           />
         </Pressable>
       </View>
@@ -91,7 +161,7 @@ export function ProductCard({
 
 const styles = StyleSheet.create({
   card: { flex: 1, margin: spacing.xs },
-  pressed: { opacity: 0.92, transform: [{ translateY: 1 }] },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   imageWrap: {
     aspectRatio: 1,
     backgroundColor: colors.bgSoft,
@@ -103,8 +173,8 @@ const styles = StyleSheet.create({
   image: { width: "100%", height: "100%", padding: spacing.sm },
   placeholder: { flex: 1, alignItems: "center", justifyContent: "center" },
   placeholderText: { color: colors.fgDim, fontSize: 12 },
-  topLeft: { position: "absolute", left: 10, top: 10 },
-  topRight: { position: "absolute", right: 8, top: 8 },
+  topLeft: { position: "absolute", left: 8, top: 8 },
+  topRight: { position: "absolute", right: 7, top: 7 },
   brand: {
     fontFamily: fonts.sansMedium,
     fontSize: 10,
@@ -117,25 +187,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.fg,
-    marginTop: 4,
+    marginTop: 3,
   },
-  meta: { fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 12, marginTop: 2 },
-  reason: { fontFamily: fonts.sans, color: colors.accent, fontSize: 12, marginTop: 4 },
-  warn: { fontFamily: fonts.sans, color: colors.warn, fontSize: 11, marginTop: 2 },
+  why: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: colors.fgMuted,
+    lineHeight: 15,
+    marginTop: 5,
+  },
+  warn: { fontFamily: fonts.sans, color: colors.warn, fontSize: 11, marginTop: 3 },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: spacing.sm,
   },
-  price: { fontFamily: fonts.sansBold, fontSize: 16, color: colors.fg },
+  price: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.fg },
   addBtn: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: radius.full,
     backgroundColor: colors.fg,
     alignItems: "center",
     justifyContent: "center",
   },
-  addBtnOn: { backgroundColor: colors.panel2, borderWidth: 1, borderColor: colors.good },
+  addBtnOn: { backgroundColor: "transparent", borderWidth: 1.5, borderColor: colors.good },
 });

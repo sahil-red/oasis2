@@ -1,19 +1,22 @@
-import { ScrollView, Pressable, StyleSheet, Text } from "react-native";
+import { ScrollView, Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
 import { getDayPrompts } from "@/lib/prompts";
 import { colors, fonts, radius, spacing } from "@/theme";
 
 export function PromptChips({
   onSelect,
   prompts,
+  style,
 }: {
   onSelect: (p: string) => void;
   prompts?: string[];
+  style?: ViewStyle;
 }) {
   const list = prompts ?? getDayPrompts();
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={style}
       contentContainerStyle={styles.row}
     >
       {list.map((p) => (

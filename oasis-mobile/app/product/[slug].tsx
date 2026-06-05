@@ -117,6 +117,20 @@ export default function ProductScreen() {
             <Text style={styles.brandEyebrow}>{product.brand.toUpperCase()}</Text>
           ) : null}
           <Text style={styles.name}>{product.name}</Text>
+
+          {/* Chips row */}
+          {product.deepseek_chips?.length || product.core_scores?.verdict_sublabels?.length ? (
+            <ChipsRow chips={product.deepseek_chips ?? product.core_scores?.verdict_sublabels ?? []} />
+          ) : null}
+
+          {/* Scout's one-liner */}
+          {product.deepseek_why ? (
+            <View style={styles.whyBox}>
+              <Text style={styles.whyLabel}>Scout says</Text>
+              <Text style={styles.why}>{product.deepseek_why}</Text>
+            </View>
+          ) : null}
+
           <Text style={styles.price}>{formatPrice(product)}</Text>
           {product.mrp_inr && product.price_inr && product.mrp_inr > product.price_inr ? (
             <Text style={styles.mrp}>MRP ₹{Math.round(product.mrp_inr)}</Text>
@@ -137,7 +151,7 @@ export default function ProductScreen() {
               </Text>
               <Text style={styles.verdictDesc}>
                 {core?.band
-                  ? `${labelForBand(bandFromScore(core.score))} · ${core.grade} grade`
+                  ? `${labelForBand(bandFromScore(core.score))} · Grade ${core.grade}`
                   : "Based on label nutrition and ingredients"}
               </Text>
             </LinearGradient>
@@ -226,6 +240,44 @@ export default function ProductScreen() {
   );
 }
 
+const CHIP_LABELS: Record<string, string> = {
+  high_protein: "High Protein", low_sugar: "Low Sugar", no_added_sugar: "No Added Sugar",
+  high_fiber: "High Fiber", gluten_free: "Gluten Free", vegan: "Vegan",
+  high_sugar: "High Sugar", hidden_sweetener: "Hidden Sweetener",
+  artificial_colors: "Artificial Colours", ultra_processed: "Ultra Processed",
+  contains_preservatives: "Preservatives", high_sodium: "High Sodium",
+};
+const CHIP_GOOD = new Set(["high_protein","low_sugar","no_added_sugar","high_fiber","gluten_free","vegan"]);
+const CHIP_BAD = new Set(["high_sugar","hidden_sweetener","ultra_processed"]);
+
+function ChipsRow({ chips }: { chips: string[] }) {
+  if (!chips.length) return null;
+  return (
+    <View style={chipRowStyles.row}>
+      {chips.slice(0, 6).map((chip) => {
+        const label = CHIP_LABELS[chip] ?? chip.replace(/_/g, " ");
+        const bg = CHIP_GOOD.has(chip)
+          ? "rgba(52,211,153,0.12)" : CHIP_BAD.has(chip)
+          ? "rgba(248,113,113,0.12)" : "rgba(251,191,36,0.12)";
+        const border = CHIP_GOOD.has(chip)
+          ? "rgba(52,211,153,0.4)" : CHIP_BAD.has(chip)
+          ? "rgba(248,113,113,0.35)" : "rgba(251,191,36,0.4)";
+        const text = CHIP_GOOD.has(chip) ? "#34d399" : CHIP_BAD.has(chip) ? "#f87171" : "#fbbf24";
+        return (
+          <View key={chip} style={[chipRowStyles.chip, { backgroundColor: bg, borderColor: border }]}>
+            <Text style={[chipRowStyles.text, { color: text }]}>{label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+const chipRowStyles = StyleSheet.create({
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: spacing.lg, marginTop: spacing.md },
+  chip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  text: { fontFamily: fonts.sansSemiBold, fontSize: 11 },
+});
+
 function NutritionCell({
   label,
   value,
@@ -293,6 +345,30 @@ const styles = StyleSheet.create({
     color: colors.fg,
     paddingHorizontal: spacing.lg,
     marginTop: 4,
+  },
+  whyBox: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: "rgba(41,151,255,0.08)",
+    borderRadius: radius.lg,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
+  },
+  whyLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10,
+    color: colors.accent,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+  why: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.fg,
+    lineHeight: 20,
   },
   price: {
     fontFamily: fonts.sansBold,

@@ -13,22 +13,18 @@ import {
   LandingDodgeList,
   LandingFacts,
   LandingGoalBoards,
-  LandingPickCard,
   LandingStatsStrip,
 } from "@/components/landing/LandingSections";
 import { PromptChips } from "@/components/PromptChips";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
-import { Eyebrow } from "@/components/ui/Typography";
 import { fetchLanding } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
 import { colors, fonts, spacing, typography } from "@/theme";
 import type { LandingInsights } from "@/types/api";
 
 export default function HomeTab() {
   const router = useRouter();
-  const { profile } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [landing, setLanding] = useState<LandingInsights | null>(null);
   const [loadingLanding, setLoadingLanding] = useState(true);
@@ -72,51 +68,45 @@ export default function HomeTab() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
+        showsVerticalScrollIndicator={false}
       >
         <SiteHeader />
 
-        <Eyebrow style={styles.kicker}>Ask Scout</Eyebrow>
-        <Text style={styles.hero}>
-          We read the back label{" "}
-          <Text style={styles.heroAccent}>so you don&apos;t have to</Text>.
-        </Text>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.kicker}>Ask Scout</Text>
+          <Text style={styles.heroText}>
+            We read the back label{"\n"}
+            <Text style={styles.heroAccent}>so you don&apos;t have to</Text>.
+          </Text>
+        </View>
 
+        {/* Search */}
         <View style={styles.searchBlock}>
           <ScoutSearchBar value={prompt} onChangeText={setPrompt} onSubmit={runSearch} />
         </View>
-        <View style={styles.chipsBlock}>
         <PromptChips
+          style={styles.chipsBlock}
           onSelect={(p) => {
             setPrompt(p);
             router.push({ pathname: "/search", params: { q: p } });
           }}
         />
-        </View>
 
-        {profile ? (
-          <Text style={styles.quota}>
-            {profile.plan === "plus"
-              ? "Scout Plus · unlimited AI search"
-              : `${profile.ai_searches_remaining} AI searches left today`}
-          </Text>
-        ) : null}
-
-        {loadingLanding ? (
+        {/* Landing sections */}
+        {loadingLanding && !landing ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
         ) : null}
 
-        {landing?.pickOfDay ? <LandingPickCard landing={landing.pickOfDay} /> : null}
-
         {landing ? (
-          <LandingStatsStrip totalScored={landing.totalScored} avgScore={landing.avgScore} />
+          <>
+            <LandingStatsStrip totalScored={landing.totalScored} avgScore={landing.avgScore} />
+            {landing.facts?.length > 0 && <LandingFacts facts={landing.facts} />}
+            {landing.goalBoards?.length > 0 && <LandingGoalBoards boards={landing.goalBoards} />}
+            {landing.bestInClass?.length > 0 && <LandingBestInClass categories={landing.bestInClass} />}
+            {landing.dodgeList?.length > 0 && <LandingDodgeList items={landing.dodgeList} />}
+          </>
         ) : null}
-
-        {landing?.facts?.length ? <LandingFacts facts={landing.facts} /> : null}
-        {landing?.goalBoards?.length ? <LandingGoalBoards boards={landing.goalBoards} /> : null}
-        {landing?.bestInClass?.length ? (
-          <LandingBestInClass categories={landing.bestInClass} />
-        ) : null}
-        {landing?.dodgeList?.length ? <LandingDodgeList items={landing.dodgeList} /> : null}
       </ScrollView>
     </Screen>
   );
@@ -124,22 +114,24 @@ export default function HomeTab() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xxl * 2 },
-  kicker: { marginTop: spacing.md, paddingHorizontal: spacing.lg },
-  hero: {
+  hero: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
+  kicker: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    letterSpacing: 2.4,
+    textTransform: "uppercase",
+    color: colors.fgDim,
+    marginBottom: spacing.sm,
+  },
+  heroText: {
     ...typography.hero,
     color: colors.fg,
-    marginTop: spacing.sm,
     marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
   },
-  heroAccent: { ...typography.heroAccent, color: colors.accent },
+  heroAccent: {
+    ...typography.heroAccent,
+    color: colors.accent,
+  },
   searchBlock: { paddingHorizontal: spacing.lg },
   chipsBlock: { paddingHorizontal: spacing.lg },
-  quota: {
-    fontFamily: fonts.sans,
-    color: colors.fgMuted,
-    fontSize: 13,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
 });

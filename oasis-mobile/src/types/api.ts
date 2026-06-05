@@ -22,6 +22,8 @@ export type CatalogProduct = {
   mrp_inr: number | null;
   image_urls: string[];
   core_scores: CoreScoreSummary | null;
+  deepseek_chips?: string[];
+  deepseek_why?: string | null;
   ai_match_score?: number;
   ai_match_reasons?: string[];
   ai_match_warning?: string | null;
@@ -58,6 +60,8 @@ export type ProductNutrition = {
 export type ProductDetail = CatalogProduct & {
   ingredients_raw: string | null;
   nutrition: ProductNutrition | null;
+  deepseek_why?: string | null;
+  deepseek_chips?: string[];
   attributes: Record<string, string> | null;
   verdict_resolved: VerdictId | null;
   core_scores: CoreScoreSummary & {
