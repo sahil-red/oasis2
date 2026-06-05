@@ -40,6 +40,7 @@ Schema:
 }
 
 Rules:
+- Candidates are already filtered for product type and hard constraints; only rank and explain within this list.
 - score is 0-100 for how well the product matches what the user asked for (product TYPE and constraints), not just keyword overlap.
 - Prefer the actual product type: jar/tin of ghee beats sweets that contain ghee; soft drinks/sodas beat plain water; Coke Zero beats sugary soda.
 - reasons: 1-3 short phrases shown to the user (e.g. "Zero sugar cola", "Grass-fed on label").

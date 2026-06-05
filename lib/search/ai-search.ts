@@ -78,23 +78,30 @@ export async function runAiProductSearch(
 
   const catalog = await getAiSearchProductPool();
   const candidates = retrieveCandidates(catalog, parsed, 100);
+  const byId = new Map(candidates.map((p) => [p.id, p]));
 
-  const deterministic = rankCandidatesSemantically(candidates, parsed, limit);
+  const semanticCap = Math.min(40, Math.max(limit, limit * 2));
+  const deterministic = rankCandidatesSemantically(candidates, parsed, semanticCap);
+  const rankingsForUi = deterministic.rankings.slice(0, limit);
 
   let summary = deterministic.summary;
-  let rankings = deterministic.rankings;
+  let rankings = rankingsForUi;
   let usage: QueryParseResult["usage"] = null;
   let rankSource: AiSearchResult["rank_source"] = "semantic";
   let rankWarning: string | undefined;
 
-  if (tier === "complex" && process.env.DEEPSEEK_API_KEY) {
-    const llm = await rankCandidatesWithDeepseek(prompt, parsed, candidates, limit);
+  const gatedForLlm = deterministic.rankings
+    .map((r) => byId.get(r.product_id))
+    .filter((p): p is ProductListItem => !!p);
+
+  if (tier === "complex" && process.env.DEEPSEEK_API_KEY && gatedForLlm.length > 0) {
+    const llm = await rankCandidatesWithDeepseek(prompt, parsed, gatedForLlm, limit);
     if (llm.rankings.length > 0) {
       summary = llm.summary;
       usage = llm.usage;
       rankWarning = llm.warning;
       const llmById = new Map(llm.rankings.map((r) => [r.product_id, r]));
-      rankings = deterministic.rankings.map((row) => {
+      rankings = rankingsForUi.map((row) => {
         const polished = llmById.get(row.product_id);
         if (!polished) return row;
         return {
@@ -107,7 +114,6 @@ export async function runAiProductSearch(
     }
   }
 
-  const byId = new Map(candidates.map((p) => [p.id, p]));
   const items: AiSearchItem[] = [];
   for (const row of rankings) {
     const p = byId.get(row.product_id);
