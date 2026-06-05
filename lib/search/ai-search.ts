@@ -1,6 +1,8 @@
 import { mergeUsage } from "@/lib/search/deepseek-client";
 import { retrieveCandidates } from "@/lib/search/ai-retrieval";
 import { rankCandidatesWithDeepseek } from "@/lib/search/ai-rank";
+import { rankCandidatesSemantically } from "@/lib/search/semantic-rank";
+import type { SearchIntentTier } from "@/lib/search/intent-classify";
 import { getAiSearchProductPool, type CatalogGridItem, type ProductListItem } from "@/lib/products/queries";
 import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-parse";
 
@@ -13,7 +15,8 @@ export type AiSearchItem = CatalogGridItem & {
 export type AiSearchResult = {
   parsed: ParsedProductQuery;
   parse_source: QueryParseResult["source"];
-  rank_source: "deepseek" | "fallback";
+  rank_source: "deepseek" | "fallback" | "semantic";
+  intent_tier: SearchIntentTier;
   parse_warning?: string;
   rank_warning?: string;
   summary: string;
@@ -66,42 +69,59 @@ function suggestedRefinements(parsed: ParsedProductQuery): string[] {
 
 export async function runAiProductSearch(
   parseResult: QueryParseResult,
-  opts: { limit?: number; prompt?: string } = {},
+  opts: { limit?: number; prompt?: string; tier?: SearchIntentTier } = {},
 ): Promise<AiSearchResult> {
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const parsed = parseResult.parsed;
   const prompt = opts.prompt?.trim() || parsed.explanation;
+  const tier = opts.tier ?? "structured";
 
   const catalog = await getAiSearchProductPool();
   const candidates = retrieveCandidates(catalog, parsed, 100);
 
-  const rank = await rankCandidatesWithDeepseek(prompt, parsed, candidates, limit);
+  const deterministic = rankCandidatesSemantically(candidates, parsed, limit);
+
+  let summary = deterministic.summary;
+  let rankings = deterministic.rankings;
+  let usage: QueryParseResult["usage"] = null;
+  let rankSource: AiSearchResult["rank_source"] = "semantic";
+  let rankWarning: string | undefined;
+
+  if (tier === "complex" && process.env.DEEPSEEK_API_KEY) {
+    const llm = await rankCandidatesWithDeepseek(prompt, parsed, candidates, limit);
+    if (llm.rankings.length > 0) {
+      summary = llm.summary;
+      rankings = llm.rankings;
+      usage = llm.usage;
+      rankSource = llm.source === "deepseek" ? "deepseek" : "semantic";
+    }
+    rankWarning = llm.warning;
+  }
 
   const byId = new Map(candidates.map((p) => [p.id, p]));
   const items: AiSearchItem[] = [];
-  for (const row of rank.rankings) {
+  for (const row of rankings) {
     const p = byId.get(row.product_id);
     if (!p) continue;
     items.push(toAiGridItem(p, row.score, row.reasons, row.warning ?? null));
   }
 
-  const relaxed = false;
-
   return {
     parsed,
     parse_source: parseResult.source,
-    rank_source: rank.source,
+    rank_source: rankSource,
+    intent_tier: tier,
     parse_warning: parseResult.warning,
-    rank_warning: rank.warning,
-    summary: rank.summary,
+    rank_warning: rankWarning,
+    summary,
     items,
     reasons_by_product_id: Object.fromEntries(
-      rank.rankings.map((r) => [r.product_id, r.reasons]),
+      rankings.map((r) => [r.product_id, r.reasons]),
     ),
-    refinements: suggestedRefinements(parsed),
-    usage: mergeUsage(parseResult.usage, rank.usage),
+    refinements: tier === "complex" ? suggestedRefinements(parsed) : [],
+    usage: mergeUsage(parseResult.usage, usage),
     limit,
     total: candidates.length,
-    relaxed,
+    relaxed: deterministic.relaxed,
   };
 }

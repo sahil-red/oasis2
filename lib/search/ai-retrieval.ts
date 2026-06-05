@@ -1,4 +1,5 @@
 import { isDietCompatible } from "@/lib/diet/match";
+import { relevanceScore } from "@/lib/search/semantic-rank";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
@@ -9,20 +10,6 @@ function nutritionValue(
 ): number | null {
   const v = nutrition?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-
-function haystack(p: ProductListItem): string {
-  return [p.name, p.brand, p.subcategory, p.category, p.net_weight]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function matchesKeyword(hay: string, kw: string): boolean {
-  const k = kw.toLowerCase().trim();
-  if (!k) return false;
-  if (k.includes(" ")) return hay.includes(k);
-  return new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(hay);
 }
 
 /** Objective filters only — nutrition and diet flags we can verify from data. */
@@ -57,37 +44,14 @@ export function passesHardConstraints(p: ProductListItem, parsed: ParsedProductQ
   return true;
 }
 
-function retrievalScore(p: ProductListItem, parsed: ParsedProductQuery): number {
-  const hay = haystack(p);
-  for (const ex of parsed.exclude_keywords) {
-    if (matchesKeyword(hay, ex)) return -1000;
-  }
-
-  const keywords = [
-    ...parsed.search_keywords,
-    ...parsed.product_terms,
-    ...parsed.categories,
-  ];
-  let score = 0;
-  for (const kw of keywords) {
-    if (matchesKeyword(hay, kw)) score += kw.includes(" ") ? 14 : 10;
-    else if (hay.includes(kw.toLowerCase())) score += 3;
-  }
-  if (parsed.product_terms.some((t) => matchesKeyword((p.subcategory ?? "").toLowerCase(), t))) {
-    score += 20;
-  }
-  score += (p.core_scores?.score ?? 0) * 0.08;
-  return score;
-}
-
-/** Pull a bounded candidate set for LLM ranking using parser-provided keywords. */
+/** Pull a bounded candidate set using product-type relevance + hard constraints. */
 export function retrieveCandidates(
   catalog: ProductListItem[],
   parsed: ParsedProductQuery,
   maxCandidates = 100,
 ): ProductListItem[] {
   const scored = catalog
-    .map((p) => ({ p, score: retrievalScore(p, parsed) }))
+    .map((p) => ({ p, score: relevanceScore(p, parsed) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 

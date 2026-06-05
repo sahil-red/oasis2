@@ -5,6 +5,7 @@ import {
 } from "@/lib/search/deepseek-client";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
+import { rankCandidatesSemantically } from "@/lib/search/semantic-rank";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 export type LlmRankedItem = {
@@ -106,7 +107,7 @@ export async function rankCandidatesWithDeepseek(
   }
 
   if (!process.env.DEEPSEEK_API_KEY) {
-    return fallbackRank(parsed, candidates, limit, "DEEPSEEK_API_KEY is missing");
+    return semanticFallbackRank(parsed, candidates, limit, "DEEPSEEK_API_KEY is missing");
   }
 
   const payload = candidates.map(compactCandidate);
@@ -159,38 +160,19 @@ export async function rankCandidatesWithDeepseek(
       source: "deepseek",
     };
   } catch (error) {
-    return fallbackRank(parsed, candidates, limit, (error as Error).message);
+    return semanticFallbackRank(parsed, candidates, limit, (error as Error).message);
   }
 }
 
-function fallbackRank(
+function semanticFallbackRank(
   parsed: ParsedProductQuery,
   candidates: ProductListItem[],
   limit: number,
   warning: string,
 ): LlmRankResult {
-  const keywords = [...parsed.search_keywords, ...parsed.product_terms].map((k) =>
-    k.toLowerCase(),
-  );
-  const rankings = candidates
-    .map((p) => {
-      const hay = [p.name, p.brand, p.subcategory].filter(Boolean).join(" ").toLowerCase();
-      let score = (p.core_scores?.score ?? 40) * 0.5;
-      for (const kw of keywords) {
-        if (hay.includes(kw)) score += 12;
-      }
-      return {
-        product_id: p.id,
-        score: Math.min(100, Math.round(score)),
-        reasons: ["Catalog keyword match"],
-        warning: null as string | null,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-
+  const { rankings, summary, relaxed } = rankCandidatesSemantically(candidates, parsed, limit);
   return {
-    summary: parsed.explanation,
+    summary: relaxed ? summary : parsed.explanation,
     rankings,
     usage: null,
     source: "fallback",

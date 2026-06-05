@@ -178,8 +178,14 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   else if (/low fat|less fat/.test(lower)) parsed.hard_constraints.max_fat_g_100g = 12;
 
   const proteinMin = firstNumberNear(lower, /(?:protein)\D{0,12}(\d{1,3})\s*g/);
+  const namedFood =
+    parsed.product_terms.length > 0 &&
+    !/protein powder|protein bar|whey|supplement/.test(lower);
   if (proteinMin) parsed.hard_constraints.min_protein_g_100g = proteinMin;
-  else if (/high protein|protein rich|gym/.test(lower)) parsed.hard_constraints.min_protein_g_100g = 12;
+  else if (/high protein|protein rich/.test(lower)) {
+    if (namedFood) parsed.sort_intent = "highest_protein";
+    else parsed.hard_constraints.min_protein_g_100g = 12;
+  }
 
   if (/veg|vegetarian/.test(lower)) parsed.hard_constraints.vegetarian = true;
   if (/palm oil/.test(lower)) parsed.hard_constraints.avoid_ingredients = ["palm oil"];
@@ -192,12 +198,40 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/diabetic|diabetes/.test(lower)) parsed.health_contexts.push("diabetic");
   if (/pcos/.test(lower)) parsed.health_contexts.push("pcos");
   if (/kids|children|child/.test(lower)) parsed.health_contexts.push("kids");
-  if (/gym|high protein|protein rich/.test(lower)) parsed.health_contexts.push("gym");
+  if (/gym/.test(lower)) parsed.health_contexts.push("gym");
   if (/fat loss|weight loss|diet/.test(lower)) parsed.health_contexts.push("fat_loss");
   if (/bulk|bulking|weight gain/.test(lower)) parsed.health_contexts.push("bulk");
 
   if (/cheap|cheapest|budget|under|below/.test(lower)) parsed.sort_intent = "cheapest";
-  if (/high protein|protein rich/.test(lower)) parsed.sort_intent = "highest_protein";
+  if (/high protein|protein rich/.test(lower) && parsed.sort_intent !== "highest_protein") {
+    parsed.sort_intent = "highest_protein";
+  }
+
+  if (/no added sugar|without added sugar/.test(lower)) {
+    parsed.hard_constraints.max_sugar_g_100g = 1;
+    parsed.soft_preferences.push("no added sugar");
+  }
+  if (/no preserv|without preserv|preservative.?free/.test(lower)) {
+    parsed.soft_preferences.push("no preservatives");
+    parsed.hard_constraints.avoid_sublabels = [
+      ...(parsed.hard_constraints.avoid_sublabels ?? []),
+      "contains_preservatives",
+    ];
+  }
+  if (/no maida|without maida/.test(lower)) {
+    parsed.hard_constraints.avoid_ingredients = [
+      ...(parsed.hard_constraints.avoid_ingredients ?? []),
+      "maida",
+      "refined wheat flour",
+    ];
+  }
+  if (/no palm oil|without palm oil/.test(lower)) {
+    parsed.hard_constraints.avoid_ingredients = [
+      ...(parsed.hard_constraints.avoid_ingredients ?? []),
+      "palm oil",
+      "palmolein",
+    ];
+  }
   if (/healthy|healthiest|best/.test(lower)) parsed.sort_intent = "healthiest";
 
   parsed.search_keywords = [...new Set(parsed.product_terms)];

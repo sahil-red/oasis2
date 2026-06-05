@@ -106,7 +106,7 @@ async function fetchProductsBatch(
   skus: string[],
 ): Promise<Map<string, ProductRow>> {
   const map = new Map<string, ProductRow>();
-  const chunkSize = 500;
+  const chunkSize = 80;
   for (let i = 0; i < skus.length; i += chunkSize) {
     const chunk = skus.slice(i, i + chunkSize);
     const { data, error } = await supabase

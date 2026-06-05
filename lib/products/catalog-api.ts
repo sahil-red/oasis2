@@ -76,11 +76,15 @@ export function prefetchCatalogSearch(
   void fetchCatalogSearch(params).catch(() => {});
 }
 
-export async function fetchAiCatalogSearch(prompt: string, limit = 24): Promise<AiSearchResult> {
+export async function fetchAiCatalogSearch(
+  prompt: string,
+  limit = 24,
+  tier?: "structured" | "complex",
+): Promise<AiSearchResult> {
   const res = await fetch("/api/search/ai", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, limit }),
+    body: JSON.stringify({ prompt, limit, tier }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: string } | null;

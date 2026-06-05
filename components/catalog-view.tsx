@@ -41,6 +41,7 @@ import {
   type AiSearchPreferences,
   type AiSearchUsage,
 } from "@/lib/search/ai-usage";
+import { classifyIntent } from "@/lib/search/intent-classify";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
@@ -388,6 +389,7 @@ export function CatalogView({
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiParseSource, setAiParseSource] = useState<"deepseek" | "heuristic" | null>(null);
+  const [aiIntentTier, setAiIntentTier] = useState<string | null>(null);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
@@ -637,6 +639,22 @@ export function CatalogView({
     const prompt = (promptOverride ?? aiPrompt).trim();
     if (!prompt) return;
     setLoadError(null);
+
+    const brands = meta?.filters.brands;
+    const intent = classifyIntent(prompt, { brands });
+    setAiIntentTier(intent);
+
+    if (intent === "lexical") {
+      setAiMode(false);
+      setAiSummary(null);
+      setAiWarning(null);
+      setAiRefinements([]);
+      setAiParsed(null);
+      setAiParseSource(null);
+      patch({ q: prompt });
+      return;
+    }
+
     if (!canUseAiSearch()) {
       const usage = readAiSearchUsage();
       setAiUsage(usage);
@@ -654,6 +672,7 @@ export function CatalogView({
       const result = await fetchAiCatalogSearch(
         prefContext ? `${prompt}. ${prefContext}` : prompt,
         CATALOG_PAGE_SIZE,
+        intent === "complex" ? "complex" : "structured",
       );
       if (gen !== fetchGen.current) return;
       setItems(result.items);
@@ -680,7 +699,7 @@ export function CatalogView({
         setLoading(false);
       }
     }
-  }, [aiPrompt, items.length, savedPrefs]);
+  }, [aiPrompt, items.length, savedPrefs, meta?.filters.brands, patch]);
 
   const handleFactAction = useCallback(
     async (fact: LandingFact) => {
