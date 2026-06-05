@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
-import { SearchScoreTabs } from "@/components/search-score-tabs";
+import { SearchScoreStack } from "@/components/search-score-tabs";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
@@ -105,7 +105,7 @@ export const ProductCard = memo(function ProductCard({
 
         {/* score badge, top-right (subtle, not screaming) */}
         {aiMatchScore != null ? (
-          <SearchScoreTabs
+          <SearchScoreStack
             className="absolute right-2 top-2"
             matchScore={aiMatchScore}
             healthScore={aiHealthScore}

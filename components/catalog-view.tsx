@@ -893,7 +893,7 @@ export function CatalogView({
       <div className="relative space-y-3">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
-        <section className="pb-1">
+        <section className={aiMode ? "pb-0" : "pb-1"}>
           <p className="font-display mb-3 text-2xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-3xl">
             Ask Scout
           </p>
@@ -939,8 +939,28 @@ export function CatalogView({
             </div>
           </form>
 
-          {/* Prompt chips — 10 rotating from 50-prompt dataset */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {aiMode && aiParsed ? (
+            <p className="mt-2 text-[12px] text-(--color-fg-muted)">
+              <button
+                type="button"
+                title="Remember diet, health goals, ingredient avoids, and budget from this search for future AI queries on this device"
+                onClick={() => {
+                  const prefs = preferencesFromParsed(aiParsed);
+                  writeAiSearchPreferences(prefs);
+                  setSavedPrefs(prefs);
+                }}
+                className="text-(--color-fg) underline decoration-(--color-line-strong) underline-offset-[3px] transition hover:decoration-(--color-fg-muted)"
+              >
+                Save preferences
+                {hasSavedPreferences(preferencesFromParsed(aiParsed))
+                  ? " from this search"
+                  : ""}
+              </button>
+            </p>
+          ) : null}
+
+          {/* Prompt chips — rotating from 50-prompt dataset */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {examplePrompts.map((example) => (
               <button
                 key={example}
@@ -959,10 +979,10 @@ export function CatalogView({
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
-              <p className="text-[13px] font-medium text-(--color-fg)">{aiSummary}</p>
+            <div className="mt-1.5 space-y-0.5">
+              <p className="text-[13px] leading-snug text-(--color-fg-muted)">{aiSummary}</p>
               {aiIntentTier ? (
-                <p className="w-full text-[10px] text-(--color-fg-dim)">
+                <p className="text-[10px] text-(--color-fg-dim)">
                   {aiIntentTier} search
                   {aiParseSource ? ` · parse ${aiParseSource}` : ""}
                   {aiRankSource ? ` · rank ${aiRankSource}` : ""}
@@ -972,25 +992,8 @@ export function CatalogView({
               {aiWarning ? (
                 <p className="text-[11px] text-(--color-fg-dim)">{aiWarning}</p>
               ) : null}
-              {aiParsed ? (
-                <button
-                  type="button"
-                  title="Remember diet, health goals, ingredient avoids, and budget from this search for future AI queries on this device"
-                  onClick={() => {
-                    const prefs = preferencesFromParsed(aiParsed);
-                    writeAiSearchPreferences(prefs);
-                    setSavedPrefs(prefs);
-                  }}
-                  className="ml-auto rounded-full border border-(--color-line-strong) px-3 py-1 text-[11px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
-                >
-                  Save preferences
-                  {hasSavedPreferences(preferencesFromParsed(aiParsed))
-                    ? " from this search"
-                    : ""}
-                </button>
-              ) : null}
               {aiRefinements.length > 0 ? (
-                <div className="flex w-full flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-0.5">
                   {aiRefinements.map((refinement) => (
                     <button
                       key={refinement}
@@ -1000,7 +1003,7 @@ export function CatalogView({
                         setAiPrompt(next);
                         void runAiSearch(next);
                       }}
-                      className="rounded-full border border-(--color-line) px-2.5 py-0.5 text-[11px] text-(--color-fg-muted) hover:text-(--color-fg)"
+                      className="text-[11px] text-(--color-fg-muted) underline decoration-(--color-line) underline-offset-2 transition hover:text-(--color-fg)"
                     >
                       {refinement}
                     </button>

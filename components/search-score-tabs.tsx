@@ -1,13 +1,9 @@
-"use client";
-
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { catalogTierStyle } from "@/lib/scoring/verdict-display";
 import type { VerdictId } from "@/lib/scoring/verdict";
 
-type TabId = "match" | "health";
-
-export function SearchScoreTabs({
+/** AI search — always show match + health (no tabs). */
+export function SearchScoreStack({
   matchScore,
   healthScore,
   verdict,
@@ -18,83 +14,40 @@ export function SearchScoreTabs({
   verdict?: VerdictId | null;
   className?: string;
 }) {
-  const hasHealth = typeof healthScore === "number" && Number.isFinite(healthScore);
-  const [tab, setTab] = useState<TabId>("match");
-
-  const activeScore = tab === "health" && hasHealth ? healthScore : matchScore;
-  const healthFill =
-    hasHealth && tab === "health"
-      ? catalogTierStyle(healthScore, verdict).fill
-      : null;
+  const health =
+    typeof healthScore === "number" && Number.isFinite(healthScore) ? healthScore : null;
+  const showHealth = health != null;
+  const healthFill = showHealth ? catalogTierStyle(health, verdict).fill : null;
 
   return (
     <div
-      className={cn(
-        "overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel)/95 text-right shadow-sm backdrop-blur-md",
-        className,
-      )}
+      className={cn("flex flex-col items-end gap-1", className)}
+      aria-label={`Match ${Math.round(matchScore)}${showHealth ? `, health ${Math.round(health)}` : ""}`}
     >
-      {hasHealth ? (
+      <div className="rounded-[10px] border border-(--color-line)/80 bg-(--color-panel)/90 px-2 py-1 shadow-sm backdrop-blur-sm">
+        <span className="font-display text-[17px] font-semibold leading-none tabular-nums text-(--color-fg)">
+          {Math.round(matchScore)}
+        </span>
+        <span className="ml-1 text-[9px] font-medium uppercase tracking-wide text-(--color-fg-dim)">
+          match
+        </span>
+      </div>
+      {showHealth && healthFill ? (
         <div
-          className="grid grid-cols-2 border-b border-(--color-line)"
-          role="tablist"
-          aria-label="Score type"
+          className="rounded-[10px] px-2 py-1 shadow-md"
+          style={{ backgroundColor: healthFill }}
         >
-          {(
-            [
-              ["match", "Match"],
-              ["health", "Health"],
-            ] as const
-          ).map(([id, label]) => {
-            const active = tab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setTab(id);
-                }}
-                className={cn(
-                  "px-1.5 py-1 text-[8px] font-semibold uppercase tracking-wide transition-colors",
-                  active
-                    ? "bg-(--color-bg-soft) text-(--color-fg)"
-                    : "text-(--color-fg-dim) hover:text-(--color-fg-muted)",
-                )}
-              >
-                {label}
-              </button>
-            );
-          })}
+          <span className="font-display text-[17px] font-bold leading-none tabular-nums text-white">
+            {Math.round(health)}
+          </span>
+          <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-white/85">
+            health
+          </span>
         </div>
       ) : null}
-      <div className="px-2 py-1">
-        {healthFill && tab === "health" ? (
-          <p
-            className="font-display text-xl font-bold leading-none tabular-nums text-white"
-            style={{
-              backgroundColor: healthFill,
-              borderRadius: 8,
-              padding: "4px 8px",
-              display: "inline-block",
-              minWidth: 36,
-              textAlign: "center",
-            }}
-          >
-            {Math.round(activeScore)}
-          </p>
-        ) : (
-          <p className="font-display text-xl leading-none tabular-nums text-(--color-fg)">
-            {Math.round(activeScore)}
-          </p>
-        )}
-        <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-(--color-fg-dim)">
-          {tab === "health" && hasHealth ? "health" : "match"}
-        </p>
-      </div>
     </div>
   );
 }
+
+/** @deprecated Use SearchScoreStack */
+export const SearchScoreTabs = SearchScoreStack;
