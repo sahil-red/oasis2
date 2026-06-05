@@ -127,6 +127,9 @@ export function catalogSnapshotForHref(currentHref: string): CatalogSearchSnapsh
 }
 
 export function isCatalogResultsView(snap: CatalogSearchSnapshot): boolean {
+  // A "results view" is one where the user actively did something — ran an AI search,
+  // applied a filter, or typed a query. Items alone don't count: the default catalog
+  // always has items, and restoring that over ScoutLanding is the wrong behaviour.
   return (
     snap.aiMode ||
     snap.factBrowse != null ||
@@ -143,7 +146,6 @@ export function isCatalogResultsView(snap: CatalogSearchSnapshot): boolean {
     Boolean(snap.state.grade) ||
     Boolean(snap.state.sublabel) ||
     Boolean(snap.state.verdict) ||
-    snap.state.sort !== "score-desc" ||
-    snap.items.length > 0
+    snap.state.sort !== "score-desc"
   );
 }
