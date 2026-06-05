@@ -1,6 +1,8 @@
 import rulesJson from "@/data/ingredient-rules.json";
+import { expandIngredientsForDisplay } from "@/lib/ingredients/expand-for-display";
 import type { AdditiveTier } from "@/lib/utils";
 import type { IngredientRule } from "@/lib/scoring/rules";
+import { normalizeIngredientName } from "@/lib/scoring/normalize-ingredient-name";
 
 const RULES: IngredientRule[] = (rulesJson as { rules: IngredientRule[] }).rules;
 
@@ -110,20 +112,24 @@ const RISK_ORDER: Record<IngredientRisk, number> = {
   "risk-free": 4,
 };
 
+function dedupeKey(token: string, percent: string | null, eNumber: string | null): string {
+  const base = normalizeIngredientName(token);
+  return [base, percent ?? "", eNumber ?? ""].join("|");
+}
+
 export function parseIngredientsForDisplay(raw: string | null): ParsedIngredient[] {
   if (!raw?.trim()) return [];
 
-  const tokens = splitIngredientList(raw);
+  const tokens = expandIngredientsForDisplay(raw);
   const seen = new Set<string>();
-
   const items: ParsedIngredient[] = [];
 
   for (const token of tokens) {
-    const key = token.toLowerCase().replace(/\s+/g, " ");
+    const { name, eNumber, percent } = extractMeta(token);
+    const key = dedupeKey(name, percent, eNumber);
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const { name, eNumber, percent } = extractMeta(token);
     const { risk, why } = classifyToken(token);
     const flagged = risk !== "risk-free" && risk !== "unknown";
 

@@ -7,7 +7,7 @@ import { fonts, radius, spacing } from "@/theme";
 import type { IngredientItem } from "@/types/api";
 import { dotRiskForItem, isProbiotic, riskColors } from "./ingredient-colors";
 
-const INITIAL = 12;
+const INITIAL = 20;
 
 function IngredientRow({ item }: { item: IngredientItem }) {
   const { colors } = useTheme();

@@ -27,7 +27,7 @@ const RISK_TEXT: Record<IngredientRisk, string> = {
   hazardous: "text-[#f87171]",
 };
 
-const INITIAL_INGREDIENT_COUNT = 10;
+const INITIAL_INGREDIENT_COUNT = 20;
 
 function dotRiskForItem(item: IngredientDisplayItem): IngredientRisk {
   if (item.tierLabel === "Probiotic" || item.tierLabel.startsWith("Probiotic")) return "risk-free";
@@ -150,8 +150,8 @@ export function IngredientPanel({
       {/* ── ingredient list ── */}
       <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
         <ul>
-          {visibleItems.map((item) => (
-            <IngredientRow key={item.key} item={item} />
+          {visibleItems.map((item, i) => (
+            <IngredientRow key={`${item.display}-${item.percent ?? ""}-${i}`} item={item} />
           ))}
         </ul>
         {hiddenCount > 0 ? (

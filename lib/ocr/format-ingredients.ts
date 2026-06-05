@@ -81,7 +81,7 @@ function formatBracketedContent(inner: string): string {
     .trim();
 }
 
-function formatSegment(segment: string): string {
+export function formatSegment(segment: string): string {
   let s = repairIngredientFragment(segment);
   if (!s) return "";
   s = s.replace(/\s+/g, " ");

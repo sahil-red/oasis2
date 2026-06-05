@@ -197,8 +197,9 @@ export function parseIngredientsForDisplayWithIntelligence(
     const next = row
       ? fromIntelligence(item.key, row, item)
       : { ...item, source: "rules" as const };
-    if (seen.has(next.key)) continue;
-    seen.add(next.key);
+    const dedupe = `${next.display}|${next.percent ?? ""}|${next.eNumber ?? ""}`;
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
     items.push(next);
   }
 
