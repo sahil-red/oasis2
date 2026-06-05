@@ -28,6 +28,7 @@ import {
   deepseekLabelFromPayload,
 } from "@/lib/ocr/deepseek-promote";
 import { loadIngredientIntelligenceForDisplay } from "@/lib/ingredients/load-intelligence";
+import { resolveZeptoBuyUrl } from "@/lib/products/zepto-product-url";
 import { findAlternatives, findSimilarProducts } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
@@ -80,6 +81,7 @@ export default async function ProductPage({
   if (!product) notFound();
 
   const price = displayPriceInr(product);
+  const zeptoBuyUrl = resolveZeptoBuyUrl(product);
 
   const displayNutrition = reconcileNutrition({
     nutrition: product.nutrition,
@@ -199,7 +201,11 @@ export default async function ProductPage({
                 ) : null}
               </p>
             ) : null}
-            <ProductGoalToolbar slug={product.slug} name={product.name} />
+            <ProductGoalToolbar
+              slug={product.slug}
+              name={product.name}
+              zeptoBuyUrl={zeptoBuyUrl}
+            />
 
             {verdict ? (
               <div className="mt-5">
