@@ -21,7 +21,7 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="product/[slug]" options={{ presentation: "card" }} />
-              <Stack.Screen name="search" options={{ presentation: "modal" }} />
+              <Stack.Screen name="search" options={{ presentation: "card" }} />
               <Stack.Screen name="subscribe" options={{ presentation: "modal" }} />
             </Stack>
           </BasketProvider>
