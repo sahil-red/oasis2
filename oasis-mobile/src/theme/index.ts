@@ -1,4 +1,4 @@
-/** Scout mobile — warm dark palette aligned with web dark mode. */
+/** Scout mobile — matches web dark mode tokens (globals.css html.dark). */
 export const colors = {
   bg: "#0a0a0b",
   bgSoft: "#141416",
@@ -9,8 +9,8 @@ export const colors = {
   fg: "#f5f5f7",
   fgMuted: "#a1a1a6",
   fgDim: "#86868b",
-  accent: "#e8a54b",
-  accentSoft: "rgba(232, 165, 75, 0.15)",
+  accent: "#2997ff",
+  accentSoft: "rgba(41, 151, 255, 0.18)",
   good: "#34d399",
   warn: "#fbbf24",
   bad: "#f87171",
@@ -26,20 +26,72 @@ export const spacing = {
   md: 16,
   lg: 24,
   xl: 32,
+  xxl: 48,
 } as const;
 
 export const radius = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
+  xl: 20,
+  xxl: 24,
   full: 999,
 } as const;
 
+export const fonts = {
+  sans: "Inter_400Regular",
+  sansMedium: "Inter_500Medium",
+  sansSemiBold: "Inter_600SemiBold",
+  sansBold: "Inter_700Bold",
+  display: "InstrumentSerif_400Regular",
+  displayItalic: "InstrumentSerif_400Regular_Italic",
+} as const;
+
 export const typography = {
-  hero: { fontSize: 32, fontWeight: "700" as const, letterSpacing: -0.5 },
-  title: { fontSize: 22, fontWeight: "600" as const, letterSpacing: -0.3 },
-  body: { fontSize: 16, fontWeight: "400" as const, lineHeight: 24 },
-  caption: { fontSize: 13, fontWeight: "500" as const },
-  micro: { fontSize: 11, fontWeight: "600" as const, letterSpacing: 0.3 },
+  eyebrow: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    letterSpacing: 2.4,
+    textTransform: "uppercase" as const,
+  },
+  hero: {
+    fontFamily: fonts.display,
+    fontSize: 40,
+    lineHeight: 44,
+    letterSpacing: -0.8,
+  },
+  heroAccent: {
+    fontFamily: fonts.displayItalic,
+    fontStyle: "italic" as const,
+  },
+  sectionTitle: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.4,
+  },
+  title: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  body: {
+    fontFamily: fonts.sans,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  caption: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+  },
+  micro: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  score: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    letterSpacing: -0.3,
+  },
 };

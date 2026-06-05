@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { colors } from "@/theme";
+import { useBasket } from "@/lib/basket";
+import { colors, fonts } from "@/theme";
 
 export default function TabLayout() {
+  const basket = useBasket();
+
   return (
     <Tabs
       screenOptions={{
@@ -10,8 +13,14 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.panel,
           borderTopColor: colors.line,
-          height: 56,
-          paddingBottom: 6,
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontFamily: fonts.sansMedium,
+          fontSize: 11,
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.fgDim,
@@ -35,6 +44,7 @@ export default function TabLayout() {
         name="basket"
         options={{
           title: "Basket",
+          tabBarBadge: basket.count > 0 ? basket.count : undefined,
           tabBarIcon: ({ color, size }) => <Ionicons name="basket" size={size} color={color} />,
         }}
       />

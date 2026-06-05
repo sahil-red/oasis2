@@ -1,41 +1,62 @@
 import { StyleSheet, Text, View } from "react-native";
+import { catalogTierFill } from "@/lib/score";
+import { resolveVerdict } from "@/lib/verdict";
 import { colors, radius, typography } from "@/theme";
+import type { CatalogProduct, VerdictId } from "@/types/api";
 
 export function ScoreBadge({
   score,
+  product,
   label,
+  match,
 }: {
   score?: number | null;
+  product?: CatalogProduct;
   label?: string;
+  match?: boolean;
 }) {
   if (score == null) return null;
-  const band =
-    score >= 76 ? colors.scoreExcellent : score >= 51 ? colors.scoreGood : score >= 26 ? colors.scorePoor : colors.scoreBad;
+  const verdict = product
+    ? ((product as { verdict_resolved?: VerdictId | null }).verdict_resolved ?? resolveVerdict(product))
+    : null;
+  const fill = catalogTierFill(score, verdict);
+
   return (
-    <View style={[styles.badge, { borderColor: band }]}>
-      <Text style={[styles.score, { color: band }]}>{Math.round(score)}</Text>
-      <Text style={styles.label}>{label ?? "MATCH"}</Text>
+    <View style={[styles.badge, { backgroundColor: fill }]}>
+      <Text style={styles.score}>{Math.round(score)}</Text>
+      {label || match ? (
+        <Text style={styles.label}>{match ? "match" : label}</Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
+    minWidth: 48,
+    minHeight: 48,
+    borderRadius: 10,
     alignItems: "center",
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    justifyContent: "center",
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    minWidth: 44,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
   score: {
-    fontSize: 15,
-    fontWeight: "700",
+    ...typography.score,
+    color: "#fff",
+    fontSize: 22,
+    lineHeight: 24,
   },
   label: {
-    ...typography.micro,
-    color: colors.fgDim,
     fontSize: 8,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
 });

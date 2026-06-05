@@ -84,3 +84,11 @@ export function createSubscription(token: string): Promise<SubscriptionCheckout>
     token,
   });
 }
+
+export function fetchSwaps(slugs: string[], goal = "balanced"): Promise<import("@/types/api").SwapsResponse> {
+  if (!slugs.length) {
+    return Promise.resolve({ goal, swaps: {} });
+  }
+  const q = `slugs=${slugs.map(encodeURIComponent).join(",")}&goal=${encodeURIComponent(goal)}`;
+  return apiFetch(`/api/swaps?${q}`);
+}

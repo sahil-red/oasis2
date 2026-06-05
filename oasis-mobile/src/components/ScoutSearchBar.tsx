@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, fonts, radius, spacing, typography } from "@/theme";
 
 export function ScoutSearchBar({
   value,
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.panel,
-    borderRadius: radius.xl,
+    borderRadius: radius.xxl,
     borderWidth: 1,
     borderColor: colors.line,
     paddingLeft: spacing.md,
@@ -67,17 +67,18 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   wrapFocused: {
-    borderColor: colors.accent,
+    borderColor: colors.lineStrong,
   },
   icon: { marginRight: spacing.sm },
   input: {
     flex: 1,
-    ...typography.body,
+    fontFamily: fonts.sans,
+    fontSize: typography.body.fontSize,
     color: colors.fg,
     paddingVertical: spacing.sm,
   },
   btn: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.fg,
     borderRadius: radius.lg,
     width: 44,
     height: 44,

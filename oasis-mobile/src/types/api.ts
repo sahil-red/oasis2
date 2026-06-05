@@ -77,27 +77,91 @@ export type AiSearchResult = {
   refinements: string[];
 };
 
+export type LandingPick = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number | null;
+  grade?: string | null;
+  verdict?: string | null;
+  price: number | null;
+  meta?: string | null;
+};
+
+export type LandingFactAction =
+  | { type: "expose"; slugs: string[] }
+  | { type: "catalog"; sublabel?: string; verdict?: string; sort?: string }
+  | { type: "ai_search"; prompt: string };
+
+export type LandingFact = {
+  stat: string;
+  headline: string;
+  tone: "bad" | "good" | "neutral";
+  action: LandingFactAction;
+  cta: string;
+};
+
+export type LandingGoalBoard = {
+  goal: string;
+  label: string;
+  tagline: string;
+  picks: LandingPick[];
+};
+
+export type LandingBestInClassProduct = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number;
+  grade: string | null;
+  protein: number | null;
+  sugar: number | null;
+};
+
+export type LandingBestInClassCategory = {
+  label: string;
+  href: string;
+  avgScore: number;
+  skipPct: number;
+  products: LandingBestInClassProduct[];
+};
+
+export type LandingDodgeProduct = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  score: number;
+  claim: string;
+  reality: string;
+};
+
 export type LandingInsights = {
   totalScored: number;
   avgScore: number;
-  facts: Array<{
-    stat: string;
-    headline: string;
-    tone: string;
-    cta: string;
-    action: { type: string; prompt?: string; slugs?: string[] };
-  }>;
-  pickOfDay: {
-    pick: {
-      slug: string;
-      name: string;
-      brand: string | null;
-      image: string | null;
-      score: number | null;
-      price: number | null;
-    };
-    reasons: string[];
-  } | null;
+  facts: LandingFact[];
+  pickOfDay: { pick: LandingPick; reasons: string[] } | null;
+  goalBoards: LandingGoalBoard[];
+  bestInClass: LandingBestInClassCategory[];
+  dodgeList: LandingDodgeProduct[];
+};
+
+export type SwapSuggestion = {
+  slug: string;
+  name: string;
+  brand: string | null;
+  image_urls: string[];
+  price_inr: number | null;
+  core_scores: CoreScoreSummary | null;
+  delta_score: number;
+  reason: string;
+};
+
+export type SwapsResponse = {
+  goal: string;
+  swaps: Record<string, SwapSuggestion[]>;
 };
 
 export type UserProfile = {

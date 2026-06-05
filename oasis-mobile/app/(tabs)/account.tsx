@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Panel } from "@/components/ui/Panel";
+import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 import { useAuth } from "@/lib/auth";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, fonts, radius, spacing } from "@/theme";
 
 export default function AccountTab() {
   const router = useRouter();
@@ -11,9 +14,12 @@ export default function AccountTab() {
 
   return (
     <Screen>
-      <View style={styles.content}>
-        <Text style={styles.title}>Account</Text>
-        <View style={styles.card}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <SiteHeader />
+        <Eyebrow style={styles.eyebrow}>Your account</Eyebrow>
+        <SectionTitle style={styles.title}>Settings</SectionTitle>
+
+        <Panel style={styles.card}>
           <Text style={styles.label}>Plan</Text>
           <Text style={styles.value}>
             {profile?.plan === "plus" ? "Scout Plus" : "Free"}
@@ -23,20 +29,22 @@ export default function AccountTab() {
               {profile?.ai_searches_remaining ?? 0} of {profile?.ai_searches_limit ?? 5} AI searches
               today
             </Text>
-          ) : null}
-        </View>
+          ) : (
+            <Text style={styles.hint}>Unlimited AI search · ₹199/mo</Text>
+          )}
+        </Panel>
 
         {profile?.email ? (
-          <View style={styles.card}>
+          <Panel style={styles.card}>
             <Text style={styles.label}>Email</Text>
             <Text style={styles.value}>{profile.email}</Text>
-          </View>
+          </Panel>
         ) : null}
         {profile?.phone ? (
-          <View style={styles.card}>
+          <Panel style={styles.card}>
             <Text style={styles.label}>Phone</Text>
             <Text style={styles.value}>{profile.phone}</Text>
-          </View>
+          </Panel>
         ) : null}
 
         {profile?.plan !== "plus" ? (
@@ -54,43 +62,39 @@ export default function AccountTab() {
         <Pressable style={styles.row} onPress={() => void signOut()}>
           <Text style={[styles.rowText, { color: colors.bad }]}>Sign out</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, padding: spacing.lg },
-  title: { ...typography.title, color: colors.fg, marginBottom: spacing.lg },
-  card: {
-    backgroundColor: colors.panel,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  label: { ...typography.micro, color: colors.fgDim },
-  value: { fontSize: 18, fontWeight: "600", color: colors.fg, marginTop: 4 },
-  hint: { color: colors.fgMuted, fontSize: 13, marginTop: 6 },
+  scroll: { paddingBottom: spacing.xxl },
+  eyebrow: { paddingHorizontal: spacing.lg, marginTop: spacing.sm },
+  title: { fontSize: 26, paddingHorizontal: spacing.lg, marginTop: 4, marginBottom: spacing.md },
+  card: { marginHorizontal: spacing.lg, marginBottom: spacing.md },
+  label: { fontFamily: fonts.sansMedium, fontSize: 10, letterSpacing: 1, color: colors.fgDim, textTransform: "uppercase" },
+  value: { fontFamily: fonts.sansSemiBold, fontSize: 18, color: colors.fg, marginTop: 4 },
+  hint: { fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 13, marginTop: 6 },
   primary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: colors.accent,
-    borderRadius: radius.lg,
+    backgroundColor: colors.fg,
+    borderRadius: radius.xl,
     paddingVertical: 16,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
-  primaryText: { color: colors.bg, fontSize: 16, fontWeight: "700" },
+  primaryText: { fontFamily: fonts.sansBold, color: colors.bg, fontSize: 16 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 16,
+    marginHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  rowText: { color: colors.fg, fontSize: 16 },
+  rowText: { fontFamily: fonts.sans, color: colors.fg, fontSize: 16 },
 });

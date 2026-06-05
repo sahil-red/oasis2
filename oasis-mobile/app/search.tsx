@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,9 +13,10 @@ import {
 import { ProductCard } from "@/components/ProductCard";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
+import { Panel } from "@/components/ui/Panel";
 import { fetchAiSearch } from "@/lib/api";
 import { useAccessToken } from "@/lib/auth";
-import { colors, spacing, typography } from "@/theme";
+import { colors, fonts, radius, spacing, typography } from "@/theme";
 import type { AiSearchResult, CatalogProduct } from "@/types/api";
 
 export default function SearchScreen() {
@@ -35,6 +37,7 @@ export default function SearchScreen() {
       try {
         const data = await fetchAiSearch(trimmed, token, 24);
         setResult(data);
+        setPrompt(trimmed);
       } catch (e) {
         const err = e as Error & { code?: string; status?: number };
         if (err.code === "quota_exceeded" || err.status === 402) {
@@ -54,8 +57,8 @@ export default function SearchScreen() {
     if (params.q && params.q.length >= 2) void run(params.q);
   }, [params.q, run]);
 
-  return (
-    <Screen>
+  const ListHeader = (
+    <>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="close" size={28} color={colors.fg} />
@@ -81,30 +84,52 @@ export default function SearchScreen() {
       ) : null}
 
       {error ? (
-        <View style={styles.errorBox}>
+        <Panel style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
           {error.includes("Upgrade") ? (
             <Pressable style={styles.upgradeBtn} onPress={() => router.push("/subscribe")}>
               <Text style={styles.upgradeBtnText}>Get Scout Plus</Text>
             </Pressable>
           ) : null}
-        </View>
+        </Panel>
       ) : null}
 
       {result ? (
-        <>
+        <Panel style={styles.summaryPanel}>
           <Text style={styles.summary}>{result.summary}</Text>
-          <FlatList
-            data={result.items}
-            keyExtractor={(p: CatalogProduct) => p.id}
-            numColumns={2}
-            contentContainerStyle={styles.grid}
-            renderItem={({ item }) => (
-              <ProductCard product={item} aiReasons={item.ai_match_reasons} />
-            )}
-          />
-        </>
+          {result.relaxed ? (
+            <Text style={styles.relaxed}>Showing closest matches — criteria relaxed slightly.</Text>
+          ) : null}
+          {result.refinements?.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.refineRow}>
+              {result.refinements.map((r) => (
+                <Pressable key={r} style={styles.refineChip} onPress={() => void run(r)}>
+                  <Text style={styles.refineText}>{r}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+        </Panel>
       ) : null}
+    </>
+  );
+
+  return (
+    <Screen>
+      {result ? (
+        <FlatList
+          data={result.items}
+          keyExtractor={(p: CatalogProduct) => p.id}
+          numColumns={2}
+          ListHeaderComponent={ListHeader}
+          contentContainerStyle={styles.grid}
+          renderItem={({ item }) => (
+            <ProductCard product={item} aiReasons={item.ai_match_reasons} />
+          )}
+        />
+      ) : (
+        <View style={{ flex: 1 }}>{ListHeader}</View>
+      )}
     </Screen>
   );
 }
@@ -119,18 +144,37 @@ const styles = StyleSheet.create({
   },
   headerTitle: { ...typography.title, fontSize: 18, color: colors.fg },
   searchWrap: { paddingHorizontal: spacing.lg },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl },
-  loadingText: { color: colors.fgMuted, marginTop: spacing.md, textAlign: "center" },
-  errorBox: { margin: spacing.lg, padding: spacing.md, backgroundColor: colors.panel, borderRadius: 12 },
-  errorText: { color: colors.bad, fontSize: 15 },
+  center: { padding: spacing.xl, alignItems: "center" },
+  loadingText: {
+    fontFamily: fonts.sans,
+    color: colors.fgMuted,
+    marginTop: spacing.md,
+    textAlign: "center",
+    fontSize: 14,
+  },
+  errorBox: { margin: spacing.lg },
+  errorText: { fontFamily: fonts.sans, color: colors.bad, fontSize: 15 },
   upgradeBtn: {
     marginTop: spacing.md,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.fg,
     padding: 12,
-    borderRadius: 10,
+    borderRadius: radius.lg,
     alignItems: "center",
   },
-  upgradeBtnText: { color: colors.bg, fontWeight: "700" },
-  summary: { color: colors.fgMuted, paddingHorizontal: spacing.lg, marginBottom: spacing.sm, fontSize: 14 },
+  upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg },
+  summaryPanel: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
+  summary: { fontFamily: fonts.sans, color: colors.fg, fontSize: 15, lineHeight: 22 },
+  relaxed: { fontFamily: fonts.sans, color: colors.fgDim, fontSize: 12, marginTop: spacing.sm },
+  refineRow: { marginTop: spacing.md, maxHeight: 40 },
+  refineChip: {
+    marginRight: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bgSoft,
+  },
+  refineText: { fontFamily: fonts.sansMedium, color: colors.fg, fontSize: 13 },
   grid: { padding: spacing.sm, paddingBottom: spacing.xl },
 });

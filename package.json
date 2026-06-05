@@ -45,7 +45,7 @@
     "score:v9:diff": "tsx scripts/score-v9-diff.ts",
     "lm:status": "tsx scripts/lm-run-status.ts",
     "mobile:env": "tsx scripts/sync-mobile-env.ts",
-    "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm start"
+    "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:tunnel"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
