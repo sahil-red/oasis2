@@ -3,8 +3,13 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/lib/search/*": ["../lib/search/*"],
+      "@/lib/diet/*": ["../lib/diet/*"],
+      "@/lib/goals/*": ["../lib/goals/*"],
+      "@/lib/products/*": ["../lib/products/*"],
+      "@/lib/scoring/*": ["../lib/scoring/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": ["app/**/*.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

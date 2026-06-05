@@ -39,7 +39,7 @@ export function Skeleton({ width = "100%", height = 16, borderRadius = radius.md
     <View
       style={[
         styles.base,
-        { width, height, borderRadius, backgroundColor: colors.bgSoft, overflow: "hidden" },
+        { width: width as number, height, borderRadius, backgroundColor: colors.bgSoft, overflow: "hidden" },
         style,
       ]}
     >

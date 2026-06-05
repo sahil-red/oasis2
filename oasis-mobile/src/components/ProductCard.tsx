@@ -78,6 +78,18 @@ const chipStyles = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 },
   chip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
   chipText: { fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 0.2 },
+  // Search reason chips — subtler, neutral
+  reasonChip: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255,255,255,0.12)",
+    maxWidth: 140,
+  },
+  reasonText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: colors.fgMuted,
+    letterSpacing: 0.1,
+  },
 });
 
 export function ProductCard({
@@ -91,11 +103,20 @@ export function ProductCard({
   const basket = useBasket();
   const thumb = product.image_urls[0];
   const displayScore = product.ai_match_score ?? product.core_scores?.score;
-  const chips = product.deepseek_chips ?? (product.core_scores?.verdict_sublabels ?? []);
+  const attributeChips = product.deepseek_chips ?? (product.core_scores?.verdict_sublabels ?? []);
   const why = product.deepseek_why;
-  const reasons = aiReasons ?? product.ai_match_reasons;
+  const reasons = aiReasons ?? product.ai_match_reasons ?? [];
   const isMatch = product.ai_match_score != null;
   const inBasket = basket.has(product.slug);
+
+  // Show product attribute chips first (colored by health tone),
+  // then search-match reasons as neutral chips — up to 4 total.
+  // Filter out generic reasons that add no value.
+  const searchReasonChips = reasons
+    .filter((r) => !/^(Scout score|Closest|Matches your|catalog keyword)/i.test(r))
+    .slice(0, 2);
+  const attrChipsToShow = attributeChips.slice(0, Math.max(0, 3 - searchReasonChips.length));
+  const allChips = attrChipsToShow.length + searchReasonChips.length > 0;
 
   return (
     <Pressable
@@ -123,18 +144,32 @@ export function ProductCard({
       ) : null}
       <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
 
-      {/* Chips — health attribute labels */}
-      {chips.length > 0 && <ChipRow chips={chips} />}
+      {/* Combined chip row: product health attributes + search match reasons */}
+      {allChips ? (
+        <View style={chipStyles.row}>
+          {/* Attribute chips — colored by health tone */}
+          {attrChipsToShow.map((chip) => {
+            const label = CHIP_LABELS[chip] ?? chip.replace(/_/g, " ");
+            const tone = CHIP_TONE[chip] ?? "neutral";
+            const c = TONE_COLORS[tone];
+            return (
+              <View key={chip} style={[chipStyles.chip, { backgroundColor: c.bg, borderColor: c.border }]}>
+                <Text style={[chipStyles.chipText, { color: c.text }]}>{label}</Text>
+              </View>
+            );
+          })}
+          {/* Search reason chips — neutral style */}
+          {searchReasonChips.map((reason) => (
+            <View key={reason} style={[chipStyles.chip, chipStyles.reasonChip]}>
+              <Text style={chipStyles.reasonText} numberOfLines={1}>{reason}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
-      {/* Scout's one-liner or AI reason */}
-      {reasons?.length ? (
-        <Text style={styles.why} numberOfLines={2}>
-          {reasons.slice(0, 3).join(" · ")}
-        </Text>
-      ) : why ? (
-        <Text style={styles.why} numberOfLines={2}>
-          {why}
-        </Text>
+      {/* DeepSeek one-liner — only shown when there are no reasons and no chips */}
+      {!allChips && !reasons.length && why ? (
+        <Text style={styles.why} numberOfLines={2}>{why}</Text>
       ) : null}
 
       {product.ai_match_warning ? (
