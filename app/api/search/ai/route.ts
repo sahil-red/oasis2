@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const limit = typeof body?.limit === "number" ? body.limit : undefined;
   const parsed = await parseProductQueryWithDeepseek(prompt);
-  const result = await runAiProductSearch(parsed, { limit });
+  const result = await runAiProductSearch(parsed, { limit, prompt });
 
   return NextResponse.json(result, {
     headers: {

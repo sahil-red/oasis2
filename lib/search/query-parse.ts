@@ -1,13 +1,4 @@
-import { Agent, fetch as undiciFetch } from "undici";
-
-const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
-
-const dispatcher = new Agent({
-  connect: { rejectUnauthorized: false, timeout: 20_000 },
-  bodyTimeout: 120_000,
-  headersTimeout: 60_000,
-});
+import { deepseekChat, extractJsonObject, type DeepseekUsage } from "@/lib/search/deepseek-client";
 
 export type ParsedHealthContext =
   | "diabetic"
@@ -25,6 +16,10 @@ export type ParsedSortIntent =
 
 export type ParsedProductQuery = {
   product_terms: string[];
+  /** Synonyms and related product names for catalog retrieval (e.g. coke zero, diet coke, sprite zero). */
+  search_keywords: string[];
+  /** Product types to deprioritize or exclude (e.g. water, laddu, biscuit when user wants ghee). */
+  exclude_keywords: string[];
   categories: string[];
   hard_constraints: {
     max_price?: number;
@@ -45,11 +40,7 @@ export type ParsedProductQuery = {
 export type QueryParseResult = {
   parsed: ParsedProductQuery;
   source: "deepseek" | "heuristic";
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  } | null;
+  usage?: DeepseekUsage | null;
   warning?: string;
 };
 
@@ -83,6 +74,8 @@ Return exactly one JSON object and no markdown.
 Schema:
 {
   "product_terms": string[],
+  "search_keywords": string[],
+  "exclude_keywords": string[],
   "categories": string[],
   "hard_constraints": {
     "max_price"?: number,
@@ -101,8 +94,10 @@ Schema:
 }
 
 Rules:
-- product_terms are concrete food/product words from the user: milk, biscuits, paneer, chips, cereal, protein bar, curd, bread, dal, ghee.
-- categories are broad aisle/shelf hints only when obvious: snacks, dairy, breakfast, bakery, sweets, sauces.
+- product_terms are the primary product type the user wants (1-3 words): ghee, soft drink, paneer, biscuits.
+- search_keywords are 8-20 retrieval terms to find matching SKUs in an Indian grocery catalog — include brand names, variants, and synonyms. Example for "zero sugar soft drinks": ["coke zero", "diet coke", "pepsi zero", "sprite zero", "7up zero", "soft drink", "soda", "cola", "carbonated", "zero sugar drink"]. Example for "grass fed ghee": ["ghee", "cow ghee", "a2 ghee", "bilona", "desi ghee", "grass fed"].
+- exclude_keywords are product types that would be wrong matches (2-8 words). Example for ghee: ["laddu", "ladoo", "barfi", "mithai", "biscuit", "snack"]. Example for soft drinks: ["water", "mineral water", "drinking water", "aquafina", "bisleri"].
+- categories are broad aisle/shelf hints only when obvious: snacks, dairy, breakfast, bakery, sweets, beverages.
 - Use hard constraints only when the user asks for a limit or strict requirement.
 - "low sugar" means max_sugar_g_100g = 10 unless a numeric limit is given.
 - "no sugar" or "zero sugar" means max_sugar_g_100g = 1.
@@ -132,12 +127,15 @@ const NON_PRODUCT_TERMS = new Set([
 ]);
 
 function emptyParsed(prompt: string): ParsedProductQuery {
-  return {
-    product_terms: prompt
-      .toLowerCase()
-      .split(/[^a-z0-9]+/i)
+  const terms = prompt
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
     .filter((w) => w.length >= 3 && !NON_PRODUCT_TERMS.has(w))
-      .slice(0, 4),
+    .slice(0, 4);
+  return {
+    product_terms: terms,
+    search_keywords: terms,
+    exclude_keywords: [],
     categories: [],
     hard_constraints: {},
     soft_preferences: [],
@@ -202,6 +200,35 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/high protein|protein rich/.test(lower)) parsed.sort_intent = "highest_protein";
   if (/healthy|healthiest|best/.test(lower)) parsed.sort_intent = "healthiest";
 
+  parsed.search_keywords = [...new Set(parsed.product_terms)];
+  if (/zero sugar|no sugar/.test(lower) && /soft|soda|drink|cola|beverage/.test(lower)) {
+    parsed.search_keywords.push(
+      "coke zero",
+      "diet coke",
+      "pepsi zero",
+      "sprite zero",
+      "7up zero",
+      "soft drink",
+      "soda",
+      "cola",
+      "zero sugar",
+    );
+    parsed.exclude_keywords = ["water", "mineral water", "drinking water", "aquafina", "bisleri"];
+  }
+  if (/\bghee\b/.test(lower)) {
+    parsed.search_keywords.push("ghee", "cow ghee", "a2 ghee", "bilona", "desi ghee");
+    parsed.exclude_keywords = [
+      "laddu",
+      "ladoo",
+      "barfi",
+      "mithai",
+      "biscuit",
+      "cookie",
+      "namkeen",
+    ];
+    if (/grass.?fed|grass fed/.test(lower)) parsed.soft_preferences.push("grass fed");
+  }
+
   parsed.explanation = "I parsed your request into product terms, limits, and health context.";
   return normalizeParsedProductQuery(parsed, prompt);
 }
@@ -230,10 +257,14 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
   );
   const sort = String(record.sort_intent ?? fallback.sort_intent);
 
+  const productTerms = asStringArray(record.product_terms).length
+    ? asStringArray(record.product_terms)
+    : fallback.product_terms;
+  const searchKeywords = asStringArray(record.search_keywords);
   return {
-    product_terms: asStringArray(record.product_terms).length
-      ? asStringArray(record.product_terms)
-      : fallback.product_terms,
+    product_terms: productTerms,
+    search_keywords: searchKeywords.length ? searchKeywords : productTerms,
+    exclude_keywords: asStringArray(record.exclude_keywords),
     categories: asStringArray(record.categories),
     hard_constraints: {
       max_price: asNumber(constraints.max_price),
@@ -255,14 +286,6 @@ export function normalizeParsedProductQuery(raw: unknown, prompt: string): Parse
   };
 }
 
-function extractJsonObject(text: string): unknown {
-  const trimmed = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("DeepSeek returned no JSON object");
-  return JSON.parse(trimmed.slice(start, end + 1)) as unknown;
-}
-
 export async function parseProductQueryWithDeepseek(
   prompt: string,
   opts: DeepseekOptions = {},
@@ -276,42 +299,21 @@ export async function parseProductQueryWithDeepseek(
     };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 18_000);
   try {
-    const baseUrl = (opts.baseUrl ?? process.env.DEEPSEEK_BASE_URL ?? DEFAULT_DEEPSEEK_BASE_URL).replace(/\/+$/, "");
-    const res = await undiciFetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      dispatcher,
-      signal: controller.signal,
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: opts.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL,
-        temperature: 0,
-        max_tokens: 900,
-        response_format: { type: "json_object" },
-        thinking: { type: "disabled" },
-        messages: [
-          { role: "system", content: QUERY_PARSER_SYSTEM_PROMPT },
-          { role: "user", content: `User grocery request: ${prompt}` },
-        ],
-      }),
+    const { content, usage } = await deepseekChat({
+      apiKey,
+      baseUrl: opts.baseUrl,
+      model: opts.model,
+      timeoutMs: opts.timeoutMs ?? 18_000,
+      maxTokens: 900,
+      jsonObject: true,
+      system: QUERY_PARSER_SYSTEM_PROMPT,
+      user: `User grocery request: ${prompt}`,
     });
-    const body = await res.json() as {
-      choices?: Array<{ message?: { content?: string } }>;
-      usage?: QueryParseResult["usage"];
-      error?: { message?: string };
-    };
-    if (!res.ok) throw new Error(body.error?.message ?? `DeepSeek HTTP ${res.status}`);
-    const content = body.choices?.[0]?.message?.content;
-    if (!content) throw new Error("DeepSeek returned no message content");
     return {
       parsed: normalizeParsedProductQuery(extractJsonObject(content), prompt),
       source: "deepseek",
-      usage: body.usage ?? null,
+      usage,
     };
   } catch (error) {
     return {
@@ -319,7 +321,5 @@ export async function parseProductQueryWithDeepseek(
       source: "heuristic",
       warning: `DeepSeek parser failed; used local parser fallback (${(error as Error).message}).`,
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
