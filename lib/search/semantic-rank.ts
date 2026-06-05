@@ -171,8 +171,28 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
   });
   score += milkRelevanceAdjust(p, parsed.product_terms, parsed.sort_intent);
   score += healthContextSortBoost(p, parsed);
+  score += healthiestRelevanceAdjust(p, parsed);
   score += Math.min(12, (p.core_scores?.score ?? 0) * 0.02);
   return score;
+}
+
+/** When user asked for "healthy X", demote instant junk and boost cleaner labels. */
+function healthiestRelevanceAdjust(p: ProductListItem, parsed: ParsedProductQuery): number {
+  if (parsed.sort_intent !== "healthiest") return 0;
+  const verdict = p.core_scores?.verdict ?? "";
+  let adj = 0;
+  if (verdict === "skip") adj -= 45;
+  else if (verdict === "occasional_treat") adj -= 15;
+  else if (verdict === "good_choice" || verdict === "daily_staple") adj += 12;
+
+  const label = [p.name, p.subcategory, productUsecase(p)].filter(Boolean).join(" ").toLowerCase();
+  if (/\b(instant|ramen|cup noodle|2[\s-]?minute|maggi masala|yeul|samyang|jin ramen|spicy flavor)\b/i.test(label)) {
+    adj -= 30;
+  }
+  if (/\b(whole wheat|whole grain|atta|millet|ragi|no maida|brown rice)\b/i.test(label)) {
+    adj += 18;
+  }
+  return adj;
 }
 
 export type PreservativeStatus = "clean" | "has" | "unknown";
@@ -490,7 +510,8 @@ function sortKey(
           protein ?? 0,
         ]);
       }
-      return [strictTier, relevance, scout, healthBoost, protein ?? 0];
+      // "healthy noodles" etc. — Scout score first, not keyword relevance alone.
+      return [strictTier, scout, relevance, healthBoost, protein ?? 0];
     case "best_match":
     default:
       if (healthIntent) {
@@ -584,13 +605,17 @@ export function rankCandidatesSemantically(
   ].slice(0, limit);
 
   const healthWeighted = usesHealthIntentSort(parsed);
+  const healthiestRank = parsed.sort_intent === "healthiest";
   const rankings: LlmRankedItem[] = ordered.map(({ p, relevance, strict: isStrict }) => {
     const goalFit = healthContextGoalFit(p, parsed);
+    const scoutScore = p.core_scores?.score ?? 0;
     const score = healthWeighted
       ? goalFit != null
         ? Math.min(100, Math.round(relevance * 0.22 + goalFit * 0.78))
         : Math.min(100, Math.round(relevance * 0.4 + healthIntentSortTier(p, parsed) * 0.6))
-      : Math.min(100, Math.round(relevance + (p.core_scores?.score ?? 0) * 0.15));
+      : healthiestRank
+        ? Math.min(100, Math.round(scoutScore * 0.78 + relevance * 0.22))
+        : Math.min(100, Math.round(relevance + scoutScore * 0.15));
     return {
     product_id: p.id,
     score,

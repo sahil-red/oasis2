@@ -281,7 +281,12 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
       "palmolein",
     ];
   }
-  if (/healthy|healthiest|best/.test(lower)) parsed.sort_intent = "healthiest";
+  if (/healthy|healthiest|best/.test(lower)) {
+    parsed.sort_intent = "healthiest";
+    if (/healthy|healthiest/.test(lower) && !parsed.soft_preferences.some((s) => /healthy/i.test(s))) {
+      parsed.soft_preferences.push("healthy");
+    }
+  }
 
   parsed.search_keywords = [...new Set(parsed.product_terms)];
   if (/zero sugar|no sugar/.test(lower) && /soft|soda|drink|cola|beverage/.test(lower)) {

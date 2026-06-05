@@ -283,7 +283,7 @@ if (failed > 0) {
   process.exit(1);
 }
 
-const rankChecks = 6;
+const rankChecks = 7;
 
 const maggiParsed = heuristicParseProductQuery("healthy maggi noodles");
 const maggiRank = rankCandidatesSemantically(
@@ -314,6 +314,53 @@ const maggiRank = rankCandidatesSemantically(
 );
 if (maggiRank.rankings[0]?.product_id === "ketchup") {
   console.error("[rank] FAIL healthy maggi noodles: ketchup must not rank first");
+  failed++;
+}
+
+const healthyNoodlesParsed = heuristicParseProductQuery("healthy noodles");
+const healthyNoodleRank = rankCandidatesSemantically(
+  [
+    {
+      id: "ramen",
+      slug: "r",
+      name: "Ottogi Yeul Ramen Noodle Single Pack",
+      brand: "Ottogi",
+      category: "Food",
+      subcategory: "Instant Noodles",
+      nutrition: { protein_g_100g: 5, sugar_g_100g: 2 },
+      core_scores: {
+        score: 31,
+        grade: "D",
+        band: "poor",
+        verdict: "skip",
+        verdict_sublabels: [],
+      },
+    } as ProductListItem,
+    {
+      id: "whole-wheat",
+      slug: "w",
+      name: "Yu Whole Wheat Hakka Noodles",
+      brand: "Yu",
+      category: "Food",
+      subcategory: "Noodles & Vermicelli",
+      nutrition: { protein_g_100g: 11, sugar_g_100g: 2 },
+      core_scores: {
+        score: 73,
+        grade: "B",
+        band: "good",
+        verdict: "good_choice",
+        verdict_sublabels: [],
+      },
+    } as ProductListItem,
+  ],
+  healthyNoodlesParsed,
+  2,
+);
+if (healthyNoodleRank.rankings[0]?.product_id !== "whole-wheat") {
+  console.error(
+    "[rank] FAIL healthy noodles: expected whole wheat first, got",
+    healthyNoodleRank.rankings.map((r) => r.product_id),
+  );
   failed++;
 }
 
