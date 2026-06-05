@@ -14,7 +14,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { ScoutSearchBar } from "@/components/ScoutSearchBar";
 import { Screen } from "@/components/Screen";
 import { Panel } from "@/components/ui/Panel";
-import { fetchAiSearch } from "@/lib/api";
+import { fetchAiSearch, fetchLexicalSearch } from "@/lib/api";
+import { classifyIntent } from "@/lib/search-intent";
 import { useAccessToken } from "@/lib/auth";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
 import type { AiSearchResult, CatalogProduct } from "@/types/api";
@@ -35,7 +36,11 @@ export default function SearchScreen() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchAiSearch(trimmed, token, 24);
+        const intent = classifyIntent(trimmed);
+        const data =
+          intent === "lexical"
+            ? await fetchLexicalSearch(trimmed, 24)
+            : await fetchAiSearch(trimmed, token, 24, intent === "complex" ? "complex" : "structured");
         setResult(data);
         setPrompt(trimmed);
       } catch (e) {

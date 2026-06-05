@@ -70,12 +70,27 @@ export function fetchAiSearch(
   prompt: string,
   token: string | null,
   limit = 24,
+  tier?: "structured" | "complex",
 ): Promise<AiSearchResult> {
   return apiFetch("/api/search/ai", {
     method: "POST",
-    body: JSON.stringify({ prompt, limit }),
+    body: JSON.stringify({ prompt, limit, tier }),
     token,
   });
+}
+
+/** Instant catalog search shaped like AI results for one-box UX. */
+export async function fetchLexicalSearch(prompt: string, limit = 24): Promise<AiSearchResult> {
+  const result = await fetchCatalogSearch({ q: prompt, limit, sort: "score-desc" });
+  return {
+    summary: `Showing catalog matches for “${prompt}”.`,
+    items: result.items,
+    parsed: {},
+    parse_source: "lexical",
+    rank_source: "catalog",
+    relaxed: false,
+    refinements: [],
+  };
 }
 
 export function createSubscription(token: string): Promise<SubscriptionCheckout> {

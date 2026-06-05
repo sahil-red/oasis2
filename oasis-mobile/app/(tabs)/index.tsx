@@ -38,7 +38,8 @@ import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { DisplayHero, Eyebrow } from "@/components/ui/Typography";
-import { fetchAiSearch, fetchLanding } from "@/lib/api";
+import { fetchAiSearch, fetchLanding, fetchLexicalSearch } from "@/lib/api";
+import { classifyIntent } from "@/lib/search-intent";
 import { useAccessToken } from "@/lib/auth";
 import { useTheme } from "@/lib/theme-context";
 import { fonts, radius, spacing } from "@/theme";
@@ -182,7 +183,11 @@ export default function HomeTab() {
     setSearchError(null);
     setSearchResult(null);
     try {
-      const data = await fetchAiSearch(trimmed, token, 24);
+      const intent = classifyIntent(trimmed);
+      const data =
+        intent === "lexical"
+          ? await fetchLexicalSearch(trimmed, 24)
+          : await fetchAiSearch(trimmed, token, 24, intent === "complex" ? "complex" : "structured");
       setSearchResult(data);
     } catch (e) {
       const err = e as Error & { code?: string; status?: number };
