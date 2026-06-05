@@ -1,4 +1,4 @@
-import { findAlternatives } from "@/lib/products/alternatives";
+import { findAlternatives, findSimilarProducts } from "@/lib/products/alternatives";
 import type { ProductListItem } from "@/lib/products/queries";
 
 function assert(cond: boolean, msg: string) {
@@ -55,3 +55,49 @@ assert(
 );
 
 console.log("Swap subcategory checks passed.");
+
+const buttermilk = item({
+  id: "b1",
+  name: "Mother Dairy Masala Buttermilk",
+  brand: "Mother Dairy",
+  subcategory: "Buttermilk & Lassi",
+  l3_category: "Buttermilk",
+});
+
+const buttermilkPool = [
+  item({
+    id: "b2",
+    name: "Go Masala Buttermilk",
+    brand: "Go",
+    l3_category: "Buttermilk",
+    core_scores: { score: 50, grade: "C", band: "average" } as ProductListItem["core_scores"],
+  }),
+  item({
+    id: "b3",
+    name: "Phab Pista Power 10g Protein Milkshake",
+    brand: "PHAB",
+    l3_category: "Protein Milkshake",
+    core_scores: { score: 75, grade: "B", band: "good" } as ProductListItem["core_scores"],
+  }),
+  item({
+    id: "b4",
+    name: "Mother Dairy Chocolate Milk Shake",
+    brand: "Mother Dairy",
+    l3_category: "Milkshake",
+    core_scores: { score: 40, grade: "D", band: "poor" } as ProductListItem["core_scores"],
+  }),
+];
+
+const bmSwaps = findAlternatives(buttermilk, buttermilkPool, "balanced", 3);
+assert(
+  bmSwaps.every((s) => s.product.l3_category === "Buttermilk"),
+  `L3 swaps must stay in Buttermilk, got ${bmSwaps.map((s) => s.product.name).join(", ")}`,
+);
+
+const bmSimilar = findSimilarProducts(buttermilk, buttermilkPool, "balanced", 4);
+assert(
+  bmSimilar.every((s) => s.product.l3_category === "Buttermilk"),
+  `L3 similar must stay in Buttermilk, got ${bmSimilar.map((s) => s.product.name).join(", ")}`,
+);
+
+console.log("Swap L3 use-case checks passed.");

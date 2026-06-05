@@ -32,8 +32,10 @@ import type {
   LandingInsights,
   LandingPick,
 } from "@/lib/products/landing-insights";
+import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import {
   canUseAiSearch,
+  hasSavedPreferences,
   readAiSearchPreferences,
   readAiSearchUsage,
   recordAiSearch,
@@ -300,22 +302,17 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-function preferencesToPrompt(prefs: AiSearchPreferences | null): string {
-  if (!prefs) return "";
-  const parts = [
-    prefs.diet ? `diet ${prefs.diet}` : null,
-    prefs.healthContexts?.length ? `health goals ${prefs.healthContexts.join(", ")}` : null,
-    prefs.avoidIngredients?.length ? `avoid ${prefs.avoidIngredients.join(", ")}` : null,
-    prefs.budget ? `budget under ₹${prefs.budget}` : null,
-  ].filter(Boolean);
-  return parts.length ? `Saved preferences: ${parts.join("; ")}.` : "";
-}
-
 function preferencesFromParsed(parsed: ParsedProductQuery): AiSearchPreferences {
   return {
-    diet: parsed.hard_constraints.vegetarian ? "vegetarian" : undefined,
-    healthContexts: parsed.health_contexts,
-    avoidIngredients: parsed.hard_constraints.avoid_ingredients,
+    diet: parsed.hard_constraints.vegan
+      ? "vegan"
+      : parsed.hard_constraints.vegetarian
+        ? "vegetarian"
+        : undefined,
+    healthContexts: parsed.health_contexts.length ? parsed.health_contexts : undefined,
+    avoidIngredients: parsed.hard_constraints.avoid_ingredients?.length
+      ? parsed.hard_constraints.avoid_ingredients
+      : undefined,
     budget: parsed.hard_constraints.max_price ?? null,
   };
 }
@@ -674,11 +671,11 @@ export function CatalogView({
     setAiSearching(true);
     setRefreshing(items.length > 0);
     try {
-      const prefContext = preferencesToPrompt(savedPrefs);
       const result = await fetchAiCatalogSearch(
-        prefContext ? `${prompt}. ${prefContext}` : prompt,
+        prompt,
         CATALOG_PAGE_SIZE,
         intent === "complex" ? "complex" : "structured",
+        savedPrefs,
       );
       if (gen !== fetchGen.current) return;
       setItems(result.items);
@@ -886,9 +883,7 @@ export function CatalogView({
             ))}
           </div>
 
-          {savedPrefs && preferencesToPrompt(savedPrefs) ? (
-            <div className="mt-1.5 text-[11px] text-(--color-fg-dim)">Preferences saved</div>
-          ) : null}
+          <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-(--color-line) bg-(--color-panel) px-4 py-3">
@@ -907,6 +902,7 @@ export function CatalogView({
               {aiParsed ? (
                 <button
                   type="button"
+                  title="Remember diet, health goals, ingredient avoids, and budget from this search for future AI queries on this device"
                   onClick={() => {
                     const prefs = preferencesFromParsed(aiParsed);
                     writeAiSearchPreferences(prefs);
@@ -915,6 +911,9 @@ export function CatalogView({
                   className="ml-auto rounded-full border border-(--color-line-strong) px-3 py-1 text-[11px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
                 >
                   Save preferences
+                  {hasSavedPreferences(preferencesFromParsed(aiParsed))
+                    ? " from this search"
+                    : ""}
                 </button>
               ) : null}
               {aiRefinements.length > 0 ? (

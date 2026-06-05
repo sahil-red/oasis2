@@ -127,9 +127,13 @@ export function ProductCard({
       {chips.length > 0 && <ChipRow chips={chips} />}
 
       {/* Scout's one-liner or AI reason */}
-      {(why || reasons?.[0]) ? (
+      {reasons?.length ? (
         <Text style={styles.why} numberOfLines={2}>
-          {why ?? reasons![0]}
+          {reasons.slice(0, 3).join(" · ")}
+        </Text>
+      ) : why ? (
+        <Text style={styles.why} numberOfLines={2}>
+          {why}
         </Text>
       ) : null}
 

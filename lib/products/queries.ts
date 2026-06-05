@@ -11,7 +11,11 @@ import {
   hasActiveCatalogFilters,
   type CatalogFilterState,
 } from "@/lib/products/catalog-filter";
-import { FRUITS_VEGETABLES_AISLE } from "@/lib/products/catalog-meta";
+import {
+  FRUITS_VEGETABLES_AISLE,
+  productMatchesUsecase,
+  productUsecase,
+} from "@/lib/products/catalog-meta";
 import {
   compareCatalogItems,
   sortCatalogItems,
@@ -1213,13 +1217,16 @@ export async function getAiSearchProductPool(): Promise<ProductListItem[]> {
   return data;
 }
 
-/** Same-aisle pool for PDP swaps — avoids loading the full catalog. */
+/** Same L3 use-case pool for PDP swaps and “more in this aisle”. */
 export async function getProductsForSwaps(
-  current: Pick<ProductListItem, "id" | "category" | "super_category" | "subcategory">,
+  current: Pick<
+    ProductListItem,
+    "id" | "category" | "super_category" | "subcategory" | "l3_category" | "attributes"
+  >,
   limit = 200,
 ): Promise<ProductListItem[]> {
+  const usecase = productUsecase(current);
   const supabase = db();
-  const aisle = current.category ?? current.super_category;
   let query = supabase
     .from("products")
     .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
@@ -1228,14 +1235,23 @@ export async function getProductsForSwaps(
     .neq("id", current.id)
     .limit(limit);
 
-  if (aisle) query = query.eq("category", aisle);
-  if (current.subcategory?.trim()) query = query.eq("subcategory", current.subcategory.trim());
+  if (usecase) {
+    query = query.eq("l3_category", usecase);
+  } else {
+    const aisle = current.category ?? current.super_category;
+    if (aisle) query = query.eq("category", aisle);
+    if (current.subcategory?.trim()) query = query.eq("subcategory", current.subcategory.trim());
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? [])
+  const rows = (data ?? [])
     .map((row) => mapListRow(row as Record<string, unknown>))
     .filter(isCatalogVisible);
+  if (usecase) {
+    return rows.filter((p) => productMatchesUsecase(p, usecase));
+  }
+  return rows;
 }
 
 export async function getProductsBySlugs(slugs: string[]): Promise<ProductListItem[]> {

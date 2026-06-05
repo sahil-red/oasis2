@@ -31,7 +31,19 @@ export function productMatchesUsecase(
   usecase: string,
 ): boolean {
   if (!usecase) return true;
-  return productUsecase(p) === usecase;
+  const target = usecase.trim();
+  const actual = productUsecase(p);
+  return Boolean(actual && actual === target);
+}
+
+/** PDP swaps / similar rows must share Zepto L3 use-case when the anchor product has one. */
+export function sameProductUsecase(
+  a: Pick<ProductListItem, "l3_category" | "attributes">,
+  b: Pick<ProductListItem, "l3_category" | "attributes">,
+): boolean {
+  const ua = productUsecase(a);
+  if (!ua) return true;
+  return productMatchesUsecase(b, ua);
 }
 
 export function isFruitsVegetablesAisle(

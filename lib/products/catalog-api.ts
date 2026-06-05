@@ -80,11 +80,12 @@ export async function fetchAiCatalogSearch(
   prompt: string,
   limit = 24,
   tier?: "structured" | "complex",
+  preferences?: import("@/lib/search/ai-usage").AiSearchPreferences | null,
 ): Promise<AiSearchResult> {
   const res = await fetch("/api/search/ai", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, limit, tier }),
+    body: JSON.stringify({ prompt, limit, tier, preferences: preferences ?? undefined }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: string } | null;

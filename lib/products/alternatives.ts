@@ -2,7 +2,12 @@ import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
 import { isDietCompatible } from "@/lib/diet/match";
 import type { DietMode } from "@/lib/diet/types";
-import { productAisle, productShelf } from "@/lib/products/catalog-meta";
+import {
+  productAisle,
+  productShelf,
+  productUsecase,
+  sameProductUsecase,
+} from "@/lib/products/catalog-meta";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
@@ -258,16 +263,22 @@ export function findAlternatives(
   const band = priceBand(current.price_inr);
   const curBrand = brandKey(current);
 
+  const anchorL3 = productUsecase(current);
+
   const pool = catalog.filter((p) => {
     if (p.id === current.id) return false;
     if (!p.core_scores && goal === "balanced") return false;
-    if (aisle && productAisle(p) !== aisle) return false;
-    if (
-      current.subcategory?.trim() &&
-      p.subcategory?.trim() &&
-      p.subcategory.trim().toLowerCase() !== current.subcategory.trim().toLowerCase()
-    ) {
-      return false;
+    if (anchorL3) {
+      if (!sameProductUsecase(current, p)) return false;
+    } else {
+      if (aisle && productAisle(p) !== aisle) return false;
+      if (
+        current.subcategory?.trim() &&
+        p.subcategory?.trim() &&
+        p.subcategory.trim().toLowerCase() !== current.subcategory.trim().toLowerCase()
+      ) {
+        return false;
+      }
     }
     if (!shelfRelated(current, p)) return false;
     if (nutritionTooSimilar(current.nutrition, p.nutrition)) return false;
@@ -409,8 +420,11 @@ export function findSimilarProducts(
 ): SimilarProductSuggestion[] {
   const diet: DietMode = opts?.diet ?? "any";
   const excludeIds = opts?.excludeIds ?? new Set<string>();
+  const anchorL3 = productUsecase(current);
+
   const candidates = catalog
     .filter((p) => p.id !== current.id && !excludeIds.has(p.id))
+    .filter((p) => (anchorL3 ? sameProductUsecase(current, p) : true))
     .filter((p) => isDietCompatible(diet, p).ok)
     .map((p) => ({
       p,

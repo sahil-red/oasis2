@@ -139,7 +139,7 @@ export const ProductCard = memo(function ProductCard({
           {/* chips — subtle, monochrome, no verdict color */}
           {aiReasons.length > 0 ? (
             <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
-              {aiReasons.slice(0, 2).join(" · ")}
+              {aiReasons.slice(0, 3).join(" · ")}
             </p>
           ) : chipLabels.length > 0 ? (
             <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">

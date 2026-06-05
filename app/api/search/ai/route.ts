@@ -9,10 +9,12 @@ import {
   setCachedAiResult,
   setCachedParse,
 } from "@/lib/search/search-cache";
+import { mergeSavedPreferences } from "@/lib/search/merge-preferences";
 import {
   heuristicParseProductQuery,
   parseProductQueryWithDeepseek,
 } from "@/lib/search/query-parse";
+import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
     prompt?: unknown;
     limit?: unknown;
     tier?: unknown;
+    preferences?: AiSearchPreferences | null;
   } | null;
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
   if (prompt.length < 2) {
@@ -72,7 +75,13 @@ export async function POST(req: NextRequest) {
     setCachedParse(prompt, parsed);
   }
 
-  let result = await runAiProductSearch(parsed, { limit, prompt, tier });
+  const preferences = body?.preferences ?? null;
+  const parseForSearch = {
+    ...parsed,
+    parsed: mergeSavedPreferences(parsed.parsed, preferences),
+  };
+
+  let result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
 
   if (shouldEscalateStructuredToComplex(tier, result, limit ?? 24)) {
     const complexParse =
@@ -80,11 +89,10 @@ export async function POST(req: NextRequest) {
         ? parsed
         : await parseProductQueryWithDeepseek(prompt).catch(() => parsed);
     if (complexParse.source === "deepseek") setCachedParse(prompt, complexParse);
-    result = await runAiProductSearch(complexParse, {
-      limit,
-      prompt,
-      tier: "complex",
-    });
+    result = await runAiProductSearch(
+      { ...complexParse, parsed: mergeSavedPreferences(complexParse.parsed, preferences) },
+      { limit, prompt, tier: "complex" },
+    );
     result = { ...result, intent_tier: "complex" };
   }
 

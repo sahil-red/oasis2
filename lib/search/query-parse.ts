@@ -109,7 +109,7 @@ Rules:
 - Use hard constraints only when the user asks for a limit or strict requirement.
 - "low sugar" means max_sugar_g_100g = 10 unless a numeric limit is given.
 - "no sugar" or "zero sugar" means max_sugar_g_100g = 1.
-- "low fat" means max_fat_g_100g = 12 unless a numeric limit is given.
+- "low fat" means max_fat_g_100g = 12 unless a numeric limit is given, except for paneer/milk/ghee/curd/yogurt/cheese — use soft preference "low fat" and sort by fat instead.
 - CRITICAL: "high protein [specific food]" (e.g. "high protein milk", "high protein curd", "high protein bread") means the user wants that food sorted by protein content. Set sort_intent:"highest_protein" ONLY. Do NOT set min_protein_g_100g — milk/curd/bread naturally have low protein, the user wants the best option within that food type.
 - Set min_protein_g_100g = 12 ONLY when the user is explicitly looking for protein supplements or high-protein products without naming a specific everyday food (e.g. "protein powder", "high protein snacks", "protein bar"). Never set it when a specific food is named.
 - "low sugar" for a specific food (e.g. "low sugar biscuits") means max_sugar_g_100g = 10 — apply as a hard constraint since biscuits can vary widely.
@@ -185,7 +185,6 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
 
   const fatLimit = firstNumberNear(lower, /(?:fat)\D{0,12}(\d{1,3})\s*g/);
   if (fatLimit) parsed.hard_constraints.max_fat_g_100g = fatLimit;
-  else if (/low fat|less fat/.test(lower)) parsed.hard_constraints.max_fat_g_100g = 12;
 
   const proteinMin = firstNumberNear(lower, /(?:protein)\D{0,12}(\d{1,3})\s*g/);
   const namedFood =
@@ -266,6 +265,17 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   }
   applyProductTermHeuristics(parsed, lower);
   applyL3IntentToParsed(parsed);
+
+  const namedFreshDairy = parsed.product_terms.some((t) =>
+    ["paneer", "milk", "ghee", "curd", "yogurt", "cheese"].includes(t.toLowerCase()),
+  );
+  if (/low fat|less fat/.test(lower) && !fatLimit) {
+    if (namedFreshDairy) {
+      parsed.soft_preferences.push("low fat");
+    } else {
+      parsed.hard_constraints.max_fat_g_100g = 12;
+    }
+  }
 
   parsed.explanation = "I parsed your request into product terms, limits, and health context.";
   return normalizeParsedProductQuery(parsed, prompt);

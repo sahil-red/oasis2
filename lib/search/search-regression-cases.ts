@@ -74,6 +74,14 @@ export const PARSE_CASES: ParseCase[] = [
       p.product_terms.includes("juice") &&
       p.soft_preferences.some((s) => /preserv/i.test(s)),
   },
+  {
+    query: "low fat paneer for diet",
+    check: (p) =>
+      p.product_terms.includes("paneer") &&
+      p.hard_constraints.max_fat_g_100g == null &&
+      p.soft_preferences.some((s) => /low fat/i.test(s)) &&
+      p.health_contexts.includes("fat_loss"),
+  },
 ];
 
 /** Live DB checks — run via pnpm search:regression:live */
@@ -118,5 +126,13 @@ export const LIVE_SEARCH_CASES: LiveSearchCase[] = [
     query: "cheapest oats",
     expectTier: "structured",
     minResults: 4,
+  },
+  {
+    query: "low fat paneer for diet",
+    expectTier: "structured",
+    minResults: 12,
+    checkTop: 8,
+    topMustMatch: /\bpaneer\b/i,
+    topMustNotMatch: /^tofu$|^tempeh$|silken tofu|soyarich tofu/i,
   },
 ];

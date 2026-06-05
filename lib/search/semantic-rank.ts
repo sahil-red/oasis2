@@ -10,8 +10,14 @@ import {
   passesL3IntentGate,
 } from "@/lib/search/l3-category-intent";
 import { productUsecase } from "@/lib/products/catalog-meta";
+import {
+  isPlantPaneerSubstitute,
+  paneerIntentSortTier,
+  paneerRelevanceAdjust,
+} from "@/lib/search/paneer-intent";
 import { isFalsePositiveProductLabel } from "@/lib/search/product-term-heuristics";
 import type { LlmRankedItem } from "@/lib/search/ai-rank";
+import { buildMatchReasons } from "@/lib/search/match-reasons";
 
 function nutritionValue(
   nutrition: ProductNutrition | null | undefined,
@@ -87,6 +93,15 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
 
   if (!passesPrimaryTypeGate(p, parsed)) return 0;
 
+  if (
+    parsed.product_terms.some((t) => t.toLowerCase() === "paneer") &&
+    isPlantPaneerSubstitute(p) &&
+    !parsed.hard_constraints.vegan
+  ) {
+    const name = (p.name ?? "").toLowerCase();
+    if (!/\bpaneer\b/i.test(name)) return 0;
+  }
+
   let score = 0;
   const terms = [
     ...parsed.product_terms,
@@ -117,6 +132,10 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
   }
 
   score += l3IntentRelevanceBoost(p, parsed);
+  score += paneerRelevanceAdjust(p, parsed.product_terms, {
+    preferPlant: parsed.hard_constraints.vegan === true,
+    lowFatPreferred: parsed.soft_preferences.some((s) => /low fat/i.test(s)),
+  });
   score += Math.min(12, (p.core_scores?.score ?? 0) * 0.02);
   return score;
 }
@@ -255,6 +274,8 @@ function sortKey(
     : 0;
 
   const strictTier = strictMatch ? 1 : 0;
+  const paneerTier = paneerIntentSortTier(p, parsed.product_terms);
+  const lowFatPref = parsed.soft_preferences.some((s) => /low fat/i.test(s));
 
   switch (parsed.sort_intent) {
     case "highest_protein":
@@ -265,11 +286,26 @@ function sortKey(
       return [strictTier, relevance, scout, healthBoost, protein ?? 0];
     case "best_match":
     default:
+      if (paneerTier > 0) {
+        const fatKey = lowFatPref || parsed.hard_constraints.max_fat_g_100g != null;
+        return [
+          paneerTier,
+          strictTier,
+          relevance,
+          preservTier,
+          fatKey && fat != null ? -fat : 0,
+          healthBoost,
+          scout,
+        ];
+      }
       if (parsed.hard_constraints.max_fat_g_100g != null) {
         return [strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
       }
       if (parsed.hard_constraints.max_sugar_g_100g != null) {
         return [strictTier, relevance, preservTier, sugar != null ? -sugar : -1, healthBoost, scout];
+      }
+      if (lowFatPref) {
+        return [strictTier, relevance, preservTier, fat != null ? -fat : -1, healthBoost, scout];
       }
       return [strictTier, relevance, preservTier, healthBoost, scout, protein ?? 0];
   }
@@ -284,45 +320,7 @@ function compareKeys(a: number[], b: number[]): number {
 }
 
 function deterministicReasons(p: ProductListItem, parsed: ParsedProductQuery): string[] {
-  const reasons: string[] = [];
-  const n = p.nutrition;
-  const protein = nutritionValue(n, "protein_g_100g");
-  const sugar =
-    nutritionValue(n, "sugar_g_100g") ?? nutritionValue(n, "added_sugar_g_100g");
-  const fat = nutritionValue(n, "fat_g_100g");
-  const price = p.price_inr ?? p.mrp_inr;
-
-  if (parsed.sort_intent === "highest_protein" && protein != null) {
-    reasons.push(`${Math.round(protein)}g protein per 100g`);
-  }
-  if (parsed.hard_constraints.max_fat_g_100g != null && fat != null) {
-    reasons.push(`${fat}g fat per 100g`);
-  }
-  if (parsed.hard_constraints.max_sugar_g_100g != null && sugar != null) {
-    reasons.push(
-      parsed.hard_constraints.max_sugar_g_100g <= 1
-        ? "No added sugar on label"
-        : `${sugar}g sugar per 100g`,
-    );
-  }
-  if (parsed.hard_constraints.max_price != null && price != null) {
-    reasons.push(`₹${Math.round(price)} — under ₹${parsed.hard_constraints.max_price}`);
-  }
-  if (wantsNoPreservatives(parsed)) {
-    const status = preservativeStatus(p.ingredients_raw);
-    if (status === "clean") reasons.push("No preservatives on label");
-    else if (status === "unknown") reasons.push("Preservative status not confirmed");
-  }
-  if (parsed.hard_constraints.vegan) reasons.push("Plant-based / vegan");
-  const l3 = productUsecase(p);
-  if (l3) reasons.push(l3);
-  else if (p.subcategory) reasons.push(p.subcategory);
-  else if (parsed.product_terms[0]) reasons.push(parsed.product_terms[0]);
-
-  if (!reasons.length && p.core_scores?.score != null) {
-    reasons.push(`Scout score ${Math.round(p.core_scores.score)}`);
-  }
-  return reasons.slice(0, 3);
+  return buildMatchReasons(p, parsed);
 }
 
 function sortScored(
