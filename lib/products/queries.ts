@@ -1177,10 +1177,12 @@ export async function searchProducts(opts: {
 export async function getAllCatalogProducts(opts?: {
   onlyWithDetail?: boolean;
   onlyScored?: boolean;
+  /** Stop after this many rows (faster AI search pool warm). */
+  maxRows?: number;
 }): Promise<ProductListItem[]> {
   const supabase = db();
   const pageSize = 1000;
-  const max = 30_000;
+  const max = opts?.maxRows ?? 30_000;
   const all: ProductListItem[] = [];
 
   const hasVisible = await catalogHasVisibleColumn();
@@ -1220,11 +1222,16 @@ export async function getAllCatalogProducts(opts?: {
       .map((row) => mapListRow(row as Record<string, unknown>));
     all.push(...batch);
     if (rows.length < pageSize) break;
+    if (opts?.maxRows != null && all.length >= opts.maxRows) break;
   }
 
   all.sort((a, b) => (b.core_scores?.score ?? -1) - (a.core_scores?.score ?? -1));
-  return all.map(slimListItemForCatalog);
+  const trimmed = opts?.maxRows != null ? all.slice(0, opts.maxRows) : all;
+  return trimmed.map(slimListItemForCatalog);
 }
+
+/** Cap in-memory scan for AI search — keeps /api/search/ai under serverless time limits. */
+export const AI_SEARCH_POOL_LIMIT = 10_000;
 
 // In-process cache for the AI search product pool — expires every 10 minutes.
 // Prevents getAllCatalogProducts from hitting Supabase on every search request.
@@ -1237,7 +1244,11 @@ export async function getAiSearchProductPool(): Promise<ProductListItem[]> {
   }
   // Include ALL catalog-visible products, not just scored ones.
   // Many commodity products (milk, dal, rice) are never scored but are perfectly valid results.
-  const data = await getAllCatalogProducts({ onlyWithDetail: true, onlyScored: false });
+  const data = await getAllCatalogProducts({
+    onlyWithDetail: true,
+    onlyScored: false,
+    maxRows: AI_SEARCH_POOL_LIMIT,
+  });
   _aiProductPoolCache = { data, at: Date.now() };
   return data;
 }

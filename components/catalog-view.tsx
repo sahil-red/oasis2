@@ -759,7 +759,12 @@ export function CatalogView({
       setAiUsage(recordAiSearch());
     } catch (e) {
       if (gen !== fetchGen.current) return;
-      setLoadError((e as Error).message);
+      const err = e as Error;
+      setLoadError(
+        err.name === "AbortError"
+          ? "Search took too long — try again in a moment."
+          : err.message,
+      );
     } finally {
       if (gen === fetchGen.current) {
         setAiSearching(false);
@@ -1196,7 +1201,21 @@ export function CatalogView({
       </div>
 
       {/* ── Data-rich landing or product grid ────────────────────────── */}
-      {!aiMode && !hasFilters && !factBrowse ? (
+      {aiSearching ? (
+        <div className="space-y-4 py-8">
+          <p className="text-center text-sm text-(--color-fg-muted)">
+            Scout is matching products and nutrition for your request…
+          </p>
+          <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="animate-pulse space-y-2">
+                <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
+                <div className="h-4 w-3/4 rounded bg-(--color-bg-soft)" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : !aiMode && !hasFilters && !factBrowse ? (
         <ScoutLanding
           stats={stats ?? null}
           hrefQuery={productQuery}

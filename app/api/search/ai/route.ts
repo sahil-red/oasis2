@@ -17,6 +17,7 @@ import {
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const CACHE_HEADERS = {
   "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",

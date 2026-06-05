@@ -76,22 +76,27 @@ export function prefetchCatalogSearch(
   void fetchCatalogSearch(params).catch(() => {});
 }
 
+const AI_SEARCH_FETCH_MS = 55_000;
+
 export async function fetchAiCatalogSearch(
   prompt: string,
   limit = 24,
   tier?: "structured" | "complex",
   preferences?: import("@/lib/search/ai-usage").AiSearchPreferences | null,
 ): Promise<AiSearchResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_SEARCH_FETCH_MS);
   const res = await fetch("/api/search/ai", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prompt, limit, tier, preferences: preferences ?? undefined }),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timer));
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: string } | null;
     throw new Error(body?.error ?? `HTTP ${res.status}`);
   }
-  return await res.json() as AiSearchResult;
+  return (await res.json()) as AiSearchResult;
 }
 
 let landingCache: { at: number; data: LandingInsights } | null = null;

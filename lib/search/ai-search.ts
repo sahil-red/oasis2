@@ -166,5 +166,7 @@ export function shouldEscalateStructuredToComplex(
 ): boolean {
   if (tier !== "structured") return false;
   if (!resolveDeepseekApiKey("search")) return false;
+  // Named product type (e.g. buttermilk, paneer): sparse matches are OK — don't re-parse + LLM rank.
+  if (result.parsed.product_terms.length > 0) return false;
   return result.items.length < Math.min(STRUCTURED_ESCALATE_MIN, Math.max(4, Math.floor(limit / 2)));
 }
