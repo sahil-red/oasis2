@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeAiSearch } from "@/lib/auth/profile";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
+import { adminClient } from "@/lib/supabase/admin";
 import { runAiProductSearch } from "@/lib/search/ai-search";
 import {
   getCachedAiResult,
@@ -68,9 +69,28 @@ export async function POST(req: NextRequest) {
     parsed: mergeSavedPreferences(parsed.parsed, preferences),
   };
 
+  let userId: string | null = null;
+  if (client) {
+    const { data: ud } = await client.auth.getUser();
+    if (ud.user) userId = ud.user.id;
+  }
+
   try {
     const result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
     setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
+
+    // Record search in history for logged-in users (fire-and-forget, non-blocking)
+    if (userId) {
+      const supabase = adminClient();
+      void supabase.from("search_history").insert({
+        user_id: userId,
+        query: prompt.slice(0, 200),
+        intent_tier: result.intent_tier ?? tier,
+        rank_source: result.rank_source,
+        result_count: result.items.length,
+      });
+    }
+
     return NextResponse.json(result, { headers: CACHE_HEADERS });
   } catch (e) {
     const message = e instanceof Error ? e.message : "AI search failed";

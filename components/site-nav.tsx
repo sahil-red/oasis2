@@ -1,6 +1,40 @@
+"use client";
+
 import Link from "next/link";
 import { NavCartLink } from "@/components/nav-cart-link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/lib/auth/context";
+
+function NavAuthButton() {
+  const { ready, session, profile } = useAuth();
+  if (!ready) return null;
+
+  if (session && profile) {
+    const initials = (profile.full_name ?? profile.email ?? "?")
+      .split(" ")
+      .map((w) => w[0]?.toUpperCase() ?? "")
+      .slice(0, 2)
+      .join("");
+    return (
+      <Link
+        href="/profile"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-(--color-fg) text-[12px] font-semibold text-(--color-bg) transition hover:opacity-80"
+        title={profile.email ?? "Profile"}
+      >
+        {initials || "?"}
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href="/login"
+      className="rounded-lg border border-(--color-line) px-3 py-1.5 text-[13px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-muted) hover:text-(--color-fg)"
+    >
+      Sign in
+    </Link>
+  );
+}
 
 export function SiteNav() {
   return (
@@ -23,6 +57,7 @@ export function SiteNav() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <NavAuthButton />
         </div>
       </nav>
     </header>
