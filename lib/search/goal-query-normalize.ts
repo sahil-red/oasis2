@@ -29,7 +29,13 @@ export const GOAL_META_PRODUCT_TERMS = new Set([
   "and",
 ]);
 
-const ADULT_GOAL_CONTEXTS = new Set<ParsedHealthContext>(["bulk", "gym", "fat_loss"]);
+const ADULT_GOAL_CONTEXTS = new Set<ParsedHealthContext>([
+  "bulk",
+  "gym",
+  "fat_loss",
+  "diabetic",
+  "pcos",
+]);
 
 const DEFAULT_BULK_EXCLUDES = [
   "cerelac",

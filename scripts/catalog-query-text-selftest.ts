@@ -4,6 +4,10 @@ const cases: [string, string | null][] = [
   ["healthy noodles", "noodles"],
   ["healthy maggi", "maggi"],
   ["amul milk", "amul milk"],
+  ["low sugar biscuits", "biscuits"],
+  ["sugar free coke", "coke"],
+  ["organic milk", "milk"],
+  ["zero sugar soft drinks", "soft drinks"],
 ];
 
 let failed = 0;

@@ -31,6 +31,10 @@ export const INTENT_CASES: IntentCase[] = [
   { query: "oats no added sugar", expect: "structured" },
   { query: "healthy noodles", expect: "structured" },
   { query: "healthy maggi", expect: "structured" },
+  { query: "organic milk", expect: "structured" },
+  { query: "sugar free coke", expect: "structured" },
+  { query: "food for bulking", expect: "structured" },
+  { query: "low sugar biscuits", expect: "structured" },
   {
     query: "something healthy for my kids tiffin with options",
     expect: "complex",

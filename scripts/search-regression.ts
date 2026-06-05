@@ -283,7 +283,40 @@ if (failed > 0) {
   process.exit(1);
 }
 
-const rankChecks = 5;
+const rankChecks = 6;
+
+const maggiParsed = heuristicParseProductQuery("healthy maggi noodles");
+const maggiRank = rankCandidatesSemantically(
+  [
+    {
+      id: "ketchup",
+      slug: "k",
+      name: "MAGGI Rich Tomato Ketchup",
+      brand: "MAGGI",
+      category: "Sauces",
+      subcategory: "Ketchup",
+      nutrition: { protein_g_100g: 1, sugar_g_100g: 22 },
+      core_scores: { score: 70, grade: "C", band: "ok", verdict_sublabels: [] },
+    } as ProductListItem,
+    {
+      id: "noodles",
+      slug: "n",
+      name: "MAGGI 2-Minute Masala Noodles",
+      brand: "MAGGI",
+      category: "Noodles",
+      subcategory: "Instant Noodles",
+      nutrition: { protein_g_100g: 8, energy_kcal_100g: 350 },
+      core_scores: { score: 55, grade: "D", band: "poor", verdict_sublabels: [] },
+    } as ProductListItem,
+  ],
+  maggiParsed,
+  2,
+);
+if (maggiRank.rankings[0]?.product_id === "ketchup") {
+  console.error("[rank] FAIL healthy maggi noodles: ketchup must not rank first");
+  failed++;
+}
+
 console.log(
   `\nAll ${INTENT_CASES.length + PARSE_CASES.length + 2 + rankChecks} search regression checks passed.`,
 );

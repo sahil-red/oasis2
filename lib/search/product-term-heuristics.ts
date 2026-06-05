@@ -221,6 +221,12 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
     parsed.search_keywords = [
       ...new Set([...parsed.search_keywords, "maggi", "2 minute", "instant noodles", "noodles"]),
     ];
-    mergeExcludes(parsed, ["masala powder", "ketchup", "sauce"]);
+    const wantsNoodles = /\bnoodles?\b/i.test(lower);
+    mergeExcludes(
+      parsed,
+      wantsNoodles
+        ? ["ketchup", "sauce", "masala powder", "tastemaker", "seasoning"]
+        : ["masala powder"],
+    );
   }
 }
