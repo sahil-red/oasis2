@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CACHE_HEADERS = {
-  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+  "Cache-Control": "private, no-store, max-age=0",
 };
 
 export async function POST(req: NextRequest) {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const tier =
     body?.tier === "structured" || body?.tier === "complex" ? body.tier : "structured";
 
-  const cached = getCachedAiResult(prompt, limit ?? 24);
+  const cached = getCachedAiResult(prompt, limit ?? 24, tier);
   if (cached) {
     return NextResponse.json(cached, { headers: CACHE_HEADERS });
   }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   const result = await runAiProductSearch(parseForSearch, { limit, prompt, tier });
 
-  setCachedAiResult(prompt, limit ?? 24, result);
+  setCachedAiResult(prompt, limit ?? 24, tier, result);
 
   return NextResponse.json(result, { headers: CACHE_HEADERS });
 }

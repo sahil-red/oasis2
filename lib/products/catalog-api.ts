@@ -88,9 +88,10 @@ export async function fetchAiCatalogSearch(
   const timer = setTimeout(() => controller.abort(), AI_SEARCH_FETCH_MS);
   const res = await fetch("/api/search/ai", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
     body: JSON.stringify({ prompt, limit, tier, preferences: preferences ?? undefined }),
     signal: controller.signal,
+    cache: "no-store",
   }).finally(() => clearTimeout(timer));
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: string } | null;

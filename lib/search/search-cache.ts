@@ -9,7 +9,8 @@ type CacheEntry<T> = { at: number; value: T };
 const parseCache = new Map<string, CacheEntry<QueryParseResult>>();
 const resultCache = new Map<string, CacheEntry<AiSearchResult>>();
 
-const CACHE_VERSION = "v8";
+/** Bump when rank/merge logic changes so warm serverless instances drop stale results. */
+const CACHE_VERSION = "v9-blend";
 
 function normalizeKey(prompt: string): string {
   return `${CACHE_VERSION}:${prompt.toLowerCase().replace(/\s+/g, " ").trim()}`;
@@ -40,10 +41,19 @@ export function setCachedParse(prompt: string, value: QueryParseResult) {
   set(parseCache, normalizeKey(prompt), value);
 }
 
-export function getCachedAiResult(prompt: string, limit: number): AiSearchResult | null {
-  return get(resultCache, `${normalizeKey(prompt)}|${limit}`, RESULT_TTL_MS);
+export function getCachedAiResult(
+  prompt: string,
+  limit: number,
+  tier: string,
+): AiSearchResult | null {
+  return get(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}`, RESULT_TTL_MS);
 }
 
-export function setCachedAiResult(prompt: string, limit: number, value: AiSearchResult) {
-  set(resultCache, `${normalizeKey(prompt)}|${limit}`, value);
+export function setCachedAiResult(
+  prompt: string,
+  limit: number,
+  tier: string,
+  value: AiSearchResult,
+) {
+  set(resultCache, `${normalizeKey(prompt)}|${tier}|${limit}`, value);
 }

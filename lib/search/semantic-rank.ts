@@ -606,15 +606,18 @@ export function rankCandidatesSemantically(
 
   const healthWeighted = usesHealthIntentSort(parsed);
   const healthiestRank = parsed.sort_intent === "healthiest";
+  const maxRelevance = Math.max(1, ...ordered.map(({ relevance }) => relevance));
   const rankings: LlmRankedItem[] = ordered.map(({ p, relevance, strict: isStrict }) => {
     const goalFit = healthContextGoalFit(p, parsed);
     const scoutScore = p.core_scores?.score ?? 0;
+    /** Card "match" tab — relative text fit (sort uses sortKey, not this field). */
+    const matchDisplay = Math.min(100, Math.round((relevance / maxRelevance) * 100));
     const score = healthWeighted
       ? goalFit != null
         ? Math.min(100, Math.round(relevance * 0.22 + goalFit * 0.78))
         : Math.min(100, Math.round(relevance * 0.4 + healthIntentSortTier(p, parsed) * 0.6))
       : healthiestRank
-        ? Math.min(100, Math.round(scoutScore * 0.78 + relevance * 0.22))
+        ? matchDisplay
         : Math.min(100, Math.round(relevance + scoutScore * 0.15));
     return {
     product_id: p.id,
