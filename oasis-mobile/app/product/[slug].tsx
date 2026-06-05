@@ -99,7 +99,7 @@ export default function ProductScreen() {
         <View style={styles.navRight}>
           <ThemeToggle />
           <Pressable
-            onPress={() => product && basket.add(product.slug)}
+            onPress={() => product && basket.add(product.slug, product.name)}
             hitSlop={12}
           >
             <Ionicons
@@ -265,7 +265,7 @@ export default function ProductScreen() {
 
           <Pressable
             style={[styles.basketCta, { backgroundColor: colors.fg }]}
-            onPress={() => basket.add(product.slug)}
+            onPress={() => basket.add(product.slug, product.name)}
           >
             <Text style={[styles.basketCtaText, { color: colors.bg }]}>
               {basket.has(product.slug) ? "In your basket" : "Add to basket"}

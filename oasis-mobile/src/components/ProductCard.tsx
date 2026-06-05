@@ -144,7 +144,7 @@ export function ProductCard({
           onPress={(e) => {
             e.stopPropagation?.();
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            basket.add(product.slug);
+            basket.add(product.slug, product.name);
           }}
           style={[styles.addBtn, inBasket && styles.addBtnOn]}
         >

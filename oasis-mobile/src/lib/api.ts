@@ -85,10 +85,43 @@ export function createSubscription(token: string): Promise<SubscriptionCheckout>
   });
 }
 
-export function fetchSwaps(slugs: string[], goal = "balanced"): Promise<import("@/types/api").SwapsResponse> {
+type RawSwapRow = {
+  product: CatalogProduct;
+  goalFit: number;
+  deltas: string[];
+};
+
+type RawSwapsResponse = {
+  goal: string;
+  swaps: Record<string, RawSwapRow[]>;
+};
+
+function mapSwapRow(row: RawSwapRow): import("@/types/api").BasketSwap {
+  const p = row.product;
+  return {
+    slug: p.slug,
+    name: p.name,
+    brand: p.brand,
+    image_urls: p.image_urls ?? [],
+    price_inr: p.price_inr,
+    core_scores: p.core_scores,
+    goal_fit: row.goalFit,
+    deltas: row.deltas ?? [],
+  };
+}
+
+export async function fetchSwaps(
+  slugs: string[],
+  goal = "balanced",
+): Promise<import("@/types/api").SwapsResponse> {
   if (!slugs.length) {
     return Promise.resolve({ goal, swaps: {} });
   }
   const q = `slugs=${slugs.map(encodeURIComponent).join(",")}&goal=${encodeURIComponent(goal)}`;
-  return apiFetch(`/api/swaps?${q}`);
+  const raw = await apiFetch<RawSwapsResponse>(`/api/swaps?${q}`);
+  const swaps: Record<string, import("@/types/api").BasketSwap[]> = {};
+  for (const [slug, rows] of Object.entries(raw.swaps ?? {})) {
+    swaps[slug] = (rows ?? []).map(mapSwapRow);
+  }
+  return { goal: raw.goal, swaps };
 }

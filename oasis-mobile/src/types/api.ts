@@ -211,20 +211,21 @@ export type LandingInsights = {
   dodgeList: LandingDodgeProduct[];
 };
 
-export type SwapSuggestion = {
+/** Normalized swap row for basket / PDP (from API `{ product, goalFit, deltas }`). */
+export type BasketSwap = {
   slug: string;
   name: string;
   brand: string | null;
   image_urls: string[];
   price_inr: number | null;
   core_scores: CoreScoreSummary | null;
-  delta_score: number;
-  reason: string;
+  goal_fit: number;
+  deltas: string[];
 };
 
 export type SwapsResponse = {
   goal: string;
-  swaps: Record<string, SwapSuggestion[]>;
+  swaps: Record<string, BasketSwap[]>;
 };
 
 export type UserProfile = {

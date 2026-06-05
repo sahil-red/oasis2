@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -9,57 +8,121 @@ import {
   Text,
   View,
 } from "react-native";
-import { ProductCard } from "@/components/ProductCard";
+import { BasketCartLine } from "@/components/basket/BasketCartLine";
 import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 import { fetchProductsBySlugs, fetchSwaps } from "@/lib/api";
 import { useBasket } from "@/lib/basket";
+import {
+  GOAL_OPTIONS,
+  readStoredGoal,
+  writeStoredGoal,
+  type GoalId,
+} from "@/lib/goals";
+import { useTheme } from "@/lib/theme-context";
 import { catalogTierFill } from "@/lib/score";
-import { colors, fonts, radius, spacing } from "@/theme";
-import type { CatalogProduct, SwapSuggestion } from "@/types/api";
+import { fonts, radius, spacing } from "@/theme";
+import type { BasketSwap, CatalogProduct } from "@/types/api";
 
 export default function BasketTab() {
   const router = useRouter();
   const basket = useBasket();
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [swaps, setSwaps] = useState<Record<string, SwapSuggestion[]>>({});
+  const { colors } = useTheme();
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [swaps, setSwaps] = useState<Record<string, BasketSwap[]>>({});
   const [loading, setLoading] = useState(false);
+  const [swapsLoading, setSwapsLoading] = useState(false);
+  const [fetchFailed, setFetchFailed] = useState(false);
+  const [goal, setGoal] = useState<GoalId>("balanced");
 
-  const avgScore = useMemo(() => {
-    const scores = products
-      .map((p) => p.core_scores?.score)
-      .filter((s): s is number => s != null);
-    if (!scores.length) return null;
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-  }, [products]);
+  useEffect(() => {
+    void readStoredGoal().then(setGoal);
+  }, []);
 
-  const refresh = useCallback(async () => {
+  const slugsKey = useMemo(
+    () => [...new Set(basket.entries.map((e) => e.slug))].sort().join(","),
+    [basket.entries],
+  );
+
+  const lines = useMemo(() => {
+    const bySlug = new Map(catalog.map((p) => [p.slug, p]));
+    return basket.entries
+      .map((e) => {
+        const product = bySlug.get(e.slug);
+        return product ? { product, qty: e.qty, entryName: e.name } : null;
+      })
+      .filter(Boolean) as { product: CatalogProduct; qty: number; entryName: string }[];
+  }, [basket.entries, catalog]);
+
+  const unresolved = useMemo(() => {
+    const loaded = new Set(catalog.map((p) => p.slug));
+    return basket.entries.filter((e) => !loaded.has(e.slug));
+  }, [basket.entries, catalog]);
+
+  const refreshCatalog = useCallback(async () => {
+    if (!basket.hydrated) return;
     if (!basket.slugs.length) {
-      setProducts([]);
-      setSwaps({});
+      setCatalog([]);
+      setFetchFailed(false);
       return;
     }
     setLoading(true);
+    setFetchFailed(false);
     try {
       const rows = await fetchProductsBySlugs(basket.slugs);
       const order = new Map(basket.slugs.map((s, i) => [s, i]));
       rows.sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
-      setProducts(rows);
-      const swapRes = await fetchSwaps(basket.slugs.slice(0, 8));
-      setSwaps(swapRes.swaps);
+      setCatalog(rows);
     } catch {
-      setProducts([]);
-      setSwaps({});
+      setCatalog([]);
+      setFetchFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [basket.slugs]);
+  }, [basket.hydrated, basket.slugs]);
+
+  const refreshSwaps = useCallback(async () => {
+    if (!slugsKey) {
+      setSwaps({});
+      return;
+    }
+    setSwapsLoading(true);
+    try {
+      const res = await fetchSwaps(slugsKey.split(","), goal);
+      setSwaps(res.swaps);
+    } catch {
+      setSwaps({});
+    } finally {
+      setSwapsLoading(false);
+    }
+  }, [slugsKey, goal]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshCatalog();
+  }, [refreshCatalog]);
+
+  useEffect(() => {
+    void refreshSwaps();
+  }, [refreshSwaps]);
+
+  const pickGoal = async (next: GoalId) => {
+    setGoal(next);
+    await writeStoredGoal(next);
+  };
+
+  const totalInr = lines.reduce((s, l) => s + (l.product.price_inr ?? 0) * l.qty, 0);
+  const scores = lines
+    .flatMap((l) => Array(l.qty).fill(l.product.core_scores?.score))
+    .filter((s): s is number => s != null);
+  const avgScore = scores.length
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : null;
+  const swapCount = Object.values(swaps).reduce((n, s) => n + s.length, 0);
+
+  const empty = basket.hydrated && basket.count === 0;
+  const showLoading = !basket.hydrated || (loading && basket.count > 0 && !lines.length);
 
   return (
     <Screen>
@@ -72,87 +135,141 @@ export default function BasketTab() {
           </View>
           {basket.count > 0 ? (
             <Pressable onPress={basket.clear}>
-              <Text style={styles.clear}>Clear all</Text>
+              <Text style={[styles.clear, { color: colors.bad }]}>Clear all</Text>
             </Pressable>
           ) : null}
         </View>
 
-        {loading ? (
+        {showLoading ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
-        ) : basket.count === 0 ? (
+        ) : empty ? (
           <Panel style={styles.empty}>
-            <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-            <Text style={styles.emptyBody}>
-              Tap + on any product to build a shortlist while you shop — Scout scores each pick.
+            <Text style={[styles.emptyTitle, { color: colors.fg }]}>Nothing saved yet</Text>
+            <Text style={[styles.emptyBody, { color: colors.fgMuted }]}>
+              Tap + on any product to build a shortlist while you shop — Scout scores each pick and
+              finds better swaps.
             </Text>
-            <Pressable style={styles.cta} onPress={() => router.push("/(tabs)/browse")}>
-              <Text style={styles.ctaText}>Browse catalog</Text>
+            <Pressable
+              style={[styles.cta, { backgroundColor: colors.fg }]}
+              onPress={() => router.push("/(tabs)/browse")}
+            >
+              <Text style={[styles.ctaText, { color: colors.bg }]}>Browse catalog</Text>
             </Pressable>
             <Pressable style={styles.ctaSecondary} onPress={() => router.push("/(tabs)")}>
-              <Text style={styles.ctaSecondaryText}>Ask Scout</Text>
+              <Text style={[styles.ctaSecondaryText, { color: colors.accent }]}>Ask Scout</Text>
             </Pressable>
           </Panel>
         ) : (
           <>
-            {avgScore != null ? (
-              <Panel soft style={styles.analysis}>
-                <Text style={styles.analysisLabel}>Basket health score</Text>
-                <View style={styles.analysisRow}>
-                  <View
-                    style={[styles.analysisBadge, { backgroundColor: catalogTierFill(avgScore) }]}
-                  >
-                    <Text style={styles.analysisScore}>{avgScore}</Text>
-                  </View>
-                  <Text style={styles.analysisCopy}>
-                    Average Scout score across {products.length} item
-                    {products.length === 1 ? "" : "s"} in your shortlist.
-                  </Text>
-                </View>
+            {fetchFailed ? (
+              <Panel style={styles.warn}>
+                <Text style={[styles.warnTitle, { color: colors.bad }]}>Couldn&apos;t load products</Text>
+                <Text style={[styles.warnBody, { color: colors.fgMuted }]}>
+                  Check your connection and API URL, then try again.
+                </Text>
+                <Pressable onPress={() => void refreshCatalog()}>
+                  <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }}>Retry</Text>
+                </Pressable>
               </Panel>
             ) : null}
 
-            <View style={styles.grid}>
-              {products.map((item) => (
-                <View key={item.id} style={styles.gridItem}>
-                  <ProductCard product={item} />
-                  <Pressable
-                    style={styles.remove}
-                    onPress={() => basket.remove(item.slug)}
+            {unresolved.length > 0 ? (
+              <Panel soft style={styles.warn}>
+                <Text style={[styles.warnTitle, { color: colors.fg }]}>
+                  {unresolved.length} item{unresolved.length === 1 ? "" : "s"} couldn&apos;t load
+                </Text>
+                {unresolved.map((e) => (
+                  <View key={e.slug} style={styles.unresolvedRow}>
+                    <Text style={{ color: colors.fgMuted, flex: 1 }} numberOfLines={1}>
+                      {e.name || e.slug}
+                      {e.qty > 1 ? ` × ${e.qty}` : ""}
+                    </Text>
+                    <Pressable onPress={() => basket.remove(e.slug)}>
+                      <Text style={{ color: colors.bad, fontSize: 12 }}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </Panel>
+            ) : null}
+
+            <Panel style={styles.summary}>
+              <Text style={[styles.summaryPrice, { color: colors.fg }]}>
+                {totalInr > 0 ? `₹${Math.round(totalInr)}` : "—"}
+              </Text>
+              <Text style={[styles.summaryMeta, { color: colors.fgMuted }]}>
+                {basket.count} item{basket.count === 1 ? "" : "s"}
+                {swapsLoading
+                  ? " · finding swaps…"
+                  : swapCount > 0
+                    ? ` · ${swapCount} swap${swapCount === 1 ? "" : "s"}`
+                    : ""}
+              </Text>
+              {avgScore != null ? (
+                <View style={styles.summaryScoreRow}>
+                  <View
+                    style={[styles.summaryBadge, { backgroundColor: catalogTierFill(avgScore) }]}
                   >
-                    <Text style={styles.removeText}>Remove</Text>
-                  </Pressable>
-                  {swaps[item.slug]?.length ? (
-                    <View style={styles.swapBlock}>
-                      <Text style={styles.swapTitle}>Better swaps</Text>
-                      {swaps[item.slug]!.slice(0, 2).map((swap) => (
-                        <Pressable
-                          key={swap.slug}
-                          style={styles.swapRow}
-                          onPress={() => router.push(`/product/${swap.slug}`)}
-                        >
-                          {swap.image_urls[0] ? (
-                            <Image
-                              source={{ uri: swap.image_urls[0] }}
-                              style={styles.swapThumb}
-                              contentFit="contain"
-                            />
-                          ) : null}
-                          <View style={styles.swapBody}>
-                            <Text style={styles.swapName} numberOfLines={1}>
-                              {swap.name}
-                            </Text>
-                            <Text style={styles.swapReason} numberOfLines={2}>
-                              {swap.reason}
-                            </Text>
-                          </View>
-                          <Text style={styles.swapDelta}>+{swap.delta_score}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : null}
+                    <Text style={styles.summaryBadgeText}>{avgScore}</Text>
+                  </View>
+                  <Text style={[styles.summaryCopy, { color: colors.fgMuted }]}>
+                    Average Scout score for loaded items
+                  </Text>
                 </View>
+              ) : null}
+            </Panel>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.goalRow}
+            >
+              {GOAL_OPTIONS.map((g) => {
+                const active = goal === g.id;
+                return (
+                  <Pressable
+                    key={g.id}
+                    onPress={() => void pickGoal(g.id)}
+                    style={[
+                      styles.goalChip,
+                      {
+                        borderColor: active ? colors.accent : colors.line,
+                        backgroundColor: active ? colors.accentSoft : colors.panel,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: fonts.sansSemiBold,
+                        fontSize: 12,
+                        color: active ? colors.accent : colors.fgMuted,
+                      }}
+                    >
+                      {g.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Panel style={styles.cart}>
+              {lines.map(({ product, qty }) => (
+                <BasketCartLine
+                  key={product.slug}
+                  product={product}
+                  qty={qty}
+                  swaps={swaps[product.slug] ?? []}
+                  swapsLoading={swapsLoading}
+                  onDecrement={() => basket.decrement(product.slug)}
+                  onIncrement={() => basket.add(product.slug, product.name)}
+                  onRemove={() => basket.remove(product.slug)}
+                  onSwap={(swap) => basket.replace(product.slug, swap.slug, swap.name)}
+                />
               ))}
-            </View>
+            </Panel>
+
+            <Pressable style={styles.addMore} onPress={() => router.push("/(tabs)/browse")}>
+              <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }}>Add more items</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -170,68 +287,65 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   title: { fontSize: 26, marginTop: 4 },
-  clear: { fontFamily: fonts.sansSemiBold, color: colors.bad, fontSize: 14 },
+  clear: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   empty: { margin: spacing.lg, alignItems: "center" },
-  emptyTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.fg },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 22 },
   emptyBody: {
     fontFamily: fonts.sans,
-    color: colors.fgMuted,
     textAlign: "center",
     marginTop: spacing.sm,
     lineHeight: 22,
   },
   cta: {
     marginTop: spacing.lg,
-    backgroundColor: colors.fg,
     paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     borderRadius: radius.full,
     width: "100%",
     alignItems: "center",
   },
-  ctaText: { fontFamily: fonts.sansBold, color: colors.bg },
+  ctaText: { fontFamily: fonts.sansBold },
   ctaSecondary: { marginTop: spacing.sm, padding: spacing.sm },
-  ctaSecondaryText: { fontFamily: fonts.sansSemiBold, color: colors.accent },
-  analysis: { marginHorizontal: spacing.lg, marginTop: spacing.md },
-  analysisLabel: { fontFamily: fonts.sansMedium, fontSize: 11, color: colors.fgDim, textTransform: "uppercase", letterSpacing: 1 },
-  analysisRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm, alignItems: "center" },
-  analysisBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  analysisScore: { fontFamily: fonts.display, fontSize: 26, color: "#fff" },
-  analysisCopy: { flex: 1, fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 14, lineHeight: 20 },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: spacing.sm,
-    marginTop: spacing.md,
-  },
-  gridItem: { width: "50%" },
-  remove: { alignItems: "center", paddingBottom: spacing.md },
-  removeText: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgDim },
-  swapBlock: {
-    marginHorizontal: spacing.xs,
-    marginBottom: spacing.lg,
-    padding: spacing.sm,
-    backgroundColor: colors.bgSoft,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  swapTitle: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.fgDim, marginBottom: spacing.sm },
-  swapRow: {
+  ctaSecondaryText: { fontFamily: fonts.sansSemiBold },
+  warn: { marginHorizontal: spacing.lg, marginTop: spacing.md },
+  warnTitle: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
+  warnBody: { fontFamily: fonts.sans, fontSize: 13, marginTop: 4, marginBottom: spacing.sm },
+  unresolvedRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  swapThumb: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.panel },
-  swapBody: { flex: 1 },
-  swapName: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.fg },
-  swapReason: { fontFamily: fonts.sans, fontSize: 11, color: colors.fgMuted, marginTop: 2 },
-  swapDelta: { fontFamily: fonts.sansBold, fontSize: 14, color: colors.good },
+  summary: { marginHorizontal: spacing.lg, marginTop: spacing.md },
+  summaryPrice: { fontFamily: fonts.display, fontSize: 28 },
+  summaryMeta: { fontFamily: fonts.sans, fontSize: 13, marginTop: 4 },
+  summaryScoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  summaryBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryBadgeText: { fontFamily: fonts.display, fontSize: 24, color: "#fff" },
+  summaryCopy: { flex: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
+  goalRow: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  goalChip: {
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  cart: { marginHorizontal: spacing.lg, marginTop: spacing.md },
+  addMore: { alignItems: "center", marginTop: spacing.lg, padding: spacing.md },
 });
