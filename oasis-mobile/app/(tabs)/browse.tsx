@@ -1,4 +1,5 @@
-import { useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,6 +28,7 @@ const VERDICT_FILTERS = [
 ] as const;
 
 export default function BrowseTab() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; verdict?: string; goal?: string; q?: string }>();
   const [categories, setCategories] = useState<string[]>([]);
   const [category, setCategory] = useState(params.category ?? "");
@@ -78,6 +80,17 @@ export default function BrowseTab() {
       <SiteHeader />
       <Eyebrow style={styles.eyebrow}>Catalog</Eyebrow>
       <Text style={styles.title}>Browse scored products</Text>
+
+      {/* AI search entry */}
+      <Pressable
+        style={styles.aiBar}
+        onPress={() => router.push("/search")}
+      >
+        <Ionicons name="sparkles" size={16} color={colors.accent} />
+        <Text style={styles.aiBarText}>Ask Scout anything…</Text>
+        <Ionicons name="arrow-forward" size={16} color={colors.fgDim} />
+      </Pressable>
+
       <TextInput
         style={styles.searchInput}
         value={query}
@@ -204,4 +217,23 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: fonts.sans, color: colors.fgMuted, fontSize: 13 },
   chipTextActive: { fontFamily: fonts.sansSemiBold, color: colors.accent },
   grid: { paddingHorizontal: spacing.sm, paddingBottom: spacing.xl },
+  aiBar: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.panel,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.accentSoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+  },
+  aiBarText: {
+    flex: 1,
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    color: colors.fgDim,
+  },
 });
