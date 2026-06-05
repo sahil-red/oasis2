@@ -1,5 +1,5 @@
 import type { SearchIntentTier } from "@/lib/search/intent-classify";
-import type { ParsedSortIntent } from "@/lib/search/query-parse";
+import type { ParsedProductQuery } from "@/lib/search/query-parse";
 
 export type LiveSearchCase = {
   query: string;
@@ -19,13 +19,7 @@ export type IntentCase = {
 
 export type ParseCase = {
   query: string;
-  check: (parsed: {
-    product_terms: string[];
-    sort_intent: ParsedSortIntent;
-    hard_constraints: Record<string, unknown>;
-    exclude_keywords: string[];
-    soft_preferences: string[];
-  }) => boolean;
+  check: (parsed: ParsedProductQuery) => boolean;
 };
 
 export const INTENT_CASES: IntentCase[] = [
