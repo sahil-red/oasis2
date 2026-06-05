@@ -50,7 +50,6 @@
     "search:regression:live": "tsx scripts/search-regression-live.ts",
     "lm:status": "tsx scripts/lm-run-status.ts",
     "mobile:env": "tsx scripts/sync-mobile-env.ts",
-    "zepto:oauth:register": "tsx scripts/register-zepto-oauth-client.ts",
     "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:tunnel"
   },
   "dependencies": {
