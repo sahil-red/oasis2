@@ -13,32 +13,17 @@ import {
   Text,
   View,
 } from "react-native";
+import { PdpIngredients } from "@/components/pdp/PdpIngredients";
 import { Screen } from "@/components/Screen";
 import { fetchProduct } from "@/lib/api";
 import { useBasket } from "@/lib/basket";
 import { bandFromScore, labelForBand } from "@/lib/score";
 import { VERDICT_COLORS, VERDICT_SHORT, formatPrice, resolveVerdict } from "@/lib/verdict";
 import { colors, fonts, radius, spacing } from "@/theme";
-import type { IngredientItem, PdpSwap, ProductDetail, VerdictId } from "@/types/api";
+import type { PdpSwap, ProductDetail, VerdictId } from "@/types/api";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-
-// ─── Risk system ─────────────────────────────────────────────────────────────
-const RISK_COLOR: Record<string, string> = {
-  "risk-free": "#34d399",
-  unknown: colors.fgDim,
-  limited: "#fbbf24",
-  moderate: "#f87171",
-  hazardous: "#ef4444",
-};
-const RISK_BG: Record<string, string> = {
-  "risk-free": "rgba(52,211,153,0.1)",
-  unknown: "rgba(255,255,255,0.04)",
-  limited: "rgba(251,191,36,0.1)",
-  moderate: "rgba(248,113,113,0.1)",
-  hazardous: "rgba(239,68,68,0.14)",
-};
 
 // ─── Chip system ──────────────────────────────────────────────────────────────
 const CHIP_LABELS: Record<string, string> = {
@@ -99,45 +84,6 @@ function SwapCard({ swap, onPress }: { swap: PdpSwap; onPress: () => void }) {
   );
 }
 
-function IngredientRow({ item, expanded, onToggle }: {
-  item: IngredientItem;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const rc = RISK_COLOR[item.risk] ?? colors.fgDim;
-  const bg = RISK_BG[item.risk] ?? "transparent";
-  const showExpand = item.flagged && item.why;
-  return (
-    <Pressable
-      style={[styles.ingredientRow, expanded && { backgroundColor: bg }]}
-      onPress={showExpand ? onToggle : undefined}
-    >
-      <View style={[styles.riskDot, { backgroundColor: rc }]} />
-      <View style={styles.ingredientBody}>
-        <View style={styles.ingredientNameRow}>
-          <Text style={[styles.ingredientName, item.flagged && { color: colors.fg }]} numberOfLines={expanded ? undefined : 1}>
-            {item.display}
-            {item.e_number ? <Text style={styles.eNumber}> {item.e_number}</Text> : null}
-            {item.percent ? <Text style={styles.ingredientPct}> {item.percent}</Text> : null}
-          </Text>
-          <Text style={[styles.tierLabel, { color: rc }]}>{item.tier_label}</Text>
-        </View>
-        {expanded && item.why ? (
-          <Text style={styles.ingredientWhy}>{item.why}</Text>
-        ) : null}
-      </View>
-      {showExpand ? (
-        <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={14}
-          color={colors.fgDim}
-          style={{ marginLeft: 4 }}
-        />
-      ) : null}
-    </Pressable>
-  );
-}
-
 function NutritionRow({ label, value, unit, emphasis, indent, warn, good }: {
   label: string; value?: number; unit?: string;
   emphasis?: boolean; indent?: boolean; warn?: boolean; good?: boolean;
@@ -167,7 +113,6 @@ export default function ProductScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageIndex, setImageIndex] = useState(0);
-  const [expandedIngredient, setExpandedIngredient] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -370,39 +315,9 @@ export default function ProductScreen() {
           </>
         ) : null}
 
-        {/* Ingredients */}
-        {ingredients.length > 0 ? (
-          <>
-            <Divider />
-            <View style={styles.section}>
-              <SectionLabel text="Ingredients" />
-              <Text style={styles.sectionSub}>Tap flagged items for details</Text>
-              <View style={styles.ingredientsList}>
-                {ingredients.map((item) => (
-                  <IngredientRow
-                    key={`${item.display}-${item.e_number}`}
-                    item={item}
-                    expanded={expandedIngredient === `${item.display}-${item.e_number}`}
-                    onToggle={() =>
-                      setExpandedIngredient(
-                        expandedIngredient === `${item.display}-${item.e_number}`
-                          ? null
-                          : `${item.display}-${item.e_number}`,
-                      )
-                    }
-                  />
-                ))}
-              </View>
-            </View>
-          </>
-        ) : product.ingredients_raw ? (
-          <>
-            <Divider />
-            <View style={styles.section}>
-              <SectionLabel text="Ingredients" />
-              <Text style={styles.rawIngredients}>{product.ingredients_raw}</Text>
-            </View>
-          </>
+        {/* Ingredients — parsed server-side via same lib as web */}
+        {ingredients.length > 0 || product.ingredients_raw ? (
+          <PdpIngredients items={ingredients} rawLabel={product.ingredients_raw} />
         ) : null}
 
         {/* Nutrition */}
