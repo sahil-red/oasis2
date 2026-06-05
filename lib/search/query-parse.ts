@@ -96,7 +96,7 @@ Schema:
 Rules:
 - product_terms are the primary product type the user wants (1-3 words): ghee, soft drink, paneer, biscuits.
 - search_keywords are 8-20 retrieval terms to find matching SKUs in an Indian grocery catalog — include brand names, variants, and synonyms. Example for "zero sugar soft drinks": ["coke zero", "diet coke", "pepsi zero", "sprite zero", "7up zero", "soft drink", "soda", "cola", "carbonated", "zero sugar drink"]. Example for "grass fed ghee": ["ghee", "cow ghee", "a2 ghee", "bilona", "desi ghee", "grass fed"].
-- exclude_keywords are product types that would be wrong matches (2-8 words). Example for ghee: ["laddu", "ladoo", "barfi", "mithai", "biscuit", "snack"]. Example for soft drinks: ["water", "mineral water", "drinking water", "aquafina", "bisleri"].
+- exclude_keywords are product types that would be wrong matches (2-8 words). Example for ghee: ["laddu", "ladoo", "barfi", "mithai", "biscuit", "snack"]. Example for paneer: ["masala", "marinade", "spice", "seasoning", "soda", "goli", "bread", "pav", "bhaji", "mix"]. Example for soft drinks: ["water", "mineral water", "drinking water", "aquafina", "bisleri"].
 - categories are broad aisle/shelf hints only when obvious: snacks, dairy, breakfast, bakery, sweets, beverages.
 - Use hard constraints only when the user asks for a limit or strict requirement.
 - "low sugar" means max_sugar_g_100g = 10 unless a numeric limit is given.
@@ -202,7 +202,7 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
   if (/fat loss|weight loss|diet/.test(lower)) parsed.health_contexts.push("fat_loss");
   if (/bulk|bulking|weight gain/.test(lower)) parsed.health_contexts.push("bulk");
 
-  if (/cheap|cheapest|budget|under|below/.test(lower)) parsed.sort_intent = "cheapest";
+  if (/\b(cheap|cheapest|budget)\b/.test(lower)) parsed.sort_intent = "cheapest";
   if (/high protein|protein rich/.test(lower) && parsed.sort_intent !== "highest_protein") {
     parsed.sort_intent = "highest_protein";
   }
@@ -261,6 +261,31 @@ export function heuristicParseProductQuery(prompt: string): ParsedProductQuery {
       "namkeen",
     ];
     if (/grass.?fed|grass fed/.test(lower)) parsed.soft_preferences.push("grass fed");
+  }
+  if (/\bpaneer\b/.test(lower) && !/\bpaneer masala\b|\bbhurji\b/i.test(lower)) {
+    parsed.product_terms = ["paneer"];
+    parsed.search_keywords = ["paneer", "cottage cheese", "malai paneer", "fresh paneer"];
+    parsed.categories = [...new Set([...parsed.categories, "dairy"])];
+    parsed.exclude_keywords = [
+      ...(parsed.exclude_keywords ?? []),
+      "masala",
+      "marinade",
+      "spice",
+      "seasoning",
+      "soda",
+      "goli",
+      "drink",
+      "pop",
+      "bread",
+      "pav",
+      "bhaji",
+      "mix",
+      "biscuit",
+      "cracker",
+      "nan",
+      "paratha",
+      "sorbet",
+    ];
   }
 
   parsed.explanation = "I parsed your request into product terms, limits, and health context.";

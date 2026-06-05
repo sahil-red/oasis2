@@ -36,6 +36,34 @@ function ingredientMentionOnly(hay: string, term: string): boolean {
   return /(?:with|contains|in|made with|using)\b/.test(hay) && hay.includes(t);
 }
 
+/** Name/subcategory patterns that mean the keyword is a flavor, not the product type. */
+const TERM_FALSE_POSITIVE: Record<string, RegExp[]> = {
+  paneer: [
+    /\bmasala\b/i,
+    /\bmarinade\b/i,
+    /\bspice\b/i,
+    /\bseasoning\b/i,
+    /\bsoda\b/i,
+    /\bgoli\b/i,
+    /\bpop\b/i,
+    /\bbread\b/i,
+    /\bpav\b/i,
+    /\bbhaji\b/i,
+    /\bmix\b/i,
+    /\bsorbet\b/i,
+    /\bbiscuit\b/i,
+    /\bcracker\b/i,
+  ],
+  ghee: [/\bladdu\b/i, /\bladoo\b/i, /\bbarfi\b/i, /\bmitai\b/i, /\bnamkeen\b/i, /\bbiscuit\b/i],
+};
+
+function isFalsePositiveForTerm(p: ProductListItem, term: string): boolean {
+  const patterns = TERM_FALSE_POSITIVE[term.toLowerCase()];
+  if (!patterns?.length) return false;
+  const label = `${p.name ?? ""} ${p.subcategory ?? ""}`;
+  return patterns.some((re) => re.test(label));
+}
+
 /** Product-type relevance for retrieval — Scout score must not dominate. */
 export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): number {
   const hay = haystack(p);
@@ -53,9 +81,14 @@ export function relevanceScore(p: ProductListItem, parsed: ParsedProductQuery): 
   for (const term of terms) {
     const t = term.toLowerCase();
     if (!t) continue;
-    if (p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), t)) score += 60;
-    else if (matchesKeyword((p.name ?? "").toLowerCase(), t) || matchesKeyword((p.brand ?? "").toLowerCase(), t)) {
-      score += 42;
+    if (parsed.product_terms.includes(t) && isFalsePositiveForTerm(p, t)) {
+      score -= 1000;
+      continue;
+    }
+    if (p.subcategory && matchesKeyword(p.subcategory.toLowerCase(), t)) {
+      score += parsed.product_terms.includes(t) ? 72 : 60;
+    } else if (matchesKeyword((p.name ?? "").toLowerCase(), t) || matchesKeyword((p.brand ?? "").toLowerCase(), t)) {
+      score += parsed.product_terms.includes(t) ? 48 : 42;
     } else if (ingredientMentionOnly(hay, t)) score += 8;
     else if (hay.includes(t)) score += 10;
     else if (p.category && matchesKeyword(p.category.toLowerCase(), t)) score += 10;

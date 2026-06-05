@@ -122,9 +122,44 @@ export function classifyIntent(
     }
   }
 
+  const ROUTING_STOPWORDS = new Set([
+    "with",
+    "low",
+    "high",
+    "less",
+    "more",
+    "no",
+    "without",
+    "under",
+    "below",
+    "over",
+    "above",
+    "and",
+    "or",
+    "for",
+    "fat",
+    "sugar",
+    "protein",
+    "rs",
+    "inr",
+    "rupees",
+  ]);
+  const contentTokens = tokens.filter(
+    (t) => !ROUTING_STOPWORDS.has(t) && !/^\d+$/.test(t),
+  );
+  const hasProductNoun = contentTokens.some(
+    (t) => isProductTypeNoun(t) || (brandSet ? brandSet.has(t) : false),
+  );
+  if (hasConstraints && hasProductNoun && contentTokens.length <= 4) {
+    return "structured";
+  }
+
+  const vagueWith =
+    /\bwith\b/i.test(q) && !/\bwith\s+(low|high|no|less|zero|added)\b/i.test(q);
   if (
-    tokens.length >= 6 ||
-    /\b(and|with|for|that|something|anything|tiffin|meal|option)\b/i.test(q)
+    contentTokens.length >= 6 ||
+    /\b(and|for|that|something|anything|tiffin|meal|option)\b/i.test(q) ||
+    vagueWith
   ) {
     return "complex";
   }

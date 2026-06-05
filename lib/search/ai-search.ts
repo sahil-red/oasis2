@@ -91,11 +91,20 @@ export async function runAiProductSearch(
     const llm = await rankCandidatesWithDeepseek(prompt, parsed, candidates, limit);
     if (llm.rankings.length > 0) {
       summary = llm.summary;
-      rankings = llm.rankings;
       usage = llm.usage;
+      rankWarning = llm.warning;
+      const llmById = new Map(llm.rankings.map((r) => [r.product_id, r]));
+      rankings = deterministic.rankings.map((row) => {
+        const polished = llmById.get(row.product_id);
+        if (!polished) return row;
+        return {
+          ...row,
+          reasons: polished.reasons.length ? polished.reasons : row.reasons,
+          warning: polished.warning ?? row.warning,
+        };
+      });
       rankSource = llm.source === "deepseek" ? "deepseek" : "semantic";
     }
-    rankWarning = llm.warning;
   }
 
   const byId = new Map(candidates.map((p) => [p.id, p]));

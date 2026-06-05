@@ -9,8 +9,10 @@ type CacheEntry<T> = { at: number; value: T };
 const parseCache = new Map<string, CacheEntry<QueryParseResult>>();
 const resultCache = new Map<string, CacheEntry<AiSearchResult>>();
 
+const CACHE_VERSION = "v2";
+
 function normalizeKey(prompt: string): string {
-  return prompt.toLowerCase().replace(/\s+/g, " ").trim();
+  return `${CACHE_VERSION}:${prompt.toLowerCase().replace(/\s+/g, " ").trim()}`;
 }
 
 function get<T>(map: Map<string, CacheEntry<T>>, key: string, ttlMs: number): T | null {
