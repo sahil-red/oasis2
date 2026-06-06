@@ -1,4 +1,4 @@
-import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
+import { cosineSimilarity, embedText, embedTextBatch } from "@/lib/search/v2/embeddings";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, TraitId, TraitVector } from "@/lib/search/v2/types";
 import { TRAIT_IDS, CATEGORY_CENTROID_THRESHOLD, CATEGORY_CENTROID_TOP_K } from "@/lib/search/v2/types";
 
@@ -47,21 +47,29 @@ export async function buildCategoryTraitProfiles(
     groups.set(key, list);
   }
 
-  const profiles: CategoryTraitProfileRow[] = [];
-  for (const [category_key, rows] of groups) {
+  // Batch all centroid embeddings in one pass — there can be hundreds of category
+  // keys, and this runs on the cold-snapshot request path; serial awaits would
+  // multiply latency by the category count (with per-call retries) and risk timeout.
+  const staged = [...groups].map(([category_key, rows]) => {
     const trait_means = meanTraits(rows);
-    const centroidText = traitVectorToText(trait_means);
-    const centroidVec = centroidText ? await embedText(centroidText, "document") : [];
-    profiles.push({
-      category_key,
-      category: rows[0]?.category ?? null,
-      subcategory: rows[0]?.subcategory ?? null,
-      trait_means,
+    return { category_key, rows, trait_means, centroidText: traitVectorToText(trait_means) };
+  });
+  const centroidVecs = await embedTextBatch(
+    staged.map((s) => s.centroidText || " "),
+    64,
+    "document",
+  );
+  return staged.map((s, i) => {
+    const centroidVec = s.centroidText ? centroidVecs[i] ?? [] : [];
+    return {
+      category_key: s.category_key,
+      category: s.rows[0]?.category ?? null,
+      subcategory: s.rows[0]?.subcategory ?? null,
+      trait_means: s.trait_means,
       trait_centroid: centroidVec.length ? centroidVec : null,
-      product_count: rows.length,
-    });
-  }
-  return profiles;
+      product_count: s.rows.length,
+    };
+  });
 }
 
 /** §6a goal candidate gen — cosine(goal_weights, category_trait_centroid) ≥ 0.5, top-K=8 */

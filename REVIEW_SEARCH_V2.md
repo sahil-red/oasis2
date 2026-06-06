@@ -124,3 +124,47 @@ validated, not before.
 3. `pnpm search:build-index` (~$2–3 DeepSeek + free Voyage; one command).
 4. `SEARCH_EVAL_CALIBRATION=1 pnpm search:eval` — builds calibration curve + enforces leak-rate=0.
 5. `pnpm search:ship-check` → set `SEARCH_V2_ENABLED=true`.
+
+---
+
+## v4 — Final bug sweep (3 parallel bug-hunters + verification)
+
+### Verified FALSE POSITIVES (do not "fix" — checked against pipeline.ts)
+- **Verification emptying all results** — NOT real. `verification.ts` returns the *original* rows when the
+  Groq keep-set is empty (`merged.length ? merged : rows`), so the pipeline filter never zeroes out.
+- **`cheaper_than` hardcoded to `healthier_than`** — NOT real. `pipeline.ts:62` overwrites mode with
+  `intent.comparison_mode`, so cheaper-than ranks by price correctly.
+
+### Fixed this pass (committed)
+1. **`loadExistingHashes` 1000-row cap** (`build-search-index.ts`) — now paginated. Without it,
+   `--skip-unchanged` silently treated every product past row 1000 as new and **re-enriched/re-embedded them
+   on every rebuild** (real recurring cost). High-value fix.
+2. **Serial `embedText` on the cold request path** — `loadGoalMapFromDb` (seed goals) and
+   `buildCategoryTraitProfiles` (hundreds of category centroids) now embed in **parallel / one batch**.
+   Previously these serialized N network calls (each with up to 5 retries) onto the first query after a cache
+   miss → latency/timeout risk.
+3. **Intent cache key instability** (`intent-cache.ts`) — `prefsKey` now key-sorted; identical prefs in
+   different key order no longer miss the cache.
+4. **Goal-slug bloat** (`goal-graph.ts`) — slug hash now over the normalized phrase, so "High Protein" and
+   "high  protein" map to one `goal_id` instead of multiplying `goal_trait_map` rows.
+
+Verified after fixes: main `tsc` clean on touched files; `search:v2-regression` passes; in-memory eval runs
+(58/64, p50 141ms) — no runtime regression.
+
+### Known-minor (documented, not blocking — fix opportunistically)
+- **Non-atomic click/save counters** (`interactions.ts`) — read-modify-write can lose increments under
+  concurrency. Low impact (popularity = 10% of rank, time-decayed). Proper fix needs a Postgres
+  `increment` RPC (a small migration); fine to defer for single-user/early traffic.
+- **Half-built index on mid-build crash** (`build-search-index.ts`) — per-chunk rows are upserted before the
+  global canonical-clustering re-upsert at the end; a crash in between leaves every product as its own
+  cluster. Mitigation: just re-run the build (idempotent). A staging-table swap is the clean long-term fix.
+- **`fastPathEligible` goal/type collision** — a bare token that is *both* a goal word and some product's
+  `primary_type` (e.g. "protein") can fast-path as a directed lookup. Rare; result is still reasonable.
+- **Canonical clustering** pass-2 first-match (vs best-match) and a fixed single-anchor "centroid"; and
+  `type-neighbors` keeping the first row's type-embedding per type — all minor at the 0.85/0.92 thresholds.
+
+### Answer: are we set for SOTA?
+**Code: yes — complete, wired (behind `SEARCH_V2_ENABLED`), and the real bugs are fixed.** The two scariest
+agent findings were false positives. What stands between you and live SOTA search is purely the **ops run**
+(keys → migrate → build-index → eval gate). Quality can only be validated *after* the enriched index +
+Voyage embeddings exist — the degraded-mode 58/64 is the floor, not the ceiling.

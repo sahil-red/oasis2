@@ -47,9 +47,19 @@ async function loadExistingHashes(): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   try {
     const supabase = adminClient();
-    const { data } = await supabase.from("product_search_index").select("product_id, source_hash");
-    for (const row of data ?? []) {
-      if (row.source_hash) map.set(String(row.product_id), String(row.source_hash));
+    // Paginate — PostgREST caps a single select at ~1000 rows; without this,
+    // --skip-unchanged would re-enrich every product past row 1000 on each run.
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("product_search_index")
+        .select("product_id, source_hash")
+        .range(from, from + PAGE - 1);
+      if (error) break;
+      for (const row of data ?? []) {
+        if (row.source_hash) map.set(String(row.product_id), String(row.source_hash));
+      }
+      if (!data || data.length < PAGE) break;
     }
   } catch {
     // table may not exist yet

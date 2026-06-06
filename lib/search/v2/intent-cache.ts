@@ -20,7 +20,9 @@ const cache: CacheEntry[] = [];
 
 function prefsKey(prefs: AiSearchPreferences | null | undefined): string {
   if (!prefs) return "";
-  return JSON.stringify(prefs);
+  // Stable (key-sorted) stringify — otherwise key-insertion order changes the key
+  // and silently misses the cache for semantically identical preferences.
+  return JSON.stringify(prefs, Object.keys(prefs as object).sort());
 }
 
 export async function getCachedIntent(

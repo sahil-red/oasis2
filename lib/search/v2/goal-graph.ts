@@ -172,12 +172,11 @@ export async function resolveGoalWeights(
 }
 
 function slugGoalId(phrase: string): string {
-  const base = phrase
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 48);
-  const hash = createHash("sha256").update(phrase).digest("hex").slice(0, 8);
+  // Normalize before hashing so "High Protein" and "high  protein" collide to one
+  // goal_id instead of bloating goal_trait_map with casing/spacing variants.
+  const normalized = phrase.toLowerCase().trim().replace(/\s+/g, " ");
+  const base = normalized.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 48);
+  const hash = createHash("sha256").update(normalized).digest("hex").slice(0, 8);
   return base ? `${base}_${hash}` : `goal_${hash}`;
 }
 

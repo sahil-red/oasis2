@@ -92,13 +92,18 @@ function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
 async function loadGoalMapFromDb(): Promise<Map<string, GoalTraitMapRow>> {
   const map = new Map<string, GoalTraitMapRow>();
 
-  for (const seed of SEED_GOAL_TRAIT_MAP) {
-    const embed = await embedText(seed.goal_phrase, "document");
+  // Parallel — these run on the cold-snapshot request path; serial awaits would
+  // stack seed-count × embedding latency (with retries) onto every cold query.
+  const seedEmbeds = await Promise.all(
+    SEED_GOAL_TRAIT_MAP.map((seed) => embedText(seed.goal_phrase, "document")),
+  );
+  SEED_GOAL_TRAIT_MAP.forEach((seed, i) => {
+    const embed = seedEmbeds[i] ?? [];
     map.set(seed.goal_id, {
       ...seed,
       goal_embedding: embed.length ? embed : null,
     });
-  }
+  });
 
   try {
     const supabase = adminClient();
