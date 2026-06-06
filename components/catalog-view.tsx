@@ -39,6 +39,8 @@ import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
+import { SavedSearchActions } from "@/components/saved-search-actions";
+import { setLastSearchContext } from "@/lib/search/v2/search-session";
 import {
   canUseAiSearch,
   hasSavedPreferences,
@@ -744,6 +746,13 @@ export function CatalogView({
       setAiRefinements(result.refinements);
       setAiParsed(result.parsed);
       setAiUsage(recordAiSearch());
+      if (result.v2) {
+        setLastSearchContext({
+          query: prompt,
+          goal_id: result.v2.goal_id,
+          goal_phrase: result.v2.goal_phrase,
+        });
+      }
     } catch (e) {
       if (gen !== fetchGen.current) return;
       const err = e as Error;
@@ -987,6 +996,9 @@ export function CatalogView({
                     Save preferences
                   </button>
                 ) : null}
+              </div>
+              <div className="mt-2">
+                <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
               </div>
               {/* Relaxed warning only — no pipeline debug strings */}
               {aiRelaxed ? (

@@ -250,7 +250,7 @@ export const ProductCard = memo(function ProductCard({
               </span>
             ) : null}
           </div>
-          <AddToBasketButton slug={product.slug} name={product.name} size="icon" />
+          <AddToBasketButton slug={product.slug} name={product.name} productId={product.id} size="icon" />
         </div>
       </div>
     </article>

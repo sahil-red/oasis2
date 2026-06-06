@@ -120,5 +120,11 @@ export async function searchV2ToAiResult(
     limit,
     total: v2.candidates_total,
     relaxed: v2.relaxed,
+    v2: {
+      goal_id: v2.intent.goal_id,
+      goal_phrase: v2.intent.goal_phrase,
+      llm_calls: v2.llm_calls,
+      latency_ms: v2.latency_ms,
+    },
   };
 }

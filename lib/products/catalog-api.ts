@@ -123,10 +123,19 @@ export async function fetchCanonicalVariants(productId: string): Promise<Canonic
 
 /** §10 popularity loop — fire-and-forget click/save tracking */
 export function trackSearchInteraction(productId: string, kind: "click" | "save"): void {
+  let goal_id: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem("scout_last_search_v2");
+      if (raw) goal_id = (JSON.parse(raw) as { goal_id?: string }).goal_id ?? null;
+    } catch {
+      // ignore
+    }
+  }
   void fetch("/api/search/interaction", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ product_id: productId, kind }),
+    body: JSON.stringify({ product_id: productId, kind, goal_id }),
     keepalive: true,
   }).catch(() => {});
 }

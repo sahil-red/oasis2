@@ -45,6 +45,13 @@ export type AiSearchResult = {
   limit: number;
   total: number;
   relaxed: boolean;
+  /** Search V2 metadata when SEARCH_V2_ENABLED */
+  v2?: {
+    goal_id: string | null;
+    goal_phrase: string | null;
+    llm_calls: number;
+    latency_ms: number;
+  };
 };
 
 const LLM_CANDIDATE_CAP = 40;
