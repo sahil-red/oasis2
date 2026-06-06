@@ -1,321 +1,339 @@
-# Scout Search — Best-in-Class Spec (Definitive)
+# Scout Search — SOTA Spec (Definitive)
 
-> Search is the make-or-break feature. Goal: **for every kind of query, return only the relevant
-> products, ranked by health.** Never a contradiction (no mango smoothie for "strawberry smoothie"),
-> never silent data loss, never "decent but random."
+> Scout is a **nutrition decision engine**, not a grocery catalog.
 >
-> Core principle: **filters decide membership, scores decide order.** A product that violates a stated
-> requirement is *removed by a filter*, never merely out-ranked. Embeddings/LLM only reorder the relevant
-> set (or expand recall when there is no hard requirement).
+> **North star — search results must answer "What should I buy?", not "What products match this query?"**
+>
+> It must be SOTA on **vague/goal queries** ("healthy drinks for running") *and* razor-precise on
+> **directed queries** ("strawberry smoothie no added sugar"). Never a contradiction, never silent data
+> loss, never "generic keyword search."
 
 ---
 
-## 0. The one big idea: move intelligence OFFLINE
+## 0. Two principles that govern everything
 
-Today the pipeline tries to understand each product *at query time* — guess its type, find its flavour,
-scan its ingredients, judge its nutrition — for every product, on every search. That is slow, costly, and
-unreliable.
-
-Best-in-class systems invert this: **enrich each product once into clean, structured facets + a semantic
-vector, then serve queries from that clean index.** Query time becomes fast filtering + ranking over data
-that is already correct.
+1. **Filters decide membership; ranking decides order.** A product that violates a stated requirement is
+   *removed by a filter* — never merely out-ranked. Embeddings/LLM never inject an off-type product.
+2. **Goals are infinite; traits are finite.** We never precompute goals. We precompute a finite set of
+   reusable **traits** per product, and at query time we **compose any goal as a weighting over traits.**
+   New goals (“drinks for running”, “snacks for night shift”) emerge automatically — no new data, no new code.
 
 ```
-            OFFLINE (once per product, re-run on change)              ONLINE (per search, fast)
- ┌──────────────────────────────────────────────────┐     ┌────────────────────────────────────┐
- │ raw product:                                       │     │ query                                │
- │  name · category · subcategory · L3 · attributes   │     │   │                                  │
- │  nutrition · ingredients · allergens · usage       │     │ ┌─▼ understand (Groq, cached) ──────┐ │
- │            │  DeepSeek/Groq enrichment             │     │ │ QueryIntent {type, modifiers,     │ │
- │            ▼                                        │     │ │   nutrition, avoid, dietary, sort}│ │
- │  product_search_index:                             │     │ └─┬─────────────────────────────────┘ │
- │   primary_type · flavours[] · variants[] · form    │     │   │                                    │
- │   dietary flags · allergens[] · claims[]           │     │ ┌─▼ FILTER (membership) ─ structured │ │
- │   nutrition + per-category tiers · use_cases[]      │ ──▶ │ │   type, flavour, dietary, allergen, │ │
- │   scout_score · nova · search_doc · embedding       │     │ │   nutrition threshold/tier          │ │
- │   per-facet confidence · data_completeness          │     │ └─┬───────────────────────────────────┘ │
- └──────────────────────────────────────────────────┘     │ ┌─▼ RANK (order) ─ hybrid + business │ │
-                                                            │ │   lexical ⊕ vector (RRF) + health   │ │
-                                                            │ └─┬───────────────────────────────────┘ │
-                                                            │ ┌─▼ VERIFY top-N (Groq, batched) ────┐ │
-                                                            │ │   final precision check + chips     │ │
-                                                            │ └─┬───────────────────────────────────┘ │
-                                                            │ ┌─▼ RELAX if <3, with banner ────────┘ │
-                                                            └────────────────────────────────────────┘
+DIRECTED query   →  Intent → Filters (type/flavour/dietary/nutrition) → Hybrid retrieve → Health-aware rank
+VAGUE/goal query →  Intent → Goal→Trait weights → Trait-scored retrieve → Curated recommendation buckets
 ```
-
-The LLM does what only an LLM can (understand language, normalize messy labels, verify nuance). Everything
-deterministic (filtering, sorting, fusion) stays deterministic — fast, free, reproducible.
 
 ---
 
-## 1. Data: ground truth that shapes the design (verified on live catalog)
+## 1. The big idea: intelligence OFFLINE, reasoning at QUERY TIME
+
+Today everything (type-guessing, flavour-guessing, ingredient scanning, health judging) happens *per search*
+— slow, costly, unreliable. SOTA inverts it:
+
+- **Offline (once per product, re-run on change):** turn messy labels into a clean **`product_search_index`**
+  row: canonical type, flavours/variants, dietary flags, allergens, claims, **a finite trait vector**,
+  health score, **a data-quality score**, India facets (brand tier, pack size, variant), and a semantic
+  embedding.
+- **Online (per search):** understand intent → (directed) filter+rank, or (goal) map goal→trait-weights and
+  score → curated buckets. Fast, mostly deterministic, LLM only when genuinely needed.
+
+```
+        OFFLINE  (DeepSeek/Groq enrichment + deterministic computation)
+ raw product: name·category·subcategory·L3·attributes·nutrition·ingredients·allergens·usage
+        │
+        ▼  product_search_index  (one row/product, the single source of truth for search)
+        │   canonical type · flavours[] · variants[] · form · dietary · allergens[] · claims[]
+        │   TRAIT VECTOR (finite, 0–1) · nutrition + per-category tiers · scout_score · nova
+        │   data_quality_score · brand_tier · pack_size · canonical_product_id · use_cases[]
+        │   search_doc (lexical) · embedding (semantic) · per-facet confidence
+        ▼
+        ONLINE  → see §6
+```
+
+---
+
+## 2. Ground truth (verified on the live catalog)
 
 | Finding | Consequence |
 |---|---|
-| **No `Flavour` attribute** (0/15 smoothies have one) | flavour comes from the **name** → must be extracted offline into `flavours[]` |
-| **No `smoothie` subcategory** (15 smoothies span 4 subcats) | product type is **name-driven** → extracted offline into `primary_type` |
-| **Correct sets are tiny** (only 2 strawberry smoothies) | precision-first + careful relaxation; padding with wrong items is the bug |
-| **Rich signals exist**: `Marketing Claims`, `Label Free From`, `Label Chips`, `L3 Category`, allergens, usage | feed enrichment → `claims[]`, `dietary`, `use_cases[]`, cleaner type |
-| **Coverage uneven** (most items lack full nutrition/ingredients) | per-facet **confidence** + `data_completeness`; missing data → flag + down-rank, never silently drop/include |
+| **22,841 products / 9,917 catalog-visible** | enrichment is batched, resumable, **per-category runnable** |
+| **No `Flavour` attribute** (0/15 smoothies) | flavour from the **name** → extract offline into `flavours[]` |
+| **No `smoothie` subcategory** (15 smoothies span 4 subcats) | product type is **name-driven** → `primary_type` |
+| **Correct sets can be tiny** (2 strawberry smoothies) | precision-first; careful relaxation; padding = the bug |
+| **Rich signals already present** in `attributes` (`Label Allergens`, `Marketing Claims`, `L3 Category`, DeepSeek confidences) + full `nutrition` + `core_scores` | **don't re-extract what exists**; enrich only the LLM-hard gaps |
+| **Coverage uneven**, OCR quality varies | **`data_quality_score`** is mandatory; low-quality items hidden/marked |
 
 ---
 
-## 2. Offline enrichment — `product_search_index`
+## 3. The TRAIT engine (the core of the moat)
 
-A new table, one row per product, rebuilt when source fields change (hash the inputs; re-enrich on diff).
-Populated by a batch script using **all** the fields you listed.
+### 3a. Finite trait vocabulary (precomputed per product, normalized 0–1)
+
+Traits are *reusable nutritional/functional properties*, not goals. Each is derived deterministically from
+nutrition/NOVA where possible, and inferred by LLM only where it must be (e.g. `kid_friendly`).
+
+```
+NUTRITIONAL   protein_density · fiber_density · low_sugar · low_sodium · low_fat ·
+              low_saturated_fat · healthy_fats · low_calorie_density · whole_food
+FUNCTIONAL    hydration · electrolytes · satiety · gut_health · slow_energy(complex carbs) ·
+              quick_energy · antioxidant · calcium_rich
+PROCESSING    processing_level(NOVA-inverted) · clean_label(additive-free) · no_added_sugar
+AUDIENCE      kid_friendly · diabetic_friendly · gym_friendly · elderly_friendly
+```
+This set is **finite and curated** (≈25). Provenance per trait stored in `trait_source` (`derived` vs
+`llm`) and gated by `data_quality_score` — a trait computed from missing data is null, not 0.
+
+### 3b. Goals map to trait weights (at query time, infinite)
+
+A goal is a **weight vector over the finite traits**, produced by (a) a curated map for common goals, and
+(b) the LLM for novel goals — but the LLM may only emit weights over the *known* trait names, so the output
+is bounded and verifiable.
+
+```
+"drinks for running"   → hydration .35 · electrolytes .30 · quick_energy .15 · low_sugar .10 · whole_food .10
+"weight loss snacks"   → low_calorie_density .30 · satiety .25 · protein_density .20 · low_sugar .15 · fiber .10
+"muscle gain"          → protein_density .45 · calorie adequacy .20 · whole_food .15 · clean_label .10 · …
+"for my diabetic dad"  → low_sugar .35 · fiber .25 · low_calorie_density .15 · whole_food .15 · low_sodium .10
+"kids tiffin"          → kid_friendly .30 · clean_label .25 · low_sugar .20 · calcium .15 · whole_food .10
+```
+`goal_fit(product) = Σ weight_i · trait_i`. New goals need **zero** new data — they just compose existing
+traits. *This is what makes Scout reason like a nutritionist instead of matching keywords.*
+
+---
+
+## 4. `product_search_index` (offline-built source of truth)
 
 ```sql
 product_search_index (
-  product_id            uuid primary key,
-  -- TYPE (the head noun)
-  primary_type          text,          -- "smoothie", "peanut butter"  (LLM-normalized)
-  type_aliases          text[],        -- ["smoothie","health drink"] for matching
-  form                  text,          -- liquid | powder | bar | spread | solid
-  -- MODIFIERS
-  flavours              text[],        -- ["strawberry"]  (from name)
-  variants              text[],        -- ["dark","unsweetened","crunchy"]
-  -- DIETARY  (from allergens + ingredients + claims — structured, reliable)
-  is_veg, is_vegan, is_gluten_free, is_jain, is_palm_oil_free  boolean,
-  has_added_sugar       boolean,
-  allergens             text[],        -- normalized: ["milk","nuts","soy","gluten"]
-  -- CLAIMS  (from Marketing Claims / Label Free From / Label Chips)
-  claims                text[],        -- ["high protein","no added sugar","no preservatives"]
-  -- NUTRITION  (numbers + per-category relative tiers, precomputed)
-  sugar_g, protein_g, fat_g, sodium_mg, energy_kcal, price  numeric,
-  sugar_tier, protein_tier, fat_tier    text,  -- low|medium|high vs OTHERS OF SAME primary_type
+  product_id uuid pk, canonical_product_id uuid,   -- §8 clustering
+  -- TYPE / MODIFIERS  (name-driven, LLM-normalized)
+  primary_type text, type_aliases text[], form text,
+  flavours text[], variants text[],                -- variants incl. India: salted/masala/spicy/tomato/family pack
+  -- DIETARY / ALLERGENS / CLAIMS  (mostly from existing attributes)
+  is_veg bool, is_vegan bool, is_gluten_free bool, is_jain bool, is_palm_oil_free bool, has_added_sugar bool,
+  allergens text[], claims text[],
+  -- NUTRITION + relative tiers (per primary_type percentiles, deterministic)
+  sugar_g numeric, protein_g numeric, fat_g numeric, sodium_mg numeric, energy_kcal numeric, price_inr numeric,
+  sugar_tier text, protein_tier text, fat_tier text,
+  -- TRAITS  (§3) — the reasoning substrate
+  traits jsonb,            -- { hydration:0.8, protein_density:0.2, ... }  (0–1, null if undeterminable)
+  trait_source jsonb,      -- { hydration:"derived", kid_friendly:"llm" }
   -- HEALTH
   scout_score numeric, nova_group int,
-  -- USE CASE  (from usage "use how" + category)
-  use_cases             text[],        -- ["breakfast","pre-workout","kids tiffin"]
-  -- SEARCH ASSETS
-  search_doc            text,          -- rich concatenation, used for lexical (tsvector) match
-  embedding             vector(384),   -- dense vector of search_doc (pgvector)
-  -- TRUST
-  facet_confidence      jsonb,         -- {flavours:0.9, type:0.95, dietary:0.7, ...}
-  data_completeness     numeric        -- 0–1: how much real label data backs this row
+  -- TRUST  (§5)
+  data_quality_score numeric,    -- 0–1 : OCR confidence · completeness · consistency
+  data_completeness numeric, facet_confidence jsonb,
+  -- INDIA  (§12)
+  brand_tier text,         -- national | regional | local
+  pack_size_value numeric, pack_size_unit text,
+  -- USE / SEARCH ASSETS
+  use_cases text[], search_doc text, embedding vector(N),
+  -- POPULARITY  (§10, updated online)
+  search_count int default 0, click_count int default 0, save_count int default 0
 )
 ```
 
-**Per-category tiers** (the thing that makes *relative* queries work): compute sugar/protein/fat
-percentiles **within each `primary_type`**, store the tertile. So "low sugar smoothie" = `sugar_tier='low'`
-among smoothies, and "high protein milk" = `protein_tier='high'` among milks — no hardcoded thresholds, no
-treating 3g-protein milk as "not high protein."
-
-**Confidence gating:** if `facet_confidence.flavours < 0.6`, query time falls back to name-substring for
-flavour instead of trusting the extracted array. We never blindly trust an extraction.
-
-**Enrichment model:** DeepSeek for the deep one-time extraction (quality matters, cost is one-time and
-tiny across a few thousand rows; much is already extracted). Re-enrichment of changed rows only.
-
-**Embeddings:** a free **multilingual** small model (e.g. `multilingual-e5-small` run locally in a script,
-or Gemini `text-embedding-004` free tier) so Hindi/Hinglish ("doodh", "bina cheeni") lands near its English
-meaning. One-time batch for the catalog; cheap. Stored in pgvector with an HNSW index.
-
-**Coverage / cold-start:** unenriched or new products fall back to name-based type/flavour matching at
-query time, and a nightly job enriches the backlog. No product is ever invisible because it lacks a row.
+**What the enrichment LLM actually does** (focused — not re-deriving what exists): `primary_type`,
+`flavours`, `variants`, `form`, `use_cases`, the few **LLM-only traits** (`kid_friendly`, etc.), dietary
+inference when claims/allergens are silent, and `brand_tier`. Everything else — nutrition tiers, derived
+traits, allergens/claims copy-through, scout_score — is **deterministic**, no token spend. Model: DeepSeek
+v4-flash for quality (one-time; much label data already extracted), Groq as the cheap/fast option for the
+easy extractions; both already wired in the repo.
 
 ---
 
-## 3. Query understanding → `QueryIntent`
+## 5. OCR reality layer — `data_quality_score` (trust = paid-product table stakes)
 
-```typescript
-type Modifier = { term: string; kind: "flavour"|"variant"|"form"; strength: "required"|"preferred" };
+Per product, combine: OCR/extraction confidence (`attributes.DeepSeek *Confidence`), **completeness**
+(how many key fields present: nutrition, ingredients, allergens), and **consistency** (passes
+`lib/nutrition/anomaly.ts` checks; macro sum sane; kcal↔macros agree).
 
-type QueryIntent = {
-  raw: string;
-  kind: "product" | "brand" | "goal";   // routing
-  primary_type: string | null;          // head noun; null for brand/goal
-  type_synonyms: string[];               // controlled (§4)
-  modifiers: Modifier[];
-  brand: string | null;
-  nutrition: {                           // deterministic
-    max_sugar_g?; min_protein_g?; max_fat_g?; max_sodium_mg?; max_calories?; max_price?;
-    relative?: ("low_sugar"|"high_protein"|"low_fat")[];   // → tier sort, not threshold
-  };
-  avoid: string[];                       // palm oil, maida, preservatives, INS-xxx, added sugar
-  must_have: string[];                   // "with chia", "with almonds"
-  dietary: ("veg"|"vegan"|"gluten_free"|"jain")[];
-  allergen_free: string[];               // "nut free" → exclude allergens:[nuts]
-  health_context: string[];             // diabetic, kids, gym, pcos, fat_loss
-  use_case: string[];                    // breakfast, pre-workout, tiffin
-  sort_intent: "relevance"|"cheapest"|"healthiest"|"highest_protein"|"lowest_sugar";
-  confidence: number;
-};
-```
-
-**Resolution rules** (encoded in parser + verified by tests):
-- **Head-noun rule:** in "A B", B is the type, A the modifier — unless "A B" is atomic.
-  `chocolate milk` = milk(+choc); `milk chocolate` = chocolate(+milk).
-- **Atomic compounds** (never split): peanut butter, ice cream, soft drink, energy drink, green tea,
-  protein bar, protein powder, dark chocolate, olive oil, corn flakes, cottage cheese, chia seeds…
-- **"with" disambiguation:** `with low sugar`→nutrition; `with strawberry`→flavour; `with chia`→must_have.
-- **Negation (EN + HI):** `no/without X`, `bina X`, `X nahi` → avoid / allergen_free. (existing engine)
-- **Relative nutrition:** adjective on a low-baseline type → `relative` (tier sort), not absolute threshold.
-
-**Parser stack (degradation-safe):** Groq `llama-3.1-8b-instant` (cached 24h by `normalize(q)+prefsHash`),
-merged over a strong **deterministic heuristic** (type lexicon + atomic list + flavour/variant lexicon +
-constraint lexicon + synonym map + negation + trigram fuzzy for typos). LLM down ⇒ heuristic still produces
-correct compound + negation parsing.
-
----
-
-## 4. Controlled synonyms (data, not rules; over-expansion is a bug)
-
-```
-soft drink → soda, cola, carbonated, fizzy, aerated      namkeen → mixture, sev, bhujia, savoury snack
-chips → crisps, wafers                                    biscuit → cookie, cracker (rank exact first)
-curd → dahi, yoghurt, yogurt                              atta → flour, wheat flour
-milk → doodh        paneer → cottage cheese               ghee → clarified butter
-```
-Hindi type words map to their English head. **`smoothie` has NO synonym** — never expand to shake/juice
-(that leaked mango juice). Embeddings cover the long tail; the synonym map is only for the high-traffic head.
-
----
-
-## 5. Three routes (don't force a product type)
-
-| `kind` | Trigger | Path |
-|---|---|---|
-| **product** | head noun present | full filter→rank→verify pipeline |
-| **brand** | known brand, no type ("amul") | filter brand → rank by health |
-| **goal** | no type, only intent ("something healthy for my diabetic dad") | **vector-first** recall across categories, filter by health_context/dietary, rank by fit |
-
-Brand+type ("amul paneer") = product route + brand filter. Brand+constraint = brand route + numeric filter.
+- `data_quality_score < threshold` → **hidden by default**, or shown with a visible "label not verified"
+  badge (never silently presented as fact).
+- Traits/constraints computed from absent data are **null**, not 0 — and the product is down-ranked and
+  labeled, never silently dropped or silently trusted.
+- High-quality, fully-verified products earn a **"Verified by Scout"** signal (premium, §13).
 
 ---
 
 ## 6. Online pipeline
 
-### 6a. FILTER — membership (deterministic, the relevance guarantee)
-Apply as hard SQL/in-memory filters over `product_search_index`:
-- **Type:** `primary_type ∈ {type, synonyms}` OR (confidence-gated) name match. *Non-negotiable.*
-- **Required flavour/variant:** `flavours/variants ⊇ required modifiers` (confidence-gated → name fallback).
-- **Dietary / allergen-free:** `is_vegan`, `is_gluten_free`, `NOT allergens ∩ allergen_free`.
-- **Avoid:** `is_palm_oil_free`, `NOT has_added_sugar`, ingredient/INS scan, claims cross-check.
-- **Nutrition absolute:** `sugar_g ≤ X`, `protein_g ≥ Y`, `price ≤ Z`.
-- **Missing data:** if a hard facet is unknown for a product → **keep, flag `unverified:<facet>`, down-rank**
-  (never silently drop = looks empty; never silently include = false trust).
-
-This stage is what guarantees "only relevant things." Membership ≠ ranking.
-
-### 6b. RANK — order within the relevant set (hybrid + business)
-For `kind=product`, the relevant set is already small/clean → rank by deterministic keys:
-1. modifier completeness (all required > partial)  2. constraint tier (all met > met-but-unverified > partial)
-3. `sort_intent`/`relative` (tier sort)  4. `scout_score`  5. `data_completeness`.
-
-For broad/`goal`/vague queries, fuse signals with **Reciprocal Rank Fusion**:
-`RRF(lexical_rank, vector_rank)` → then blend health/sort. Vector recall handles "office snack that isn't
-junk" where keywords fail; **vector only orders/expands, never overrides a §6a filter.**
-
-DeepSeek reranking is invoked **only** for `kind=product` with ≥2 simultaneous constraints (genuinely hard) —
-as an enhancement on top of the keys, never the sole arbiter.
-
-### 6c. VERIFY — final precision check (Groq, batched, non-blocking)
-Top ~20 in one batched Groq call: "is this a {type} that is {modifiers}? judge from text only, not numbers."
-Returns `{id, is_type, modifiers_present, partial, reason}`. Wrong type / wrong flavour → removed; `partial`
-(mixed-berry for strawberry) → kept below, labeled; `reason` → match chip. Because §6a/§2 already did most of
-the work, verify is a cheap safety net, not the engine. Groq down ⇒ skip, deterministic stands. ~1 call/search
-⇒ within 30 RPM free.
-
-### 6d. RELAX — sparse results (explicit contract, always announced)
-If survivors < 3: loosen in order — preferred modifiers → must_have → numeric one tier (or absolute→"lowest
-in set") → unverifiable avoids. **Never relax `primary_type` or required flavour.** Banner states what changed
-("No strawberry smoothie under 10g sugar — showing the 2 lowest, 12g & 14g").
+```
+query
+ └▶ INTENT UNDERSTANDING ─ extract { kind, goal, primary_type, modifiers, constraints, sort, confidence }
+      │                     (deterministic heuristic always; LLM only per §9)
+      ├─ directed (type present) ───────────────┐
+      │   FILTER (membership, deterministic):    │
+      │     type ∈ {type,synonyms}; flavour⊇req; │
+      │     dietary; allergen-free; avoid scan;   │
+      │     nutrition threshold/tier              │
+      │   RETRIEVE (hybrid §7) → RANK (§7b)        │
+      │                                           │
+      └─ goal/vague (no hard type) ──────────────┤
+          GOAL → TRAIT WEIGHTS (§3b)              │
+          candidate gen across categories →       │
+          score by goal_fit + health →            │
+          RECOMMENDATION BUCKETS (§7c)            │
+                                                  ▼
+                          RELAX if sparse (§ explained) → results + chips + "why"
+```
 
 ---
 
-## 7. Every query type → exact handling
+## 7. Retrieval & ranking
 
-| Query type | Example | Mechanism |
+### 7a. Hybrid retrieval — **structured-first**
+> **Use vectors primarily for intent expansion, semantic matching, and sparse-query recovery — not as the
+> primary retrieval mechanism.** For a ~23k catalog, **structured retrieval > vector retrieval** most of the
+> time.
+
+- **Structured/lexical is the workhorse:** filter on indexed facets (type, flavour, dietary, nutrition,
+  traits) + lexical match on `search_doc`. This is precise and free.
+- **Vector is the assistant:** expands intent and recovers matches when the structured pass is sparse or the
+  query is vague/typo'd/Hindi. Fused with structured via **Reciprocal Rank Fusion (RRF)** — but **vector can
+  only reorder/expand within the filtered membership set; it can never add an off-filter product.**
+
+### 7b. Health-aware ranking formula (directed queries)
+> **relevance 40% · health (scout_score) 30% · trait/goal match 20% · popularity 10%.**
+
+Health must *materially* move ranking — otherwise Scout is generic search. Within ties: data-quality, then
+sort_intent (cheapest/lowest-sugar/etc.). `relative` nutrition (“high protein milk”) uses per-type tiers, not
+absolute thresholds. DeepSeek rerank only on hard multi-constraint cases (§9).
+
+### 7c. Recommendation layer (goal queries — the product moat)
+For goal searches, **don't return a flat list — return curated buckets** answering *what to buy*:
+
+```
+"healthy drinks for running" →
+  Best Overall      (top goal_fit · health)
+  Best Hydration    (top hydration trait)
+  Best Endurance    (slow_energy · electrolytes)
+  Best Recovery     (protein_density · electrolytes)
+  Best Budget       (goal_fit per ₹)
+```
+Bucket definitions are derived from the goal's dominant traits (so they’re also infinite/automatic). Each pick
+carries a one-line **"why"** (the traits that earned it). Generic buckets for any goal: *Best Overall, Best
+Budget, Best for Diabetics, Best Protein, Cleanest Label.*
+
+---
+
+## 8. Canonical product clustering
+
+Collapse pack-size/flavour variants under `canonical_product_id` so results aren’t flooded with
+"Lay’s 20g / 40g / 90g". Search shows **one representative** (best data-quality / most relevant variant);
+expand on click to see sizes/flavours/prices. Clustering key = normalized brand + base name + type, computed
+offline.
+
+---
+
+## 9. Query-time AI discipline (LLM only when needed)
+
+Most searches resolve **deterministically** (heuristic intent + structured filter + trait scoring). Invoke an
+LLM **only when** `intent_confidence < threshold` **OR** `result_count` is very low (needs goal decomposition
+or verification). Keeps the hot path fast, free-tier-viable, and reproducible.
+
+- **Intent parse:** heuristic first; Groq `8b-instant` only on low confidence (cached 24h).
+- **Goal→trait decomposition:** curated map first; LLM only for novel goals (bounded to known traits).
+- **Verification net:** Groq batched, top ~20, only when precision is at risk; non-blocking.
+- **Hard rerank:** DeepSeek only for ≥2-constraint directed queries.
+
+Degradation ladder: full → (LLM down) heuristic + structured + traits → (vector down) structured only →
+(all down) lexical over `search_doc`. Every tier keeps the type filter; worst case is "precise keyword
+search," never random.
+
+---
+
+## 10. Popularity feedback loop
+
+Track `search_count, click_count, save_count` → CTR per product/query. Feeds the 10% popularity term in §7b
+and improves continuously from real behavior. Cold-start safe (defaults to 0, health/relevance dominate).
+
+---
+
+## 11. Query relaxation (always explained)
+
+If membership < 3, relax **stepwise** and announce each step: *High Protein Snacks → Protein Snacks →
+Protein Foods*; or drop preferred modifiers → loosen numeric one tier → drop unverifiable avoids. **Never
+relax `primary_type` or a required flavour.** Banner states exactly what changed and why.
+
+---
+
+## 12. India-specific enhancements
+
+- `brand_tier` ∈ {national, regional, local} — feeds trust/popularity priors.
+- `pack_size_value`/`unit` extracted ("500gm", "1 L") — powers value (₹/100g) and clustering.
+- **Variant awareness** as flavours/variants: salted, masala, spicy, tomato, family pack, etc.
+- **Multilingual** built in: synonym map (doodh→milk, atta→flour), EN+HI negation (`bina cheeni`,
+  `cheeni nahi`), multilingual embedding so Hindi lands near meaning.
+
+---
+
+## 13. Premium / retention features (AFTER core search is solved — not core)
+
+Saved searches · product alerts · **"Verified by Scout"** badge (from §5 data-quality) · health
+tracking/history. These are retention layers; they ship only once search quality is proven by the eval gate.
+
+---
+
+## 14. Every query type → exact handling
+
+| Type | Example | Mechanism |
 |---|---|---|
-| Brand | `amul` | brand route, health rank |
+| Brand | `amul` | brand filter, health rank |
 | Type | `namkeen` | type filter, health rank |
 | Type + flavour | `strawberry smoothie` | type filter + `flavours⊇[strawberry]` + verify |
 | Type + abs nutrition | `biscuits under 5g sugar` | type filter + `sugar_g≤5` |
-| Type + rel nutrition | `high protein milk` | type filter + `protein_tier='high'` sort |
-| Type + negation | `peanut butter no palm oil` | type filter + `is_palm_oil_free` + ingredient scan |
-| Type + dietary | `vegan protein bar` | type filter + `is_vegan` |
-| Type + allergen-free | `nut free chocolate` | type filter + `NOT allergens∩[nuts]` |
-| Type + health ctx | `biscuits for diabetics` | type filter + low-sugar/health rank |
-| Pure goal | `something healthy for weight loss` | goal route, vector + health filter |
-| Use-case | `pre workout snack` | `use_cases⊇[pre-workout]` + vector |
+| Type + rel nutrition | `high protein milk` | type filter + `protein_tier='high'` |
+| Type + negation | `peanut butter no palm oil` | type filter + `is_palm_oil_free` + scan |
+| Type + dietary/allergen | `vegan / nut-free X` | type filter + flags / allergen exclude |
+| Type + health ctx | `biscuits for diabetics` | type filter + diabetic traits rank |
+| **Goal/vague** | `healthy drinks for running` | **goal→traits → buckets (§7c)** |
+| Use-case | `pre-workout snack` | trait weights (quick_energy/protein) + use_cases |
 | Superlative/sort | `healthiest oats`, `cheapest milk` | type filter + sort_intent |
 | Comparison | `healthier than maggi` | resolve ref → same type, higher scout_score |
-| Multi-constraint | `strawberry smoothie low sugar no preservatives` | all filters ANDed + relax ladder |
-| Misspelling | `smoothei`, `penut butter` | trigram fuzzy + vector robustness |
-| Hindi/Hinglish | `bina cheeni doodh` | synonym map + multilingual embedding + negation |
-| Vague NL | `tiffin stuff that isn't junk` | goal route, vector + nova/health filter |
-| Ambiguous | `protein` | confidence split: if low, show type-results with a "did you mean a goal?" affordance |
+| Multi-constraint | `strawberry smoothie low sugar no preservatives` | all filters ANDed + relax |
+| Misspelling / Hinglish | `smoothei`, `bina cheeni doodh` | fuzzy + synonyms + multilingual vector |
+| Vague NL | `tiffin stuff that isn't junk` | goal route, traits (clean_label/whole_food/kid_friendly) |
+| Ambiguous | `protein` | confidence split → type results + "looking for a goal?" affordance |
 | Word-order | `chocolate milk` vs `milk chocolate` | head-noun rule → opposite types |
-| Empty/1-char | `` | no LLM; show landing/catalog |
 
 ---
 
-## 8. Trust, degradation, performance
+## 15. Evaluation harness — how we *prove* SOTA (merge gate)
 
-**Transparency:** per-result chips for *why matched* ("Strawberry ✓", "Sugar 4g — low") and *caveats*
-("Sugar not on label"); set-level banner on relaxation. Never silent.
-
-**Degradation ladder:** (1) full; (2) verify down → filter+hybrid+deterministic modifier match; (3) parse
-down → heuristic parser; (4) all down → lexical over `search_doc`. Every tier keeps the §6a type filter, so
-worst case is "precise keyword search," never random.
-
-**Performance:** parse 1 Groq (cache≈free) · filter+rank over indexed columns ~100–150ms · verify 1 Groq
-~500ms · DeepSeek only on hard ranking. Warm ~0.8s, cold ~2.5s. Groq 30 RPM ⇒ ~30 searches/min headroom.
-DeepSeek spend ≈ 0 at query time.
+`eval/search-cases.json` (~60 cases across **every** query type × category family) →
+`{must_include[], must_exclude[], expected_top1?, expected_buckets?}`; `scripts/eval-search.ts` runs the live
+pipeline. Metrics: **forbidden-leak rate = 0 (hard gate)**, precision@5 ≥ 0.8, top-1 accuracy,
+**goal-bucket sanity** (running query surfaces hydration/electrolyte picks), latency, LLM calls/search.
+Seed from §14 + real `search_history`. **No search change ships unless leak-rate = 0.**
 
 ---
 
-## 9. Evaluation harness — how we *prove* best-in-class
+## 16. Build order
 
-`eval/search-cases.json` (~60 queries → `{must_include[], must_exclude[], expected_top1?}`) +
-`scripts/eval-search.ts` running the live pipeline. Metrics: **forbidden-leak rate (must be 0)**,
-precision@5 (≥0.8 gate), top-1 accuracy, mean latency, LLM calls/search. Seed from §7 table + real
-`search_history`. **No search change ships unless leak-rate = 0.** This is what turns "foolproof" into a test.
-
----
-
-## 10. Build order
-
-1. **Index + enrichment** — `product_search_index` schema, enrichment script (DeepSeek, all fields),
-   per-category tiers, embeddings (free multilingual model) + pgvector HNSW. *(biggest leverage; everything
-   else reads from this)*
-2. **Query understanding** — `lib/search/intent.ts`: QueryIntent, head-noun, atomic compounds, "with",
-   synonyms, negation, fuzzy; Groq parse + heuristic floor.
-3. **Filter→rank online** — type-gated filter over the index, deterministic keys + RRF hybrid for broad/goal.
-   (fixes the wrong-product problem deterministically, no LLM needed)
-4. **Groq verify** — batched precision net + chips, graceful fallback.
-5. **Eval harness** — cases + runner; leak-rate=0 merge gate.
-6. **Polish** — relaxation banners, ambiguity affordance, comparison/use-case routes, confidence chips,
-   nightly re-enrichment of changed/new products.
+1. **Index + enrichment** — `product_search_index` schema; deterministic computations (nutrition tiers,
+   derived traits, allergens/claims copy-through, data_quality_score, brand_tier, pack_size, clustering);
+   focused LLM extraction (type/flavours/variants/use_cases/LLM-traits). Per-category runnable.
+2. **Intent understanding** — `lib/search/intent.ts`: head-noun, atomic compounds, "with", synonyms,
+   negation, fuzzy; heuristic-first, LLM-on-low-confidence; goal extraction.
+3. **Goal→trait engine** — curated map + LLM decomposition (bounded to trait vocab); `goal_fit` scorer.
+4. **Online filter→hybrid retrieve→health-aware rank** (directed) + **bucketed recommendations** (goal).
+5. **Embeddings** — provider chosen later (parked); structured-first means core ships without it. Add
+   pgvector + RRF as the secondary expansion layer.
+6. **Verify net + relaxation + clustering UI + popularity loop.**
+7. **Eval harness** — leak-rate=0 merge gate.
+8. **Premium/retention features (§13).**
 
 ---
 
-## 10b. Confirmed decisions (locked)
+## 17. Non-negotiables
 
-- **Embeddings: YES.** pgvector + free multilingual model, one-time batch over the catalog. Hybrid
-  lexical+vector retrieval is in scope from the start (not deferred).
-- **DeepSeek enrichment: YES.** Full one-time enrichment pass over the catalog is approved; cost accepted.
-  Re-enrich changed/new rows incrementally thereafter.
-- **Scope: ALL query types, ALL categories.** No narrowing — type+flavour, health constraints, goal/vague
-  NL, and brand/superlative are all first-class; every category enriched and tuned. The eval suite (§9)
-  carries cases for each query type × each category family.
-- **Enrichment is per-category runnable.** The enrichment script takes an optional category filter so each
-  family (dairy/drinks, snacks/bakery, spreads/staples, …) can be enriched, tuned, and verified
-  independently, then rolled up — instead of one all-or-nothing batch.
-- **Multilingual: in scope.** Hindi/Hinglish handling (multilingual embeddings + synonym map + EN/HI
-  negation) is built in from the start for India-robustness, even though current usage is English-heavy.
-
----
-
-## 11. Non-negotiables
-
-- **Filters decide membership; scores decide order.** Embeddings/LLM never inject an off-type product.
-- **Intelligence offline, serving online.** Normalize once per product, not once per search.
-- **LLM judges language (type/flavour/nuance); deterministic judges numbers/ingredients.** Keep the split.
-- **Never silently drop or include on missing data** — flag, down-rank, tell the user.
-- **Never relax product type or required flavour.** Strawberry smoothie ≠ "some smoothies."
-- **Verification is a net, not the engine, and is non-blocking.** Search never goes down with Groq.
-- **Lexicons/synonyms are data; per-query rules are forbidden.** That's how we got here.
+- **Answer "what should I buy?", not "what matches?"** — recommendation > retrieval.
+- **Filters decide membership; scores decide order.** Vectors/LLM never inject off-filter products.
+- **Goals infinite, traits finite** — reason over traits, compose goals dynamically.
+- **Structured retrieval > vector retrieval**; vectors are expansion/recovery, not the engine.
+- **Health must materially affect ranking** (30%+), else Scout is generic search.
+- **Trust is core:** `data_quality_score` gates visibility; never silently drop or silently trust.
+- **LLM only when needed** (low confidence / sparse results); deterministic hot path.
+- **Never relax product type or required flavour**; always explain relaxation.
+- **Lexicons/traits/synonyms are data; per-query rules are forbidden.**
