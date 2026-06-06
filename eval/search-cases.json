@@ -1,0 +1,108 @@
+[
+  {
+    "id": "strawberry-smoothie",
+    "query": "strawberry smoothie",
+    "must_include_patterns": ["smoothie", "strawberry"],
+    "must_exclude_patterns": ["biscuit", "namkeen", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "amul-brand",
+    "query": "amul",
+    "must_include_patterns": ["amul"],
+    "must_exclude_patterns": [],
+    "kind": "brand"
+  },
+  {
+    "id": "running-drinks",
+    "query": "healthy drinks for running",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["biscuit", "namkeen", "atta", "noodles"],
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "hydration"]
+  },
+  {
+    "id": "peanut-butter-no-palm",
+    "query": "peanut butter no palm oil",
+    "must_include_patterns": ["peanut"],
+    "must_exclude_patterns": [],
+    "kind": "directed"
+  },
+  {
+    "id": "high-protein-milk",
+    "query": "high protein milk",
+    "must_include_patterns": ["milk"],
+    "must_exclude_patterns": ["paneer", "biscuit", "whey"],
+    "kind": "directed"
+  },
+  {
+    "id": "diabetic-biscuits",
+    "query": "biscuits for diabetics",
+    "must_include_patterns": ["biscuit"],
+    "must_exclude_patterns": ["noodles", "juice"],
+    "kind": "directed"
+  },
+  {
+    "id": "vegan-snacks",
+    "query": "vegan snacks",
+    "must_include_patterns": ["snack"],
+    "must_exclude_patterns": [],
+    "kind": "directed"
+  },
+  {
+    "id": "coconut-water",
+    "query": "coconut water",
+    "must_include_patterns": ["coconut"],
+    "must_exclude_patterns": ["biscuit", "chips"],
+    "kind": "directed"
+  },
+  {
+    "id": "gym-protein",
+    "query": "high protein snacks for gym",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["juice", "tea", "coffee"],
+    "kind": "goal"
+  },
+  {
+    "id": "kids-tiffin",
+    "query": "healthy snacks for kids tiffin",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "goal"
+  },
+  {
+    "id": "low-sugar-biscuits",
+    "query": "low sugar biscuits",
+    "must_include_patterns": ["biscuit"],
+    "must_exclude_patterns": ["milk", "paneer"],
+    "kind": "directed"
+  },
+  {
+    "id": "namkeen",
+    "query": "namkeen",
+    "must_include_patterns": ["namkeen", "bhujia", "sev", "chivda"],
+    "must_exclude_patterns": ["milk", "smoothie"],
+    "kind": "directed"
+  },
+  {
+    "id": "oats-healthiest",
+    "query": "healthiest oats",
+    "must_include_patterns": ["oat"],
+    "must_exclude_patterns": ["biscuit", "chips"],
+    "kind": "directed"
+  },
+  {
+    "id": "weight-loss",
+    "query": "snacks for weight loss",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder"],
+    "kind": "goal"
+  },
+  {
+    "id": "doodh-milk",
+    "query": "doodh",
+    "must_include_patterns": ["milk"],
+    "must_exclude_patterns": ["biscuit"],
+    "kind": "directed"
+  }
+]

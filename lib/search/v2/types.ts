@@ -1,0 +1,160 @@
+/** Search V2 types — see SEARCH_V2_PLAN.md */
+
+export const TRAIT_IDS = [
+  "protein_density",
+  "fiber_density",
+  "low_sugar",
+  "low_sodium",
+  "low_fat",
+  "low_saturated_fat",
+  "healthy_fats",
+  "low_calorie_density",
+  "whole_food",
+  "hydration",
+  "electrolytes",
+  "satiety",
+  "gut_health",
+  "slow_energy",
+  "quick_energy",
+  "antioxidant",
+  "calcium_rich",
+  "processing_level",
+  "clean_label",
+  "no_added_sugar",
+  "kid_friendly",
+  "diabetic_friendly",
+  "gym_friendly",
+  "elderly_friendly",
+] as const;
+
+export type TraitId = (typeof TRAIT_IDS)[number];
+
+export type TraitVector = Partial<Record<TraitId, number>>;
+export type TraitSourceMap = Partial<Record<TraitId, "derived" | "llm">>;
+export type TraitConfidenceMap = Partial<Record<TraitId, number>>;
+
+export type NutritionTier = "low" | "medium" | "high" | "unknown";
+
+export type ProductSearchIndexRow = {
+  product_id: string;
+  canonical_product_id: string | null;
+  slug: string;
+  name: string;
+  brand: string | null;
+  category: string | null;
+  subcategory: string | null;
+  l3_category: string | null;
+  primary_type: string | null;
+  type_aliases: string[];
+  form: string | null;
+  flavours: string[];
+  variants: string[];
+  is_veg: boolean | null;
+  is_vegan: boolean | null;
+  is_gluten_free: boolean | null;
+  is_jain: boolean | null;
+  is_palm_oil_free: boolean | null;
+  has_added_sugar: boolean | null;
+  allergens: string[];
+  claims: string[];
+  sugar_g: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  sodium_mg: number | null;
+  energy_kcal: number | null;
+  price_inr: number | null;
+  sugar_tier: NutritionTier | null;
+  protein_tier: NutritionTier | null;
+  fat_tier: NutritionTier | null;
+  traits: TraitVector;
+  trait_source: TraitSourceMap;
+  trait_confidence: TraitConfidenceMap;
+  scout_score: number | null;
+  nova_group: number | null;
+  data_quality_score: number;
+  data_completeness: number;
+  facet_confidence: Record<string, number>;
+  brand_tier: string | null;
+  pack_size_value: number | null;
+  pack_size_unit: string | null;
+  use_cases: string[];
+  search_doc: string | null;
+  search_count: number;
+  click_count: number;
+  save_count: number;
+};
+
+export type GoalTraitWeights = Partial<Record<TraitId, number>>;
+
+export type GoalTraitMapRow = {
+  goal_id: string;
+  display_name: string;
+  trait_weights: GoalTraitWeights;
+  source: string;
+  confidence: number;
+};
+
+export type CategoryTraitProfileRow = {
+  category_key: string;
+  category: string | null;
+  subcategory: string | null;
+  trait_means: TraitVector;
+  product_count: number;
+};
+
+export type SearchIntentKind = "directed" | "goal" | "brand" | "ambiguous";
+
+export type SearchIntentV2 = {
+  kind: SearchIntentKind;
+  goal_id: string | null;
+  primary_type: string | null;
+  required_flavours: string[];
+  modifiers: string[];
+  constraints: {
+    max_sugar_g?: number;
+    max_fat_g?: number;
+    min_protein_g?: number;
+    max_price?: number;
+    vegan?: boolean;
+    vegetarian?: boolean;
+    gluten_free?: boolean;
+    palm_oil_free?: boolean;
+    avoid_ingredients: string[];
+    allergens_excluded: string[];
+  };
+  sort: "best_match" | "cheapest" | "healthiest" | "highest_protein" | "lowest_sugar";
+  confidence: number;
+  raw_query: string;
+};
+
+export type RankedCandidate = {
+  row: ProductSearchIndexRow;
+  relevance_score: number;
+  health_score: number;
+  trait_match_score: number;
+  popularity_score: number;
+  final_score: number;
+  goal_fit: number | null;
+  reasons: string[];
+  trait_reasons: Array<{ trait: TraitId; label: string }>;
+};
+
+export type RecommendationBucket = {
+  id: string;
+  label: string;
+  trait_focus: TraitId | "overall" | "budget";
+  items: RankedCandidate[];
+};
+
+export type SearchV2Result = {
+  intent: SearchIntentV2;
+  candidates_total: number;
+  items: RankedCandidate[];
+  buckets: RecommendationBucket[] | null;
+  relaxed: boolean;
+  relaxation_steps: string[];
+  rank_source: "v2_structured" | "v2_goal";
+  summary: string;
+};
+
+export const DATA_QUALITY_MIN = 0.35;

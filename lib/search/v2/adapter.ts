@@ -1,0 +1,109 @@
+import { adminClient } from "@/lib/supabase/admin";
+import type { AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
+import { heuristicParseProductQuery } from "@/lib/search/query-parse";
+import type { SearchV2Result } from "@/lib/search/v2/types";
+import type { Grade, ScoreBand } from "@/lib/supabase/types";
+
+function scoreToGrade(score: number): Grade {
+  if (score >= 80) return "A";
+  if (score >= 65) return "B";
+  if (score >= 50) return "C";
+  if (score >= 35) return "D";
+  return "F";
+}
+
+function scoreToBand(score: number): ScoreBand {
+  if (score >= 75) return "excellent";
+  if (score >= 55) return "good";
+  if (score >= 40) return "poor";
+  return "bad";
+}
+
+type DisplayEnrichment = {
+  image_urls: string[];
+  net_weight: string | null;
+  mrp_inr: number | null;
+};
+
+async function enrichDisplayFields(productIds: string[]): Promise<Map<string, DisplayEnrichment>> {
+  const out = new Map<string, DisplayEnrichment>();
+  if (!productIds.length) return out;
+  try {
+    const supabase = adminClient();
+    const { data } = await supabase
+      .from("products")
+      .select("id, image_urls, net_weight, mrp_inr")
+      .in("id", productIds.slice(0, 50));
+    for (const row of data ?? []) {
+      out.set(String(row.id), {
+        image_urls: Array.isArray(row.image_urls) ? row.image_urls.slice(0, 1) : [],
+        net_weight: (row.net_weight as string) ?? null,
+        mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
+      });
+    }
+  } catch {
+    // non-fatal
+  }
+  return out;
+}
+
+export async function searchV2ToAiResult(
+  v2: SearchV2Result,
+  opts: { limit?: number; parseSource?: "heuristic" | "deepseek" } = {},
+): Promise<AiSearchResult> {
+  const limit = opts.limit ?? v2.items.length;
+  const ids = v2.items.map((i) => i.row.product_id);
+  const display = await enrichDisplayFields(ids);
+
+  const items: AiSearchItem[] = v2.items.map((c) => {
+    const row = c.row;
+    const extra = display.get(row.product_id);
+    const scout = row.scout_score ?? Math.round(c.final_score * 100);
+    return {
+      id: row.product_id,
+      slug: row.slug,
+      name: row.name,
+      brand: row.brand,
+      category: row.category,
+      subcategory: row.subcategory,
+      net_weight: extra?.net_weight ?? null,
+      price_inr: row.price_inr,
+      mrp_inr: extra?.mrp_inr ?? null,
+      image_urls: extra?.image_urls ?? [],
+      core_scores: scout
+        ? {
+            score: scout,
+            grade: scoreToGrade(scout),
+            band: scoreToBand(scout),
+            verdict: null,
+            verdict_sublabels: [],
+            relative_score: null,
+            cohort_size: null,
+          }
+        : null,
+      ai_match_score: Math.round(c.final_score * 100),
+      ai_health_score: row.scout_score ?? undefined,
+      ai_match_reasons: c.reasons,
+      ai_match_warning:
+        row.data_quality_score < 0.5 ? "Label data partially verified by Scout" : null,
+    };
+  });
+
+  const parsed = heuristicParseProductQuery(v2.intent.raw_query);
+
+  return {
+    parsed,
+    parse_source: opts.parseSource ?? "heuristic",
+    rank_source: "semantic",
+    intent_tier: v2.intent.kind === "goal" ? "complex" : "structured",
+    summary: v2.summary,
+    items,
+    reasons_by_product_id: Object.fromEntries(
+      v2.items.map((c) => [c.row.product_id, c.reasons]),
+    ),
+    refinements: v2.relaxed ? v2.relaxation_steps : [],
+    limit,
+    total: v2.candidates_total,
+    relaxed: v2.relaxed,
+  };
+}
