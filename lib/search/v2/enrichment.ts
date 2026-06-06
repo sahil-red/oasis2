@@ -16,6 +16,26 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** Parse "500 g" / "1 L" / "200ml" / "1kg" into a normalized value+unit (deterministic). */
+function parseNetWeight(net_weight: string | null | undefined): { value: number | null; unit: string | null } {
+  if (!net_weight) return { value: null, unit: null };
+  const m = String(net_weight).toLowerCase().match(/(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|ml|l|litre|liter|pcs|piece|pack|n|x)?/);
+  if (!m?.[1]) return { value: null, unit: null };
+  const value = Number(m[1]);
+  if (!Number.isFinite(value)) return { value: null, unit: null };
+  const rawUnit = m[2] ?? null;
+  const unit = rawUnit === "gm" || rawUnit === "gram" || rawUnit === "grams" ? "g"
+    : rawUnit === "litre" || rawUnit === "liter" ? "l"
+    : rawUnit;
+  return { value, unit };
+}
+
+/**
+ * Rich text for the doc embedding + lexical (pg_trgm) match. Includes the full
+ * semantic surface — flavours, variants, form, claims, use-cases, and an ingredient
+ * snippet — so vague/semantic queries ("high fiber", "no maida", "for kids") have
+ * something to match. Thin docs were the #1 cause of weak vector recall.
+ */
 function buildSearchDoc(row: {
   name: string;
   brand: string | null;
@@ -24,20 +44,31 @@ function buildSearchDoc(row: {
   l3_category?: string | null;
   primary_type: string | null;
   base_name: string | null;
+  form?: string | null;
   flavours: string[];
+  variants?: string[];
+  claims?: string[];
+  use_cases?: string[];
+  ingredients_raw?: string | null;
 }): string {
   return [
     row.name,
     row.brand,
     row.base_name,
     row.primary_type,
+    row.form,
     row.category,
     row.subcategory,
     row.l3_category,
     ...row.flavours,
+    ...(row.variants ?? []),
+    ...(row.claims ?? []),
+    ...(row.use_cases ?? []).map((u) => u.replace(/_/g, " ")),
+    (row.ingredients_raw ?? "").slice(0, 240),
   ]
     .filter(Boolean)
     .join(" ")
+    .replace(/\s+/g, " ")
     .toLowerCase();
 }
 
@@ -47,6 +78,7 @@ export type EnrichSource = Pick<
   | "slug"
   | "name"
   | "brand"
+  | "super_category"
   | "category"
   | "subcategory"
   | "l3_category"
@@ -122,8 +154,10 @@ function baseRowFromProduct(
     data_completeness,
     facet_confidence: { ...facet_confidence, ...(llm?.facet_confidence ?? {}) },
     brand_tier: llm?.brand_tier ?? null,
-    pack_size_value: llm?.pack_size_value ?? null,
-    pack_size_unit: llm?.pack_size_unit ?? null,
+    // Deterministic pack size from net_weight (94% populated) — more reliable than
+    // the LLM guessing from the name. LLM value is a fallback only.
+    pack_size_value: parseNetWeight(p.net_weight).value ?? llm?.pack_size_value ?? null,
+    pack_size_unit: parseNetWeight(p.net_weight).unit ?? llm?.pack_size_unit ?? null,
     use_cases: llm?.use_cases ?? [],
     search_doc: buildSearchDoc({
       name: p.name,
@@ -133,7 +167,12 @@ function baseRowFromProduct(
       l3_category: p.l3_category ?? null,
       primary_type,
       base_name: llm?.base_name ?? null,
+      form: llm?.form ?? null,
       flavours: llm?.flavours ?? [],
+      variants: llm?.variants ?? [],
+      claims: llm?.claims ?? [],
+      use_cases: llm?.use_cases ?? [],
+      ingredients_raw: p.ingredients_raw,
     }),
     click_count: 0,
     save_count: 0,
@@ -145,6 +184,7 @@ function baseRowFromProduct(
       category: p.category,
       subcategory: p.subcategory,
       l3_category: p.l3_category ?? null,
+      net_weight: p.net_weight ?? null,
       nutrition: p.nutrition,
       ingredients_raw: p.ingredients_raw,
       attributes: p.attributes,
@@ -318,9 +358,11 @@ export async function buildIndexFromProducts(
           id: p.id,
           name: p.name,
           brand: p.brand,
+          super_category: p.super_category ?? null,
           category: p.category,
           subcategory: p.subcategory,
           l3_category: p.l3_category ?? null,
+          net_weight: p.net_weight ?? null,
           ingredients_raw: p.ingredients_raw,
           attributes: p.attributes,
           nutrition: (p.nutrition ?? null) as Record<string, unknown> | null,

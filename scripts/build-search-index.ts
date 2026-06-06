@@ -86,7 +86,7 @@ async function main() {
     let query = supabase
       .from("products")
       .select(
-        "id, slug, name, brand, category, subcategory, l3_category, net_weight, price_inr, mrp_inr, nutrition, ingredients_raw, attributes, core_scores ( score, subscores )",
+        "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, price_inr, mrp_inr, nutrition, ingredients_raw, attributes, core_scores ( score, subscores )",
       )
       .eq("platform", "zepto")
       .not("nutrition", "is", null);
@@ -115,6 +115,7 @@ async function main() {
         slug: p.slug,
         name: p.name,
         brand: p.brand,
+        super_category: p.super_category,
         category: p.category,
         subcategory: p.subcategory,
         l3_category: p.l3_category,

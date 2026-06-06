@@ -7,6 +7,7 @@ export function computeProductSourceHash(opts: {
   category: string | null;
   subcategory: string | null;
   l3_category: string | null;
+  net_weight?: string | null;
   nutrition: unknown;
   ingredients_raw: string | null;
   attributes: Record<string, string> | null;
@@ -17,6 +18,7 @@ export function computeProductSourceHash(opts: {
     category: opts.category?.trim() ?? null,
     subcategory: opts.subcategory?.trim() ?? null,
     l3_category: opts.l3_category?.trim() ?? null,
+    net_weight: opts.net_weight?.trim() ?? null,
     nutrition: opts.nutrition,
     ingredients_raw: opts.ingredients_raw?.trim() ?? null,
     attributes: opts.attributes,

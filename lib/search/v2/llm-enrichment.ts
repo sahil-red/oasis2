@@ -69,21 +69,59 @@ const ENRICHMENT_SYSTEM = `You enrich Indian grocery products for Scout Search. 
   "semantic_traits": { "${SEMANTIC_TRAITS[0]}": {"value":0-1,"confidence":0-1,"reason":string}, ... },
   "facet_confidence": { "type":0-1, "flavours":0-1, "dietary":0-1 }
 }]}
+Use EVERY field provided: name+brand for type/flavour/variants; ingredients for
+clean_label/whole_food/palm-oil/allergens/dietary; nutrition for satiety/energy traits;
+label.Allergens + "May Contain" for allergens; label."Free From"/Certifications for
+dietary flags (vegan/gluten-free/jain) and no-added-sugar; label.Claims for marketing
+claims; label.Preparation/Serving/Dosage for use_cases (how it's consumed); net_weight
+for pack_size_value+unit.
 Extract type and flavours from the product name — never from subcategory alone.
-Semantic traits: reason over full label context. null/omit when undeterminable.
+Set dietary booleans true/false ONLY with evidence (ingredients/label); else null.
+Semantic traits: reason over the full label+ingredient+nutrition context. null/omit when undeterminable.
 Keep each "reason" ≤ 12 words. Omit traits you cannot justify rather than guessing.`;
 
 export type EnrichmentInput = {
   id: string;
   name: string;
   brand: string | null;
+  super_category?: string | null;
   category: string | null;
   subcategory: string | null;
   l3_category: string | null;
+  net_weight?: string | null;
   ingredients_raw: string | null;
   attributes: Record<string, string> | null;
   nutrition: Record<string, unknown> | null;
 };
+
+/**
+ * Curated label fields worth sending the LLM. Excludes noise (Variant ID, Data Source,
+ * Customer Care, Manufacturer, DeepSeek confidence flags) that wastes tokens and adds
+ * nothing to type/flavour/trait/dietary reasoning.
+ */
+const USEFUL_ATTR_KEYS = [
+  "Label Allergens",
+  "Label May Contain",
+  "Label Free From",
+  "Marketing Claims",
+  "Label Chips",
+  "Label Certifications",
+  "Label Why",
+  "Storage Instructions",
+  "Preparation Instructions",
+  "Serving Suggestion",
+  "Recommended Dosage",
+];
+
+function curateAttributes(attrs: Record<string, string> | null): Record<string, string> | null {
+  if (!attrs) return null;
+  const out: Record<string, string> = {};
+  for (const key of USEFUL_ATTR_KEYS) {
+    const v = attrs[key];
+    if (v != null && String(v).trim()) out[key.replace(/^Label /, "")] = String(v);
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 async function enrichBatchOnce(batch: EnrichmentInput[]): Promise<Map<string, LlmProductEnrichment>> {
   const out = new Map<string, LlmProductEnrichment>();
@@ -94,11 +132,15 @@ async function enrichBatchOnce(batch: EnrichmentInput[]): Promise<Map<string, Ll
       id: p.id,
       name: p.name,
       brand: p.brand,
+      super_category: p.super_category ?? undefined,
       category: p.category,
       subcategory: p.subcategory,
       l3: p.l3_category,
-      ingredients: p.ingredients_raw?.slice(0, 400),
-      attributes: p.attributes,
+      net_weight: p.net_weight ?? undefined,
+      // Full ingredient list (not truncated to 400) — 16% exceed it, and ingredients
+      // are the basis for clean_label / whole_food / palm-oil / allergen reasoning.
+      ingredients: p.ingredients_raw?.slice(0, 1500),
+      label: curateAttributes(p.attributes),
       nutrition: p.nutrition,
     })),
   });
