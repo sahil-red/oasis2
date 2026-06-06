@@ -293,6 +293,23 @@ precision@5 (≥0.8 gate), top-1 accuracy, mean latency, LLM calls/search. Seed 
 
 ---
 
+## 10b. Confirmed decisions (locked)
+
+- **Embeddings: YES.** pgvector + free multilingual model, one-time batch over the catalog. Hybrid
+  lexical+vector retrieval is in scope from the start (not deferred).
+- **DeepSeek enrichment: YES.** Full one-time enrichment pass over the catalog is approved; cost accepted.
+  Re-enrich changed/new rows incrementally thereafter.
+- **Scope: ALL query types, ALL categories.** No narrowing — type+flavour, health constraints, goal/vague
+  NL, and brand/superlative are all first-class; every category enriched and tuned. The eval suite (§9)
+  carries cases for each query type × each category family.
+- **Enrichment is per-category runnable.** The enrichment script takes an optional category filter so each
+  family (dairy/drinks, snacks/bakery, spreads/staples, …) can be enriched, tuned, and verified
+  independently, then rolled up — instead of one all-or-nothing batch.
+- **Multilingual: in scope.** Hindi/Hinglish handling (multilingual embeddings + synonym map + EN/HI
+  negation) is built in from the start for India-robustness, even though current usage is English-heavy.
+
+---
+
 ## 11. Non-negotiables
 
 - **Filters decide membership; scores decide order.** Embeddings/LLM never inject an off-type product.
