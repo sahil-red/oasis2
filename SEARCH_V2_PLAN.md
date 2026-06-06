@@ -19,8 +19,11 @@
    New goals (“drinks for running”, “snacks for night shift”) emerge automatically — no new data, no new code.
 
 ```
-DIRECTED query   →  Intent → Filters (type/flavour/dietary/nutrition) → Hybrid retrieve → Health-aware rank
-VAGUE/goal query →  Intent → Goal→Trait weights → Trait-scored retrieve → Curated recommendation buckets
+DIRECTED query → Intent → Candidate Generation → Retrieve (filter+hybrid) → Rank (health-aware)
+VAGUE/goal query → Intent → Goal→Traits (Nutrition Graph) → Candidate Generation → Retrieve → Rank → Buckets
+
+Funnel (the architecture every serious search converges to):
+   ~23k products → ~500 candidates → ~50 reranked → ~10 shown
 ```
 
 ---
@@ -83,21 +86,32 @@ AUDIENCE      kid_friendly · diabetic_friendly · gym_friendly · elderly_frien
 This set is **finite and curated** (≈25). Provenance per trait stored in `trait_source` (`derived` vs
 `llm`) and gated by `data_quality_score` — a trait computed from missing data is null, not 0.
 
-### 3b. Goals map to trait weights (at query time, infinite)
+### 3b. The Nutrition Graph — goals map to trait weights (stored explicitly)
 
-A goal is a **weight vector over the finite traits**, produced by (a) a curated map for common goals, and
-(b) the LLM for novel goals — but the LLM may only emit weights over the *known* trait names, so the output
-is bounded and verifiable.
+A goal is a **weight vector over the finite traits**. These mappings are stored explicitly as a persistent
+**Nutrition Graph** (`goal_trait_map` table: `goal → {trait: weight}`), seeded with common goals:
 
 ```
-"drinks for running"   → hydration .35 · electrolytes .30 · quick_energy .15 · low_sugar .10 · whole_food .10
-"weight loss snacks"   → low_calorie_density .30 · satiety .25 · protein_density .20 · low_sugar .15 · fiber .10
-"muscle gain"          → protein_density .45 · calorie adequacy .20 · whole_food .15 · clean_label .10 · …
-"for my diabetic dad"  → low_sugar .35 · fiber .25 · low_calorie_density .15 · whole_food .15 · low_sodium .10
-"kids tiffin"          → kid_friendly .30 · clean_label .25 · low_sugar .20 · calcium .15 · whole_food .10
+running  → hydration .35 · electrolytes .30 · slow_energy .15 · low_sugar .10 · whole_food .10
+PCOS     → fiber .30 · low_sugar .30 · whole_food .20 · low_calorie_density .10 · clean_label .10
+diabetes → fiber .30 · low_sugar .30 · satiety .20 · whole_food .10 · low_sodium .10
+muscle gain → protein_density .45 · calorie adequacy .20 · whole_food .15 · clean_label .10 · …
+kids tiffin → kid_friendly .30 · clean_label .25 · low_sugar .20 · calcium .15 · whole_food .10
 ```
+
 `goal_fit(product) = Σ weight_i · trait_i`. New goals need **zero** new data — they just compose existing
-traits. *This is what makes Scout reason like a nutritionist instead of matching keywords.*
+traits. Storing the graph explicitly means: **recommendations are explainable** (we can show *which* traits
+earned a pick), **decomposition is consistent** (same goal → same weights every time), and **LLM dependence
+drops** (a graph hit needs no model call).
+
+> **The curated goal map is only a bootstrap layer.** The system must *progressively learn* new goal→trait
+> mappings — from user behavior (clicks/saves on what the LLM proposed) and from LLM decomposition of novel
+> goals (which, once validated, are written back into the graph) — rather than relying on an ever-growing
+> manually maintained goal list. We never hand-add `running, cycling, swimming, trekking, …` one by one; the
+> trait model + graph learning is precisely what prevents that. The graph grows itself.
+
+Resolution order for any goal: **graph hit → (miss) LLM decomposition bounded to known traits → persist the
+validated mapping back into the graph.** Over time, fewer misses, fewer LLM calls.
 
 ---
 
@@ -160,23 +174,24 @@ Per product, combine: OCR/extraction confidence (`attributes.DeepSeek *Confidenc
 
 ```
 query
- └▶ INTENT UNDERSTANDING ─ extract { kind, goal, primary_type, modifiers, constraints, sort, confidence }
+ └▶ INTENT UNDERSTANDING ─ { kind, goal, primary_type, modifiers, constraints, sort, confidence }
       │                     (deterministic heuristic always; LLM only per §9)
-      ├─ directed (type present) ───────────────┐
-      │   FILTER (membership, deterministic):    │
-      │     type ∈ {type,synonyms}; flavour⊇req; │
-      │     dietary; allergen-free; avoid scan;   │
-      │     nutrition threshold/tier              │
-      │   RETRIEVE (hybrid §7) → RANK (§7b)        │
-      │                                           │
-      └─ goal/vague (no hard type) ──────────────┤
-          GOAL → TRAIT WEIGHTS (§3b)              │
-          candidate gen across categories →       │
-          score by goal_fit + health →            │
-          RECOMMENDATION BUCKETS (§7c)            │
-                                                  ▼
-                          RELAX if sparse (§ explained) → results + chips + "why"
+      │  goal/vague → GOAL→TRAITS via Nutrition Graph (§3b)
+      ▼
+   CANDIDATE GENERATION (~23k → ~500) ─ membership filters that CANNOT be wrong:
+      type ∈ {type,synonyms} · flavour⊇required · dietary · allergen-free · avoid scan ·
+      nutrition threshold/tier · data_quality gate.  (goal route: trait-relevant categories)
+      ▼
+   RETRIEVE / RERANK (~500 → ~50) ─ hybrid (structured-first + vector expansion, RRF §7a)
+      ▼
+   RANK (~50 → ~10) ─ directed: health-aware formula §7b · goal: goal_fit + health → BUCKETS §7c
+      ▼
+   RELAX if sparse (always explained §11) → results + chips + per-pick "why"
 ```
+
+This is the canonical funnel: **Candidate Generation is its own stage** (membership — the relevance
+guarantee), distinct from rerank and final rank. We build it explicitly now even though ~500 fits in memory
+today, so the architecture already matches where every serious search system lands.
 
 ---
 
@@ -316,8 +331,10 @@ Seed from §14 + real `search_history`. **No search change ships unless leak-rat
    focused LLM extraction (type/flavours/variants/use_cases/LLM-traits). Per-category runnable.
 2. **Intent understanding** — `lib/search/intent.ts`: head-noun, atomic compounds, "with", synonyms,
    negation, fuzzy; heuristic-first, LLM-on-low-confidence; goal extraction.
-3. **Goal→trait engine** — curated map + LLM decomposition (bounded to trait vocab); `goal_fit` scorer.
-4. **Online filter→hybrid retrieve→health-aware rank** (directed) + **bucketed recommendations** (goal).
+3. **Nutrition Graph + goal→trait engine** — `goal_trait_map` table (seed common goals), graph-hit →
+   bounded LLM decomposition → persist learned mappings; `goal_fit` scorer.
+4. **Online pipeline as explicit funnel** — Candidate Generation (membership) → Retrieve/rerank → Rank;
+   health-aware rank (directed) + **bucketed recommendations** (goal).
 5. **Embeddings** — provider chosen later (parked); structured-first means core ships without it. Add
    pgvector + RRF as the secondary expansion layer.
 6. **Verify net + relaxation + clustering UI + popularity loop.**
@@ -331,6 +348,9 @@ Seed from §14 + real `search_history`. **No search change ships unless leak-rat
 - **Answer "what should I buy?", not "what matches?"** — recommendation > retrieval.
 - **Filters decide membership; scores decide order.** Vectors/LLM never inject off-filter products.
 - **Goals infinite, traits finite** — reason over traits, compose goals dynamically.
+- **Nutrition Graph is bootstrap + learning, never a hand-maintained goal list.** It grows from behavior +
+  validated LLM decomposition; we never add goals one by one.
+- **Candidate Generation is a distinct stage** — the funnel (23k→500→50→10) is explicit from day one.
 - **Structured retrieval > vector retrieval**; vectors are expansion/recovery, not the engine.
 - **Health must materially affect ranking** (30%+), else Scout is generic search.
 - **Trust is core:** `data_quality_score` gates visibility; never silently drop or silently trust.
