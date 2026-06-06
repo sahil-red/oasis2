@@ -139,7 +139,9 @@ function baseRowFromProduct(
     sodium_mg: num(p.nutrition?.sodium_mg_100g),
     energy_kcal: num(p.nutrition?.energy_kcal_100g),
     calcium_mg: num(p.nutrition?.calcium_mg_100g),
+    iron_mg: num(p.nutrition?.iron_mg_100g),
     fiber_g: num(p.nutrition?.fiber_g_100g),
+    carbs_g: num(p.nutrition?.carbs_g_100g),
     price_inr: p.price_inr ?? p.mrp_inr,
     sugar_tier: null,
     protein_tier: null,
@@ -202,7 +204,9 @@ function buildCohortMap(
     sodium_mg: number | null;
     energy_kcal: number | null;
     calcium_mg?: number | null;
+    iron_mg?: number | null;
     fiber_g?: number | null;
+    carbs_g?: number | null;
   }>,
 ) {
   const map = new Map<
@@ -216,6 +220,8 @@ function buildCohortMap(
       energy_kcal: number | null;
       fiber_g: number | null;
       calcium_mg: number | null;
+      iron_mg: number | null;
+      carbs_g: number | null;
     }>
   >();
   for (const r of rows) {
@@ -230,6 +236,8 @@ function buildCohortMap(
       energy_kcal: r.energy_kcal,
       fiber_g: r.fiber_g ?? null,
       calcium_mg: r.calcium_mg ?? null,
+      iron_mg: r.iron_mg ?? null,
+      carbs_g: r.carbs_g ?? null,
     });
     map.set(t, list);
   }
@@ -253,6 +261,8 @@ export function applyQuantitativeTraits(
         energy_kcal_100g: row.energy_kcal ?? undefined,
         fiber_g_100g: row.fiber_g ?? undefined,
         calcium_mg_100g: row.calcium_mg ?? undefined,
+        iron_mg_100g: row.iron_mg ?? undefined,
+        carbs_g_100g: row.carbs_g ?? undefined,
       },
       has_added_sugar: row.has_added_sugar,
       data_quality_score: row.data_quality_score,

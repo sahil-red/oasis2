@@ -13,9 +13,11 @@ const SEMANTIC_TRAITS: TraitId[] = [
   "slow_energy",
   "quick_energy",
   "antioxidant",
+  "vitamin_rich",
   "whole_food",
   "clean_label",
   "processing_level",
+  "low_gi",
   "kid_friendly",
   "diabetic_friendly",
   "gym_friendly",
@@ -77,8 +79,12 @@ claims; label.Preparation/Serving/Dosage for use_cases (how it's consumed); net_
 for pack_size_value+unit.
 Extract type and flavours from the product name — never from subcategory alone.
 Set dietary booleans true/false ONLY with evidence (ingredients/label); else null.
-Semantic traits: reason over the full label+ingredient+nutrition context. null/omit when undeterminable.
-Keep each "reason" ≤ 12 words. Omit traits you cannot justify rather than guessing.`;
+Semantic traits: assess EVERY trait you can reasonably judge from the data — aim for 6–10
+per product. Use the "confidence" field (0-1) to express uncertainty; a low-confidence
+value is fine and preferred over omitting. ALWAYS assess processing_level, whole_food,
+clean_label, and satiety whenever ingredients are present (a long additive/refined list →
+low whole_food/clean_label, high processing_level). Only omit a trait that is genuinely
+inapplicable to the product. Keep each "reason" ≤ 12 words.`;
 
 export type EnrichmentInput = {
   id: string;

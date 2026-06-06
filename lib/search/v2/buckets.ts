@@ -18,6 +18,12 @@ const TRAIT_LABELS: Partial<Record<TraitId, string>> = {
   whole_food: "Best Whole Food",
   low_sugar: "Lowest Sugar",
   fiber_density: "Best Fiber",
+  low_carb: "Lowest Carb",
+  iron_rich: "Most Iron",
+  vitamin_rich: "Most Vitamins",
+  low_gi: "Best for Blood Sugar",
+  calcium_rich: "Best Calcium",
+  antioxidant: "Most Antioxidants",
   kid_friendly: "Best for Kids",
   diabetic_friendly: "Best for Diabetics",
 };

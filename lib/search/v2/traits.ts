@@ -31,7 +31,9 @@ const QUANTITATIVE_TRAITS: TraitId[] = [
   "low_saturated_fat",
   "healthy_fats",
   "low_calorie_density",
+  "low_carb",
   "calcium_rich",
+  "iron_rich",
   "no_added_sugar",
 ];
 
@@ -51,6 +53,8 @@ export function computeQuantitativeTraits(opts: {
       energy_kcal: number | null;
       fiber_g: number | null;
       calcium_mg: number | null;
+      iron_mg: number | null;
+      carbs_g: number | null;
     }>
   >;
   primary_type: string;
@@ -69,6 +73,8 @@ export function computeQuantitativeTraits(opts: {
   const kcals = cohort.map((c) => c.energy_kcal).filter((v): v is number => v != null);
   const fibers = cohort.map((c) => c.fiber_g).filter((v): v is number => v != null);
   const calciums = cohort.map((c) => c.calcium_mg).filter((v): v is number => v != null);
+  const irons = cohort.map((c) => c.iron_mg).filter((v): v is number => v != null);
+  const carbsList = cohort.map((c) => c.carbs_g).filter((v): v is number => v != null);
 
   const setMath = (id: TraitId, value: number | null) => {
     if (value == null) return;
@@ -85,6 +91,8 @@ export function computeQuantitativeTraits(opts: {
   const kcal = num(n?.energy_kcal_100g);
   const fiber = num(n?.fiber_g_100g);
   const calcium = num(n?.calcium_mg_100g);
+  const iron = num(n?.iron_mg_100g);
+  const carbs = num(n?.carbs_g_100g);
 
   if (protein != null && proteins.length >= 5) {
     setMath("protein_density", percentileRank(protein, proteins));
@@ -119,6 +127,12 @@ export function computeQuantitativeTraits(opts: {
   }
   if (calcium != null && calciums.length >= 5) {
     setMath("calcium_rich", percentileRank(calcium, calciums));
+  }
+  if (iron != null && irons.length >= 5) {
+    setMath("iron_rich", percentileRank(iron, irons));
+  }
+  if (carbs != null && carbsList.length >= 5) {
+    setMath("low_carb", percentileRank(carbs, carbsList, true));
   }
   if (kcal != null && kcals.length >= 5) {
     setMath("low_calorie_density", percentileRank(kcal, kcals, true));

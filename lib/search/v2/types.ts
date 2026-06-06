@@ -9,6 +9,7 @@ export const TRAIT_IDS = [
   "low_saturated_fat",
   "healthy_fats",
   "low_calorie_density",
+  "low_carb",
   "whole_food",
   "hydration",
   "electrolytes",
@@ -17,10 +18,13 @@ export const TRAIT_IDS = [
   "slow_energy",
   "quick_energy",
   "antioxidant",
+  "vitamin_rich",
   "calcium_rich",
+  "iron_rich",
   "processing_level",
   "clean_label",
   "no_added_sugar",
+  "low_gi",
   "kid_friendly",
   "diabetic_friendly",
   "gym_friendly",
@@ -66,7 +70,9 @@ export type ProductSearchIndexRow = {
   fat_g: number | null;
   saturated_fat_g?: number | null;
   calcium_mg?: number | null;
+  iron_mg?: number | null;
   fiber_g?: number | null;
+  carbs_g?: number | null;
   sodium_mg: number | null;
   energy_kcal: number | null;
   price_inr: number | null;
