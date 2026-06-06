@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --turbopack --hostname localhost",
+    "dev:lan": "next dev --turbopack --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname localhost",
     "lint": "next lint",
@@ -53,7 +54,8 @@
     "search:regression:live": "tsx scripts/search-regression-live.ts",
     "lm:status": "tsx scripts/lm-run-status.ts",
     "mobile:env": "tsx scripts/sync-mobile-env.ts",
-    "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:tunnel"
+    "mobile:start": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:tunnel",
+    "mobile:start:lan": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:lan"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",

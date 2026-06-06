@@ -1,7 +1,7 @@
-/** Re-export web intent routing so mobile and catalog stay in sync. */
+/** Client intent routing — keep in sync with lib/search/intent-classify.ts */
 export {
   classifyIntent,
   hasConstraintLexicon,
   hasModifierLexicon,
   type SearchIntentTier,
-} from "../../../lib/search/intent-classify";
+} from "@/lib/intent-classify";

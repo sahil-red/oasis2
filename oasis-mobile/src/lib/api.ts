@@ -46,9 +46,10 @@ async function apiFetch<T>(
       throw new Error("Search took too long — try again in a moment.");
     }
     if (e instanceof TypeError) {
-      throw new Error(
-        `Cannot reach Scout API at ${API_BASE}. Run pnpm mobile:env from the repo root or set EXPO_PUBLIC_API_URL.`,
-      );
+      const hint = API_BASE.startsWith("https://")
+        ? "Check phone internet access, then run `pnpm mobile:env` and `pnpm mobile:start` (Expo tunnel)."
+        : "Local API needs same Wi‑Fi + `pnpm dev:lan`. For worldwide QR use production: `pnpm mobile:env` then `pnpm mobile:start`.";
+      throw new Error(`Cannot reach Scout API at ${API_BASE}. ${hint}`);
     }
     throw e;
   } finally {
