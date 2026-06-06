@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, Bookmark } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
@@ -16,12 +16,24 @@ export function SavedSearchActions({
   const auth = useAuth();
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [v2Enabled, setV2Enabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/search/v2-status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { enabled?: boolean }) => setV2Enabled(Boolean(d.enabled)))
+      .catch(() => setV2Enabled(false));
+  }, []);
 
   if (!query.trim()) return null;
 
   async function handleSave(alert: boolean) {
     if (!auth?.session?.access_token) {
       setStatus("Sign in to save searches");
+      return;
+    }
+    if (alert && v2Enabled === false) {
+      setStatus("Alerts need Search V2 enabled on the server");
       return;
     }
     setBusy(true);
@@ -53,7 +65,8 @@ export function SavedSearchActions({
       </button>
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || v2Enabled === false}
+        title={v2Enabled === false ? "Alerts require Search V2" : undefined}
         onClick={() => void handleSave(true)}
         className="inline-flex items-center gap-1.5 rounded-full border border-(--color-line) px-3 py-1.5 text-xs font-medium text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) disabled:opacity-50"
       >

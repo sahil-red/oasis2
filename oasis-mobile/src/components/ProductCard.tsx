@@ -139,9 +139,14 @@ export function ProductCard({
         </View>
       </View>
 
-      {product.brand ? (
-        <Text style={styles.brand} numberOfLines={1}>{product.brand.toUpperCase()}</Text>
-      ) : null}
+      <View style={styles.brandRow}>
+        {product.brand ? (
+          <Text style={styles.brand} numberOfLines={1}>{product.brand.toUpperCase()}</Text>
+        ) : null}
+        {product.scout_verified ? (
+          <Text style={styles.verified}>Verified by Scout</Text>
+        ) : null}
+      </View>
       <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
 
       {/* Combined chip row: product health attributes + search match reasons */}
@@ -214,12 +219,26 @@ const styles = StyleSheet.create({
   placeholderText: { color: colors.fgDim, fontSize: 12 },
   topLeft: { position: "absolute", left: 8, top: 8 },
   topRight: { position: "absolute", right: 7, top: 7 },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.sm,
+    flexWrap: "wrap",
+  },
   brand: {
     fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.2,
     color: colors.fgDim,
-    marginTop: spacing.sm,
+    flexShrink: 1,
+  },
+  verified: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.4,
+    color: colors.good,
+    textTransform: "uppercase",
   },
   name: {
     fontFamily: fonts.sansSemiBold,

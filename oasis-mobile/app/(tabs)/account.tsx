@@ -1,16 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
-import { useAuth } from "@/lib/auth";
+import { useAccessToken, useAuth } from "@/lib/auth";
+import { listSavedSearches } from "@/lib/saved-searches";
 import { colors, fonts, radius, spacing } from "@/theme";
+import type { SavedSearchRow } from "@/types/api";
 
 export default function AccountTab() {
   const router = useRouter();
   const { profile, signOut, refreshProfile } = useAuth();
+  const accessToken = useAccessToken();
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRow[]>([]);
+
+  const loadSaved = useCallback(async () => {
+    const rows = await listSavedSearches(accessToken);
+    setSavedSearches(rows);
+  }, [accessToken]);
+
+  useEffect(() => {
+    void loadSaved();
+  }, [loadSaved]);
 
   return (
     <Screen>
@@ -52,6 +66,26 @@ export default function AccountTab() {
             <Ionicons name="card" size={20} color={colors.bg} />
             <Text style={styles.primaryText}>Upgrade · UPI or card</Text>
           </Pressable>
+        ) : null}
+
+        {savedSearches.length > 0 ? (
+          <Panel style={styles.card}>
+            <Text style={styles.label}>Saved searches</Text>
+            {savedSearches.slice(0, 5).map((s) => (
+              <Pressable
+                key={s.id}
+                style={styles.savedRow}
+                onPress={() => router.push({ pathname: "/search", params: { q: s.query } })}
+              >
+                <Text style={styles.savedQuery} numberOfLines={1}>
+                  {s.label || s.query}
+                </Text>
+                {s.alert_enabled ? (
+                  <Text style={styles.savedAlert}>Alerts on</Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </Panel>
         ) : null}
 
         <Pressable style={styles.row} onPress={() => void refreshProfile()}>
@@ -97,4 +131,12 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   rowText: { fontFamily: fonts.sans, color: colors.fg, fontSize: 16 },
+  savedRow: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  savedQuery: { fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg },
+  savedAlert: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgMuted, marginTop: 2 },
 });

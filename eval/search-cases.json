@@ -434,5 +434,19 @@
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
     "kind": "directed"
+  },
+  {
+    "id": "chocolate-milk",
+    "query": "chocolate milk",
+    "must_include_patterns": ["milk", "chocolate"],
+    "must_exclude_patterns": ["chocolate bar", "candy bar", "protein bar"],
+    "kind": "directed"
+  },
+  {
+    "id": "milk-chocolate",
+    "query": "milk chocolate",
+    "must_include_patterns": ["chocolate"],
+    "must_exclude_patterns": ["toned milk", "fresh milk", "doodh", "paneer"],
+    "kind": "directed"
   }
 ]

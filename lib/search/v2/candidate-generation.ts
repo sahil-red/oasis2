@@ -109,7 +109,7 @@ export async function generateCandidates(
 ): Promise<ProductSearchIndexRow[]> {
   let pool = index.filter((row) => passesDataQuality(row, minDataQuality));
 
-  if (intent.kind === "goal" && goalWeights) {
+  if (intent.kind === "goal" && goalWeights && Object.keys(goalWeights).length > 0) {
     const cats = await selectCategoriesForGoal(profiles, goalWeights);
     const keys = new Set(cats.map((c) => c.category_key));
     if (keys.size > 0) {

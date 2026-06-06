@@ -130,12 +130,41 @@ ${TRAIT_IDS.join(", ")}
 Return JSON: {"weights":{trait:number},"reasons":{trait:string}}
 Unknown traits dropped. Renormalize weights to sum 1.`;
 
+/** Bootstrap seed match without embeddings or LLM (§3b cold start). */
+function matchSeedGoalPhrase(
+  phrase: string,
+  goalMap: Map<string, GoalTraitMapRow>,
+): GoalTraitMapRow | null {
+  const p = phrase.toLowerCase().trim();
+  if (!p) return null;
+
+  let best: { row: GoalTraitMapRow; score: number } | null = null;
+  for (const row of goalMap.values()) {
+    const labels = [row.goal_phrase, row.display_name, row.goal_id].filter(Boolean) as string[];
+    for (const label of labels) {
+      const l = label.toLowerCase();
+      if (p === l || p.includes(l) || l.includes(p)) return row;
+      const tokens = l.split(/\s+/).filter((t) => t.length >= 4);
+      if (!tokens.length) continue;
+      const hits = tokens.filter((t) => p.includes(t)).length;
+      const score = hits / tokens.length;
+      if (score >= 0.5 && (!best || score > best.score)) best = { row, score };
+    }
+  }
+  return best?.row ?? null;
+}
+
 export async function resolveGoalWeights(
   goalPhrase: string,
   goalMap: Map<string, GoalTraitMapRow>,
 ): Promise<{ weights: GoalTraitWeights; goal_id: string | null; llm_calls: number }> {
   const phrase = goalPhrase.trim();
   if (!phrase) return { weights: {}, goal_id: null, llm_calls: 0 };
+
+  const seedMatch = matchSeedGoalPhrase(phrase, goalMap);
+  if (seedMatch) {
+    return { weights: seedMatch.trait_weights, goal_id: seedMatch.goal_id, llm_calls: 0 };
+  }
 
   const queryEmbed = await embedText(phrase);
   if (queryEmbed.length) {

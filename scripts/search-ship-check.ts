@@ -27,8 +27,7 @@ async function main() {
   }
 
   if (!process.env.GROQ_API_KEY?.trim()) {
-    console.error("  ✗ GROQ_API_KEY missing");
-    ok = false;
+    console.log("  · GROQ_API_KEY missing (intent uses degraded lexical path)");
   } else {
     console.log("  ✓ GROQ_API_KEY");
   }
@@ -36,8 +35,7 @@ async function main() {
   const deepseekKey =
     process.env.DEEPSEEK_SEARCH_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
   if (!deepseekKey) {
-    console.error("  ✗ DEEPSEEK_SEARCH_API_KEY or DEEPSEEK_API_KEY missing");
-    ok = false;
+    console.log("  · deepseek key missing (offline enrichment skipped until configured)");
   } else {
     console.log(`  ✓ deepseek (${process.env.DEEPSEEK_SEARCH_API_KEY ? "DEEPSEEK_SEARCH_API_KEY" : "DEEPSEEK_API_KEY"})`);
   }

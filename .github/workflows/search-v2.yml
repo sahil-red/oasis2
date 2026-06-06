@@ -1,0 +1,36 @@
+name: Search V2
+
+on:
+  pull_request:
+    paths:
+      - "lib/search/**"
+      - "scripts/eval-search.ts"
+      - "scripts/search-v2-regression.ts"
+      - "eval/**"
+  push:
+    branches: [main, search-improvements]
+    paths:
+      - "lib/search/**"
+      - "scripts/eval-search.ts"
+      - "scripts/search-v2-regression.ts"
+      - "eval/**"
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsc --noEmit
+      - run: pnpm search:v2-regression
+      - run: pnpm search:eval
+        env:
+          SEARCH_V2_ENABLED: "true"
+          SEARCH_EVAL_USE_MEMORY: "1"

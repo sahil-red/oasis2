@@ -30,6 +30,13 @@ export type AiSearchItem = CatalogGridItem & {
   canonical_variant_count?: number;
 };
 
+export type AiSearchBucket = {
+  id: string;
+  label: string;
+  trait_focus: string;
+  items: AiSearchItem[];
+};
+
 export type AiSearchResult = {
   parsed: ParsedProductQuery;
   parse_source: QueryParseResult["source"];
@@ -39,8 +46,13 @@ export type AiSearchResult = {
   rank_warning?: string;
   summary: string;
   items: AiSearchItem[];
+  /** §7c goal-query bucket sections (Search V2) */
+  buckets?: AiSearchBucket[] | null;
   reasons_by_product_id: Record<string, string[]>;
+  /** V1-style clickable query suggestions — not V2 relaxation text */
   refinements: string[];
+  /** §11 non-clickable relaxation explanations (Search V2) */
+  relaxation_explanations?: string[];
   usage?: QueryParseResult["usage"];
   limit: number;
   total: number;

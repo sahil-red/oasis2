@@ -10,7 +10,7 @@ import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
 import { applyExplorationSlot } from "@/lib/search/v2/popularity";
 import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
-import { relaxIntentWithLlm } from "@/lib/search/v2/llm-intent";
+import { relaxIntentDeterministic, relaxIntentWithLlm } from "@/lib/search/v2/relaxation";
 import { nearestPrimaryTypes } from "@/lib/search/v2/type-neighbors";
 import { isPrecisionAtRisk, verifyTopCandidates } from "@/lib/search/v2/verification";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
@@ -83,24 +83,34 @@ export async function runSearchV2(
     : [];
 
   while (candidates.length < MIN_RESULTS) {
-    try {
-      const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
-      llm_calls += relaxedResult.llm_calls;
-      intent = relaxedResult.intent;
-      relaxation_steps.push(relaxedResult.explanation);
+    const deterministic = relaxIntentDeterministic(intent);
+    if (deterministic) {
+      intent = deterministic.intent;
+      relaxation_steps.push(deterministic.explanation);
       relaxed = true;
-      minDataQuality = Math.max(0.35, minDataQuality - 0.1);
-      candidates = await generateCandidates(
-        snapshot.index,
-        intent,
-        snapshot.profiles,
-        goalWeights?.weights ?? null,
-        minDataQuality,
-      );
-      if (candidates.length >= MIN_RESULTS) break;
-    } catch {
+    } else if (process.env.GROQ_API_KEY?.trim()) {
+      try {
+        const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
+        llm_calls += relaxedResult.llm_calls;
+        intent = relaxedResult.intent;
+        relaxation_steps.push(relaxedResult.explanation);
+        relaxed = true;
+      } catch {
+        break;
+      }
+    } else {
       break;
     }
+
+    minDataQuality = Math.max(0.35, minDataQuality - 0.1);
+    candidates = await generateCandidates(
+      snapshot.index,
+      intent,
+      snapshot.profiles,
+      goalWeights?.weights ?? null,
+      minDataQuality,
+    );
+    if (candidates.length >= MIN_RESULTS) break;
     if (relaxation_steps.length >= 4) break;
   }
 

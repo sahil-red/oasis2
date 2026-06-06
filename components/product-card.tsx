@@ -178,7 +178,7 @@ export const ProductCard = memo(function ProductCard({
             )}
             {scoutVerified ? (
               <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700">
-                Verified
+                Verified by Scout
               </span>
             ) : null}
           </div>
@@ -200,7 +200,11 @@ export const ProductCard = memo(function ProductCard({
           {variantCount > 1 ? (
             <button
               type="button"
-              onClick={() => void toggleVariants()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void toggleVariants();
+              }}
               className="mt-1 text-left text-[10.5px] text-(--color-accent) hover:underline"
             >
               {variantsLoading

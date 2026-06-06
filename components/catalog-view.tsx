@@ -335,6 +335,8 @@ export function CatalogView({
   const [aiRelaxed, setAiRelaxed] = useState(false);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
+  const [aiRelaxationExplanations, setAiRelaxationExplanations] = useState<string[]>([]);
+  const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
@@ -360,6 +362,8 @@ export function CatalogView({
     setAiRelaxed(snap.aiRelaxed);
     setAiWarning(snap.aiWarning);
     setAiRefinements(snap.aiRefinements);
+    setAiRelaxationExplanations(snap.aiRelaxationExplanations ?? []);
+    setAiBuckets(snap.aiBuckets ?? null);
     setAiParsed(snap.aiParsed);
     setFactBrowse(snap.factBrowse);
     setLoading(false);
@@ -411,6 +415,10 @@ export function CatalogView({
       setAiSummary(null);
       setAiWarning(null);
       setAiRefinements([]);
+    setAiRelaxationExplanations([]);
+    setAiBuckets(null);
+      setAiRelaxationExplanations([]);
+      setAiBuckets(null);
       setAiParsed(null);
       setFactBrowse(null);
       skipInitialSearch.current = false;
@@ -620,6 +628,8 @@ export function CatalogView({
       aiRelaxed,
       aiWarning,
       aiRefinements,
+      aiRelaxationExplanations,
+      aiBuckets,
       aiParsed,
       factBrowse,
     };
@@ -649,6 +659,8 @@ export function CatalogView({
     aiRelaxed,
     aiWarning,
     aiRefinements,
+    aiRelaxationExplanations,
+    aiBuckets,
     aiParsed,
     factBrowse,
   ]);
@@ -681,6 +693,8 @@ export function CatalogView({
     setAiSummary(null);
     setAiWarning(null);
     setAiRefinements([]);
+    setAiRelaxationExplanations([]);
+    setAiBuckets(null);
     setAiParsed(null);
     setState((prev) => {
       const next = { ...prev, ...partial };
@@ -744,6 +758,8 @@ export function CatalogView({
       setAiRelaxed(result.relaxed);
       setAiWarning(result.parse_warning ?? null);
       setAiRefinements(result.refinements);
+      setAiRelaxationExplanations(result.relaxation_explanations ?? []);
+      setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
       setAiUsage(recordAiSearch());
       if (result.v2) {
@@ -849,6 +865,8 @@ export function CatalogView({
     setAiSummary(null);
     setAiWarning(null);
     setAiRefinements([]);
+    setAiRelaxationExplanations([]);
+    setAiBuckets(null);
     setAiParsed(null);
     setFactBrowse(null);
     setItems([]);
@@ -1000,11 +1018,20 @@ export function CatalogView({
               <div className="mt-2">
                 <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
               </div>
-              {/* Relaxed warning only — no pipeline debug strings */}
               {aiRelaxed ? (
-                <p className="mt-0.5 text-[11px] text-(--color-fg-dim)">
-                  Exact matches were limited — showing closest options.
-                </p>
+                <div className="mt-1 space-y-0.5">
+                  {aiRelaxationExplanations.length > 0 ? (
+                    aiRelaxationExplanations.map((step) => (
+                      <p key={step} className="text-[11px] text-(--color-fg-dim)">
+                        {step}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-(--color-fg-dim)">
+                      Exact matches were limited — showing closest options.
+                    </p>
+                  )}
+                </div>
               ) : null}
               {/* Refinement chips */}
               {aiRefinements.length > 0 ? (
@@ -1266,21 +1293,46 @@ export function CatalogView({
               </button>
             </div>
           ) : null}
-          <div
-            className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
-              refreshing ? "opacity-80" : "opacity-100"
-            } transition-opacity duration-100`}
-          >
-            {items.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                hrefQuery={productQuery}
-                goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                onSublabelClick={handleSublabelClick}
-              />
-            ))}
-          </div>
+          {aiBuckets && aiBuckets.length > 0 ? (
+            <div className="space-y-8">
+              {aiBuckets.map((bucket) => (
+                <section key={bucket.id}>
+                  <h3 className="font-display text-lg text-(--color-fg)">{bucket.label}</h3>
+                  <div
+                    className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+                      refreshing ? "opacity-80" : "opacity-100"
+                    } transition-opacity duration-100`}
+                  >
+                    {bucket.items.map((p) => (
+                      <ProductCard
+                        key={`${bucket.id}-${p.id}`}
+                        product={p}
+                        hrefQuery={productQuery}
+                        goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                        onSublabelClick={handleSublabelClick}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+                refreshing ? "opacity-80" : "opacity-100"
+              } transition-opacity duration-100`}
+            >
+              {items.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  hrefQuery={productQuery}
+                  goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                  onSublabelClick={handleSublabelClick}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

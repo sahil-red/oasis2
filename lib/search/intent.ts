@@ -185,13 +185,25 @@ export async function resolveSearchIntent(
     void setCachedIntent(query, intent, opts.preferences);
     return { intent, llm_calls };
   } catch {
+    const residual = numeric.residual_text.toLowerCase().trim();
+    let primary_type: string | null = null;
+    if (opts.catalogMeta.primaryTypes.has(residual)) {
+      primary_type = residual;
+    } else {
+      for (const pt of opts.catalogMeta.primaryTypes) {
+        if (residual.includes(pt) && pt.length >= (primary_type?.length ?? 0)) {
+          primary_type = pt;
+        }
+      }
+    }
+
     // §9 degradation: minimal numeric-only intent keeps search alive
     const degraded: SearchIntentV2 = {
       kind: "directed",
       goal_phrase: null,
       goal_id: null,
       brand: null,
-      primary_type: null,
+      primary_type,
       required_flavours: [],
       modifiers: numeric.high_protein_tier ? ["high_protein_tier"] : [],
       constraints: {

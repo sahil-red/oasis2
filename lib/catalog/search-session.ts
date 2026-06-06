@@ -4,6 +4,7 @@ import type { DietMode } from "@/lib/diet/types";
 import type { CatalogGridItem } from "@/lib/products/catalog-api";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import type { ProductListItem } from "@/lib/products/queries";
+import type { AiSearchBucket } from "@/lib/search/ai-search";
 
 export const CATALOG_SNAPSHOT_KEY = "scout-catalog-snapshot";
 export const CATALOG_SNAPSHOT_VERSION = 1;
@@ -34,6 +35,8 @@ export type CatalogSearchSnapshot = {
   aiRelaxed: boolean;
   aiWarning: string | null;
   aiRefinements: string[];
+  aiRelaxationExplanations: string[];
+  aiBuckets: AiSearchBucket[] | null;
   aiParsed: ParsedProductQuery | null;
   factBrowse: CatalogFactBrowseSnapshot | null;
 };

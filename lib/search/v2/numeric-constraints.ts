@@ -49,7 +49,10 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     text = text.replace(/\d{2,5}\s*(?:rs|rupees|inr|₹)/g, " ");
   }
 
-  const sugarLimit = firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/);
+  const sugarLimit =
+    firstNumber(text, /(\d{1,3})\s*g\s*sugar/) ??
+    firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/) ??
+    firstNumber(text, /(?:under|below|less than)\s*(\d{1,3})\s*g\s*sugar/);
   if (/zero sugar|no sugar|no added sugar/.test(text)) {
     out.max_sugar_g = 1;
     out.no_added_sugar = true;

@@ -167,6 +167,12 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     return cachedSnapshot.data;
   }
 
+  if (process.env.SEARCH_EVAL_USE_MEMORY === "1") {
+    const mem = await buildInMemorySnapshot();
+    cachedSnapshot = { data: mem, at: Date.now() };
+    return mem;
+  }
+
   const [dbIndex, dbProfiles, goalMap] = await Promise.all([
     loadIndexFromDb(),
     loadProfilesFromDb(),
@@ -186,6 +192,4 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
   return mem;
 }
 
-export function isSearchV2Enabled(): boolean {
-  return process.env.SEARCH_V2_ENABLED === "1" || process.env.SEARCH_V2_ENABLED === "true";
-}
+export { isSearchV2Enabled } from "@/lib/search/v2/config";

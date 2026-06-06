@@ -5,6 +5,7 @@ import { runSearchV2 } from "@/lib/search/v2/pipeline";
 export type AlertRecord = {
   id: string;
   user_id: string;
+  saved_search_id?: string | null;
   query: string;
   preferences: unknown;
   last_match_count: number | null;
@@ -34,13 +35,21 @@ export async function runAlertsForRecords(alerts: AlertRecord[]): Promise<AlertT
     const prev = Number(alert.last_match_count ?? 0);
     const hasNew = count > prev;
 
+    const now = new Date().toISOString();
     await supabase
       .from("search_alerts")
       .update({
         last_match_count: count,
-        last_notified_at: hasNew ? new Date().toISOString() : alert.last_notified_at,
+        last_notified_at: hasNew ? now : alert.last_notified_at,
       })
       .eq("id", alert.id);
+
+    if (alert.saved_search_id) {
+      await supabase
+        .from("saved_searches")
+        .update({ last_run_at: now, updated_at: now })
+        .eq("id", alert.saved_search_id);
+    }
 
     if (hasNew) {
       triggered.push({

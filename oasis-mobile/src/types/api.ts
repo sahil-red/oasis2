@@ -25,8 +25,11 @@ export type CatalogProduct = {
   deepseek_chips?: string[];
   deepseek_why?: string | null;
   ai_match_score?: number;
+  ai_health_score?: number;
   ai_match_reasons?: string[];
   ai_match_warning?: string | null;
+  scout_verified?: boolean;
+  canonical_variant_count?: number;
 };
 
 export type CatalogSearchResult = {
@@ -131,9 +134,17 @@ export type ProductDetail = CatalogProduct & {
   } | null;
 };
 
+export type AiSearchBucket = {
+  id: string;
+  label: string;
+  trait_focus: string;
+  items: CatalogProduct[];
+};
+
 export type AiSearchResult = {
   summary: string;
   items: CatalogProduct[];
+  buckets?: AiSearchBucket[] | null;
   parsed: unknown;
   parse_source: string;
   rank_source: string;
@@ -142,6 +153,22 @@ export type AiSearchResult = {
   rank_warning?: string;
   relaxed: boolean;
   refinements: string[];
+  relaxation_explanations?: string[];
+  v2?: {
+    goal_id: string | null;
+    goal_phrase: string | null;
+    llm_calls: number;
+    latency_ms: number;
+  };
+};
+
+export type SavedSearchRow = {
+  id: string;
+  label: string | null;
+  query: string;
+  alert_enabled: boolean;
+  last_run_at: string | null;
+  created_at: string;
 };
 
 export type LandingPick = {

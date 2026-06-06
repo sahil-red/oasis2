@@ -77,12 +77,21 @@ export async function updateSavedSearch(
   return data.saved_search;
 }
 
-export async function runSearchAlerts(accessToken: string | undefined) {
-  if (!accessToken) return { triggered: [] };
+export async function runSearchAlerts(accessToken: string | undefined): Promise<{
+  triggered: Array<{ id: string; query: string; new_matches: number; previous?: number }>;
+  error?: string;
+}> {
+  if (!accessToken) return { triggered: [], error: "Sign in required" };
   const res = await fetch("/api/me/search-alerts", {
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return { triggered: [] };
-  return (await res.json()) as { triggered: Array<{ id: string; query: string; new_matches: number }> };
+  const body = (await res.json().catch(() => null)) as {
+    triggered?: Array<{ id: string; query: string; new_matches: number; previous?: number }>;
+    error?: string;
+  } | null;
+  if (!res.ok) {
+    return { triggered: [], error: body?.error ?? `HTTP ${res.status}` };
+  }
+  return { triggered: body?.triggered ?? [] };
 }

@@ -116,12 +116,20 @@ export default function SearchScreen() {
             </Text>
           ) : null}
           {result.relaxed ? (
-            <Text style={styles.relaxed}>Showing closest matches — criteria relaxed slightly.</Text>
+            result.relaxation_explanations?.length ? (
+              result.relaxation_explanations.map((step) => (
+                <Text key={step} style={styles.relaxed}>
+                  {step}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.relaxed}>Showing closest matches — criteria relaxed slightly.</Text>
+            )
           ) : null}
           {result.refinements?.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.refineRow}>
               {result.refinements.map((r) => (
-                <Pressable key={r} style={styles.refineChip} onPress={() => void run(r)}>
+                <Pressable key={r} style={styles.refineChip} onPress={() => void run(`${prompt.trim()} ${r.replace(/^Add /i, "")}`.trim())}>
                   <Text style={styles.refineText}>{r}</Text>
                 </Pressable>
               ))}
@@ -132,14 +140,27 @@ export default function SearchScreen() {
     </>
   );
 
+  const flatItems = result?.buckets?.length
+    ? result.buckets.flatMap((b) => b.items)
+    : (result?.items ?? []);
+
   return (
     <Screen>
       {result ? (
         <FlatList
-          data={result.items}
-          keyExtractor={(p: CatalogProduct) => p.id}
+          data={flatItems}
+          keyExtractor={(p: CatalogProduct, index) => `${p.id}-${index}`}
           numColumns={2}
-          ListHeaderComponent={ListHeader}
+          ListHeaderComponent={
+            <>
+              {ListHeader}
+              {result.buckets?.map((bucket) => (
+                <View key={bucket.id} style={styles.bucketHeader}>
+                  <Text style={styles.bucketTitle}>{bucket.label}</Text>
+                </View>
+              ))}
+            </>
+          }
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
             <ProductCard product={item} aiReasons={item.ai_match_reasons} />
@@ -208,4 +229,6 @@ const styles = StyleSheet.create({
   },
   refineText: { fontFamily: fonts.sansMedium, color: colors.fg, fontSize: 13 },
   grid: { padding: spacing.sm, paddingBottom: spacing.xl },
+  bucketHeader: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  bucketTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.fg },
 });

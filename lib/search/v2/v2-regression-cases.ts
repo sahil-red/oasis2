@@ -28,4 +28,12 @@ export const NUMERIC_CASES: Array<{
       n.comparison_mode === "healthier_than" &&
       n.sort === "healthiest",
   },
+  {
+    query: "cheaper than amul butter",
+    check: (n) => n.comparison_ref === "amul butter" && n.comparison_mode === "cheaper_than",
+  },
+  {
+    query: "biscuits under 5g sugar",
+    check: (n) => n.max_sugar_g === 5 && n.residual_text.includes("biscuit"),
+  },
 ];

@@ -1,9 +1,9 @@
 import { adminClient } from "@/lib/supabase/admin";
-import type { AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
+import type { AiSearchBucket, AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
-import type { SearchV2Result } from "@/lib/search/v2/types";
+import type { RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
 import type { Grade, ScoreBand } from "@/lib/supabase/types";
 
 function dataQualityWarning(score: number): string | null {
@@ -25,6 +25,13 @@ function scoreToBand(score: number): ScoreBand {
   if (score >= 55) return "good";
   if (score >= 40) return "poor";
   return "bad";
+}
+
+function mapParseSource(
+  source: SearchV2Result["intent"]["intent_source"],
+): AiSearchResult["parse_source"] {
+  if (source === "llm-groq" || source === "llm-deepseek") return "deepseek";
+  return "heuristic";
 }
 
 type DisplayEnrichment = {
@@ -55,6 +62,48 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
   return out;
 }
 
+function rankedToAiItem(
+  c: RankedCandidate,
+  display: Map<string, DisplayEnrichment>,
+  snapshotIndex: Awaited<ReturnType<typeof getSearchIndexSnapshot>>["index"],
+): AiSearchItem {
+  const row = c.row;
+  const extra = display.get(row.product_id);
+  const scout = row.scout_score ?? Math.round(c.final_score * 100);
+  return {
+    id: row.product_id,
+    slug: row.slug,
+    name: row.name,
+    brand: row.brand,
+    category: row.category,
+    subcategory: row.subcategory,
+    net_weight: extra?.net_weight ?? null,
+    price_inr: row.price_inr,
+    mrp_inr: extra?.mrp_inr ?? null,
+    image_urls: extra?.image_urls ?? [],
+    core_scores: scout
+      ? {
+          score: scout,
+          grade: scoreToGrade(scout),
+          band: scoreToBand(scout),
+          verdict: null,
+          verdict_sublabels: [],
+          relative_score: null,
+          cohort_size: null,
+        }
+      : null,
+    ai_match_score: Math.round(c.final_score * 100),
+    ai_health_score: row.scout_score ?? undefined,
+    ai_match_reasons: c.reasons,
+    ai_match_warning: dataQualityWarning(row.data_quality_score),
+    scout_verified: row.data_quality_score >= 0.75,
+    canonical_variant_count: countCanonicalSiblings(
+      snapshotIndex,
+      row.canonical_product_id ?? row.product_id,
+    ),
+  };
+}
+
 export async function searchV2ToAiResult(
   v2: SearchV2Result,
   opts: { limit?: number; parseSource?: "heuristic" | "deepseek" } = {},
@@ -66,57 +115,39 @@ export async function searchV2ToAiResult(
     getSearchIndexSnapshot(),
   ]);
 
-  const items: AiSearchItem[] = v2.items.map((c) => {
-    const row = c.row;
-    const extra = display.get(row.product_id);
-    const scout = row.scout_score ?? Math.round(c.final_score * 100);
-    return {
-      id: row.product_id,
-      slug: row.slug,
-      name: row.name,
-      brand: row.brand,
-      category: row.category,
-      subcategory: row.subcategory,
-      net_weight: extra?.net_weight ?? null,
-      price_inr: row.price_inr,
-      mrp_inr: extra?.mrp_inr ?? null,
-      image_urls: extra?.image_urls ?? [],
-      core_scores: scout
-        ? {
-            score: scout,
-            grade: scoreToGrade(scout),
-            band: scoreToBand(scout),
-            verdict: null,
-            verdict_sublabels: [],
-            relative_score: null,
-            cohort_size: null,
-          }
-        : null,
-      ai_match_score: Math.round(c.final_score * 100),
-      ai_health_score: row.scout_score ?? undefined,
-      ai_match_reasons: c.reasons,
-      ai_match_warning: dataQualityWarning(row.data_quality_score),
-      scout_verified: row.data_quality_score >= 0.75,
-      canonical_variant_count: countCanonicalSiblings(
-        snapshot.index,
-        row.canonical_product_id ?? row.product_id,
-      ),
-    };
-  });
+  const items: AiSearchItem[] = v2.items.map((c) =>
+    rankedToAiItem(c, display, snapshot.index),
+  );
+
+  const buckets: AiSearchBucket[] | null = v2.buckets?.length
+    ? v2.buckets.map((b) => ({
+        id: b.id,
+        label: b.label,
+        trait_focus: String(b.trait_focus),
+        items: b.items.map((c) => rankedToAiItem(c, display, snapshot.index)),
+      }))
+    : null;
 
   const parsed = heuristicParseProductQuery(v2.intent.raw_query);
+  const parse_warning =
+    v2.intent.intent_source === "degraded"
+      ? "Limited understanding — showing best lexical matches"
+      : undefined;
 
   return {
     parsed,
-    parse_source: opts.parseSource ?? "heuristic",
+    parse_source: opts.parseSource ?? mapParseSource(v2.intent.intent_source),
     rank_source: "semantic",
     intent_tier: v2.intent.kind === "goal" ? "complex" : "structured",
+    parse_warning,
     summary: v2.summary,
     items,
+    buckets,
     reasons_by_product_id: Object.fromEntries(
       v2.items.map((c) => [c.row.product_id, c.reasons]),
     ),
-    refinements: v2.relaxed ? v2.relaxation_steps : [],
+    refinements: [],
+    relaxation_explanations: v2.relaxed ? v2.relaxation_steps : [],
     limit,
     total: v2.candidates_total,
     relaxed: v2.relaxed,

@@ -17,6 +17,7 @@ import type { CalibrationBin } from "@/lib/search/v2/trait-calibration";
 import { saveCalibrationBins } from "@/lib/search/v2/trait-calibration";
 
 config({ path: ".env.local" });
+process.env.SEARCH_EVAL_USE_MEMORY = "1";
 
 type EvalCase = {
   id: string;
@@ -24,6 +25,7 @@ type EvalCase = {
   must_include_patterns: string[];
   must_exclude_patterns: string[];
   kind?: string;
+  min_results?: number;
   expected_bucket_ids?: string[];
   expected_top1_patterns?: string[];
 };
@@ -33,9 +35,25 @@ function loadCases(): EvalCase[] {
   return JSON.parse(raw) as EvalCase[];
 }
 
-function matchesAny(text: string, patterns: string[]): boolean {
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesPattern(hay: string, pat: string, mode: "include" | "exclude"): boolean {
+  const p = pat.toLowerCase().trim();
+  if (!p) return false;
+  if (mode === "exclude" && p.length <= 5) {
+    return new RegExp(`\\b${escapeRegex(p)}\\b`, "i").test(hay);
+  }
+  if (hay.includes(p)) return true;
+  if (p.endsWith("s") && hay.includes(p.slice(0, -1))) return true;
+  if (!p.endsWith("s") && hay.includes(`${p}s`)) return true;
+  return false;
+}
+
+function matchesAny(text: string, patterns: string[], mode: "include" | "exclude" = "include"): boolean {
   const hay = text.toLowerCase();
-  return patterns.some((p) => hay.includes(p.toLowerCase()));
+  return patterns.some((p) => matchesPattern(hay, p, mode));
 }
 
 function percentile(values: number[], p: number): number {
@@ -112,7 +130,7 @@ async function main() {
 
     for (const pattern of c.must_exclude_patterns) {
       for (const name of names) {
-        if (matchesAny(name, [pattern])) {
+        if (matchesAny(name, [pattern], "exclude")) {
           console.error(`[LEAK] ${c.id} "${c.query}" — forbidden "${pattern}" in: ${name.slice(0, 80)}`);
           leaks++;
           caseOk = false;
@@ -167,8 +185,11 @@ async function main() {
       console.warn(`[numeric] ${c.id} expected price constraint`);
     }
 
-    if (result.items.length === 0 && c.must_include_patterns.length) {
-      console.error(`[EMPTY] ${c.id} "${c.query}" — zero results`);
+    const minResults = c.min_results ?? (c.must_include_patterns.length ? 1 : c.kind === "goal" ? 3 : 0);
+    if (minResults > 0 && result.items.length < minResults) {
+      console.error(
+        `[EMPTY] ${c.id} "${c.query}" — ${result.items.length} results (need ${minResults})`,
+      );
       caseOk = false;
     }
 
@@ -194,7 +215,9 @@ async function main() {
   const latencyP50 = percentile(latencies, 0.5);
   const avgLlm = llmCalls.length ? llmCalls.reduce((a, b) => a + b, 0) / llmCalls.length : 0;
 
-  if (traitSamples.length) updateCalibrationFromRun(traitSamples);
+  if (traitSamples.length && process.env.SEARCH_EVAL_CALIBRATION === "1") {
+    updateCalibrationFromRun(traitSamples);
+  }
 
   console.log(`\n[search:eval] ${passed}/${cases.length} passed, ${leaks} forbidden leaks`);
   console.log(`[search:eval] precision@5=${precisionAt5.toFixed(3)} top1=${top1Acc.toFixed(3)}`);
@@ -209,7 +232,8 @@ async function main() {
     process.exit(1);
   }
   if (precisionAt5 < 0.8 && precisionTotal >= 10) {
-    console.warn(`[search:eval] WARN — precision@5 ${precisionAt5.toFixed(3)} below 0.8 target`);
+    console.error(`[search:eval] FAIL — precision@5 ${precisionAt5.toFixed(3)} below 0.8 target`);
+    process.exit(1);
   }
   console.log("[search:eval] PASS");
 }

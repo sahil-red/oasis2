@@ -102,8 +102,10 @@ export default function ProfilePage() {
     if (!session) return;
     setAlertCheckStatus("Checking…");
     try {
-      const { triggered } = await runSearchAlerts(session.access_token);
-      if (triggered.length === 0) {
+      const { triggered, error } = await runSearchAlerts(session.access_token);
+      if (error) {
+        setAlertCheckStatus(error.includes("SEARCH_V2") ? "Alerts need Search V2 enabled" : error);
+      } else if (triggered.length === 0) {
         setAlertCheckStatus("No new matches since last check");
       } else {
         setAlertCheckStatus(
