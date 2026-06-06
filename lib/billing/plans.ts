@@ -7,7 +7,7 @@ export const SCOUT_PLUS_PLAN = {
   currency: "INR",
   interval: "monthly" as const,
   /** Free tier AI searches per calendar day */
-  free_daily_ai_searches: 5,
+  free_daily_ai_searches: 10,
 };
 
 export function formatInr(paise: number): string {

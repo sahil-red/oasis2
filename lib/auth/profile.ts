@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SCOUT_PLUS_PLAN } from "@/lib/billing/plans";
 
+/** Emails that always get unlimited AI searches regardless of plan. */
+const UNLIMITED_EMAILS = new Set([
+  "sahil27gunwal@gmail.com",
+]);
+
 export type UserProfile = {
   id: string;
   email: string | null;
@@ -31,8 +36,9 @@ export async function getProfileForUser(
   if (data.ai_searches_day !== day) used = 0;
 
   const plan = (data.plan === "plus" ? "plus" : "free") as "free" | "plus";
-  const limit = plan === "plus" ? 9999 : SCOUT_PLUS_PLAN.free_daily_ai_searches;
-  const remaining = Math.max(0, limit - used);
+  const isUnlimited = plan === "plus" || UNLIMITED_EMAILS.has(data.email ?? "");
+  const limit = isUnlimited ? 9999 : SCOUT_PLUS_PLAN.free_daily_ai_searches;
+  const remaining = isUnlimited ? 9999 : Math.max(0, limit - used);
 
   return {
     id: data.id,
@@ -40,7 +46,7 @@ export async function getProfileForUser(
     phone: data.phone,
     full_name: data.full_name,
     plan,
-    ai_searches_remaining: plan === "plus" ? 9999 : remaining,
+    ai_searches_remaining: remaining,
     ai_searches_limit: limit,
   };
 }
@@ -51,7 +57,7 @@ export async function consumeAiSearch(
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const profile = await getProfileForUser(supabase, userId);
   if (!profile) return { ok: false, reason: "Profile not found" };
-  if (profile.plan === "plus") return { ok: true };
+  if (profile.ai_searches_limit >= 9999) return { ok: true }; // plus or whitelisted
   if (profile.ai_searches_remaining <= 0) {
     return { ok: false, reason: "Daily AI search limit reached. Upgrade to Scout Plus." };
   }
