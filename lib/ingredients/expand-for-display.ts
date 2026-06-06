@@ -121,14 +121,22 @@ export function collectDisplayFragments(fragment: string, out: string[], seen: S
   const inner = cleaned.slice(paren + 1, close).trim();
 
   const pctOnly = /^\d+(?:\.\d+)?\s*%$/.test(inner);
-  if (parent.length >= 2) {
-    pushDisplayToken(out, seen, pctOnly ? `${parent} (${inner})` : parent);
-  }
+  const parentGeneric = isGenericIngredientCategory(normalizeIngredientName(parent));
 
-  if (!pctOnly && inner) {
-    for (const part of splitIngredientParts(inner)) {
-      collectDisplayFragments(part, out, seen);
-    }
+  if (pctOnly) {
+    // "Strawberry (2%)" — keep the percent with its ingredient.
+    if (parent.length >= 2) pushDisplayToken(out, seen, `${parent} (${inner})`);
+  } else if (parentGeneric || parent.length < 2) {
+    // Additive/category head ("Emulsifier (INS 322)") — drop the head and surface the
+    // real additive(s) inside, which are what we actually rate.
+    if (inner) for (const part of splitIngredientParts(inner)) collectDisplayFragments(part, out, seen);
+  } else {
+    // Real compound ("Toned Milk (Water, Milk Solids)", "Vitamins (B12, D, A)") — show as
+    // ONE line with its breakdown in brackets, not flattened to top-level rows.
+    const innerFmt = inner
+      ? inner.split(",").map((s) => s.trim()).filter(Boolean).join(", ")
+      : "";
+    pushDisplayToken(out, seen, innerFmt ? `${parent} (${innerFmt})` : parent);
   }
 
   const tail = cleaned

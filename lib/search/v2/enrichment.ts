@@ -343,7 +343,7 @@ export async function finalizeIndexBatch(
 
 export async function buildIndexFromProducts(
   products: EnrichSource[],
-  opts: { llmBatchSize?: number; useLlm?: boolean } = {},
+  opts: { llmBatchSize?: number; useLlm?: boolean; llmConcurrency?: number } = {},
 ): Promise<ProductSearchIndexRow[]> {
   const eligible = products.filter((p) =>
     isCatalogVisible({
@@ -357,36 +357,52 @@ export async function buildIndexFromProducts(
 
   const useLlm = opts.useLlm !== false && Boolean(process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY);
   const batchSize = opts.llmBatchSize ?? 20;
-  const partial: ProductSearchIndexRow[] = [];
+  const concurrency = Math.max(
+    1,
+    opts.llmConcurrency ?? (Number(process.env.SEARCH_ENRICH_CONCURRENCY) || 20),
+  );
 
-  for (let i = 0; i < eligible.length; i += batchSize) {
-    const chunk = eligible.slice(i, i + batchSize);
-    let llmMap = new Map<string, LlmProductEnrichment>();
-    if (useLlm) {
-      llmMap = await enrichProductsWithLlm(
-        chunk.map((p) => ({
-          id: p.id,
-          name: p.name,
-          brand: p.brand,
-          super_category: p.super_category ?? null,
-          category: p.category,
-          subcategory: p.subcategory,
-          l3_category: p.l3_category ?? null,
-          net_weight: p.net_weight ?? null,
-          ingredients_raw: p.ingredients_raw,
-          attributes: p.attributes,
-          nutrition: (p.nutrition ?? null) as Record<string, unknown> | null,
-        })),
-      );
-    }
-    for (const p of chunk) {
+  // Split into LLM batches and run them with a bounded concurrency pool — DeepSeek
+  // tolerates many parallel calls, so this is the main throughput lever.
+  const batches: EnrichSource[][] = [];
+  for (let i = 0; i < eligible.length; i += batchSize) batches.push(eligible.slice(i, i + batchSize));
+
+  const llmMaps: Array<Map<string, LlmProductEnrichment>> = new Array(batches.length)
+    .fill(null)
+    .map(() => new Map());
+
+  if (useLlm) {
+    let next = 0;
+    const worker = async () => {
+      while (true) {
+        const idx = next++;
+        if (idx >= batches.length) break;
+        llmMaps[idx] = await enrichProductsWithLlm(
+          batches[idx]!.map((p) => ({
+            id: p.id,
+            name: p.name,
+            brand: p.brand,
+            super_category: p.super_category ?? null,
+            category: p.category,
+            subcategory: p.subcategory,
+            l3_category: p.l3_category ?? null,
+            net_weight: p.net_weight ?? null,
+            ingredients_raw: p.ingredients_raw,
+            attributes: p.attributes,
+            nutrition: (p.nutrition ?? null) as Record<string, unknown> | null,
+          })),
+        );
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker));
+  }
+
+  const partial: ProductSearchIndexRow[] = [];
+  for (let bi = 0; bi < batches.length; bi++) {
+    const llmMap = llmMaps[bi]!;
+    for (const p of batches[bi]!) {
       const base = baseRowFromProduct(p, llmMap.get(p.id));
-      partial.push({
-        ...base,
-        canonical_product_id: null,
-        embedding: null,
-        type_embedding: null,
-      });
+      partial.push({ ...base, canonical_product_id: null, embedding: null, type_embedding: null });
     }
   }
 

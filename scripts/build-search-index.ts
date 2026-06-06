@@ -70,8 +70,10 @@ async function loadExistingHashes(): Promise<Map<string, string>> {
 async function main() {
   const args = parseArgs();
   const supabase = adminClient();
-  const enrichChunk = 100;
-  const loadBatch = 500;
+  // Large chunks so all LLM batches in a chunk run under the concurrency pool at once
+  // (1000 products = 50 batches of 20). Concurrency set via SEARCH_ENRICH_CONCURRENCY.
+  const enrichChunk = 1000;
+  const loadBatch = 1000;
   let offset = 0;
   const allFinalized: Awaited<ReturnType<typeof buildIndexFromProducts>> = [];
   const existingHashes = args.skipUnchanged ? await loadExistingHashes() : new Map<string, string>();
@@ -153,19 +155,25 @@ async function main() {
       allFinalized.push(...finalized);
 
       if (!args.dryRun) {
-        const { error: upsertErr } = await supabase.from("product_search_index").upsert(
-          finalized.map((row) => ({
-            ...row,
-            embedding: row.embedding,
-            type_embedding: row.type_embedding,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: "product_id" },
-        );
-        if (upsertErr) {
-          console.error("[search:build-index] upsert failed:", upsertErr.message);
-          console.error("Apply migrations: pnpm db:migrate");
-          process.exit(1);
+        // Upsert in small DB batches — rows carry two 1024-dim vectors, so a single
+        // large upsert (e.g. 800 rows) hits Supabase's statement timeout.
+        const UPSERT_BATCH = 100;
+        for (let j = 0; j < finalized.length; j += UPSERT_BATCH) {
+          const part = finalized.slice(j, j + UPSERT_BATCH);
+          const { error: upsertErr } = await supabase.from("product_search_index").upsert(
+            part.map((row) => ({
+              ...row,
+              embedding: row.embedding,
+              type_embedding: row.type_embedding,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: "product_id" },
+          );
+          if (upsertErr) {
+            console.error("[search:build-index] upsert failed:", upsertErr.message);
+            console.error("Apply migrations: pnpm db:migrate");
+            process.exit(1);
+          }
         }
         console.log(`[search:build-index] upserted ${allFinalized.length} rows total`);
       }
@@ -185,7 +193,7 @@ async function main() {
     capped = await assignCanonicalClusters(capped);
 
     if (!args.dryRun) {
-      const clusterChunk = 200;
+      const clusterChunk = 100;
       for (let i = 0; i < capped.length; i += clusterChunk) {
         const slice = capped.slice(i, i + clusterChunk);
         const { error: clusterErr } = await supabase.from("product_search_index").upsert(
