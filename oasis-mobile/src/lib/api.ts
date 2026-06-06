@@ -102,6 +102,24 @@ export function fetchMe(token: string): Promise<MeResponse> {
 }
 
 /** Same contract as web `fetchAiCatalogSearch`. */
+export type CanonicalVariantItem = {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string | null;
+  net_weight: string | null;
+  price_inr: number | null;
+  mrp_inr: number | null;
+  image_urls: string[];
+  scout_score: number | null;
+};
+
+export function fetchCanonicalVariants(productId: string): Promise<CanonicalVariantItem[]> {
+  return apiFetch(`/api/search/canonical?product_id=${encodeURIComponent(productId)}`).then(
+    (body) => (body as { items?: CanonicalVariantItem[] }).items ?? [],
+  );
+}
+
 export function fetchAiSearch(
   prompt: string,
   token: string | null,

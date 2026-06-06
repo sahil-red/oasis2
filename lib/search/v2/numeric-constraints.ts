@@ -73,8 +73,12 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
   if (/\b(highest protein|high protein|most protein)\b/.test(text)) {
     out.high_protein_tier = true;
     out.sort = "highest_protein";
+    text = text.replace(/\b(highest protein|high protein|most protein)\b/g, " ");
   }
-  if (/\b(cheapest|cheap|budget|lowest price)\b/.test(text)) out.sort = "cheapest";
+  if (/\b(cheapest|cheap|budget|lowest price)\b/.test(text)) {
+    out.sort = "cheapest";
+    text = text.replace(/\b(cheapest|cheap|budget|lowest price)\b/g, " ");
+  }
   const healthierThan = text.match(/\bhealthier\s+than\s+(.+?)(?:\s+under|\s+below|$)/);
   const cheaperThan = text.match(/\bcheaper\s+than\s+(.+?)(?:\s+under|\s+below|$)/);
   if (healthierThan?.[1]) {
@@ -89,8 +93,12 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     text = text.replace(/\bcheaper\s+than\s+.+/, " ");
   } else if (/\b(healthiest|cleanest)\b/.test(text)) {
     out.sort = "healthiest";
+    text = text.replace(/\b(healthiest|cleanest)\b/g, " ");
   }
-  if (/\b(lowest sugar|least sugar)\b/.test(text)) out.sort = "lowest_sugar";
+  if (/\b(lowest sugar|least sugar)\b/.test(text)) {
+    out.sort = "lowest_sugar";
+    text = text.replace(/\b(lowest sugar|least sugar)\b/g, " ");
+  }
 
   out.residual_text = text
     .replace(/\b(under|below|over|above|less than|more than|max|min)\b/gi, " ")

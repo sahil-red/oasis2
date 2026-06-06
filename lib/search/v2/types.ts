@@ -131,6 +131,8 @@ export type SearchIntentV2 = {
   goal_id: string | null;
   brand: string | null;
   primary_type: string | null;
+  /** LLM-extracted use case (e.g. pre_workout, school_lunch) — §14 */
+  use_case: string | null;
   required_flavours: string[];
   modifiers: string[];
   constraints: {

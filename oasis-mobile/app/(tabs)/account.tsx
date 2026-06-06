@@ -7,7 +7,12 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 import { useAccessToken, useAuth } from "@/lib/auth";
-import { deleteSavedSearch, listSavedSearches } from "@/lib/saved-searches";
+import {
+  deleteSavedSearch,
+  listSavedSearches,
+  runSearchAlerts,
+  updateSavedSearch,
+} from "@/lib/saved-searches";
 import { colors, fonts, radius, spacing } from "@/theme";
 import type { SavedSearchRow } from "@/types/api";
 
@@ -17,6 +22,9 @@ export default function AccountTab() {
   const accessToken = useAccessToken();
   const [savedSearches, setSavedSearches] = useState<SavedSearchRow[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [alertHits, setAlertHits] = useState<
+    Array<{ id: string; query: string; new_matches: number }>
+  >([]);
 
   const loadSaved = useCallback(async () => {
     const rows = await listSavedSearches(accessToken);
@@ -26,6 +34,21 @@ export default function AccountTab() {
   useEffect(() => {
     void loadSaved();
   }, [loadSaved]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    void runSearchAlerts(accessToken).then((r) => setAlertHits(r.triggered));
+  }, [accessToken]);
+
+  async function handleToggleAlert(row: SavedSearchRow) {
+    setDeletingId(row.id);
+    try {
+      await updateSavedSearch(accessToken, { id: row.id, alert_enabled: !row.alert_enabled });
+      await loadSaved();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleDeleteSaved(id: string) {
     setDeletingId(id);
@@ -79,6 +102,17 @@ export default function AccountTab() {
           </Pressable>
         ) : null}
 
+        {alertHits.length > 0 ? (
+          <Panel style={styles.card}>
+            <Text style={styles.label}>Search alerts</Text>
+            {alertHits.slice(0, 3).map((hit) => (
+              <Text key={hit.id} style={styles.alertHit}>
+                {hit.new_matches} new match{hit.new_matches === 1 ? "" : "es"} for “{hit.query}”
+              </Text>
+            ))}
+          </Panel>
+        ) : null}
+
         {savedSearches.length > 0 ? (
           <Panel style={styles.card}>
             <Text style={styles.label}>Saved searches</Text>
@@ -94,6 +128,17 @@ export default function AccountTab() {
                   {s.alert_enabled ? (
                     <Text style={styles.savedAlert}>Alerts on</Text>
                   ) : null}
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  disabled={deletingId === s.id}
+                  onPress={() => void handleToggleAlert(s)}
+                >
+                  <Ionicons
+                    name={s.alert_enabled ? "notifications" : "notifications-outline"}
+                    size={18}
+                    color={s.alert_enabled ? colors.accent : colors.fgMuted}
+                  />
                 </Pressable>
                 <Pressable
                   hitSlop={8}
@@ -164,6 +209,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   savedMain: { flex: 1 },
+  alertHit: { fontFamily: fonts.sans, fontSize: 13, color: colors.fg, marginTop: spacing.sm },
   savedQuery: { fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg },
   savedAlert: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgMuted, marginTop: 2 },
 });

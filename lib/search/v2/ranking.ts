@@ -2,6 +2,7 @@ import { computeGoalFit } from "@/lib/search/v2/goal-graph";
 import { buildReasons } from "@/lib/search/v2/explain";
 import { comparisonBeatScore, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { computePopularitySignal } from "@/lib/search/v2/popularity";
+import { useCaseMatchScore } from "@/lib/search/v2/use-case";
 import type {
   GoalTraitWeights,
   ProductSearchIndexRow,
@@ -81,6 +82,7 @@ export function rankCandidates(
 ): RankedCandidate[] {
   const hasGoalOrConstraints =
     Boolean(goalWeights && Object.keys(goalWeights).length) ||
+    Boolean(intent.use_case) ||
     intent.modifiers.length > 0 ||
     Object.values(intent.constraints).some((v) => v != null && (Array.isArray(v) ? v.length : true));
 
@@ -88,10 +90,16 @@ export function rankCandidates(
   const healths = candidates.map(healthScore);
   const pops = candidates.map(computePopularitySignal);
   const rawTraitMatches = candidates.map((row) => {
+    let base: number;
     if (goalWeights && Object.keys(goalWeights).length) {
-      return computeGoalFit(row, goalWeights).score;
+      base = computeGoalFit(row, goalWeights).score;
+    } else {
+      base = constraintSatisfaction(row, intent);
     }
-    return constraintSatisfaction(row, intent);
+    if (intent.use_case) {
+      base = clamp01(base * 0.65 + useCaseMatchScore(row, intent.use_case) * 0.35);
+    }
+    return base;
   });
 
   const normRel = minMaxNormalize(relevances);

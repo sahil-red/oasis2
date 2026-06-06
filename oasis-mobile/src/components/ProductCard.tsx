@@ -1,10 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { VerdictPill } from "@/components/VerdictPill";
 import { useBasket } from "@/lib/basket";
+import { fetchCanonicalVariants, type CanonicalVariantItem } from "@/lib/api";
 import { formatPrice } from "@/lib/verdict";
 import { colors, fonts, radius, spacing } from "@/theme";
 import type { CatalogProduct } from "@/types/api";
@@ -108,6 +110,28 @@ export function ProductCard({
   const reasons = aiReasons ?? product.ai_match_reasons ?? [];
   const isMatch = product.ai_match_score != null;
   const inBasket = basket.has(product.slug);
+  const variantCount = product.canonical_variant_count ?? 0;
+  const [variantsOpen, setVariantsOpen] = useState(false);
+  const [variants, setVariants] = useState<CanonicalVariantItem[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+
+  async function toggleVariants() {
+    if (variantCount <= 1) return;
+    if (variantsOpen) {
+      setVariantsOpen(false);
+      return;
+    }
+    if (!variants.length) {
+      setVariantsLoading(true);
+      try {
+        const rows = await fetchCanonicalVariants(product.id);
+        setVariants(rows.filter((v) => v.id !== product.id));
+      } finally {
+        setVariantsLoading(false);
+      }
+    }
+    setVariantsOpen(true);
+  }
 
   // Show product attribute chips first (colored by health tone),
   // then search-match reasons as neutral chips — up to 4 total.
@@ -179,6 +203,36 @@ export function ProductCard({
 
       {product.ai_match_warning ? (
         <Text style={styles.warn} numberOfLines={1}>{product.ai_match_warning}</Text>
+      ) : null}
+
+      {variantCount > 1 ? (
+        <Pressable onPress={(e) => { e.stopPropagation?.(); void toggleVariants(); }} style={styles.variantBtn}>
+          {variantsLoading ? (
+            <ActivityIndicator size="small" color={colors.fgMuted} />
+          ) : (
+            <Text style={styles.variantBtnText}>
+              {variantsOpen ? "Hide" : "Show"} {variantCount - 1} more size{variantCount > 2 ? "s" : ""}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
+
+      {variantsOpen && variants.length > 0 ? (
+        <View style={styles.variantList}>
+          {variants.map((v) => (
+            <Pressable
+              key={v.id}
+              style={styles.variantRow}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                router.push(`/product/${v.slug}`);
+              }}
+            >
+              <Text style={styles.variantName} numberOfLines={1}>{v.name}</Text>
+              {v.net_weight ? <Text style={styles.variantMeta}>{v.net_weight}</Text> : null}
+            </Pressable>
+          ))}
+        </View>
       ) : null}
 
       <View style={styles.footer}>
@@ -255,6 +309,19 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   warn: { fontFamily: fonts.sans, color: colors.warn, fontSize: 11, marginTop: 3 },
+  variantBtn: { marginTop: 6, alignSelf: "flex-start" },
+  variantBtnText: { fontFamily: fonts.sansMedium, fontSize: 11, color: colors.accent },
+  variantList: { marginTop: 6, gap: 4 },
+  variantRow: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    backgroundColor: colors.bgSoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  variantName: { fontFamily: fonts.sansMedium, fontSize: 11, color: colors.fg },
+  variantMeta: { fontFamily: fonts.sans, fontSize: 10, color: colors.fgDim, marginTop: 1 },
   footer: {
     flexDirection: "row",
     alignItems: "center",

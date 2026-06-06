@@ -44,6 +44,21 @@ export async function deleteSavedSearch(token: string | null, id: string): Promi
   }
 }
 
+export async function runSearchAlerts(token: string | null): Promise<{
+  triggered: Array<{ id: string; query: string; new_matches: number; previous?: number }>;
+}> {
+  if (!token) return { triggered: [] };
+  const res = await fetch(`${API_BASE}/api/me/search-alerts`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const body = (await res.json().catch(() => null)) as {
+    triggered?: Array<{ id: string; query: string; new_matches: number; previous?: number }>;
+  } | null;
+  if (!res.ok) return { triggered: [] };
+  return { triggered: body?.triggered ?? [] };
+}
+
 export async function updateSavedSearch(
   token: string | null,
   opts: { id: string; alert_enabled?: boolean; label?: string },

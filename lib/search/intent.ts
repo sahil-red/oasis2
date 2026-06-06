@@ -116,6 +116,7 @@ function buildFastPathIntent(
     goal_id: null,
     brand,
     primary_type,
+    use_case: null,
     required_flavours: [],
     modifiers,
     constraints: {
@@ -179,23 +180,21 @@ export async function resolveSearchIntent(
   } catch {
     const residual = numeric.residual_text.toLowerCase().trim();
     let primary_type: string | null = null;
+    let brand: string | null = null;
     if (opts.catalogMeta.primaryTypes.has(residual)) {
       primary_type = residual;
-    } else {
-      for (const pt of opts.catalogMeta.primaryTypes) {
-        if (residual.includes(pt) && pt.length >= (primary_type?.length ?? 0)) {
-          primary_type = pt;
-        }
-      }
+    } else if (opts.catalogMeta.brands.has(residual)) {
+      brand = residual;
     }
 
-    // §9 degradation: minimal numeric-only intent keeps search alive
+    // §9 degradation: exact index token match only — no substring rules
     const degraded: SearchIntentV2 = {
-      kind: "directed",
+      kind: brand ? "brand" : "directed",
       goal_phrase: null,
       goal_id: null,
-      brand: null,
+      brand,
       primary_type,
+      use_case: null,
       required_flavours: [],
       modifiers: numeric.high_protein_tier ? ["high_protein_tier"] : [],
       constraints: {

@@ -20,6 +20,7 @@ Schema:
   "goal_phrase": string|null,
   "brand": string|null,
   "primary_type": string|null,
+  "use_case": string|null,
   "required_flavours": string[],
   "modifiers": string[],
   "constraints": {
@@ -46,6 +47,7 @@ Rules:
 - Understand Hindi/Hinglish natively (doodh, bina cheeni, nahi).
 - "chocolate milk" vs "milk chocolate" are opposite primary_types — use product meaning, not word order rules.
 - Goal/vague queries (healthy drinks for running, tiffin not junk) → kind:"goal" with goal_phrase.
+- Use-case queries (pre-workout snack, school lunch) → kind:"directed" or "goal" with use_case slug (pre_workout, school_lunch).
 - Type + health context (biscuits for diabetics) → kind:"directed", rank by diabetic traits.
 - "high protein milk" → primary_type:"milk", sort:"highest_protein", do NOT set min_protein_g.
 - constraint_priorities: lower number = relax first (price before sugar before avoid_ingredients).
@@ -60,6 +62,7 @@ type LlmIntentJson = {
   goal_phrase?: string | null;
   brand?: string | null;
   primary_type?: string | null;
+  use_case?: string | null;
   required_flavours?: string[];
   modifiers?: string[];
   constraints?: SearchIntentV2["constraints"];
@@ -124,6 +127,7 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     goal_id: null,
     brand: raw.brand?.trim() || null,
     primary_type: raw.primary_type?.trim().toLowerCase() || null,
+    use_case: raw.use_case?.trim().toLowerCase().replace(/[\s-]+/g, "_") || null,
     required_flavours: (raw.required_flavours ?? []).map((f) => f.toLowerCase()),
     modifiers: raw.modifiers ?? [],
     constraints,

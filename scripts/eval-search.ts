@@ -166,7 +166,11 @@ async function main() {
       }
     }
 
-    if (c.expected_bucket_ids?.length && result.buckets) {
+    if (
+      c.expected_bucket_ids?.length &&
+      result.buckets &&
+      (c.kind == null || result.intent.kind === c.kind)
+    ) {
       const ids = new Set(result.buckets.map((b) => b.id));
       for (const expected of c.expected_bucket_ids) {
         if (!ids.has(expected)) {

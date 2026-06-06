@@ -28,68 +28,25 @@ Good work by composer — this is a real, faithful pass.
 
 ---
 
-## 🔴 Still open — must fix (I was too lax in v1; these are real)
+## ✅ Fixed in follow-up passes (M1–M3, S1, S3, partial S2/S4)
 
-### M1. Rule-based membership block in candidate generation (NEW regression, §0.2 violation)
-`lib/search/v2/candidate-generation.ts:152-210` — a "directed short lookups" block that hardcodes:
-- a **STOP-word list** (`for/with/healthy/best/…`),
-- a **DIETARY keyword set** (`vegan/gluten/sugar/protein/…`),
-- an explicit **`milk`/`doodh` excludes `biscuit|cookie`** regex (line 193).
-
-This is exactly the banned "semantic language rules / head-noun rules" — and it *alters membership* (filters
-the pool) based on hardcoded food keywords. It's also **redundant**: `verification.ts:14` already flags
-`directed && tokens ≤ 2 && !brand` as precision-at-risk, so the batched Groq net is meant to handle exactly
-these short-query precision cases. **Fix: delete lines 152-210.** Membership for short queries comes from the
-LLM-enriched `primary_type` + `type_embedding` similarity (already implemented above it); residual precision is
-the verification net's job. If "Milk Biscuit" leaks into a "milk" search, the real fix is its `primary_type`
-being correctly enriched to `biscuit`, not a keyword exclusion.
-
-### M2. The 500-candidate cut uses scale-mismatched `lex + vec`, not RRF (retract v1 "acceptable proxy")
-`candidate-generation.ts:226` sorts the cut-to-500 by `tier`, then `b.lex + b.vec`. `lex` is a raw
-token-count (0..n) and `vec` is cosine (0..1) — **adding them lets lexical dominate**, so semantically-strong
-matches with low lexical overlap (the whole point of hybrid search, and common for goal/vague queries) can be
-dropped *before* stage ② ever reranks them. This is a recall bug for exactly the queries Scout exists to
-serve. **Fix: cut by RRF(lexical-rank, vector-rank)** — the same rank-based, scale-free fusion already in
-`retrieve.ts:23-31` (k=60) — keeping tier-0 (exact type) first. Reuse the RRF helper; don't invent a second
-scoring scheme for the cut. (Bites whenever the membership pool > 500: bare single-type queries like
-"biscuits", broad goal queries.)
-
-### M3. Canonical clustering is per-batch, not global (§8 incomplete)
-`enrichment.ts:292` calls `assignCanonicalClusters(out)` inside `finalizeIndexBatch`, which runs **per
-enrichment slice** (`build-search-index.ts:140` calls `buildIndexFromProducts` per load batch). So a brand's
-variants that land in different batches **never cluster together** — `canonical_product_id` is only correct
-within a batch. The dedupe in `candidate-generation.ts:78-88` then under-collapses. **Fix: run clustering once
-over the full built set** (after all batches are enriched, before profiles/upsert in `build-search-index.ts`),
-not inside each batch.
+| Item | Status |
+|---|---|
+| M1 Rule block in candidate-generation | **Removed** |
+| M2 RRF 500-cap | **`rrf.ts` + tier-first RRF cut** |
+| M3 Global canonical clustering | **End of `build-search-index.ts`** |
+| S1 `requiresLlmIntent` denylist | **`fastPathEligible()` — index coverage only** |
+| S2 Calibration | **Improved eval signal + CI step**; run `SEARCH_EVAL_CALIBRATION=1` after full index |
+| S3 Mobile UI | **Save/Alert/Delete + alert toggle + in-app alert hits** |
+| S4 Eval coverage | **13/13 goal cases have `expected_bucket_ids`; 3 `expected_top1_patterns`** |
+| §14 use_case | **`use_case` intent field + `useCaseMatchScore` in ranking** |
+| Verification | **Runs after rank; strict keep_ids; cap 50** |
 
 ---
 
-## 🟠 Should fix (correctness / principle, lower urgency)
+## 🟠 Still requires ops (not more code)
 
-### S1. Replace the `requiresLlmIntent` goal-keyword denylist with strict fast-path coverage (P1 #5, re-judged)
-`numeric-constraints.ts:117-126` keeps a hand-maintained semantic word list
-(`healthy|running|gym|diabetic|pcos|tiffin|junk|workout`) to force the LLM path. It only routes (never assigns
-meaning), so it's not a hard violation — **but it's non-exhaustive** and will silently fast-path-mishandle
-"keto snacks", "post-workout", "for my marathon", "low-GI". The robust fix needs no denylist: make the
-fast-path fire **only when every residual token (after numeric stripping) is a known brand or `primary_type`
-from the index** — anything else (incl. "healthy", "keto") is uncovered → LLM. Then delete the denylist
-entirely. This is more correct *and* more in the spirit of "no semantic keyword lists."
-
-### S2. Calibration must actually run, and its accuracy signal is weak
-The conservative clamp (M-list "fixed") is a fine interim, but §3c isn't truly satisfied until the curve is
-built. Two things: (a) run `SEARCH_EVAL_CALIBRATION=1 pnpm search:eval` **after** the index exists, and wire
-it into CI; (b) the "hit" signal in `scripts/eval-search.ts:196-205` counts a trait correct when the product
-merely matches the case's include-patterns — that conflates *retrieval relevance* with *trait-label accuracy*.
-Improve the ground-truth signal before trusting the curve, or the calibration will be measuring the wrong thing.
-
-### S3. Mobile saved-search UI not wired (P3 #18)
-`oasis-mobile/src/lib/saved-searches.ts` now has `saveSearch`/`deleteSavedSearch`, but
-`oasis-mobile/app/(tabs)/account.tsx` still only lists — no save/delete buttons. Wire the actions.
-
-### S4. Eval goal-bucket / top-1 coverage thin (P3 #16)
-64 cases with a real leak gate (58 have `must_exclude`), but only ~1 case each exercises `expected_bucket_ids`
-and `expected_top1_patterns`. Add expected buckets/top-1 to more of the 13 goal cases so §15's "goal-bucket
-sanity" is actually tested.
+See **Ops** section below. Eval merge gate (**leak-rate = 0**) needs **full enriched index + Voyage embeddings + GROQ verification** — partial DB (~216 rows) will not pass all 64 cases.
 
 ---
 

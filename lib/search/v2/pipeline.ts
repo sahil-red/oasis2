@@ -118,21 +118,27 @@ export async function runSearchV2(
     useDbLexical: snapshot.source === "db",
   });
 
-  let verified = reranked;
-  if (isPrecisionAtRisk(intent)) {
-    const v = await verifyTopCandidates(reranked, intent);
-    verified = v.rows;
-    llm_calls += v.llm_calls;
-  }
-
   let ranked = rankCandidates(
-    verified,
+    reranked,
     intent,
     relevanceById,
     goalWeights?.weights ?? null,
     Math.max(limit, 50),
     comparison,
   );
+
+  if (isPrecisionAtRisk(intent)) {
+    const v = await verifyTopCandidates(
+      ranked.map((r) => r.row),
+      intent,
+    );
+    llm_calls += v.llm_calls;
+    if (v.llm_calls > 0) {
+      const keep = new Set(v.rows.map((r) => r.product_id));
+      ranked = ranked.filter((r) => keep.has(r.row.product_id));
+    }
+  }
+
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 
   const { items, explored } = applyExplorationSlot(ranked, intent.raw_query, limit);

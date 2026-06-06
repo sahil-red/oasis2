@@ -159,6 +159,7 @@ const smoothieIntent: SearchIntentV2 = {
   goal_id: null,
   brand: null,
   primary_type: "smoothie",
+  use_case: null,
   required_flavours: ["strawberry"],
   modifiers: [],
   constraints: { avoid_ingredients: [], allergens_excluded: [] },

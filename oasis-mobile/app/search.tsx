@@ -112,23 +112,42 @@ export default function SearchScreen() {
           <View style={styles.summaryRow}>
             <Text style={[styles.summary, { flex: 1 }]}>{result.summary}</Text>
             {token ? (
-              <Pressable
-                style={styles.saveBtn}
-                disabled={saveBusy || !prompt.trim()}
-                onPress={() => {
-                  const q = prompt.trim();
-                  if (!q) return;
-                  setSaveBusy(true);
-                  setSaveStatus(null);
-                  void saveSearch(token, { query: q })
-                    .then(() => setSaveStatus("Saved"))
-                    .catch((e: Error) => setSaveStatus(e.message))
-                    .finally(() => setSaveBusy(false));
-                }}
-              >
-                <Ionicons name="bookmark-outline" size={16} color={colors.fgMuted} />
-                <Text style={styles.saveBtnText}>{saveBusy ? "…" : "Save"}</Text>
-              </Pressable>
+              <View style={styles.saveRow}>
+                <Pressable
+                  style={styles.saveBtn}
+                  disabled={saveBusy || !prompt.trim()}
+                  onPress={() => {
+                    const q = prompt.trim();
+                    if (!q) return;
+                    setSaveBusy(true);
+                    setSaveStatus(null);
+                    void saveSearch(token, { query: q, alert_enabled: false })
+                      .then(() => setSaveStatus("Saved"))
+                      .catch((e: Error) => setSaveStatus(e.message))
+                      .finally(() => setSaveBusy(false));
+                  }}
+                >
+                  <Ionicons name="bookmark-outline" size={16} color={colors.fgMuted} />
+                  <Text style={styles.saveBtnText}>{saveBusy ? "…" : "Save"}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.saveBtn}
+                  disabled={saveBusy || !prompt.trim()}
+                  onPress={() => {
+                    const q = prompt.trim();
+                    if (!q) return;
+                    setSaveBusy(true);
+                    setSaveStatus(null);
+                    void saveSearch(token, { query: q, alert_enabled: true })
+                      .then(() => setSaveStatus("Saved with alerts"))
+                      .catch((e: Error) => setSaveStatus(e.message))
+                      .finally(() => setSaveBusy(false));
+                  }}
+                >
+                  <Ionicons name="notifications-outline" size={16} color={colors.fgMuted} />
+                  <Text style={styles.saveBtnText}>Alert</Text>
+                </Pressable>
+              </View>
             ) : null}
           </View>
           {saveStatus ? <Text style={styles.saveStatus}>{saveStatus}</Text> : null}
@@ -228,6 +247,7 @@ const styles = StyleSheet.create({
   upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg },
   summaryPanel: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   summaryRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+  saveRow: { flexDirection: "row", gap: 6 },
   summary: { fontFamily: fonts.sans, color: colors.fg, fontSize: 15, lineHeight: 22 },
   saveBtn: {
     flexDirection: "row",

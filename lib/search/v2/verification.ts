@@ -1,14 +1,15 @@
 /**
- * §6 LLM verification net — batched Groq over top ~20 when precision is at risk.
+ * §6 LLM verification net — batched Groq over top results when precision is at risk.
  */
 import { groqChat, parseGroqJson } from "@/lib/search/v2/groq-client";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
-export const VERIFICATION_CAP = 20;
+export const VERIFICATION_CAP = 50;
 
 export function isPrecisionAtRisk(intent: SearchIntentV2): boolean {
   if (intent.required_flavours.length > 0) return true;
   if (intent.modifiers.length > 0) return true;
+  if (intent.use_case) return true;
   if (intent.confidence < 0.75) return true;
   const tokens = intent.raw_query.trim().split(/\s+/).filter(Boolean);
   if (intent.kind === "directed" && tokens.length <= 2 && !intent.brand) return true;
@@ -42,27 +43,28 @@ export async function verifyTopCandidates(
     brand: r.brand,
   }));
 
-  const typeDesc = intent.primary_type ?? "product";
+  const typeDesc = intent.primary_type ?? intent.use_case?.replace(/_/g, " ") ?? "product";
   const flavourDesc =
     intent.required_flavours.length > 0
       ? ` with flavour(s): ${intent.required_flavours.join(", ")}`
       : "";
+  const useCaseDesc = intent.use_case
+    ? ` suitable for ${intent.use_case.replace(/_/g, " ")}`
+    : "";
 
   try {
     const { content } = await groqChat({
       system: `You verify grocery search results. Return JSON: {"keep_ids": string[]}
-Keep only products that are genuinely a ${typeDesc}${flavourDesc}. Text-only judgment. Be strict.`,
+Keep only products that are genuinely a ${typeDesc}${flavourDesc}${useCaseDesc} for the shopper query. Text-only judgment. Be strict.`,
       user: JSON.stringify({ query: intent.raw_query, products: payload }),
-      maxTokens: 600,
+      maxTokens: 800,
     });
     const parsed = parseGroqJson<{ keep_ids?: string[] }>(content);
     const keep = new Set((parsed.keep_ids ?? []).map(String));
-    if (!keep.size) return { rows, llm_calls: 1 };
+    if (!keep.size) return { rows: [], llm_calls: 1 };
 
-    const verifiedHead = slice.filter((r) => keep.has(r.product_id));
-    const tail = rows.slice(VERIFICATION_CAP);
-    const merged = [...verifiedHead, ...tail.filter((r) => keep.has(r.product_id))];
-    return { rows: merged.length ? merged : rows, llm_calls: 1 };
+    const verified = slice.filter((r) => keep.has(r.product_id));
+    return { rows: verified, llm_calls: 1 };
   } catch {
     return { rows, llm_calls: 0 };
   }
