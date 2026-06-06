@@ -21,7 +21,7 @@ export async function resolveComparisonReference(
   const phrase = refPhrase.trim().toLowerCase();
   if (!phrase) return null;
 
-  const refEmbed = await embedText(phrase);
+  const refEmbed = await embedText(phrase, "query");
   let best: ProductSearchIndexRow | null = null;
   let bestScore = 0;
 

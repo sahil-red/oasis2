@@ -23,58 +23,19 @@ export function isPrecisionAtRisk(intent: SearchIntentV2): boolean {
 
 type VerifyRow = { id: string; name: string; brand: string | null };
 
-/** Deterministic precision filter when LLM verification is unavailable (§9). */
-export function filterCandidatesDeterministic(
-  rows: ProductSearchIndexRow[],
-  intent: SearchIntentV2,
-): ProductSearchIndexRow[] {
-  if (!rows.length) return rows;
-  const q = intent.raw_query.toLowerCase();
-  let out = rows;
-
-  if (/\b(tea|green tea)\b/.test(q) && !/\bmilk\b/.test(q)) {
-    const filtered = out.filter((r) => {
-      const blob = `${r.name} ${r.primary_type ?? ""}`.toLowerCase();
-      return !(/\bmilk\b/.test(blob) && !/\btea\b/.test(blob));
-    });
-    if (filtered.length) out = filtered;
-  }
-
-  if (/\bcoffee\b/.test(q) && !/\bmilk\b/.test(q)) {
-    const filtered = out.filter((r) => {
-      const blob = `${r.name} ${r.primary_type ?? ""}`.toLowerCase();
-      return !(/\bmilk\b/.test(blob) && !/\bcoffee\b/.test(blob));
-    });
-    if (filtered.length) out = filtered;
-  }
-
-  if (/\bpoha\b/.test(q)) {
-    const filtered = out.filter((r) => !/\b(milk|paneer)\b/i.test(r.name));
-    if (filtered.length) out = filtered;
-  }
-
-  if (/\bprotein\s+bar/.test(q) || intent.primary_type?.toLowerCase().includes("bar")) {
-    const filtered = out.filter((r) => !/\bjuice\b/i.test(r.name));
-    if (filtered.length) out = filtered;
-  }
-
-  return out;
-}
-
 export async function verifyTopCandidates(
   rows: ProductSearchIndexRow[],
   intent: SearchIntentV2,
 ): Promise<{ rows: ProductSearchIndexRow[]; llm_calls: number }> {
-  const deterministic = filterCandidatesDeterministic(rows, intent);
-  if (!isPrecisionAtRisk(intent) || deterministic.length === 0) {
-    return { rows: deterministic, llm_calls: 0 };
+  if (!isPrecisionAtRisk(intent) || rows.length === 0) {
+    return { rows, llm_calls: 0 };
   }
 
   if (!process.env.GROQ_API_KEY?.trim()) {
-    return { rows: deterministic, llm_calls: 0 };
+    return { rows, llm_calls: 0 };
   }
 
-  const slice = deterministic.slice(0, VERIFICATION_CAP);
+  const slice = rows.slice(0, VERIFICATION_CAP);
   const payload: VerifyRow[] = slice.map((r) => ({
     id: r.product_id,
     name: r.name,
@@ -96,13 +57,13 @@ Keep only products that are genuinely a ${typeDesc}${flavourDesc}. Text-only jud
     });
     const parsed = parseGroqJson<{ keep_ids?: string[] }>(content);
     const keep = new Set((parsed.keep_ids ?? []).map(String));
-    if (!keep.size) return { rows: deterministic, llm_calls: 1 };
+    if (!keep.size) return { rows, llm_calls: 1 };
 
     const verifiedHead = slice.filter((r) => keep.has(r.product_id));
-    const tail = deterministic.slice(VERIFICATION_CAP);
+    const tail = rows.slice(VERIFICATION_CAP);
     const merged = [...verifiedHead, ...tail.filter((r) => keep.has(r.product_id))];
-    return { rows: merged.length ? merged : deterministic, llm_calls: 1 };
+    return { rows: merged.length ? merged : rows, llm_calls: 1 };
   } catch {
-    return { rows: deterministic, llm_calls: 0 };
+    return { rows, llm_calls: 0 };
   }
 }

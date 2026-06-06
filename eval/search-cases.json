@@ -61,14 +61,16 @@
     "query": "high protein snacks for gym",
     "must_include_patterns": [],
     "must_exclude_patterns": ["juice", "tea", "coffee"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "protein_density"]
   },
   {
     "id": "kids-tiffin",
     "query": "healthy snacks for kids tiffin",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "kid_friendly"]
   },
   {
     "id": "low-sugar-biscuits",
@@ -96,7 +98,8 @@
     "query": "snacks for weight loss",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "low_sugar"]
   },
   {
     "id": "doodh-milk",
@@ -160,21 +163,24 @@
     "query": "PCOS friendly snacks",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "low_sugar"]
   },
   {
     "id": "diabetes-drinks",
     "query": "drinks for diabetics",
     "must_include_patterns": [],
     "must_exclude_patterns": ["biscuit", "namkeen", "noodles"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "low_sugar"]
   },
   {
     "id": "pre-workout",
     "query": "pre workout snack",
     "must_include_patterns": [],
     "must_exclude_patterns": ["juice", "tea"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "quick_energy"]
   },
   {
     "id": "cheapest-oats",
@@ -202,7 +208,8 @@
     "query": "tiffin stuff that isn't junk",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall"]
   },
   {
     "id": "smoothei-typo",
@@ -216,7 +223,8 @@
     "query": "britannia",
     "must_include_patterns": ["britannia"],
     "must_exclude_patterns": [],
-    "kind": "brand"
+    "kind": "brand",
+    "expected_top1_patterns": ["britannia"]
   },
   {
     "id": "poha",
@@ -251,14 +259,16 @@
     "query": "foods for muscle gain",
     "must_include_patterns": [],
     "must_exclude_patterns": ["juice", "tea"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "protein_density"]
   },
   {
     "id": "elderly-friendly",
     "query": "gentle snacks for elderly",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall"]
   },
   {
     "id": "jain-snacks",
@@ -384,14 +394,16 @@
     "query": "healthy snacks for cycling",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "slow_energy"]
   },
   {
     "id": "school-lunch",
     "query": "school lunch box ideas",
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey", "alcohol"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "kid_friendly"]
   },
   {
     "id": "low-sodium",
@@ -405,7 +417,8 @@
     "query": "high fiber breakfast",
     "must_include_patterns": [],
     "must_exclude_patterns": ["chips", "namkeen"],
-    "kind": "goal"
+    "kind": "goal",
+    "expected_bucket_ids": ["overall", "fiber_density"]
   },
   {
     "id": "turmeric-milk",

@@ -12,7 +12,7 @@ export async function nearestPrimaryTypes(
   const wanted = primaryType.trim().toLowerCase();
   if (!wanted) return [];
 
-  const queryEmbed = await embedText(wanted);
+  const queryEmbed = await embedText(wanted, "query");
   const byType = new Map<string, number[]>();
 
   for (const row of index) {

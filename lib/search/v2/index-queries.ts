@@ -93,7 +93,7 @@ async function loadGoalMapFromDb(): Promise<Map<string, GoalTraitMapRow>> {
   const map = new Map<string, GoalTraitMapRow>();
 
   for (const seed of SEED_GOAL_TRAIT_MAP) {
-    const embed = await embedText(seed.goal_phrase);
+    const embed = await embedText(seed.goal_phrase, "document");
     map.set(seed.goal_id, {
       ...seed,
       goal_embedding: embed.length ? embed : null,

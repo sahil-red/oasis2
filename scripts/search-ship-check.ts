@@ -13,13 +13,15 @@ async function main() {
   let ok = true;
   console.log("[search:ship-check] environment");
 
-  const embeddingSource = process.env.EMBEDDING_API_KEY?.trim()
-    ? "EMBEDDING_API_KEY"
-    : process.env.OPENAI_API_KEY?.trim()
-      ? "OPENAI_API_KEY"
-      : process.env.EMBEDDING_BASE_URL?.trim()
-        ? "EMBEDDING_BASE_URL"
-        : null;
+  const embeddingSource = process.env.VOYAGE_API_KEY?.trim()
+    ? "VOYAGE_API_KEY"
+    : process.env.EMBEDDING_API_KEY?.trim()
+      ? "EMBEDDING_API_KEY"
+      : process.env.OPENAI_API_KEY?.trim()
+        ? "OPENAI_API_KEY"
+        : process.env.EMBEDDING_BASE_URL?.trim()
+          ? "EMBEDDING_BASE_URL"
+          : null;
   if (!embeddingSource) {
     console.log("  · embeddings: no cloud key (lexical fallback only; optional EMBEDDING_API_KEY for full quality)");
   } else {

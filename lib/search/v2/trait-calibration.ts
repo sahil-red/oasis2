@@ -34,7 +34,10 @@ export function loadCalibrationBins(): CalibrationBin[] {
 /** Map raw LLM self-reported confidence → calibrated trust (§3c). */
 export function calibrateTraitConfidence(trait: TraitId, raw: number): number {
   const bins = loadCalibrationBins().filter((b) => b.trait === trait);
-  if (!bins.length) return raw;
+  if (!bins.length) {
+    // §3c: conservative clamp until calibration curve exists
+    return Math.min(0.72, raw * 0.85);
+  }
 
   const bin =
     bins.find((b) => raw >= b.raw_min && raw <= b.raw_max) ??

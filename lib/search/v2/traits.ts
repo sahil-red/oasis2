@@ -40,7 +40,19 @@ export function computeQuantitativeTraits(opts: {
   nutrition: ProductNutrition | null;
   has_added_sugar: boolean | null;
   data_quality_score: number;
-  cohortByType: Map<string, Array<{ sugar_g: number | null; protein_g: number | null; fat_g: number | null; sodium_mg: number | null; energy_kcal: number | null; fiber_g: number | null }>>;
+  cohortByType: Map<
+    string,
+    Array<{
+      sugar_g: number | null;
+      protein_g: number | null;
+      fat_g: number | null;
+      saturated_fat_g: number | null;
+      sodium_mg: number | null;
+      energy_kcal: number | null;
+      fiber_g: number | null;
+      calcium_mg: number | null;
+    }>
+  >;
   primary_type: string;
 }): { traits: TraitVector; trait_source: TraitSourceMap; trait_confidence: TraitConfidenceMap } {
   const n = opts.nutrition;
@@ -52,9 +64,11 @@ export function computeQuantitativeTraits(opts: {
   const sugars = cohort.map((c) => c.sugar_g).filter((v): v is number => v != null);
   const proteins = cohort.map((c) => c.protein_g).filter((v): v is number => v != null);
   const fats = cohort.map((c) => c.fat_g).filter((v): v is number => v != null);
+  const saturatedFats = cohort.map((c) => c.saturated_fat_g).filter((v): v is number => v != null);
   const sodiums = cohort.map((c) => c.sodium_mg).filter((v): v is number => v != null);
   const kcals = cohort.map((c) => c.energy_kcal).filter((v): v is number => v != null);
   const fibers = cohort.map((c) => c.fiber_g).filter((v): v is number => v != null);
+  const calciums = cohort.map((c) => c.calcium_mg).filter((v): v is number => v != null);
 
   const setMath = (id: TraitId, value: number | null) => {
     if (value == null) return;
@@ -66,9 +80,11 @@ export function computeQuantitativeTraits(opts: {
   const sugar = num(n?.sugar_g_100g ?? n?.added_sugar_g_100g);
   const protein = num(n?.protein_g_100g);
   const fat = num(n?.fat_g_100g);
+  const saturatedFat = num(n?.saturated_fat_g_100g);
   const sodium = num(n?.sodium_mg_100g);
   const kcal = num(n?.energy_kcal_100g);
   const fiber = num(n?.fiber_g_100g);
+  const calcium = num(n?.calcium_mg_100g);
 
   if (protein != null && proteins.length >= 5) {
     setMath("protein_density", percentileRank(protein, proteins));
@@ -84,6 +100,25 @@ export function computeQuantitativeTraits(opts: {
   }
   if (fat != null && fats.length >= 5) {
     setMath("low_fat", percentileRank(fat, fats, true));
+  }
+  if (saturatedFat != null && saturatedFats.length >= 5) {
+    setMath("low_saturated_fat", percentileRank(saturatedFat, saturatedFats, true));
+  }
+  if (fat != null && saturatedFat != null && fat > 0 && fats.length >= 5 && saturatedFats.length >= 5) {
+    const unsaturatedRatio = Math.max(0, (fat - saturatedFat) / fat);
+    const cohortRatios = cohort
+      .map((c) =>
+        c.fat_g != null && c.saturated_fat_g != null && c.fat_g > 0
+          ? Math.max(0, (c.fat_g - c.saturated_fat_g) / c.fat_g)
+          : null,
+      )
+      .filter((v): v is number => v != null);
+    if (cohortRatios.length >= 5) {
+      setMath("healthy_fats", percentileRank(unsaturatedRatio, cohortRatios));
+    }
+  }
+  if (calcium != null && calciums.length >= 5) {
+    setMath("calcium_rich", percentileRank(calcium, calciums));
   }
   if (kcal != null && kcals.length >= 5) {
     setMath("low_calorie_density", percentileRank(kcal, kcals, true));

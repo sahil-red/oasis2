@@ -29,7 +29,7 @@ export async function getCachedIntent(
 ): Promise<SearchIntentV2 | null> {
   const pk = prefsKey(prefs);
   const now = Date.now();
-  const qEmbed = await embedText(query);
+  const qEmbed = await embedText(query, "query");
   if (!qEmbed.length) return null;
 
   let best: CacheEntry | null = null;
@@ -52,7 +52,7 @@ export async function setCachedIntent(
   intent: SearchIntentV2,
   prefs?: AiSearchPreferences | null,
 ): Promise<void> {
-  const embedding = await embedText(query);
+  const embedding = await embedText(query, "query");
   if (!embedding.length) return;
   cache.push({
     query,

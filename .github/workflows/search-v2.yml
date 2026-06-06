@@ -34,3 +34,10 @@ jobs:
         env:
           SEARCH_V2_ENABLED: "true"
           SEARCH_EVAL_USE_MEMORY: "1"
+      - name: Trait calibration curve (optional)
+        run: pnpm search:eval
+        env:
+          SEARCH_V2_ENABLED: "true"
+          SEARCH_EVAL_USE_MEMORY: "1"
+          SEARCH_EVAL_CALIBRATION: "1"
+        continue-on-error: true

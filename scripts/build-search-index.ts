@@ -194,7 +194,7 @@ async function main() {
   }
 
   for (const seed of SEED_GOAL_TRAIT_MAP) {
-    const goal_embedding = await embedText(seed.goal_phrase);
+    const goal_embedding = await embedText(seed.goal_phrase, "document");
     await supabase.from("goal_trait_map").upsert(
       {
         goal_id: seed.goal_id,

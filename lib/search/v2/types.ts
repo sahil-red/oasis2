@@ -36,7 +36,8 @@ export type TraitReasonMap = Partial<Record<TraitId, string>>;
 
 export type NutritionTier = "low" | "medium" | "high" | "unknown";
 
-export const EMBEDDING_DIM = 384;
+/** Default for Voyage voyage-multilingual-2 — override via EMBEDDING_DIM env */
+export const EMBEDDING_DIM = 1024;
 
 export type ProductSearchIndexRow = {
   product_id: string;
@@ -63,6 +64,9 @@ export type ProductSearchIndexRow = {
   sugar_g: number | null;
   protein_g: number | null;
   fat_g: number | null;
+  saturated_fat_g?: number | null;
+  calcium_mg?: number | null;
+  fiber_g?: number | null;
   sodium_mg: number | null;
   energy_kcal: number | null;
   price_inr: number | null;

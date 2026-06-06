@@ -2,7 +2,7 @@ import { isCatalogVisible } from "@/lib/products/catalog-eligibility";
 import type { ProductListItem } from "@/lib/products/queries";
 import { assignCanonicalClusters } from "@/lib/search/v2/canonical-cluster";
 import { computeDataQuality } from "@/lib/search/v2/data-quality";
-import { embedText } from "@/lib/search/v2/embeddings";
+import { embedTextBatch } from "@/lib/search/v2/embeddings";
 import { computeProductSourceHash } from "@/lib/search/v2/source-hash";
 import {
   enrichProductsWithLlm,
@@ -104,8 +104,11 @@ function baseRowFromProduct(
     sugar_g: num(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g),
     protein_g: num(p.nutrition?.protein_g_100g),
     fat_g: num(p.nutrition?.fat_g_100g),
+    saturated_fat_g: num(p.nutrition?.saturated_fat_g_100g),
     sodium_mg: num(p.nutrition?.sodium_mg_100g),
     energy_kcal: num(p.nutrition?.energy_kcal_100g),
+    calcium_mg: num(p.nutrition?.calcium_mg_100g),
+    fiber_g: num(p.nutrition?.fiber_g_100g),
     price_inr: p.price_inr ?? p.mrp_inr,
     sugar_tier: null,
     protein_tier: null,
@@ -150,8 +153,32 @@ function baseRowFromProduct(
   };
 }
 
-function buildCohortMap(rows: Array<{ primary_type: string | null; sugar_g: number | null; protein_g: number | null; fat_g: number | null; sodium_mg: number | null; energy_kcal: number | null; nutrition?: ProductListItem["nutrition"] }>) {
-  const map = new Map<string, Array<{ sugar_g: number | null; protein_g: number | null; fat_g: number | null; sodium_mg: number | null; energy_kcal: number | null; fiber_g: number | null }>>();
+function buildCohortMap(
+  rows: Array<{
+    primary_type: string | null;
+    sugar_g: number | null;
+    protein_g: number | null;
+    fat_g: number | null;
+    saturated_fat_g?: number | null;
+    sodium_mg: number | null;
+    energy_kcal: number | null;
+    calcium_mg?: number | null;
+    fiber_g?: number | null;
+  }>,
+) {
+  const map = new Map<
+    string,
+    Array<{
+      sugar_g: number | null;
+      protein_g: number | null;
+      fat_g: number | null;
+      saturated_fat_g: number | null;
+      sodium_mg: number | null;
+      energy_kcal: number | null;
+      fiber_g: number | null;
+      calcium_mg: number | null;
+    }>
+  >();
   for (const r of rows) {
     const t = r.primary_type ?? "unknown";
     const list = map.get(t) ?? [];
@@ -159,9 +186,11 @@ function buildCohortMap(rows: Array<{ primary_type: string | null; sugar_g: numb
       sugar_g: r.sugar_g,
       protein_g: r.protein_g,
       fat_g: r.fat_g,
+      saturated_fat_g: r.saturated_fat_g ?? null,
       sodium_mg: r.sodium_mg,
       energy_kcal: r.energy_kcal,
-      fiber_g: num(r.nutrition?.fiber_g_100g),
+      fiber_g: r.fiber_g ?? null,
+      calcium_mg: r.calcium_mg ?? null,
     });
     map.set(t, list);
   }
@@ -180,8 +209,11 @@ export function applyQuantitativeTraits(
         added_sugar_g_100g: row.sugar_g ?? undefined,
         protein_g_100g: row.protein_g ?? undefined,
         fat_g_100g: row.fat_g ?? undefined,
+        saturated_fat_g_100g: row.saturated_fat_g ?? undefined,
         sodium_mg_100g: row.sodium_mg ?? undefined,
         energy_kcal_100g: row.energy_kcal ?? undefined,
+        fiber_g_100g: row.fiber_g ?? undefined,
+        calcium_mg_100g: row.calcium_mg ?? undefined,
       },
       has_added_sugar: row.has_added_sugar,
       data_quality_score: row.data_quality_score,
@@ -210,29 +242,53 @@ export async function finalizeIndexBatch(
     byType.set(key, list);
   }
 
-  const out: ProductSearchIndexRow[] = [];
+  const staged: Array<{
+    row: ProductSearchIndexRow;
+    tiers: ReturnType<typeof assignTiersForType>[number];
+    docText: string;
+    typeText: string;
+  }> = [];
 
   for (const [, group] of byType) {
     const tiers = assignTiersForType(group);
     for (let i = 0; i < group.length; i++) {
       const row = group[i]!;
-      const t = tiers[i]!;
-      const typeText = row.primary_type ?? row.search_doc ?? row.name;
-      const [embedding, type_embedding] = await Promise.all([
-        embedText(row.search_doc ?? row.name),
-        embedText(typeText),
-      ]);
-      out.push({
-        ...row,
-        sugar_tier: t.sugar_tier,
-        protein_tier: t.protein_tier,
-        fat_tier: t.fat_tier,
-        canonical_product_id: row.product_id,
-        embedding: embedding.length ? embedding : null,
-        type_embedding: type_embedding.length ? type_embedding : null,
+      staged.push({
+        row,
+        tiers: tiers[i]!,
+        docText: row.search_doc ?? row.name,
+        typeText: row.primary_type ?? row.search_doc ?? row.name,
       });
     }
   }
+
+  const [docEmbeds, typeEmbeds] = await Promise.all([
+    embedTextBatch(
+      staged.map((s) => s.docText),
+      64,
+      "document",
+    ),
+    embedTextBatch(
+      staged.map((s) => s.typeText),
+      64,
+      "document",
+    ),
+  ]);
+
+  const out: ProductSearchIndexRow[] = staged.map((s, i) => {
+    const embedding = docEmbeds[i] ?? [];
+    const type_embedding = typeEmbeds[i] ?? [];
+    return {
+      ...s.row,
+      sugar_tier: s.tiers.sugar_tier,
+      protein_tier: s.tiers.protein_tier,
+      fat_tier: s.tiers.fat_tier,
+      canonical_product_id: s.row.product_id,
+      embedding: embedding.length ? embedding : null,
+      type_embedding: type_embedding.length ? type_embedding : null,
+    };
+  });
+
   return assignCanonicalClusters(out);
 }
 
@@ -251,7 +307,7 @@ export async function buildIndexFromProducts(
   );
 
   const useLlm = opts.useLlm !== false && Boolean(process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY);
-  const batchSize = opts.llmBatchSize ?? 8;
+  const batchSize = opts.llmBatchSize ?? 28;
   const partial: ProductSearchIndexRow[] = [];
 
   for (let i = 0; i < eligible.length; i += batchSize) {

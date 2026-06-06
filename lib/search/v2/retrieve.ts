@@ -55,7 +55,7 @@ export async function retrieveAndRerank(
     rank: i + 1,
   }));
 
-  const queryEmbed = await embedText(intent.raw_query);
+  const queryEmbed = await embedText(intent.raw_query, "query");
   const vectorRanks = [...candidates]
     .map((row) => ({
       row,

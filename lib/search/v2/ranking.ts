@@ -87,22 +87,27 @@ export function rankCandidates(
   const relevances = candidates.map((r) => relevanceById.get(r.product_id) ?? 0);
   const healths = candidates.map(healthScore);
   const pops = candidates.map(computePopularitySignal);
+  const rawTraitMatches = candidates.map((row) => {
+    if (goalWeights && Object.keys(goalWeights).length) {
+      return computeGoalFit(row, goalWeights).score;
+    }
+    return constraintSatisfaction(row, intent);
+  });
 
   const normRel = minMaxNormalize(relevances);
   const normHealth = minMaxNormalize(healths);
   const normPop = minMaxNormalize(pops);
+  const normTrait = minMaxNormalize(rawTraitMatches);
 
   const ranked: RankedCandidate[] = candidates.map((row, i) => {
     const relevance_score = normRel[i] ?? 0;
     const health_score = normHealth[i] ?? 0;
     const popularity_score = normPop[i] ?? 0;
+    const trait_match_score = normTrait[i] ?? 0;
 
-    let trait_match_score = constraintSatisfaction(row, intent);
     let goal_fit: number | null = null;
     if (goalWeights && Object.keys(goalWeights).length) {
-      const fit = computeGoalFit(row, goalWeights);
-      goal_fit = fit.score;
-      trait_match_score = fit.score;
+      goal_fit = rawTraitMatches[i] ?? 0;
     }
 
     let final_score: number;

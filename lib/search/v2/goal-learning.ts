@@ -2,6 +2,7 @@
  * §3b / §10 — refine goal_trait_map weights from user click behavior.
  */
 import { adminClient } from "@/lib/supabase/admin";
+import { calibrateTraitConfidence } from "@/lib/search/v2/trait-calibration";
 import { effectiveTraitScore } from "@/lib/search/v2/traits";
 import type { GoalTraitWeights, ProductSearchIndexRow, TraitId } from "@/lib/search/v2/types";
 import { TRAIT_IDS } from "@/lib/search/v2/types";
@@ -44,7 +45,7 @@ export async function refineGoalWeightsFromClick(
     for (const id of TRAIT_IDS) {
       const raw = row.traits[id];
       if (raw == null) continue;
-      const effective = effectiveTraitScore(id, raw, row);
+      const effective = effectiveTraitScore(id, raw, row, calibrateTraitConfidence);
       if (effective > 0.35) clicked[id] = effective;
     }
 

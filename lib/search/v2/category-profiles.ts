@@ -51,7 +51,7 @@ export async function buildCategoryTraitProfiles(
   for (const [category_key, rows] of groups) {
     const trait_means = meanTraits(rows);
     const centroidText = traitVectorToText(trait_means);
-    const centroidVec = centroidText ? await embedText(centroidText) : [];
+    const centroidVec = centroidText ? await embedText(centroidText, "document") : [];
     profiles.push({
       category_key,
       category: rows[0]?.category ?? null,
@@ -70,7 +70,7 @@ export async function selectCategoriesForGoal(
   goalWeights: TraitVector,
 ): Promise<CategoryTraitProfileRow[]> {
   const goalText = traitVectorToText(goalWeights);
-  const goalEmbed = goalText ? await embedText(goalText) : [];
+  const goalEmbed = goalText ? await embedText(goalText, "query") : [];
   if (!goalEmbed.length) return profiles.slice(0, CATEGORY_CENTROID_TOP_K);
 
   return [...profiles]

@@ -50,7 +50,7 @@ function passesAllergens(row: ProductSearchIndexRow, excluded: string[]): boolea
   for (const a of excluded) {
     if (allergens.includes(a.toLowerCase())) return false;
   }
-  return false;
+  return true;
 }
 
 function passesAvoidIngredients(row: ProductSearchIndexRow, avoid: string[]): boolean {
@@ -123,7 +123,11 @@ export async function generateCandidates(
     }
   }
 
-  const queryTypeEmbed = intent.primary_type ? await embedText(intent.primary_type) : null;
+  const queryTypeEmbed = intent.primary_type ? await embedText(intent.primary_type, "query") : null;
+  const queryEmbed =
+    pool.length > CANDIDATE_CAP && isEmbeddingConfigured()
+      ? await embedText(intent.raw_query, "query")
+      : null;
 
   if (intent.kind === "brand" && intent.brand) {
     const brandQ = intent.brand.toLowerCase();
@@ -207,12 +211,19 @@ export async function generateCandidates(
 
   const wanted = intent.primary_type?.toLowerCase() ?? null;
   const scored = pool
-    .map((row) => ({
-      row,
-      lex: lexicalScore(row, intent.raw_query),
-      tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
-    }))
-    .sort((a, b) => a.tier - b.tier || b.lex - a.lex)
+    .map((row) => {
+      const vec =
+        queryEmbed?.length && row.embedding?.length
+          ? cosineSimilarity(queryEmbed, row.embedding)
+          : 0;
+      return {
+        row,
+        lex: lexicalScore(row, intent.raw_query),
+        vec,
+        tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
+      };
+    })
+    .sort((a, b) => a.tier - b.tier || b.lex + b.vec - (a.lex + a.vec))
     .slice(0, CANDIDATE_CAP)
     .map((x) => x.row);
 
