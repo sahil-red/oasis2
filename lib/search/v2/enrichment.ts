@@ -1,7 +1,9 @@
 import { isCatalogVisible } from "@/lib/products/catalog-eligibility";
 import type { ProductListItem } from "@/lib/products/queries";
+import { assignCanonicalClusters } from "@/lib/search/v2/canonical-cluster";
 import { computeDataQuality } from "@/lib/search/v2/data-quality";
 import { embedText } from "@/lib/search/v2/embeddings";
+import { computeProductSourceHash } from "@/lib/search/v2/source-hash";
 import {
   enrichProductsWithLlm,
   mergeSemanticTraits,
@@ -134,6 +136,17 @@ function baseRowFromProduct(
     click_count: 0,
     save_count: 0,
     last_interaction_at: null,
+    built_at: new Date().toISOString(),
+    source_hash: computeProductSourceHash({
+      name: p.name,
+      brand: p.brand,
+      category: p.category,
+      subcategory: p.subcategory,
+      l3_category: p.l3_category ?? null,
+      nutrition: p.nutrition,
+      ingredients_raw: p.ingredients_raw,
+      attributes: p.attributes,
+    }),
   };
 }
 
@@ -198,19 +211,12 @@ export async function finalizeIndexBatch(
   }
 
   const out: ProductSearchIndexRow[] = [];
-  const clusterRep = new Map<string, string>();
 
   for (const [, group] of byType) {
     const tiers = assignTiersForType(group);
     for (let i = 0; i < group.length; i++) {
       const row = group[i]!;
       const t = tiers[i]!;
-      const clusterKey = `${(row.brand ?? "").toLowerCase()}|${row.base_name ?? row.name}|${row.primary_type ?? ""}`;
-      let canonicalId = clusterRep.get(clusterKey);
-      if (!canonicalId) {
-        canonicalId = row.product_id;
-        clusterRep.set(clusterKey, canonicalId);
-      }
       const typeText = row.primary_type ?? row.search_doc ?? row.name;
       const [embedding, type_embedding] = await Promise.all([
         embedText(row.search_doc ?? row.name),
@@ -221,13 +227,13 @@ export async function finalizeIndexBatch(
         sugar_tier: t.sugar_tier,
         protein_tier: t.protein_tier,
         fat_tier: t.fat_tier,
-        canonical_product_id: canonicalId,
+        canonical_product_id: row.product_id,
         embedding: embedding.length ? embedding : null,
         type_embedding: type_embedding.length ? type_embedding : null,
       });
     }
   }
-  return out;
+  return assignCanonicalClusters(out);
 }
 
 export async function buildIndexFromProducts(

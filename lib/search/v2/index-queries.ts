@@ -84,6 +84,8 @@ function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
     click_count: Number(raw.click_count ?? 0),
     save_count: Number(raw.save_count ?? 0),
     last_interaction_at: (raw.last_interaction_at as string) ?? null,
+    built_at: (raw.built_at as string) ?? null,
+    source_hash: (raw.source_hash as string) ?? null,
   };
 }
 

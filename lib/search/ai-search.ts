@@ -24,6 +24,10 @@ export type AiSearchItem = CatalogGridItem & {
   ai_health_score?: number;
   ai_match_reasons: string[];
   ai_match_warning?: string | null;
+  /** §5 data quality tier for Scout badges */
+  scout_verified?: boolean;
+  /** §8 canonical cluster sibling count (expand on click) */
+  canonical_variant_count?: number;
 };
 
 export type AiSearchResult = {

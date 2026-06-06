@@ -88,6 +88,8 @@ export type ProductSearchIndexRow = {
   click_count: number;
   save_count: number;
   last_interaction_at: string | null;
+  built_at: string | null;
+  source_hash: string | null;
 };
 
 export type GoalTraitWeights = Partial<Record<TraitId, number>>;
@@ -175,6 +177,8 @@ export type SearchV2Result = {
   rank_source: "v2_structured" | "v2_goal";
   summary: string;
   llm_calls: number;
+  latency_ms: number;
+  explored: boolean;
 };
 
 /** §5 default gate — tuned by eval */

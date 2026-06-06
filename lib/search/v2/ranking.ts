@@ -1,5 +1,6 @@
 import { computeGoalFit } from "@/lib/search/v2/goal-graph";
 import { buildReasons } from "@/lib/search/v2/explain";
+import { computePopularitySignal } from "@/lib/search/v2/popularity";
 import type {
   GoalTraitWeights,
   ProductSearchIndexRow,
@@ -24,13 +25,6 @@ function healthScore(row: ProductSearchIndexRow): number {
   return clamp01(row.scout_score / 100);
 }
 
-/** §10 time-decayed popularity — 30-day half-life approximation */
-function popularityScore(row: ProductSearchIndexRow): number {
-  const clicks = row.click_count ?? 0;
-  const saves = row.save_count ?? 0;
-  const raw = clicks * 0.5 + saves * 0.8;
-  return clamp01(Math.log1p(raw) / 5);
-}
 
 function constraintSatisfaction(row: ProductSearchIndexRow, intent: SearchIntentV2): number {
   const c = intent.constraints;
@@ -90,7 +84,7 @@ export function rankCandidates(
 
   const relevances = candidates.map((r) => relevanceById.get(r.product_id) ?? 0);
   const healths = candidates.map(healthScore);
-  const pops = candidates.map(popularityScore);
+  const pops = candidates.map(computePopularitySignal);
 
   const normRel = minMaxNormalize(relevances);
   const normHealth = minMaxNormalize(healths);

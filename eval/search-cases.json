@@ -104,5 +104,328 @@
     "must_include_patterns": ["milk"],
     "must_exclude_patterns": ["biscuit"],
     "kind": "directed"
+  },
+  {
+    "id": "amul-milk-fast",
+    "query": "amul milk",
+    "must_include_patterns": ["amul", "milk"],
+    "must_exclude_patterns": ["biscuit"],
+    "kind": "directed",
+    "expected_top1_patterns": ["amul"]
+  },
+  {
+    "id": "protein-bars",
+    "query": "protein bars",
+    "must_include_patterns": ["protein", "bar"],
+    "must_exclude_patterns": ["milk", "juice"],
+    "kind": "directed"
+  },
+  {
+    "id": "ghee",
+    "query": "cow ghee",
+    "must_include_patterns": ["ghee"],
+    "must_exclude_patterns": ["biscuit", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "mango-juice",
+    "query": "mango juice",
+    "must_include_patterns": ["mango"],
+    "must_exclude_patterns": ["biscuit", "atta"],
+    "kind": "directed"
+  },
+  {
+    "id": "biscuits-under-100",
+    "query": "biscuits under ₹100",
+    "must_include_patterns": ["biscuit"],
+    "must_exclude_patterns": ["milk", "paneer"],
+    "kind": "directed"
+  },
+  {
+    "id": "gluten-free-bread",
+    "query": "gluten free bread",
+    "must_include_patterns": ["bread"],
+    "must_exclude_patterns": ["noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "nut-free-snacks",
+    "query": "nut free snacks",
+    "must_include_patterns": ["snack"],
+    "must_exclude_patterns": [],
+    "kind": "directed"
+  },
+  {
+    "id": "pcos-snacks",
+    "query": "PCOS friendly snacks",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "goal"
+  },
+  {
+    "id": "diabetes-drinks",
+    "query": "drinks for diabetics",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["biscuit", "namkeen", "noodles"],
+    "kind": "goal"
+  },
+  {
+    "id": "pre-workout",
+    "query": "pre workout snack",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["juice", "tea"],
+    "kind": "goal"
+  },
+  {
+    "id": "cheapest-oats",
+    "query": "cheapest oats",
+    "must_include_patterns": ["oat"],
+    "must_exclude_patterns": ["biscuit"],
+    "kind": "directed"
+  },
+  {
+    "id": "smoothie-low-sugar",
+    "query": "strawberry smoothie low sugar",
+    "must_include_patterns": ["smoothie"],
+    "must_exclude_patterns": ["biscuit", "namkeen"],
+    "kind": "directed"
+  },
+  {
+    "id": "bina-cheeni-biscuits",
+    "query": "bina cheeni biscuits",
+    "must_include_patterns": ["biscuit"],
+    "must_exclude_patterns": ["milk", "paneer"],
+    "kind": "directed"
+  },
+  {
+    "id": "tiffin-not-junk",
+    "query": "tiffin stuff that isn't junk",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "goal"
+  },
+  {
+    "id": "smoothei-typo",
+    "query": "smoothei",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["biscuit", "namkeen", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "britannia-brand",
+    "query": "britannia",
+    "must_include_patterns": ["britannia"],
+    "must_exclude_patterns": [],
+    "kind": "brand"
+  },
+  {
+    "id": "poha",
+    "query": "poha",
+    "must_include_patterns": ["poha"],
+    "must_exclude_patterns": ["fresh milk", "toned milk", "cow milk"],
+    "kind": "directed"
+  },
+  {
+    "id": "muesli",
+    "query": "muesli",
+    "must_include_patterns": ["muesli"],
+    "must_exclude_patterns": ["milk", "paneer"],
+    "kind": "directed"
+  },
+  {
+    "id": "yogurt",
+    "query": "greek yogurt",
+    "must_include_patterns": ["yogurt", "curd"],
+    "must_exclude_patterns": ["biscuit", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "green-tea",
+    "query": "green tea",
+    "must_include_patterns": ["tea"],
+    "must_exclude_patterns": ["biscuit", "milk"],
+    "kind": "directed"
+  },
+  {
+    "id": "muscle-gain",
+    "query": "foods for muscle gain",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["juice", "tea"],
+    "kind": "goal"
+  },
+  {
+    "id": "elderly-friendly",
+    "query": "gentle snacks for elderly",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "goal"
+  },
+  {
+    "id": "jain-snacks",
+    "query": "jain snacks",
+    "must_include_patterns": ["snack"],
+    "must_exclude_patterns": [],
+    "kind": "directed"
+  },
+  {
+    "id": "sugar-free-drinks",
+    "query": "zero sugar soft drinks",
+    "must_include_patterns": ["drink", "cola", "soda", "zero", "diet"],
+    "must_exclude_patterns": ["biscuit", "atta"],
+    "kind": "directed"
+  },
+  {
+    "id": "paneer",
+    "query": "paneer",
+    "must_include_patterns": ["paneer"],
+    "must_exclude_patterns": ["biscuit", "smoothie"],
+    "kind": "directed"
+  },
+  {
+    "id": "atta",
+    "query": "whole wheat atta",
+    "must_include_patterns": ["atta", "wheat"],
+    "must_exclude_patterns": ["biscuit", "juice"],
+    "kind": "directed"
+  },
+  {
+    "id": "rice",
+    "query": "basmati rice",
+    "must_include_patterns": ["rice"],
+    "must_exclude_patterns": ["biscuit", "milk"],
+    "kind": "directed"
+  },
+  {
+    "id": "olive-oil",
+    "query": "olive oil",
+    "must_include_patterns": ["olive"],
+    "must_exclude_patterns": ["biscuit", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "honey",
+    "query": "organic honey",
+    "must_include_patterns": ["honey"],
+    "must_exclude_patterns": ["biscuit", "noodles"],
+    "kind": "directed"
+  },
+  {
+    "id": "chips",
+    "query": "potato chips",
+    "must_include_patterns": ["chip"],
+    "must_exclude_patterns": ["milk", "smoothie"],
+    "kind": "directed"
+  },
+  {
+    "id": "dal",
+    "query": "toor dal",
+    "must_include_patterns": ["dal"],
+    "must_exclude_patterns": ["biscuit", "juice"],
+    "kind": "directed"
+  },
+  {
+    "id": "idli-dosa-batter",
+    "query": "idli dosa batter",
+    "must_include_patterns": ["idli", "dosa", "batter"],
+    "must_exclude_patterns": ["biscuit", "chips"],
+    "kind": "directed"
+  },
+  {
+    "id": "maggi-noodles",
+    "query": "maggi noodles",
+    "must_include_patterns": ["maggi", "noodle"],
+    "must_exclude_patterns": ["milk", "smoothie"],
+    "kind": "directed"
+  },
+  {
+    "id": "soya-milk",
+    "query": "soya milk",
+    "must_include_patterns": ["soya", "soy"],
+    "must_exclude_patterns": ["biscuit"],
+    "kind": "directed"
+  },
+  {
+    "id": "almond-milk",
+    "query": "almond milk",
+    "must_include_patterns": ["almond"],
+    "must_exclude_patterns": ["biscuit", "namkeen"],
+    "kind": "directed"
+  },
+  {
+    "id": "breakfast-cereal",
+    "query": "breakfast cereal",
+    "must_include_patterns": ["cereal", "corn", "flakes", "muesli"],
+    "must_exclude_patterns": ["paneer", "dal"],
+    "kind": "directed"
+  },
+  {
+    "id": "pickle",
+    "query": "mango pickle",
+    "must_include_patterns": ["pickle", "achar"],
+    "must_exclude_patterns": ["buttermilk", "fresh milk", "smoothie"],
+    "kind": "directed"
+  },
+  {
+    "id": "coffee",
+    "query": "instant coffee",
+    "must_include_patterns": ["coffee"],
+    "must_exclude_patterns": ["biscuit", "milk"],
+    "kind": "directed"
+  },
+  {
+    "id": "energy-bar",
+    "query": "energy bar",
+    "must_include_patterns": ["bar", "energy"],
+    "must_exclude_patterns": ["milk", "juice"],
+    "kind": "directed"
+  },
+  {
+    "id": "cycling-goal",
+    "query": "healthy snacks for cycling",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "goal"
+  },
+  {
+    "id": "school-lunch",
+    "query": "school lunch box ideas",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey", "alcohol"],
+    "kind": "goal"
+  },
+  {
+    "id": "low-sodium",
+    "query": "low sodium snacks",
+    "must_include_patterns": ["snack"],
+    "must_exclude_patterns": ["fresh milk", "toned milk", "paneer"],
+    "kind": "directed"
+  },
+  {
+    "id": "high-fiber",
+    "query": "high fiber breakfast",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["chips", "namkeen"],
+    "kind": "goal"
+  },
+  {
+    "id": "turmeric-milk",
+    "query": "haldi doodh",
+    "must_include_patterns": ["milk", "doodh", "haldi", "turmeric"],
+    "must_exclude_patterns": ["biscuit", "cookie"],
+    "kind": "directed"
+  },
+  {
+    "id": "lassi",
+    "query": "mango lassi",
+    "must_include_patterns": ["lassi", "mango"],
+    "must_exclude_patterns": ["biscuit", "namkeen"],
+    "kind": "directed"
+  },
+  {
+    "id": "buttermilk",
+    "query": "chaas buttermilk",
+    "must_include_patterns": ["chaas", "buttermilk", "lassi"],
+    "must_exclude_patterns": ["biscuit", "chips"],
+    "kind": "directed"
   }
 ]

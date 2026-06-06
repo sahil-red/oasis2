@@ -1,8 +1,16 @@
 import { adminClient } from "@/lib/supabase/admin";
 import type { AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
+import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
+import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
 import type { SearchV2Result } from "@/lib/search/v2/types";
 import type { Grade, ScoreBand } from "@/lib/supabase/types";
+
+function dataQualityWarning(score: number): string | null {
+  if (score < 0.5) return "Label not verified — limited data";
+  if (score < 0.75) return "Label coverage limited — verify before buying";
+  return null;
+}
 
 function scoreToGrade(score: number): Grade {
   if (score >= 80) return "A";
@@ -53,7 +61,10 @@ export async function searchV2ToAiResult(
 ): Promise<AiSearchResult> {
   const limit = opts.limit ?? v2.items.length;
   const ids = v2.items.map((i) => i.row.product_id);
-  const display = await enrichDisplayFields(ids);
+  const [display, snapshot] = await Promise.all([
+    enrichDisplayFields(ids),
+    getSearchIndexSnapshot(),
+  ]);
 
   const items: AiSearchItem[] = v2.items.map((c) => {
     const row = c.row;
@@ -84,8 +95,12 @@ export async function searchV2ToAiResult(
       ai_match_score: Math.round(c.final_score * 100),
       ai_health_score: row.scout_score ?? undefined,
       ai_match_reasons: c.reasons,
-      ai_match_warning:
-        row.data_quality_score < 0.5 ? "Label data partially verified by Scout" : null,
+      ai_match_warning: dataQualityWarning(row.data_quality_score),
+      scout_verified: row.data_quality_score >= 0.75,
+      canonical_variant_count: countCanonicalSiblings(
+        snapshot.index,
+        row.canonical_product_id ?? row.product_id,
+      ),
     };
   });
 

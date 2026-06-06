@@ -6,9 +6,11 @@ import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
 import { buildIndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
+import { applyExplorationSlot } from "@/lib/search/v2/popularity";
 import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
 import { relaxIntentWithLlm } from "@/lib/search/v2/llm-intent";
+import { isPrecisionAtRisk, verifyTopCandidates } from "@/lib/search/v2/verification";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
 
@@ -34,6 +36,7 @@ export async function runSearchV2(
   rawQuery: string,
   opts: { limit?: number; preferences?: AiSearchPreferences | null } = {},
 ): Promise<SearchV2Result> {
+  const started = Date.now();
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const snapshot = await getSearchIndexSnapshot();
   const catalogMeta = buildIndexCatalogMeta(snapshot.index);
@@ -87,16 +90,27 @@ export async function runSearchV2(
     if (relaxation_steps.length >= 4) break;
   }
 
-  const { rows: reranked, relevanceById } = await retrieveAndRerank(candidates, intent);
+  const { rows: reranked, relevanceById } = await retrieveAndRerank(candidates, intent, {
+    useDbLexical: snapshot.source === "db",
+  });
+
+  let verified = reranked;
+  if (isPrecisionAtRisk(intent)) {
+    const v = await verifyTopCandidates(reranked, intent);
+    verified = v.rows;
+    llm_calls += v.llm_calls;
+  }
+
   let ranked = rankCandidates(
-    reranked,
+    verified,
     intent,
     relevanceById,
     goalWeights?.weights ?? null,
     Math.max(limit, 50),
   );
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
-  const items = ranked.slice(0, limit);
+
+  const { items, explored } = applyExplorationSlot(ranked, intent.raw_query, limit);
   const buckets =
     intent.kind === "goal" ? buildGoalBuckets(ranked, goalWeights?.weights ?? null) : null;
 
@@ -115,5 +129,7 @@ export async function runSearchV2(
     rank_source: intent.kind === "goal" ? "v2_goal" : "v2_structured",
     summary: buildSummary(intent, items.length, relaxed, relaxation_steps),
     llm_calls,
+    latency_ms: Date.now() - started,
+    explored,
   };
 }

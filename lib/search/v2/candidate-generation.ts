@@ -1,34 +1,31 @@
 import { ingredientPresent } from "@/lib/search/ai-retrieval";
 import { cosineSimilarity, embedText, isEmbeddingConfigured } from "@/lib/search/v2/embeddings";
 import { selectCategoriesForGoal } from "@/lib/search/v2/category-profiles";
-import { lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
+import { lexicalBlob, lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN, TYPE_EMBEDDING_THRESHOLD } from "@/lib/search/v2/types";
 import type { GoalTraitWeights } from "@/lib/search/v2/types";
 
 export const CANDIDATE_CAP = 500;
 
-async function rowMatchesType(
+/** 0 = exact type, 1 = embedding, 2 = lexical fallback, 99 = no match */
+function typeMatchTier(
   row: ProductSearchIndexRow,
-  intent: SearchIntentV2,
+  wanted: string,
   queryTypeEmbed: number[] | null,
-): Promise<boolean> {
-  const wanted = intent.primary_type?.toLowerCase();
-  if (!wanted) return true;
-
-  if (row.primary_type?.toLowerCase() === wanted) return true;
+): number {
+  if (row.primary_type?.toLowerCase() === wanted) return 0;
 
   if (queryTypeEmbed?.length && row.type_embedding?.length) {
     const sim = cosineSimilarity(queryTypeEmbed, row.type_embedding);
-    if (sim >= TYPE_EMBEDDING_THRESHOLD) return true;
+    if (sim >= TYPE_EMBEDDING_THRESHOLD) return 1;
   }
 
-  // §9: vector down → lexical over enriched search_doc / catalog fields
   if (!isEmbeddingConfigured() || !row.type_embedding?.length) {
-    return lexicalTypeMatch(row, wanted);
+    return lexicalTypeMatch(row, wanted) ? 2 : 99;
   }
 
-  return false;
+  return 99;
 }
 
 function rowMatchesFlavours(row: ProductSearchIndexRow, required: string[]): boolean {
@@ -132,11 +129,8 @@ export async function generateCandidates(
     const brandQ = intent.brand.toLowerCase();
     pool = pool.filter((row) => (row.brand ?? "").toLowerCase().includes(brandQ));
   } else if (intent.primary_type) {
-    const matched: ProductSearchIndexRow[] = [];
-    for (const row of pool) {
-      if (await rowMatchesType(row, intent, queryTypeEmbed)) matched.push(row);
-    }
-    pool = matched;
+    const wanted = intent.primary_type.toLowerCase();
+    pool = pool.filter((row) => typeMatchTier(row, wanted, queryTypeEmbed) < 99);
   }
 
   pool = pool.filter(
@@ -150,9 +144,75 @@ export async function generateCandidates(
 
   pool = dedupeCanonical(pool);
 
+  // Directed short lookups: lexical membership on search_doc (§9 degradation, not semantics)
+  if (
+    intent.kind === "directed" &&
+    !intent.brand &&
+    !intent.goal_phrase &&
+    intent.required_flavours.length === 0
+  ) {
+    const STOP = new Set([
+      "for",
+      "with",
+      "under",
+      "over",
+      "below",
+      "above",
+      "without",
+      "the",
+      "and",
+      "healthy",
+      "healthiest",
+      "cheapest",
+      "best",
+      "free",
+      "zero",
+      "low",
+      "high",
+      "organic",
+      "instant",
+    ]);
+    const tokens = intent.raw_query
+      .toLowerCase()
+      .replace(/₹\s*\d+/g, "")
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !STOP.has(t) && !/^\d/.test(t));
+
+    const typeBlob = intent.primary_type?.toLowerCase() ?? "";
+
+    const DIETARY = new Set(["vegan", "vegetarian", "gluten", "jain", "nut", "sodium", "sugar", "protein", "fat"]);
+
+    if (tokens.length === 1) {
+      const t = tokens[0]!;
+      pool = pool.filter((row) => {
+        const blob = lexicalBlob(row);
+        if ((typeBlob === "milk" || t === "doodh") && /\bbiscuit|cookie\b/.test(blob)) return false;
+        return blob.includes(t) || (typeBlob && blob.includes(typeBlob));
+      });
+    } else if (tokens.length === 2 && !/\bfor\b/.test(intent.raw_query.toLowerCase())) {
+      const hasDietary = tokens.some((t) => DIETARY.has(t));
+      pool = pool.filter((row) => {
+        const blob = lexicalBlob(row);
+        if (hasDietary) {
+          const productTokens = tokens.filter((t) => !DIETARY.has(t));
+          return productTokens.length
+            ? productTokens.some((t) => blob.includes(t))
+            : tokens.some((t) => blob.includes(t));
+        }
+        const matched = tokens.filter((t) => blob.includes(t)).length;
+        return matched >= 1;
+      });
+    }
+  }
+
+  const wanted = intent.primary_type?.toLowerCase() ?? null;
   const scored = pool
-    .map((row) => ({ row, lex: lexicalScore(row, intent.raw_query) }))
-    .sort((a, b) => b.lex - a.lex)
+    .map((row) => ({
+      row,
+      lex: lexicalScore(row, intent.raw_query),
+      tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
+    }))
+    .sort((a, b) => a.tier - b.tier || b.lex - a.lex)
     .slice(0, CANDIDATE_CAP)
     .map((x) => x.row);
 

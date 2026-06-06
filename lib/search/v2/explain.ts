@@ -1,4 +1,5 @@
 import { computeGoalFit } from "@/lib/search/v2/goal-graph";
+import { calibrateTraitConfidence } from "@/lib/search/v2/trait-calibration";
 import { effectiveTraitScore } from "@/lib/search/v2/traits";
 import type {
   GoalTraitWeights,
@@ -57,7 +58,7 @@ export function buildTraitReasons(
   }
 
   for (const [trait, value] of Object.entries(row.traits) as Array<[TraitId, number]>) {
-    const effective = effectiveTraitScore(trait, value, row);
+    const effective = effectiveTraitScore(trait, value, row, calibrateTraitConfidence);
     if (effective < 0.55) continue;
     const reason = row.trait_reasons[trait];
     out.push({

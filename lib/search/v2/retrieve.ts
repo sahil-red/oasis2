@@ -2,6 +2,7 @@
  * §7a Hybrid retrieve / rerank (~500 → ~50) — RRF(structured, vector), k=60.
  */
 import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
+import { fetchLexicalScoresFromDb } from "@/lib/search/v2/db-lexical";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
 export const RERANK_CAP = 50;
@@ -32,9 +33,21 @@ function reciprocalRankFusion(lists: Array<Array<{ id: string; rank: number }>>)
 export async function retrieveAndRerank(
   candidates: ProductSearchIndexRow[],
   intent: SearchIntentV2,
+  opts: { useDbLexical?: boolean } = {},
 ): Promise<{ rows: ProductSearchIndexRow[]; relevanceById: Map<string, number> }> {
+  const dbLexical =
+    opts.useDbLexical && candidates.length
+      ? await fetchLexicalScoresFromDb(
+          candidates.map((c) => c.product_id),
+          intent.raw_query,
+        )
+      : new Map<string, number>();
+
   const structured = [...candidates]
-    .map((row) => ({ row, score: lexicalScore(row, intent.raw_query) }))
+    .map((row) => ({
+      row,
+      score: dbLexical.get(row.product_id) ?? lexicalScore(row, intent.raw_query),
+    }))
     .sort((a, b) => b.score - a.score);
 
   const structuredRanks = structured.map((x, i) => ({

@@ -63,6 +63,8 @@ const FIXTURE_INDEX: ProductSearchIndexRow[] = [
     click_count: 0,
     save_count: 0,
     last_interaction_at: null,
+    built_at: null,
+    source_hash: null,
   },
   {
     product_id: "3",
@@ -117,6 +119,8 @@ const FIXTURE_INDEX: ProductSearchIndexRow[] = [
     click_count: 0,
     save_count: 0,
     last_interaction_at: null,
+    built_at: null,
+    source_hash: null,
   },
 ];
 

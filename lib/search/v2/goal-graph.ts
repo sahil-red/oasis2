@@ -1,9 +1,12 @@
 /**
  * §3b Nutrition Graph — embedding-keyed, LLM-composed goals.
  */
+import { createHash } from "node:crypto";
 import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
+import { adminClient } from "@/lib/supabase/admin";
 import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
 import { validateTraitWeights } from "@/lib/search/v2/llm-intent";
+import { calibrateTraitConfidence } from "@/lib/search/v2/trait-calibration";
 import { effectiveTraitScore } from "@/lib/search/v2/traits";
 import type {
   GoalTraitMapRow,
@@ -161,9 +164,50 @@ export async function resolveGoalWeights(
     });
     const parsed = extractJsonObject(content) as { weights?: Record<string, number> };
     const weights = validateTraitWeights(parsed.weights ?? {});
-    return { weights, goal_id: null, llm_calls: 1 };
+    const goal_id = await persistLearnedGoal(phrase, weights);
+    return { weights, goal_id, llm_calls: 1 };
   } catch {
     return { weights: {}, goal_id: null, llm_calls: 0 };
+  }
+}
+
+function slugGoalId(phrase: string): string {
+  const base = phrase
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 48);
+  const hash = createHash("sha256").update(phrase).digest("hex").slice(0, 8);
+  return base ? `${base}_${hash}` : `goal_${hash}`;
+}
+
+/** Persist LLM-decomposed goal into Nutrition Graph (§3b learning). */
+export async function persistLearnedGoal(
+  goalPhrase: string,
+  weights: GoalTraitWeights,
+): Promise<string | null> {
+  if (!Object.keys(weights).length) return null;
+  const goal_id = slugGoalId(goalPhrase);
+  const goal_embedding = await embedText(goalPhrase);
+  try {
+    const supabase = adminClient();
+    await supabase.from("goal_trait_map").upsert(
+      {
+        goal_id,
+        goal_phrase: goalPhrase,
+        display_name: goalPhrase,
+        trait_weights: weights,
+        goal_embedding: goal_embedding.length ? goal_embedding : null,
+        source: "llm",
+        confidence: 0.85,
+        support_count: 1,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "goal_id" },
+    );
+    return goal_id;
+  } catch {
+    return goal_id;
   }
 }
 
@@ -179,7 +223,7 @@ export function computeGoalFit(
     if (!weight || weight <= 0) continue;
     const raw = row.traits[trait];
     if (raw == null) continue;
-    const effective = effectiveTraitScore(trait, raw, row);
+    const effective = effectiveTraitScore(trait, raw, row, calibrateTraitConfidence);
     if (effective <= 0) continue;
     sumW += weight;
     sum += weight * effective;

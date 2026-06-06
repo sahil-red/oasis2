@@ -65,6 +65,12 @@ export const ProductCard = memo(function ProductCard({
     "ai_match_warning" in product && typeof product.ai_match_warning === "string"
       ? product.ai_match_warning
       : null;
+  const scoutVerified =
+    "scout_verified" in product && product.scout_verified === true;
+  const variantCount =
+    "canonical_variant_count" in product && typeof product.canonical_variant_count === "number"
+      ? product.canonical_variant_count
+      : 0;
   const aiReasonLines = aiReasons.filter((r) => !/^Scout(\s+score)?\s*\d/i.test(r)).slice(0, 3);
 
   return (
@@ -129,13 +135,20 @@ export const ProductCard = memo(function ProductCard({
           className="block flex-1"
           onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
         >
-          {product.brand ? (
-            <p className="truncate text-[10px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
-              {product.brand}
-            </p>
-          ) : (
-            <span className="block h-[13px]" aria-hidden />
-          )}
+          <div className="flex items-center gap-1.5">
+            {product.brand ? (
+              <p className="truncate text-[10px] uppercase tracking-[0.12em] text-(--color-fg-dim)">
+                {product.brand}
+              </p>
+            ) : (
+              <span className="block h-[13px]" aria-hidden />
+            )}
+            {scoutVerified ? (
+              <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700">
+                Verified
+              </span>
+            ) : null}
+          </div>
           <h3 className="line-clamp-2 mt-0.5 text-[13.5px] font-medium leading-snug text-(--color-fg) group-hover:underline group-hover:underline-offset-2">
             {displayName}
           </h3>
@@ -149,6 +162,11 @@ export const ProductCard = memo(function ProductCard({
             <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">
               {chipLabels.slice(0, 2).join(" · ")}
               {chipLabels.length > 2 ? ` · +${chipLabels.length - 2}` : ""}
+            </p>
+          ) : null}
+          {variantCount > 1 ? (
+            <p className="mt-1 text-[10.5px] text-(--color-fg-muted)">
+              +{variantCount - 1} more variant{variantCount - 1 === 1 ? "" : "s"}
             </p>
           ) : null}
           {aiWarning ? (
