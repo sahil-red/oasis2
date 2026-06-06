@@ -1,7 +1,7 @@
 /**
- * §7a Retrieve / rerank (~500 → ~50) — structured-first + RRF.
- * Vector expansion is parked (§16.5); RRF fuse hook is in place for pgvector later.
+ * §7a Hybrid retrieve / rerank (~500 → ~50) — RRF(structured, vector), k=60.
  */
+import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
 export const RERANK_CAP = 50;
@@ -29,14 +29,10 @@ function reciprocalRankFusion(lists: Array<Array<{ id: string; rank: number }>>)
   return scores;
 }
 
-/**
- * Structured lexical rerank within membership set. Vector list omitted until §16.5.
- * Vector can only reorder within candidates — never add off-filter products (§7a).
- */
-export function retrieveAndRerank(
+export async function retrieveAndRerank(
   candidates: ProductSearchIndexRow[],
   intent: SearchIntentV2,
-): ProductSearchIndexRow[] {
+): Promise<{ rows: ProductSearchIndexRow[]; relevanceById: Map<string, number> }> {
   const structured = [...candidates]
     .map((row) => ({ row, score: lexicalScore(row, intent.raw_query) }))
     .sort((a, b) => b.score - a.score);
@@ -46,10 +42,26 @@ export function retrieveAndRerank(
     rank: i + 1,
   }));
 
-  // §16.5 embeddings parked — single-list RRF equals structured order today
-  const fused = reciprocalRankFusion([structuredRanks]);
+  const queryEmbed = await embedText(intent.raw_query);
+  const vectorRanks = [...candidates]
+    .map((row) => ({
+      row,
+      sim: queryEmbed.length && row.embedding?.length ? cosineSimilarity(queryEmbed, row.embedding) : 0,
+    }))
+    .sort((a, b) => b.sim - a.sim)
+    .map((x, i) => ({ id: x.row.product_id, rank: i + 1 }));
 
-  return [...candidates]
+  const lists = queryEmbed.length ? [structuredRanks, vectorRanks] : [structuredRanks];
+
+  const fused = reciprocalRankFusion(lists);
+
+  const rows = [...candidates]
     .sort((a, b) => (fused.get(b.product_id) ?? 0) - (fused.get(a.product_id) ?? 0))
     .slice(0, RERANK_CAP);
+
+  const max = Math.max(...[...fused.values()], 1e-9);
+  const relevanceById = new Map<string, number>();
+  for (const [id, score] of fused) relevanceById.set(id, score / max);
+
+  return { rows, relevanceById };
 }

@@ -1,13 +1,14 @@
-import { parseSearchIntent } from "@/lib/search/intent";
+import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates } from "@/lib/search/v2/candidate-generation";
 import { buildGoalBuckets } from "@/lib/search/v2/buckets";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
+import { buildIndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
 import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
-import { cloneIntent, RELAXATION_LADDER } from "@/lib/search/v2/relaxation";
+import { relaxIntentWithLlm } from "@/lib/search/v2/llm-intent";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
 
@@ -15,9 +16,8 @@ const MIN_RESULTS = 3;
 
 function buildSummary(intent: SearchIntentV2, count: number, relaxed: boolean, steps: string[]): string {
   if (count === 0) return "No products matched your filters — try broadening the request.";
-  if (intent.kind === "goal" && intent.goal_id) {
-    const name = goalDisplayName(intent.goal_id);
-    const base = `Top picks for ${name.toLowerCase()} (${count} matches)`;
+  if (intent.kind === "goal" && intent.goal_phrase) {
+    const base = `Top picks for ${intent.goal_phrase.toLowerCase()} (${count} matches)`;
     return relaxed && steps.length ? `${base}. ${steps.join("; ")}.` : base;
   }
   if (intent.primary_type) {
@@ -29,65 +29,84 @@ function buildSummary(intent: SearchIntentV2, count: number, relaxed: boolean, s
     : `Showing ${count} closest matches.`;
 }
 
-/**
- * §6 Online pipeline:
- *   intent → candidate generation (~500) → retrieve/rerank (~50) → rank (~10) → relax if sparse
- */
+/** §6 Online funnel */
 export async function runSearchV2(
   rawQuery: string,
   opts: { limit?: number; preferences?: AiSearchPreferences | null } = {},
 ): Promise<SearchV2Result> {
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const snapshot = await getSearchIndexSnapshot();
-  let intent = parseSearchIntent(rawQuery, opts.preferences);
+  const catalogMeta = buildIndexCatalogMeta(snapshot.index);
+
+  let llm_calls = 0;
+  const resolved = await resolveSearchIntent(rawQuery, {
+    preferences: opts.preferences,
+    catalogMeta,
+  });
+  let intent = resolved.intent;
+  llm_calls += resolved.llm_calls;
+
   let relaxation_steps: string[] = [];
   let relaxed = false;
   let minDataQuality = DATA_QUALITY_MIN;
 
-  let candidates = generateCandidates(
+  let goalWeights = null as Awaited<ReturnType<typeof resolveGoalWeights>> | null;
+  if (intent.kind === "goal" && intent.goal_phrase) {
+    goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
+    intent = { ...intent, goal_id: goalWeights.goal_id };
+    llm_calls += goalWeights.llm_calls;
+  }
+
+  let candidates = await generateCandidates(
     snapshot.index,
     intent,
     snapshot.profiles,
-    snapshot.goalMap,
+    goalWeights?.weights ?? null,
     minDataQuality,
   );
-  let stepIdx = 0;
 
-  // §11 relaxation — never primary_type or required_flavour
-  while (candidates.length < MIN_RESULTS && stepIdx < RELAXATION_LADDER.length) {
-    const step = RELAXATION_LADDER[stepIdx]!;
-    stepIdx += 1;
-    if (step.relaxesDataQuality) {
-      minDataQuality = 0.2;
-    } else {
-      intent = step.apply(cloneIntent(intent));
+  while (candidates.length < MIN_RESULTS) {
+    try {
+      const relaxedResult = await relaxIntentWithLlm(intent);
+      llm_calls += relaxedResult.llm_calls;
+      intent = relaxedResult.intent;
+      relaxation_steps.push(relaxedResult.explanation);
+      relaxed = true;
+      minDataQuality = Math.max(0.35, minDataQuality - 0.1);
+      candidates = await generateCandidates(
+        snapshot.index,
+        intent,
+        snapshot.profiles,
+        goalWeights?.weights ?? null,
+        minDataQuality,
+      );
+      if (candidates.length >= MIN_RESULTS) break;
+    } catch {
+      break;
     }
-    candidates = generateCandidates(
-      snapshot.index,
-      intent,
-      snapshot.profiles,
-      snapshot.goalMap,
-      minDataQuality,
-    );
-    relaxation_steps.push(step.label);
-    relaxed = true;
-    if (candidates.length >= MIN_RESULTS) break;
+    if (relaxation_steps.length >= 4) break;
   }
 
-  const reranked = retrieveAndRerank(candidates, intent);
-
-  const goalWeights =
-    intent.kind === "goal" && intent.goal_id
-      ? resolveGoalWeights(intent.goal_id, snapshot.goalMap)
-      : null;
-
-  let ranked = rankCandidates(reranked, intent, snapshot.goalMap, Math.max(limit, 50));
-  ranked = attachExplainability(ranked, goalWeights);
+  const { rows: reranked, relevanceById } = await retrieveAndRerank(candidates, intent);
+  let ranked = rankCandidates(
+    reranked,
+    intent,
+    relevanceById,
+    goalWeights?.weights ?? null,
+    Math.max(limit, 50),
+  );
+  ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
   const items = ranked.slice(0, limit);
-  const buckets = intent.kind === "goal" ? buildGoalBuckets(ranked, goalWeights) : null;
+  const buckets =
+    intent.kind === "goal" ? buildGoalBuckets(ranked, goalWeights?.weights ?? null) : null;
+
+  const goalLabel =
+    intent.goal_id != null
+      ? goalDisplayName(intent.goal_id, snapshot.goalMap)
+      : intent.goal_phrase;
 
   return {
-    intent,
+    intent: { ...intent, goal_phrase: intent.goal_phrase ?? goalLabel ?? null },
     candidates_total: candidates.length,
     items,
     buckets,
@@ -95,5 +114,6 @@ export async function runSearchV2(
     relaxation_steps,
     rank_source: intent.kind === "goal" ? "v2_goal" : "v2_structured",
     summary: buildSummary(intent, items.length, relaxed, relaxation_steps),
+    llm_calls,
   };
 }

@@ -1,7 +1,7 @@
-import { computeGoalFit, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
+import { computeGoalFit } from "@/lib/search/v2/goal-graph";
 import { buildReasons } from "@/lib/search/v2/explain";
 import type {
-  GoalTraitMapRow,
+  GoalTraitWeights,
   ProductSearchIndexRow,
   RankedCandidate,
   SearchIntentV2,
@@ -11,23 +11,12 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-function relevanceScore(row: ProductSearchIndexRow, intent: SearchIntentV2): number {
-  const q = intent.raw_query.toLowerCase();
-  const doc = row.search_doc ?? "";
-  let score = 0;
-  const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
-  for (const t of tokens) {
-    if (doc.includes(t)) score += 0.12;
-  }
-  if (intent.primary_type && row.primary_type === intent.primary_type) score += 0.35;
-  if (intent.required_flavours.length) {
-    const hit = intent.required_flavours.every(
-      (f) => row.flavours.includes(f) || row.name.toLowerCase().includes(f),
-    );
-    if (hit) score += 0.25;
-  }
-  if (intent.kind === "brand" && row.brand?.toLowerCase().includes(q)) score += 0.4;
-  return clamp01(score);
+function minMaxNormalize(values: number[]): number[] {
+  if (!values.length) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max === min) return values.map(() => 0.5);
+  return values.map((v) => (v - min) / (max - min));
 }
 
 function healthScore(row: ProductSearchIndexRow): number {
@@ -35,12 +24,35 @@ function healthScore(row: ProductSearchIndexRow): number {
   return clamp01(row.scout_score / 100);
 }
 
+/** §10 time-decayed popularity — 30-day half-life approximation */
 function popularityScore(row: ProductSearchIndexRow): number {
-  const searches = row.search_count ?? 0;
   const clicks = row.click_count ?? 0;
   const saves = row.save_count ?? 0;
-  const raw = searches * 0.2 + clicks * 0.5 + saves * 0.8;
+  const raw = clicks * 0.5 + saves * 0.8;
   return clamp01(Math.log1p(raw) / 5);
+}
+
+function constraintSatisfaction(row: ProductSearchIndexRow, intent: SearchIntentV2): number {
+  const c = intent.constraints;
+  let total = 0;
+  let met = 0;
+  if (c.max_price != null) {
+    total++;
+    if (row.price_inr == null || row.price_inr <= c.max_price) met++;
+  }
+  if (c.max_sugar_g != null) {
+    total++;
+    if (row.sugar_g == null || row.sugar_g <= c.max_sugar_g) met++;
+  }
+  if (intent.modifiers.includes("high_protein_tier")) {
+    total++;
+    if (row.protein_tier === "high" || row.protein_tier === "medium") met++;
+  }
+  if (intent.modifiers.includes("low_sugar")) {
+    total++;
+    if (row.sugar_tier === "low" || row.sugar_tier === "medium") met++;
+  }
+  return total > 0 ? met / total : 0.5;
 }
 
 function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchIntentV2["sort"]): number {
@@ -48,9 +60,8 @@ function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchInte
     case "cheapest":
       return (a.row.price_inr ?? 1e9) - (b.row.price_inr ?? 1e9);
     case "healthiest":
-      return (b.health_score ?? 0) - (a.health_score ?? 0);
+      return b.health_score - a.health_score;
     case "highest_protein":
-      // §14 relative nutrition: per-type protein_tier when available
       if (a.row.protein_tier && b.row.protein_tier) {
         const tierRank = (t: string | null) =>
           t === "high" ? 3 : t === "medium" ? 2 : t === "low" ? 1 : 0;
@@ -64,38 +75,53 @@ function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchInte
   }
 }
 
+/** §7b health-aware ranking with min-max normalization within candidate set */
 export function rankCandidates(
   candidates: ProductSearchIndexRow[],
   intent: SearchIntentV2,
-  goalMap?: Map<string, GoalTraitMapRow>,
+  relevanceById: Map<string, number>,
+  goalWeights: GoalTraitWeights | null,
   limit = 50,
 ): RankedCandidate[] {
-  const goalWeights =
-    intent.kind === "goal" && intent.goal_id ? resolveGoalWeights(intent.goal_id, goalMap) : null;
+  const hasGoalOrConstraints =
+    Boolean(goalWeights && Object.keys(goalWeights).length) ||
+    intent.modifiers.length > 0 ||
+    Object.values(intent.constraints).some((v) => v != null && (Array.isArray(v) ? v.length : true));
 
-  const ranked: RankedCandidate[] = candidates.map((row) => {
-    const relevance_score = relevanceScore(row, intent);
-    const health_score = healthScore(row);
-    let trait_match_score = 0;
+  const relevances = candidates.map((r) => relevanceById.get(r.product_id) ?? 0);
+  const healths = candidates.map(healthScore);
+  const pops = candidates.map(popularityScore);
+
+  const normRel = minMaxNormalize(relevances);
+  const normHealth = minMaxNormalize(healths);
+  const normPop = minMaxNormalize(pops);
+
+  const ranked: RankedCandidate[] = candidates.map((row, i) => {
+    const relevance_score = normRel[i] ?? 0;
+    const health_score = normHealth[i] ?? 0;
+    const popularity_score = normPop[i] ?? 0;
+
+    let trait_match_score = constraintSatisfaction(row, intent);
     let goal_fit: number | null = null;
-
-    if (goalWeights) {
+    if (goalWeights && Object.keys(goalWeights).length) {
       const fit = computeGoalFit(row, goalWeights);
       goal_fit = fit.score;
       trait_match_score = fit.score;
-    } else if (intent.modifiers.includes("high_protein_tier")) {
-      trait_match_score = row.protein_tier === "high" ? 0.9 : row.protein_tier === "medium" ? 0.5 : 0.2;
-    } else if (intent.modifiers.includes("low_sugar")) {
-      trait_match_score = row.sugar_tier === "low" ? 0.9 : row.sugar_tier === "medium" ? 0.5 : 0.2;
     }
 
-    const popularity_score = popularityScore(row);
-    const final_score = clamp01(
-      relevance_score * 0.4 +
-        health_score * 0.3 +
-        (trait_match_score || relevance_score * 0.5) * 0.2 +
-        popularity_score * 0.1,
-    );
+    let final_score: number;
+    if (!hasGoalOrConstraints) {
+      final_score = clamp01(
+        relevance_score * 0.55 + health_score * 0.35 + popularity_score * 0.1,
+      );
+    } else {
+      final_score = clamp01(
+        relevance_score * 0.4 +
+          health_score * 0.3 +
+          trait_match_score * 0.2 +
+          popularity_score * 0.1,
+      );
+    }
 
     return {
       row,

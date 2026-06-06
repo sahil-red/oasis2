@@ -1,38 +1,36 @@
 import { ingredientPresent } from "@/lib/search/ai-retrieval";
-import { typeMatchTokens } from "@/lib/search/intent";
+import { cosineSimilarity, embedText, isEmbeddingConfigured } from "@/lib/search/v2/embeddings";
 import { selectCategoriesForGoal } from "@/lib/search/v2/category-profiles";
-import { resolveGoalWeights } from "@/lib/search/v2/goal-graph";
+import { lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
-import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
+import { DATA_QUALITY_MIN, TYPE_EMBEDDING_THRESHOLD } from "@/lib/search/v2/types";
+import type { GoalTraitWeights } from "@/lib/search/v2/types";
 
-/** §6 funnel: ~23k → ~500 candidates */
 export const CANDIDATE_CAP = 500;
 
-/** §6 membership: type ∈ {type,synonyms} using indexed primary_type + type_aliases */
-function rowMatchesType(row: ProductSearchIndexRow, wanted: Set<string>): boolean {
-  if (!wanted.size) return true;
+async function rowMatchesType(
+  row: ProductSearchIndexRow,
+  intent: SearchIntentV2,
+  queryTypeEmbed: number[] | null,
+): Promise<boolean> {
+  const wanted = intent.primary_type?.toLowerCase();
+  if (!wanted) return true;
 
-  const rowPrimary = (row.primary_type ?? "").toLowerCase();
-  if (rowPrimary && wanted.has(rowPrimary)) return true;
+  if (row.primary_type?.toLowerCase() === wanted) return true;
 
-  for (const alias of row.type_aliases ?? []) {
-    if (wanted.has(alias.toLowerCase())) return true;
+  if (queryTypeEmbed?.length && row.type_embedding?.length) {
+    const sim = cosineSimilarity(queryTypeEmbed, row.type_embedding);
+    if (sim >= TYPE_EMBEDDING_THRESHOLD) return true;
   }
 
-  // Un-enriched rows: word-boundary match on name only (not search_doc / ingredients)
-  if (!rowPrimary) {
-    const name = row.name.toLowerCase();
-    for (const w of wanted) {
-      if (new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(name)) {
-        return true;
-      }
-    }
+  // §9: vector down → lexical over enriched search_doc / catalog fields
+  if (!isEmbeddingConfigured() || !row.type_embedding?.length) {
+    return lexicalTypeMatch(row, wanted);
   }
 
   return false;
 }
 
-/** §6 flavours ⊇ required */
 function rowMatchesFlavours(row: ProductSearchIndexRow, required: string[]): boolean {
   if (!required.length) return true;
   const flavours = row.flavours.map((f) => f.toLowerCase());
@@ -55,7 +53,7 @@ function passesAllergens(row: ProductSearchIndexRow, excluded: string[]): boolea
   for (const a of excluded) {
     if (allergens.includes(a.toLowerCase())) return false;
   }
-  return true;
+  return false;
 }
 
 function passesAvoidIngredients(row: ProductSearchIndexRow, avoid: string[]): boolean {
@@ -70,12 +68,9 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   if (c.max_sugar_g != null && row.sugar_g != null && row.sugar_g > c.max_sugar_g) return false;
   if (c.max_fat_g != null && row.fat_g != null && row.fat_g > c.max_fat_g) return false;
   if (c.min_protein_g != null && row.protein_g != null && row.protein_g < c.min_protein_g) return false;
-
-  // §14 relative nutrition tiers
   if (intent.modifiers.includes("high_protein_tier") && row.protein_tier === "low") return false;
   if (intent.modifiers.includes("low_sugar") && row.sugar_tier === "high") return false;
   if (intent.modifiers.includes("no_added_sugar") && row.has_added_sugar === true) return false;
-
   return true;
 }
 
@@ -83,7 +78,6 @@ function passesDataQuality(row: ProductSearchIndexRow, minQuality: number): bool
   return row.data_quality_score >= minQuality;
 }
 
-/** §8 one representative per canonical_product_id (best data_quality) */
 function dedupeCanonical(rows: ProductSearchIndexRow[]): ProductSearchIndexRow[] {
   const byCanon = new Map<string, ProductSearchIndexRow>();
   for (const row of rows) {
@@ -96,49 +90,53 @@ function dedupeCanonical(rows: ProductSearchIndexRow[]): ProductSearchIndexRow[]
   return [...byCanon.values()];
 }
 
-/**
- * §6 Candidate generation — membership filters only. Scores decide order later.
- * Goal route: §6a category_trait_profile overlap → hard filters → candidates.
- */
-export function generateCandidates(
+function lexicalScore(row: ProductSearchIndexRow, query: string): number {
+  const q = query.toLowerCase();
+  const doc = row.search_doc ?? "";
+  if (!doc) return 0;
+  let score = 0;
+  for (const token of q.split(/\s+/).filter((t) => t.length >= 3)) {
+    if (doc.includes(token)) score += 1;
+  }
+  if (row.brand?.toLowerCase() && q.includes(row.brand.toLowerCase())) score += 3;
+  return score;
+}
+
+/** §6 membership filters over LLM-enriched fields */
+export async function generateCandidates(
   index: ProductSearchIndexRow[],
   intent: SearchIntentV2,
   profiles: CategoryTraitProfileRow[],
-  goalMap?: Map<string, import("@/lib/search/v2/types").GoalTraitMapRow>,
+  goalWeights: GoalTraitWeights | null,
   minDataQuality = DATA_QUALITY_MIN,
-): ProductSearchIndexRow[] {
+): Promise<ProductSearchIndexRow[]> {
   let pool = index.filter((row) => passesDataQuality(row, minDataQuality));
 
-  // §6a goal candidate generation
-  if (intent.kind === "goal" && intent.goal_id) {
-    const weights = resolveGoalWeights(intent.goal_id, goalMap);
-    if (weights) {
-      const cats = selectCategoriesForGoal(profiles, weights);
-      const keys = new Set(cats.map((c) => c.category_key));
-      if (keys.size > 0) {
-        pool = pool.filter((row) => {
-          const cat = (row.category ?? "").trim().toLowerCase();
-          const sub = (row.subcategory ?? "").trim().toLowerCase();
-          const key = sub ? `${cat}::${sub}` : cat || "unknown";
-          if (keys.has(key)) return true;
-          return [...keys].some((k) => k === cat || k.startsWith(`${cat}::`));
-        });
-      }
+  if (intent.kind === "goal" && goalWeights) {
+    const cats = await selectCategoriesForGoal(profiles, goalWeights);
+    const keys = new Set(cats.map((c) => c.category_key));
+    if (keys.size > 0) {
+      pool = pool.filter((row) => {
+        const cat = (row.category ?? "").trim().toLowerCase();
+        const sub = (row.subcategory ?? "").trim().toLowerCase();
+        const key = sub ? `${cat}::${sub}` : cat || "unknown";
+        if (keys.has(key)) return true;
+        return [...keys].some((k) => k === cat || k.startsWith(`${cat}::`));
+      });
     }
   }
 
-  const typeTokens = typeMatchTokens(intent);
-  const wantedTypes = new Set(typeTokens.map((t) => t.toLowerCase()));
+  const queryTypeEmbed = intent.primary_type ? await embedText(intent.primary_type) : null;
 
-  if (intent.kind === "brand") {
-    const brandQ = intent.raw_query.toLowerCase();
-    pool = pool.filter(
-      (row) =>
-        (row.brand ?? "").toLowerCase().includes(brandQ) ||
-        (row.search_doc ?? "").includes(brandQ),
-    );
-  } else if (wantedTypes.size > 0) {
-    pool = pool.filter((row) => rowMatchesType(row, wantedTypes));
+  if (intent.kind === "brand" && intent.brand) {
+    const brandQ = intent.brand.toLowerCase();
+    pool = pool.filter((row) => (row.brand ?? "").toLowerCase().includes(brandQ));
+  } else if (intent.primary_type) {
+    const matched: ProductSearchIndexRow[] = [];
+    for (const row of pool) {
+      if (await rowMatchesType(row, intent, queryTypeEmbed)) matched.push(row);
+    }
+    pool = matched;
   }
 
   pool = pool.filter(
@@ -151,5 +149,12 @@ export function generateCandidates(
   );
 
   pool = dedupeCanonical(pool);
-  return pool.slice(0, CANDIDATE_CAP);
+
+  const scored = pool
+    .map((row) => ({ row, lex: lexicalScore(row, intent.raw_query) }))
+    .sort((a, b) => b.lex - a.lex)
+    .slice(0, CANDIDATE_CAP)
+    .map((x) => x.row);
+
+  return scored;
 }

@@ -1,5 +1,6 @@
+import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, TraitId, TraitVector } from "@/lib/search/v2/types";
-import { TRAIT_IDS } from "@/lib/search/v2/types";
+import { TRAIT_IDS, CATEGORY_CENTROID_THRESHOLD, CATEGORY_CENTROID_TOP_K } from "@/lib/search/v2/types";
 
 function categoryKey(category: string | null, subcategory: string | null): string {
   const c = (category ?? "").trim().toLowerCase();
@@ -27,7 +28,17 @@ function meanTraits(rows: ProductSearchIndexRow[]): TraitVector {
   return out;
 }
 
-export function buildCategoryTraitProfiles(index: ProductSearchIndexRow[]): CategoryTraitProfileRow[] {
+function traitVectorToText(weights: TraitVector): string {
+  return Object.entries(weights)
+    .filter(([, v]) => v != null && v > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([k, v]) => `${k}:${(v ?? 0).toFixed(2)}`)
+    .join(" ");
+}
+
+export async function buildCategoryTraitProfiles(
+  index: ProductSearchIndexRow[],
+): Promise<CategoryTraitProfileRow[]> {
   const groups = new Map<string, ProductSearchIndexRow[]>();
   for (const row of index) {
     const key = categoryKey(row.category, row.subcategory);
@@ -36,41 +47,41 @@ export function buildCategoryTraitProfiles(index: ProductSearchIndexRow[]): Cate
     groups.set(key, list);
   }
 
-  return [...groups.entries()].map(([category_key, rows]) => ({
-    category_key,
-    category: rows[0]?.category ?? null,
-    subcategory: rows[0]?.subcategory ?? null,
-    trait_means: meanTraits(rows),
-    product_count: rows.length,
-  }));
-}
-
-/** Weighted dot product between goal weights and category trait means. */
-export function categoryGoalOverlap(
-  profile: CategoryTraitProfileRow,
-  goalWeights: TraitVector,
-): number {
-  let sumW = 0;
-  let sum = 0;
-  for (const [trait, weight] of Object.entries(goalWeights)) {
-    if (!weight || weight <= 0) continue;
-    const mean = profile.trait_means[trait as TraitId];
-    if (mean == null) continue;
-    sumW += weight;
-    sum += weight * mean;
+  const profiles: CategoryTraitProfileRow[] = [];
+  for (const [category_key, rows] of groups) {
+    const trait_means = meanTraits(rows);
+    const centroidText = traitVectorToText(trait_means);
+    const centroidVec = centroidText ? await embedText(centroidText) : [];
+    profiles.push({
+      category_key,
+      category: rows[0]?.category ?? null,
+      subcategory: rows[0]?.subcategory ?? null,
+      trait_means,
+      trait_centroid: centroidVec.length ? centroidVec : null,
+      product_count: rows.length,
+    });
   }
-  return sumW > 0 ? sum / sumW : 0;
+  return profiles;
 }
 
-export function selectCategoriesForGoal(
+/** §6a goal candidate gen — cosine(goal_weights, category_trait_centroid) ≥ 0.5, top-K=8 */
+export async function selectCategoriesForGoal(
   profiles: CategoryTraitProfileRow[],
   goalWeights: TraitVector,
-  topK = 8,
-): CategoryTraitProfileRow[] {
+): Promise<CategoryTraitProfileRow[]> {
+  const goalText = traitVectorToText(goalWeights);
+  const goalEmbed = goalText ? await embedText(goalText) : [];
+  if (!goalEmbed.length) return profiles.slice(0, CATEGORY_CENTROID_TOP_K);
+
   return [...profiles]
-    .map((p) => ({ profile: p, overlap: categoryGoalOverlap(p, goalWeights) }))
-    .filter((x) => x.overlap > 0.15 && x.profile.product_count >= 3)
+    .map((p) => ({
+      profile: p,
+      overlap: p.trait_centroid?.length
+        ? cosineSimilarity(goalEmbed, p.trait_centroid)
+        : 0,
+    }))
+    .filter((x) => x.overlap >= CATEGORY_CENTROID_THRESHOLD && x.profile.product_count >= 3)
     .sort((a, b) => b.overlap - a.overlap)
-    .slice(0, topK)
+    .slice(0, CATEGORY_CENTROID_TOP_K)
     .map((x) => x.profile);
 }

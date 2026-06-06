@@ -1,15 +1,23 @@
+/**
+ * §3b Nutrition Graph — embedding-keyed, LLM-composed goals.
+ */
+import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
+import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
+import { validateTraitWeights } from "@/lib/search/v2/llm-intent";
+import { effectiveTraitScore } from "@/lib/search/v2/traits";
 import type {
   GoalTraitMapRow,
   GoalTraitWeights,
   ProductSearchIndexRow,
   TraitId,
 } from "@/lib/search/v2/types";
-import { effectiveTraitScore } from "@/lib/search/v2/traits";
+import { GOAL_EMBEDDING_THRESHOLD, TRAIT_IDS } from "@/lib/search/v2/types";
 
-/** Seed goals — mirrors migration 0013_search_v2.sql */
-export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
+/** Bootstrap seeds only (~10 goals) — §3b */
+export const SEED_GOAL_TRAIT_MAP: Omit<GoalTraitMapRow, "goal_embedding">[] = [
   {
     goal_id: "running",
+    goal_phrase: "running endurance",
     display_name: "Running / endurance",
     trait_weights: {
       hydration: 0.35,
@@ -20,9 +28,11 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "pcos",
+    goal_phrase: "PCOS friendly",
     display_name: "PCOS-friendly",
     trait_weights: {
       fiber_density: 0.3,
@@ -33,9 +43,11 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "diabetes",
+    goal_phrase: "diabetes friendly",
     display_name: "Diabetes-friendly",
     trait_weights: {
       fiber_density: 0.3,
@@ -46,10 +58,12 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "muscle_gain",
-    display_name: "Muscle gain / bulking",
+    goal_phrase: "muscle gain bulking",
+    display_name: "Muscle gain",
     trait_weights: {
       protein_density: 0.45,
       slow_energy: 0.2,
@@ -59,9 +73,11 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "kids_tiffin",
+    goal_phrase: "kids tiffin school lunch",
     display_name: "Kids tiffin",
     trait_weights: {
       kid_friendly: 0.3,
@@ -72,9 +88,11 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "weight_loss",
+    goal_phrase: "weight loss fat loss",
     display_name: "Weight loss",
     trait_weights: {
       low_calorie_density: 0.3,
@@ -85,9 +103,11 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
   {
     goal_id: "gym",
+    goal_phrase: "gym fitness workout",
     display_name: "Gym / fitness",
     trait_weights: {
       protein_density: 0.4,
@@ -98,34 +118,53 @@ export const SEED_GOAL_TRAIT_MAP: GoalTraitMapRow[] = [
     },
     source: "seed",
     confidence: 1,
+    support_count: 0,
   },
 ];
 
-/** Bootstrap detect — only seeded goal_trait_map ids (§3b). Novel goals → LLM decomposition (§9). */
-const GOAL_DETECT: Array<{ goal_id: string; re: RegExp; priority: number }> = [
-  { goal_id: "running", re: /\b(running|runner|marathon|endurance|jogging|cardio)\b/i, priority: 90 },
-  { goal_id: "pcos", re: /\bpcos\b/i, priority: 95 },
-  { goal_id: "diabetes", re: /\b(diabetic|diabetes)\b/i, priority: 95 },
-  { goal_id: "muscle_gain", re: /\b(muscle gain|bulking|mass gain|bodybuilding)\b/i, priority: 85 },
-  { goal_id: "kids_tiffin", re: /\b(kids? tiffin|school lunch|tiffin|not junk|isn't junk)\b/i, priority: 88 },
-  { goal_id: "weight_loss", re: /\b(weight loss|fat loss|slimming|lose weight)\b/i, priority: 87 },
-  { goal_id: "gym", re: /\b(gym|workout|pre[\s-]?workout|post[\s-]?workout|fitness)\b/i, priority: 80 },
-];
+const GOAL_DECOMPOSE_SYSTEM = `Decompose a shopper goal into trait weights over this fixed vocabulary only:
+${TRAIT_IDS.join(", ")}
+Return JSON: {"weights":{trait:number},"reasons":{trait:string}}
+Unknown traits dropped. Renormalize weights to sum 1.`;
 
-export function detectGoalId(query: string): string | null {
-  const matches = GOAL_DETECT.filter((g) => g.re.test(query)).sort((a, b) => b.priority - a.priority);
-  return matches[0]?.goal_id ?? null;
-}
+export async function resolveGoalWeights(
+  goalPhrase: string,
+  goalMap: Map<string, GoalTraitMapRow>,
+): Promise<{ weights: GoalTraitWeights; goal_id: string | null; llm_calls: number }> {
+  const phrase = goalPhrase.trim();
+  if (!phrase) return { weights: {}, goal_id: null, llm_calls: 0 };
 
-export function resolveGoalWeights(
-  goalId: string | null,
-  customMap?: Map<string, GoalTraitMapRow>,
-): GoalTraitWeights | null {
-  if (!goalId) return null;
-  const fromDb = customMap?.get(goalId);
-  if (fromDb) return fromDb.trait_weights;
-  const seed = SEED_GOAL_TRAIT_MAP.find((g) => g.goal_id === goalId);
-  return seed?.trait_weights ?? null;
+  const queryEmbed = await embedText(phrase);
+  if (queryEmbed.length) {
+    let best: GoalTraitMapRow | null = null;
+    let bestSim = 0;
+    for (const row of goalMap.values()) {
+      if (!row.goal_embedding?.length) continue;
+      const sim = cosineSimilarity(queryEmbed, row.goal_embedding);
+      if (sim >= GOAL_EMBEDDING_THRESHOLD && sim > bestSim) {
+        best = row;
+        bestSim = sim;
+      }
+    }
+    if (best) {
+      return { weights: best.trait_weights, goal_id: best.goal_id, llm_calls: 0 };
+    }
+  }
+
+  try {
+    const { content } = await deepseekChat({
+      usageKind: "search",
+      jsonObject: true,
+      maxTokens: 600,
+      system: GOAL_DECOMPOSE_SYSTEM,
+      user: `Goal: ${phrase}`,
+    });
+    const parsed = extractJsonObject(content) as { weights?: Record<string, number> };
+    const weights = validateTraitWeights(parsed.weights ?? {});
+    return { weights, goal_id: null, llm_calls: 1 };
+  } catch {
+    return { weights: {}, goal_id: null, llm_calls: 0 };
+  }
 }
 
 export function computeGoalFit(
@@ -147,12 +186,9 @@ export function computeGoalFit(
     contributions.push({ trait, weight, effective });
   }
 
-  return {
-    score: sumW > 0 ? sum / sumW : 0,
-    contributions,
-  };
+  return { score: sumW > 0 ? sum / sumW : 0, contributions };
 }
 
-export function goalDisplayName(goalId: string, customMap?: Map<string, GoalTraitMapRow>): string {
-  return customMap?.get(goalId)?.display_name ?? SEED_GOAL_TRAIT_MAP.find((g) => g.goal_id === goalId)?.display_name ?? goalId;
+export function goalDisplayName(goalId: string, goalMap?: Map<string, GoalTraitMapRow>): string {
+  return goalMap?.get(goalId)?.display_name ?? goalId;
 }

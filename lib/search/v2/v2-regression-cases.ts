@@ -1,36 +1,24 @@
-import type { SearchIntentV2 } from "@/lib/search/v2/types";
+import type { NumericExtraction } from "@/lib/search/v2/numeric-constraints";
 
-export const V2_INTENT_CASES: Array<{
+/** Allowed deterministic extraction tests — §0.2 */
+export const NUMERIC_CASES: Array<{
   query: string;
-  check: (intent: SearchIntentV2) => boolean;
+  check: (n: NumericExtraction) => boolean;
 }> = [
   {
-    query: "strawberry smoothie",
-    check: (i) => i.primary_type === "smoothie" && i.required_flavours.includes("strawberry"),
-  },
-  {
-    query: "healthy drinks for running",
-    check: (i) => i.kind === "goal" && i.goal_id === "running",
-  },
-  {
-    query: "amul",
-    check: (i) => i.kind === "brand",
+    query: "biscuits under ₹100",
+    check: (n) => n.max_price === 100 && n.residual_text.includes("biscuit"),
   },
   {
     query: "high protein milk",
-    check: (i) => i.primary_type === "milk" && i.sort === "highest_protein",
+    check: (n) => n.high_protein_tier && n.sort === "highest_protein",
   },
   {
-    query: "peanut butter no palm oil",
-    check: (i) =>
-      i.primary_type === "peanut butter" && i.constraints.avoid_ingredients.some((a) => a.includes("palm")),
+    query: "low sugar biscuits",
+    check: (n) => n.low_sugar_tier && n.max_sugar_g === 10,
   },
   {
-    query: "doodh",
-    check: (i) => i.primary_type === "milk",
-  },
-  {
-    query: "biscuits for diabetics",
-    check: (i) => i.primary_type === "biscuit",
+    query: "zero sugar drinks",
+    check: (n) => n.max_sugar_g === 1 && n.no_added_sugar,
   },
 ];

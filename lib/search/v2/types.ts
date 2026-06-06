@@ -1,4 +1,4 @@
-/** Search V2 types — see SEARCH_V2_PLAN.md */
+/** Search V2 types — SEARCH_V2_PLAN.md (LLM-first) */
 
 export const TRAIT_IDS = [
   "protein_density",
@@ -30,10 +30,13 @@ export const TRAIT_IDS = [
 export type TraitId = (typeof TRAIT_IDS)[number];
 
 export type TraitVector = Partial<Record<TraitId, number>>;
-export type TraitSourceMap = Partial<Record<TraitId, "derived" | "llm">>;
+export type TraitSourceMap = Partial<Record<TraitId, "math" | "llm">>;
 export type TraitConfidenceMap = Partial<Record<TraitId, number>>;
+export type TraitReasonMap = Partial<Record<TraitId, string>>;
 
 export type NutritionTier = "low" | "medium" | "high" | "unknown";
+
+export const EMBEDDING_DIM = 384;
 
 export type ProductSearchIndexRow = {
   product_id: string;
@@ -45,7 +48,7 @@ export type ProductSearchIndexRow = {
   subcategory: string | null;
   l3_category: string | null;
   primary_type: string | null;
-  type_aliases: string[];
+  base_name: string | null;
   form: string | null;
   flavours: string[];
   variants: string[];
@@ -69,6 +72,7 @@ export type ProductSearchIndexRow = {
   traits: TraitVector;
   trait_source: TraitSourceMap;
   trait_confidence: TraitConfidenceMap;
+  trait_reasons: TraitReasonMap;
   scout_score: number | null;
   nova_group: number | null;
   data_quality_score: number;
@@ -79,19 +83,24 @@ export type ProductSearchIndexRow = {
   pack_size_unit: string | null;
   use_cases: string[];
   search_doc: string | null;
-  search_count: number;
+  embedding: number[] | null;
+  type_embedding: number[] | null;
   click_count: number;
   save_count: number;
+  last_interaction_at: string | null;
 };
 
 export type GoalTraitWeights = Partial<Record<TraitId, number>>;
 
 export type GoalTraitMapRow = {
   goal_id: string;
+  goal_phrase: string;
   display_name: string;
   trait_weights: GoalTraitWeights;
+  goal_embedding: number[] | null;
   source: string;
   confidence: number;
+  support_count: number;
 };
 
 export type CategoryTraitProfileRow = {
@@ -99,14 +108,22 @@ export type CategoryTraitProfileRow = {
   category: string | null;
   subcategory: string | null;
   trait_means: TraitVector;
+  trait_centroid: number[] | null;
   product_count: number;
 };
 
 export type SearchIntentKind = "directed" | "goal" | "brand" | "ambiguous";
 
+export type ConstraintPriority = {
+  field: string;
+  priority: number;
+};
+
 export type SearchIntentV2 = {
   kind: SearchIntentKind;
+  goal_phrase: string | null;
   goal_id: string | null;
+  brand: string | null;
   primary_type: string | null;
   required_flavours: string[];
   modifiers: string[];
@@ -122,8 +139,10 @@ export type SearchIntentV2 = {
     avoid_ingredients: string[];
     allergens_excluded: string[];
   };
+  constraint_priorities: ConstraintPriority[];
   sort: "best_match" | "cheapest" | "healthiest" | "highest_protein" | "lowest_sugar";
   confidence: number;
+  intent_source: "fast-path" | "llm-groq" | "llm-deepseek" | "cache" | "degraded";
   raw_query: string;
 };
 
@@ -136,7 +155,7 @@ export type RankedCandidate = {
   final_score: number;
   goal_fit: number | null;
   reasons: string[];
-  trait_reasons: Array<{ trait: TraitId; label: string }>;
+  trait_reasons: Array<{ trait: TraitId; label: string; contribution: number }>;
 };
 
 export type RecommendationBucket = {
@@ -155,6 +174,14 @@ export type SearchV2Result = {
   relaxation_steps: string[];
   rank_source: "v2_structured" | "v2_goal";
   summary: string;
+  llm_calls: number;
 };
 
-export const DATA_QUALITY_MIN = 0.35;
+/** §5 default gate — tuned by eval */
+export const DATA_QUALITY_MIN = 0.5;
+
+export const TYPE_EMBEDDING_THRESHOLD = 0.85;
+export const GOAL_EMBEDDING_THRESHOLD = 0.92;
+export const INTENT_CACHE_THRESHOLD = 0.97;
+export const CATEGORY_CENTROID_THRESHOLD = 0.5;
+export const CATEGORY_CENTROID_TOP_K = 8;

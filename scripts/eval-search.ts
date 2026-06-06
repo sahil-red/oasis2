@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "dotenv";
-import { parseSearchIntent } from "@/lib/search/intent";
+import { extractNumericConstraints } from "@/lib/search/v2/numeric-constraints";
 import { runSearchV2 } from "@/lib/search/v2/pipeline";
 
 config({ path: ".env.local" });
@@ -42,7 +42,6 @@ async function main() {
   console.log(`[search:eval] running ${cases.length} cases…`);
 
   for (const c of cases) {
-    const intent = parseSearchIntent(c.query);
     const result = await runSearchV2(c.query, { limit: 10 });
     const names = result.items.map((i) => `${i.row.name} ${i.row.brand ?? ""} ${i.row.primary_type ?? ""}`);
 
@@ -79,8 +78,13 @@ async function main() {
       }
     }
 
-    if (c.kind && intent.kind !== c.kind) {
-      console.warn(`[intent] ${c.id} kind ${intent.kind} (expected ${c.kind})`);
+    if (c.kind && result.intent.kind !== c.kind) {
+      console.warn(`[intent] ${c.id} kind ${result.intent.kind} (expected ${c.kind})`);
+    }
+
+    const numeric = extractNumericConstraints(c.query);
+    if (c.query.includes("₹") && numeric.max_price == null) {
+      console.warn(`[numeric] ${c.id} expected price constraint`);
     }
 
     if (result.items.length === 0 && c.must_include_patterns.length) {
