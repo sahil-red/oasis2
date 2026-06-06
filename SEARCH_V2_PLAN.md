@@ -16,12 +16,14 @@
    **(b) scoring math** (weighted sums, normalization, percentiles, RRF). Determinism is **never** used to
    *understand language*.
 
-2. **Zero language rules. This is a hard constraint.** The following are **spec violations**, not allowed
-   optimizations: regex/keyword parsers as the primary path, keyword lexicons, **synonym maps**,
-   **head-noun rules**, **atomic-compound lists**, hand-maintained **category→trait** or **goal→trait** or
-   **type-hierarchy** tables. Wherever earlier drafts implied a lookup table, it is replaced by an LLM call or
-   embedding similarity. The only hand-authored artifact permitted is the **finite trait vocabulary** (§3a)
-   and the eval set (§15).
+2. **No *semantic* language rules.** Banned as spec violations: **synonym maps**, **goal dictionaries**,
+   **head-noun rules**, **atomic-compound lists**, hand-maintained **category→trait / goal→trait /
+   type-hierarchy** tables — anything that encodes *meaning* as a lookup table. Meaning is always LLM or
+   embedding. **Allowed:** simple, deterministic extraction of **explicit numeric/comparator constraints**
+   ("under ₹100" → `max_price=100`; "≤5g sugar"; "≥10g protein") and the canonical magnitude modifiers
+   ("high protein", "low sugar") — these are unambiguous, free, and perfectly reliable, so a regex is the
+   right tool. The hand-authored artifacts permitted are: that numeric-constraint extractor, the **finite
+   trait vocabulary** (§3a), and the eval set (§15).
 
 3. **Filters decide membership; ranking decides order.** A product that violates a stated requirement is
    removed by a filter over an LLM-extracted field — never merely out-ranked, never injected by a vector.
@@ -30,11 +32,20 @@
    goal as a weighting over traits at query time. The flow is always:
    `Goal → Trait weights → Candidate generation → Ranking → Recommendation`.
 
-5. **Cost is controlled by batching + caching + model tiering, not by avoiding the LLM.** DeepSeek v4-flash's
-   context fits many products per enrichment call; query parses are reused via semantic cache; a fast model
-   handles the common case and a strong model the hard case. Cheapness is never a reason to fall back to rules.
+5. **LLM-first for most queries; a deterministic fast-path only for the obvious ones (latency, not cost).**
+   The LLM handles the **majority** of queries — anything with a goal, vague phrasing, flavour/variant nuance,
+   negation, or ambiguity. But a query that resolves cleanly and completely to a **known brand and/or
+   `primary_type` (read from the enriched index — data, not a hand-authored lexicon) plus explicit numeric
+   constraints, with no residual or ambiguous tokens** ("amul milk", "protein bars", "biscuits under ₹100")
+   skips the LLM and goes straight to retrieval. This is to save **latency** on trivially obvious lookups —
+   never an excuse to route ambiguous queries through rules.
 
-6. **Trustworthiness > recall.** Never a confident recommendation from low-confidence data.
+6. **Cost is controlled by batching + caching + model tiering, not by avoiding the LLM.** DeepSeek v4-flash's
+   context fits many products per enrichment call; query parses are reused via semantic cache; a fast model
+   handles the common case and a strong model the hard case. Cheapness is never a reason to use rules for
+   *meaning*.
+
+7. **Trustworthiness > recall.** Never a confident recommendation from low-confidence data.
 
 ```
 DIRECTED  query → LLM Intent → Candidate Gen (filter on enriched fields) → Hybrid retrieve → Health-aware rank
@@ -65,6 +76,14 @@ rules. Three layers:
      │  + L2 embeddings (product, type, category-profile vectors)
      ▼  product_search_index  (single source of truth)  +  goal_trait_map (Nutrition Graph)  +  category_trait_profile
  ONLINE → §6
+```
+
+**What this architecture is, stripped of wording:**
+```
+Offline:   DeepSeek Flash (batched) + Embeddings
+Online:    Query → [fast-path | Intent LLM] → Candidate Generation → Hybrid Retrieval → Trait Ranking → Buckets
+Storage:   Postgres + pgvector
+Reasoning: trait-based Nutrition Graph
 ```
 
 ---
@@ -198,10 +217,15 @@ data_quality_score = 0.40·completeness + 0.30·ocr_confidence + 0.30·consisten
 
 ```
 query
- └▶ (L3) LLM INTENT — fast model (Groq) default → { kind, goal, primary_type, flavours, constraints (each
-      with a priority rank), dietary, sort, intent_confidence }. Semantic cache: embed query; cosine ≥ 0.97
-      to a cached parse (same prefs) ⇒ reuse, 0 calls. Escalate to DeepSeek when intent_confidence < 0.6 OR
-      ≥2 simultaneous constraints. (LLM is the DEFAULT, not a fallback.)
+ └▶ (L3) INTENT
+      ├─ FAST-PATH (no LLM): deterministic numeric-constraint extraction, then test if the residual query is
+      │   fully covered by a known brand and/or `primary_type` (matched against the enriched index — data,
+      │   not a lexicon) with NO leftover/ambiguous tokens, NO goal, NO flavour/negation. If so → straight to
+      │   retrieval. Handles "amul milk", "protein bars", "biscuits under ₹100". (latency win for the obvious)
+      └─ LLM INTENT (the default for everything else) — fast model (Groq) → { kind, goal, primary_type,
+         flavours, constraints (each with a priority rank), dietary, sort, intent_confidence }. Semantic
+         cache: embed query; cosine ≥ 0.97 to a cached parse (same prefs) ⇒ reuse, 0 calls. Escalate to
+         DeepSeek when intent_confidence < 0.6 OR ≥2 simultaneous constraints.
       │  goal/vague → GOAL→TRAITS via Nutrition Graph (§3b)
       ▼
  ① CANDIDATE GENERATION (~23k → ~500) — membership only, over LLM-extracted fields:
@@ -266,7 +290,8 @@ Representative = highest `data_quality_score`. Search shows one; expand on click
 
 ## 9. Model orchestration (LLM-first; cost via batching/caching/tiering)
 - **Offline enrichment & trait inference:** DeepSeek v4-flash, **batched** (20–40 products/call).
-- **Query intent:** Groq fast model **by default**; **escalate to DeepSeek** on `intent_confidence < 0.6` or
+- **Query intent:** deterministic **fast-path** for obvious brand/type(+numeric) lookups (§6); **LLM for
+  everything else** (the majority) — Groq fast model, escalating to DeepSeek on `intent_confidence < 0.6` or
   ≥2 constraints. Reused via semantic cache (cosine ≥ 0.97).
 - **Goal decomposition:** LLM, cached in the Nutrition Graph by goal embedding (cosine ≥ 0.92).
 - **Verification:** Groq, batched ~20, only when precision is at risk; non-blocking.
@@ -358,11 +383,14 @@ from §14 + real `search_history`. No search change ships unless leak-rate = 0.
 ---
 
 ## 17. Non-negotiables
-- **Zero language rules** — no lexicons, synonym maps, head-noun rules, atomic-compound lists, or
-  hand-maintained category/goal/type-hierarchy tables. Understanding is LLM or embedding, always.
-- **Intelligence LLM-generated, serving deterministic** — determinism only for membership filters + math.
-- **LLM is the default path, not a fallback**; heuristics exist only for outage degradation.
-- **Cost via batching + semantic cache + model tiering** — never by avoiding the LLM.
+- **No *semantic* language rules** — no synonym maps, goal dictionaries, head-noun rules, atomic-compound
+  lists, or category/goal/type-hierarchy tables. *Meaning* is always LLM or embedding. Simple deterministic
+  extraction of explicit numeric constraints (price/sugar/protein, "high/low X") IS allowed.
+- **Intelligence LLM-generated, serving deterministic** — determinism only for membership filters, numeric
+  extraction, and math.
+- **LLM-first for most queries; deterministic fast-path only for obvious brand/type lookups** (latency).
+  Heuristics never decide *meaning* on ambiguous queries.
+- **Cost via batching + semantic cache + model tiering** — never by using rules for meaning.
 - **Filters decide membership; scores decide order**; vectors never inject off-filter products.
 - **Goals infinite, traits finite**; the Nutrition Graph learns, never hand-grown.
 - **Confidence discounts scoring**; trustworthiness > recall; calibrate LLM confidence via eval.
