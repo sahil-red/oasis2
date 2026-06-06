@@ -36,6 +36,8 @@ Schema:
   },
   "constraint_priorities": [{"field": string, "priority": number}],
   "sort": "best_match"|"cheapest"|"healthiest"|"highest_protein"|"lowest_sugar",
+  "comparison_ref": string|null,
+  "comparison_mode": "healthier_than"|"cheaper_than"|null,
   "intent_confidence": number,
   "explanation": string
 }
@@ -49,6 +51,8 @@ Rules:
 - constraint_priorities: lower number = relax first (price before sugar before avoid_ingredients).
 - modifiers may include: high_protein_tier, low_sugar, no_added_sugar when user asks relatively.
 - Populate avoid_ingredients/allergens from negation in the query.
+- "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
+- "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".
 `;
 
 type LlmIntentJson = {
@@ -61,6 +65,8 @@ type LlmIntentJson = {
   constraints?: SearchIntentV2["constraints"];
   constraint_priorities?: ConstraintPriority[];
   sort?: SearchIntentV2["sort"];
+  comparison_ref?: string | null;
+  comparison_mode?: SearchIntentV2["comparison_mode"];
   intent_confidence?: number;
 };
 
@@ -123,6 +129,8 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     constraints,
     constraint_priorities: raw.constraint_priorities ?? defaultConstraintPriorities(constraints),
     sort: raw.sort ?? "best_match",
+    comparison_ref: raw.comparison_ref?.trim() || null,
+    comparison_mode: raw.comparison_mode ?? null,
     confidence: Math.max(0, Math.min(1, raw.intent_confidence ?? 0.7)),
     intent_source: "llm-groq",
     raw_query: query,
@@ -176,6 +184,13 @@ export async function parseIntentWithLlm(
   }
 
   intent = mergeNumericIntoIntent(intent, numeric);
+  if (!intent.comparison_ref && numeric.comparison_ref) {
+    intent = {
+      ...intent,
+      comparison_ref: numeric.comparison_ref,
+      comparison_mode: numeric.comparison_mode ?? null,
+    };
+  }
   if (intent.confidence < 0.6 && !useDeepseek) {
     const escalated = await parseIntentWithLlm(query, { escalateDeepseek: true });
     return { intent: escalated.intent, llm_calls: llm_calls + escalated.llm_calls };
@@ -187,13 +202,18 @@ export async function parseIntentWithLlm(
 /** §11 relaxation: LLM proposes next-broader intent */
 export async function relaxIntentWithLlm(
   intent: SearchIntentV2,
+  opts: { type_neighbors?: string[] } = {},
 ): Promise<{ intent: SearchIntentV2; explanation: string; llm_calls: number }> {
   const sorted = [...intent.constraint_priorities].sort((a, b) => a.priority - b.priority);
   const next = sorted[0]?.field;
 
   const { content } = await groqChat({
     system: `You broaden a grocery search intent when results are sparse. Never change primary_type or required_flavours. Return JSON: {"intent":{...same schema as parse...},"explanation":string}`,
-    user: JSON.stringify({ current_intent: intent, relax_field: next ?? "modifiers" }),
+    user: JSON.stringify({
+      current_intent: intent,
+      relax_field: next ?? "modifiers",
+      embedding_neighbor_types: opts.type_neighbors ?? [],
+    }),
     maxTokens: 800,
   });
 

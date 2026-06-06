@@ -1,5 +1,6 @@
 import { computeGoalFit } from "@/lib/search/v2/goal-graph";
 import { buildReasons } from "@/lib/search/v2/explain";
+import { comparisonBeatScore, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { computePopularitySignal } from "@/lib/search/v2/popularity";
 import type {
   GoalTraitWeights,
@@ -76,6 +77,7 @@ export function rankCandidates(
   relevanceById: Map<string, number>,
   goalWeights: GoalTraitWeights | null,
   limit = 50,
+  comparison: ComparisonContext | null = null,
 ): RankedCandidate[] {
   const hasGoalOrConstraints =
     Boolean(goalWeights && Object.keys(goalWeights).length) ||
@@ -115,6 +117,11 @@ export function rankCandidates(
           trait_match_score * 0.2 +
           popularity_score * 0.1,
       );
+    }
+
+    if (comparison) {
+      const beat = comparisonBeatScore(row, comparison);
+      final_score = clamp01(final_score * 0.65 + beat * 0.35);
     }
 
     return {

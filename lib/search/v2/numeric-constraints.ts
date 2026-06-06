@@ -13,6 +13,8 @@ export type NumericExtraction = {
   low_sugar_tier: boolean;
   no_added_sugar: boolean;
   sort: SearchIntentV2["sort"];
+  comparison_ref?: string;
+  comparison_mode?: SearchIntentV2["comparison_mode"];
   /** Query text with numeric/limit phrases stripped for fast-path residual test */
   residual_text: string;
 };
@@ -69,7 +71,21 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     out.sort = "highest_protein";
   }
   if (/\b(cheapest|cheap|budget|lowest price)\b/.test(text)) out.sort = "cheapest";
-  if (/\b(healthiest|healthier|cleanest)\b/.test(text)) out.sort = "healthiest";
+  const healthierThan = text.match(/\bhealthier\s+than\s+(.+?)(?:\s+under|\s+below|$)/);
+  const cheaperThan = text.match(/\bcheaper\s+than\s+(.+?)(?:\s+under|\s+below|$)/);
+  if (healthierThan?.[1]) {
+    out.comparison_ref = healthierThan[1].trim();
+    out.comparison_mode = "healthier_than";
+    out.sort = "healthiest";
+    text = text.replace(/\bhealthier\s+than\s+.+/, " ");
+  } else if (cheaperThan?.[1]) {
+    out.comparison_ref = cheaperThan[1].trim();
+    out.comparison_mode = "cheaper_than";
+    out.sort = "cheapest";
+    text = text.replace(/\bcheaper\s+than\s+.+/, " ");
+  } else if (/\b(healthiest|cleanest)\b/.test(text)) {
+    out.sort = "healthiest";
+  }
   if (/\b(lowest sugar|least sugar)\b/.test(text)) out.sort = "lowest_sugar";
 
   out.residual_text = text

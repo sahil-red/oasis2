@@ -2,6 +2,7 @@ import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates } from "@/lib/search/v2/candidate-generation";
 import { buildGoalBuckets } from "@/lib/search/v2/buckets";
+import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
 import { buildIndexCatalogMeta } from "@/lib/search/v2/index-meta";
@@ -10,6 +11,7 @@ import { applyExplorationSlot } from "@/lib/search/v2/popularity";
 import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
 import { relaxIntentWithLlm } from "@/lib/search/v2/llm-intent";
+import { nearestPrimaryTypes } from "@/lib/search/v2/type-neighbors";
 import { isPrecisionAtRisk, verifyTopCandidates } from "@/lib/search/v2/verification";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
@@ -53,6 +55,14 @@ export async function runSearchV2(
   let relaxed = false;
   let minDataQuality = DATA_QUALITY_MIN;
 
+  let comparison: ComparisonContext | null = null;
+  if (intent.comparison_ref && intent.comparison_mode) {
+    const resolved = await resolveComparisonReference(intent.comparison_ref, snapshot.index);
+    if (resolved) {
+      comparison = { ...resolved, mode: intent.comparison_mode };
+    }
+  }
+
   let goalWeights = null as Awaited<ReturnType<typeof resolveGoalWeights>> | null;
   if (intent.kind === "goal" && intent.goal_phrase) {
     goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
@@ -68,9 +78,13 @@ export async function runSearchV2(
     minDataQuality,
   );
 
+  const typeNeighbors = intent.primary_type
+    ? await nearestPrimaryTypes(intent.primary_type, snapshot.index)
+    : [];
+
   while (candidates.length < MIN_RESULTS) {
     try {
-      const relaxedResult = await relaxIntentWithLlm(intent);
+      const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
       llm_calls += relaxedResult.llm_calls;
       intent = relaxedResult.intent;
       relaxation_steps.push(relaxedResult.explanation);
@@ -107,6 +121,7 @@ export async function runSearchV2(
     relevanceById,
     goalWeights?.weights ?? null,
     Math.max(limit, 50),
+    comparison,
   );
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 
@@ -119,6 +134,11 @@ export async function runSearchV2(
       ? goalDisplayName(intent.goal_id, snapshot.goalMap)
       : intent.goal_phrase;
 
+  const comparisonNote =
+    comparison && items.length
+      ? ` Compared against ${comparison.reference_name}.`
+      : "";
+
   return {
     intent: { ...intent, goal_phrase: intent.goal_phrase ?? goalLabel ?? null },
     candidates_total: candidates.length,
@@ -127,7 +147,7 @@ export async function runSearchV2(
     relaxed,
     relaxation_steps,
     rank_source: intent.kind === "goal" ? "v2_goal" : "v2_structured",
-    summary: buildSummary(intent, items.length, relaxed, relaxation_steps),
+    summary: buildSummary(intent, items.length, relaxed, relaxation_steps) + comparisonNote,
     llm_calls,
     latency_ms: Date.now() - started,
     explored,

@@ -1,4 +1,6 @@
-import { memo } from "react";
+"use client";
+
+import { memo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
@@ -6,6 +8,11 @@ import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import { SearchScoreStack } from "@/components/search-score-tabs";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
+import {
+  fetchCanonicalVariants,
+  trackSearchInteraction,
+  type CanonicalVariantItem,
+} from "@/lib/products/catalog-api";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { sublabelChipLabels, VERDICT_COLORS } from "@/lib/scoring/verdict-display";
 import type { VerdictId } from "@/lib/scoring/verdict";
@@ -71,7 +78,27 @@ export const ProductCard = memo(function ProductCard({
     "canonical_variant_count" in product && typeof product.canonical_variant_count === "number"
       ? product.canonical_variant_count
       : 0;
+  const [variantsOpen, setVariantsOpen] = useState(false);
+  const [variants, setVariants] = useState<CanonicalVariantItem[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
   const aiReasonLines = aiReasons.filter((r) => !/^Scout(\s+score)?\s*\d/i.test(r)).slice(0, 3);
+
+  async function toggleVariants() {
+    if (variantsOpen) {
+      setVariantsOpen(false);
+      return;
+    }
+    if (!variants.length && variantCount > 1) {
+      setVariantsLoading(true);
+      try {
+        const rows = await fetchCanonicalVariants(product.id);
+        setVariants(rows.filter((v) => v.id !== product.id));
+      } finally {
+        setVariantsLoading(false);
+      }
+    }
+    setVariantsOpen(true);
+  }
 
   return (
     <article className="group flex h-full flex-col">
@@ -79,7 +106,10 @@ export const ProductCard = memo(function ProductCard({
       <Link
         href={href}
         className="relative block aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
-        onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+        onClick={() => {
+          saveCatalogReturnUrl(`/search${hrefQuery}`);
+          trackSearchInteraction(product.id, "click");
+        }}
       >
         {thumb ? (
           <Image
@@ -133,7 +163,10 @@ export const ProductCard = memo(function ProductCard({
         <Link
           href={href}
           className="block flex-1"
-          onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
+          onClick={() => {
+            saveCatalogReturnUrl(`/search${hrefQuery}`);
+            trackSearchInteraction(product.id, "click");
+          }}
         >
           <div className="flex items-center gap-1.5">
             {product.brand ? (
@@ -165,9 +198,34 @@ export const ProductCard = memo(function ProductCard({
             </p>
           ) : null}
           {variantCount > 1 ? (
-            <p className="mt-1 text-[10.5px] text-(--color-fg-muted)">
-              +{variantCount - 1} more variant{variantCount - 1 === 1 ? "" : "s"}
-            </p>
+            <button
+              type="button"
+              onClick={() => void toggleVariants()}
+              className="mt-1 text-left text-[10.5px] text-(--color-accent) hover:underline"
+            >
+              {variantsLoading
+                ? "Loading variants…"
+                : variantsOpen
+                  ? "Hide variants"
+                  : `+${variantCount - 1} more variant${variantCount - 1 === 1 ? "" : "s"}`}
+            </button>
+          ) : null}
+          {variantsOpen && variants.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-[10.5px] text-(--color-fg-muted)">
+              {variants.slice(0, 4).map((v) => (
+                <li key={v.id}>
+                  <Link
+                    href={`/product/${v.slug}${hrefQuery}`}
+                    className="hover:text-(--color-fg) hover:underline"
+                    onClick={() => trackSearchInteraction(v.id, "click")}
+                  >
+                    {catalogCardDisplayName(v.name)}
+                    {v.net_weight ? ` · ${v.net_weight}` : ""}
+                    {v.price_inr != null ? ` · ₹${v.price_inr}` : ""}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           ) : null}
           {aiWarning ? (
             <p className="mt-1 line-clamp-1 text-[10.5px] text-(--score-poor)">

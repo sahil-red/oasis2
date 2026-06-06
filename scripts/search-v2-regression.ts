@@ -154,6 +154,8 @@ const smoothieIntent: SearchIntentV2 = {
   constraints: { avoid_ingredients: [], allergens_excluded: [] },
   constraint_priorities: [],
   sort: "best_match",
+  comparison_ref: null,
+  comparison_mode: null,
   confidence: 0.9,
   intent_source: "fast-path",
   raw_query: "strawberry smoothie",

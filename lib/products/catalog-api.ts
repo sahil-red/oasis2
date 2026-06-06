@@ -100,6 +100,37 @@ export async function fetchAiCatalogSearch(
   return (await res.json()) as AiSearchResult;
 }
 
+export type CanonicalVariantItem = {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string | null;
+  net_weight: string | null;
+  price_inr: number | null;
+  mrp_inr: number | null;
+  image_urls: string[];
+  scout_score: number | null;
+};
+
+export async function fetchCanonicalVariants(productId: string): Promise<CanonicalVariantItem[]> {
+  const res = await fetch(`/api/search/canonical?product_id=${encodeURIComponent(productId)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { items?: CanonicalVariantItem[] };
+  return body.items ?? [];
+}
+
+/** §10 popularity loop — fire-and-forget click/save tracking */
+export function trackSearchInteraction(productId: string, kind: "click" | "save"): void {
+  void fetch("/api/search/interaction", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ product_id: productId, kind }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 let landingCache: { at: number; data: LandingInsights } | null = null;
 const LANDING_CACHE_MS = 300_000;
 

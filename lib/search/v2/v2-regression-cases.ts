@@ -21,4 +21,11 @@ export const NUMERIC_CASES: Array<{
     query: "zero sugar drinks",
     check: (n) => n.max_sugar_g === 1 && n.no_added_sugar,
   },
+  {
+    query: "healthier than maggi",
+    check: (n) =>
+      n.comparison_ref === "maggi" &&
+      n.comparison_mode === "healthier_than" &&
+      n.sort === "healthiest",
+  },
 ];

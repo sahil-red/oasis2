@@ -143,6 +143,8 @@ export type SearchIntentV2 = {
   };
   constraint_priorities: ConstraintPriority[];
   sort: "best_match" | "cheapest" | "healthiest" | "highest_protein" | "lowest_sugar";
+  comparison_ref: string | null;
+  comparison_mode: "healthier_than" | "cheaper_than" | null;
   confidence: number;
   intent_source: "fast-path" | "llm-groq" | "llm-deepseek" | "cache" | "degraded";
   raw_query: string;

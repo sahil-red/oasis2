@@ -427,5 +427,12 @@
     "must_include_patterns": ["chaas", "buttermilk", "lassi"],
     "must_exclude_patterns": ["biscuit", "chips"],
     "kind": "directed"
+  },
+  {
+    "id": "healthier-than-maggi",
+    "query": "healthier than maggi",
+    "must_include_patterns": [],
+    "must_exclude_patterns": ["protein powder", "whey"],
+    "kind": "directed"
   }
 ]
