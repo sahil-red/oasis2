@@ -1,66 +1,70 @@
-# Scout Search — SOTA Spec (Definitive)
+# Scout Search — SOTA Spec (Definitive, LLM-First)
 
 > Scout is a **nutrition decision engine**, not a grocery catalog.
->
-> **North star — search results must answer "What should I buy?", not "What products match this query?"**
->
-> It must be SOTA on **vague/goal queries** ("healthy drinks for running") *and* razor-precise on
-> **directed queries** ("strawberry smoothie no added sugar"). Never a contradiction, never silent data
-> loss, never "generic keyword search."
+> **North star — answer "What should I buy?", not "What products match this query?"** The recommendation
+> layer is the primary moat; decision support is the differentiator.
 
 ---
 
-## 0. Two principles that govern everything
+## 0. Governing principles (read these first)
 
-1. **Filters decide membership; ranking decides order.** A product that violates a stated requirement is
-   *removed by a filter* — never merely out-ranked. Embeddings/LLM never inject an off-type product.
-2. **Goals are infinite; traits are finite.** We never precompute goals. We precompute a finite set of
-   reusable **traits** per product, and at query time we **compose any goal as a weighting over traits.**
-   New goals (“drinks for running”, “snacks for night shift”) emerge automatically — no new data, no new code.
-   Long-term behavior emerges from a single flow, **not** from manually expanding goal taxonomies:
+1. **Intelligence is LLM/embedding-driven; serving is deterministic — and these are not in tension.**
+   All *understanding and judgment* — intent parsing, product type, flavour/variant, every non-numeric trait,
+   dietary inference, synonym/semantic matching, goal decomposition, query generalization, variant clustering
+   — is produced by an **LLM or by embedding similarity**. Determinism is reserved for exactly two
+   **non-linguistic** things: **(a) set-membership filters over fields the LLM already extracted**, and
+   **(b) scoring math** (weighted sums, normalization, percentiles, RRF). Determinism is **never** used to
+   *understand language*.
 
-   ```
-   Goal → Trait weights → Candidate generation → Ranking → Recommendation
-   ```
-   Curated goal mappings exist only as a bootstrap layer (§3b).
+2. **Zero language rules. This is a hard constraint.** The following are **spec violations**, not allowed
+   optimizations: regex/keyword parsers as the primary path, keyword lexicons, **synonym maps**,
+   **head-noun rules**, **atomic-compound lists**, hand-maintained **category→trait** or **goal→trait** or
+   **type-hierarchy** tables. Wherever earlier drafts implied a lookup table, it is replaced by an LLM call or
+   embedding similarity. The only hand-authored artifact permitted is the **finite trait vocabulary** (§3a)
+   and the eval set (§15).
 
-> **Product vision.** Scout is **not** optimizing for *"Which products match this query?"* — it is optimizing
-> for *"What should I buy?"* The **recommendation layer is the primary product moat.** Search quality matters,
-> but **decision support is the differentiator.**
+3. **Filters decide membership; ranking decides order.** A product that violates a stated requirement is
+   removed by a filter over an LLM-extracted field — never merely out-ranked, never injected by a vector.
+
+4. **Goals are infinite; traits are finite.** We precompute a finite trait vector per product and compose any
+   goal as a weighting over traits at query time. The flow is always:
+   `Goal → Trait weights → Candidate generation → Ranking → Recommendation`.
+
+5. **Cost is controlled by batching + caching + model tiering, not by avoiding the LLM.** DeepSeek v4-flash's
+   context fits many products per enrichment call; query parses are reused via semantic cache; a fast model
+   handles the common case and a strong model the hard case. Cheapness is never a reason to fall back to rules.
+
+6. **Trustworthiness > recall.** Never a confident recommendation from low-confidence data.
 
 ```
-DIRECTED query → Intent → Candidate Generation → Retrieve (filter+hybrid) → Rank (health-aware)
-VAGUE/goal query → Intent → Goal→Traits (Nutrition Graph) → Candidate Generation → Retrieve → Rank → Buckets
-
-Funnel (the architecture every serious search converges to):
-   ~23k products → ~500 candidates → ~50 reranked → ~10 shown
+DIRECTED  query → LLM Intent → Candidate Gen (filter on enriched fields) → Hybrid retrieve → Health-aware rank
+VAGUE/goal query → LLM Intent → Goal→Traits (Nutrition Graph) → Candidate Gen (trait-profile) → rank → Buckets
+Funnel: ~23k products → ~500 candidates → ~50 reranked → ~10 shown
 ```
 
 ---
 
-## 1. The big idea: intelligence OFFLINE, reasoning at QUERY TIME
+## 1. Architecture: LLM intelligence OFFLINE, fast reasoning ONLINE
 
-Today everything (type-guessing, flavour-guessing, ingredient scanning, health judging) happens *per search*
-— slow, costly, unreliable. SOTA inverts it:
+The hot path is fast **because the LLM already did the hard understanding offline**, not because it uses
+rules. Three layers:
 
-- **Offline (once per product, re-run on change):** turn messy labels into a clean **`product_search_index`**
-  row: canonical type, flavours/variants, dietary flags, allergens, claims, **a finite trait vector**,
-  health score, **a data-quality score**, India facets (brand tier, pack size, variant), and a semantic
-  embedding.
-- **Online (per search):** understand intent → (directed) filter+rank, or (goal) map goal→trait-weights and
-  score → curated buckets. Fast, mostly deterministic, LLM only when genuinely needed.
+- **(L1) Offline LLM enrichment** — batched DeepSeek v4-flash turns messy labels into a clean
+  `product_search_index` row (semantic facets + traits + confidences). This is where intelligence is baked.
+- **(L2) Embedding layer** — every product, every canonical type, every goal, and every category-trait
+  profile lives in vector space. *All* semantic matching (type synonyms, goal "hits", category selection,
+  query generalization, variant clustering) is **cosine similarity**, never a lookup table.
+- **(L3) Online understanding** — each query is parsed by an LLM into structured intent; a **semantic cache**
+  makes repeats/near-repeats free. Serving (filter + math) runs over L1/L2 output.
 
 ```
-        OFFLINE  (DeepSeek/Groq enrichment + deterministic computation)
- raw product: name·category·subcategory·L3·attributes·nutrition·ingredients·allergens·usage
-        │
-        ▼  product_search_index  (one row/product, the single source of truth for search)
-        │   canonical type · flavours[] · variants[] · form · dietary · allergens[] · claims[]
-        │   TRAIT VECTOR (finite, 0–1) · nutrition + per-category tiers · scout_score · nova
-        │   data_quality_score · brand_tier · pack_size · canonical_product_id · use_cases[]
-        │   search_doc (lexical) · embedding (semantic) · per-facet confidence
-        ▼
-        ONLINE  → see §6
+ OFFLINE (batched DeepSeek v4-flash + embeddings + deterministic math)
+   raw: name·category·subcategory·L3·attributes·nutrition·ingredients·allergens·usage
+     │  L1 LLM enrichment (semantic facets, non-numeric traits, base_name, dietary, brand_tier, confidences)
+     │  + deterministic math (quantitative traits, tiers, data_quality_score)
+     │  + L2 embeddings (product, type, category-profile vectors)
+     ▼  product_search_index  (single source of truth)  +  goal_trait_map (Nutrition Graph)  +  category_trait_profile
+ ONLINE → §6
 ```
 
 ---
@@ -69,73 +73,70 @@ Today everything (type-guessing, flavour-guessing, ingredient scanning, health j
 
 | Finding | Consequence |
 |---|---|
-| **22,841 products / 9,917 catalog-visible** | enrichment is batched, resumable, **per-category runnable** |
-| **No `Flavour` attribute** (0/15 smoothies) | flavour from the **name** → extract offline into `flavours[]` |
-| **No `smoothie` subcategory** (15 smoothies span 4 subcats) | product type is **name-driven** → `primary_type` |
-| **Correct sets can be tiny** (2 strawberry smoothies) | precision-first; careful relaxation; padding = the bug |
-| **Rich signals already present** in `attributes` (`Label Allergens`, `Marketing Claims`, `L3 Category`, DeepSeek confidences) + full `nutrition` + `core_scores` | **don't re-extract what exists**; enrich only the LLM-hard gaps |
-| **Coverage uneven**, OCR quality varies | **`data_quality_score`** is mandatory; low-quality items hidden/marked |
+| **22,841 products / 9,917 catalog-visible** | enrichment is batched, resumable, per-category runnable |
+| **No `Flavour` attribute; no `smoothie` subcategory** (smoothies span 4 subcats) | type & flavour are **LLM-extracted from the name**, never inferred by a rule on subcategory |
+| **Correct sets can be tiny** (2 strawberry smoothies) | precision-first; padding with wrong items is the bug |
+| **Rich signals already in `attributes`** (`Label Allergens`, `Marketing Claims`, `L3`, DeepSeek confidences) + full `nutrition` + `core_scores` | feed enrichment & confidences; don't re-extract what exists |
+| **Coverage/OCR quality uneven** | `data_quality_score` mandatory; low-quality hidden/badged |
 
 ---
 
-## 3. The TRAIT engine (the core of the moat)
+## 3. The trait engine
 
-### 3a. Finite trait vocabulary (precomputed per product, normalized 0–1)
+### 3a. The finite trait vocabulary (the ONE hand-authored list, ≈25)
 
-Traits are *reusable nutritional/functional properties*, not goals. Each is derived deterministically from
-nutrition/NOVA where possible, and inferred by LLM only where it must be (e.g. `kid_friendly`).
-
-```
-NUTRITIONAL   protein_density · fiber_density · low_sugar · low_sodium · low_fat ·
-              low_saturated_fat · healthy_fats · low_calorie_density · whole_food
-FUNCTIONAL    hydration · electrolytes · satiety · gut_health · slow_energy(complex carbs) ·
-              quick_energy · antioxidant · calcium_rich
-PROCESSING    processing_level(NOVA-inverted) · clean_label(additive-free) · no_added_sugar
-AUDIENCE      kid_friendly · diabetic_friendly · gym_friendly · elderly_friendly
-```
-This set is **finite and curated** (≈25). Provenance per trait stored in `trait_source` (`derived` vs
-`llm`) and gated by `data_quality_score` — a trait computed from missing data is null, not 0.
-
-### 3b. The Nutrition Graph — goals map to trait weights (stored explicitly)
-
-A goal is a **weight vector over the finite traits**. These mappings are stored explicitly as a persistent
-**Nutrition Graph** (`goal_trait_map` table: `goal → {trait: weight}`), seeded with common goals:
+The vocabulary is fixed; the per-product *values* are computed (math or LLM, never keyword rules).
 
 ```
-running  → hydration .35 · electrolytes .30 · slow_energy .15 · low_sugar .10 · whole_food .10
-PCOS     → fiber .30 · low_sugar .30 · whole_food .20 · low_calorie_density .10 · clean_label .10
-diabetes → fiber .30 · low_sugar .30 · satiety .20 · whole_food .10 · low_sodium .10
-muscle gain → protein_density .45 · calorie adequacy .20 · whole_food .15 · clean_label .10 · …
-kids tiffin → kid_friendly .30 · clean_label .25 · low_sugar .20 · calcium .15 · whole_food .10
+QUANTITATIVE (deterministic MATH over verified numbers — arithmetic, not language rules)
+  protein_density · fiber_density · low_sugar · low_sodium · low_fat · low_saturated_fat ·
+  healthy_fats · low_calorie_density · calcium_rich · no_added_sugar
+SEMANTIC / FUNCTIONAL (LLM judgment, offline, from name+category+ingredients+usage+claims)
+  hydration · electrolytes · satiety · gut_health · slow_energy · quick_energy · antioxidant ·
+  whole_food · clean_label · processing_level · kid_friendly · diabetic_friendly ·
+  gym_friendly · elderly_friendly
 ```
 
-`goal_fit(product) = Σ weight_i · trait_i`. New goals need **zero** new data — they just compose existing
-traits. Storing the graph explicitly means: **recommendations are explainable** (we can show *which* traits
-earned a pick), **decomposition is consistent** (same goal → same weights every time), and **LLM dependence
-drops** (a graph hit needs no model call).
+**Trait value computation (pinned):**
+- **Quantitative traits** = a monotonic transform of the real nutrition number, normalized to **0–1 by
+  percentile rank within the product's `primary_type`** (e.g. `low_sugar` = 1 − sugar-percentile among
+  smoothies). This is exact math, fully trustworthy, no tokens. `null` if the underlying number is absent.
+- **Semantic traits** = emitted by the LLM **per product** as `{value: 0–1, confidence: 0–1, reason: string}`,
+  reasoning over the *whole* label (name, ingredients, usage, claims, category). The numeric signals are
+  given to the LLM as context, but the LLM produces the judgment — there is no hardcoded
+  "beverage⇒hydration=0.8" rule. `null` (not 0) when undeterminable.
+- Provenance in `trait_source` (`math`|`llm`); confidence in `trait_confidence`.
 
-> **The curated goal map is only a bootstrap layer.** The system must *progressively learn* new goal→trait
-> mappings — from user behavior (clicks/saves on what the LLM proposed) and from LLM decomposition of novel
-> goals (which, once validated, are written back into the graph) — rather than relying on an ever-growing
-> manually maintained goal list. We never hand-add `running, cycling, swimming, trekking, …` one by one; the
-> trait model + graph learning is precisely what prevents that. The graph grows itself.
+### 3b. The Nutrition Graph — goals → trait weights (LLM-composed, embedding-keyed)
 
-Resolution order for any goal: **graph hit → (miss) LLM decomposition bounded to known traits → persist the
-validated mapping back into the graph.** Over time, fewer misses, fewer LLM calls.
+`goal_trait_map` stores `goal_phrase, goal_embedding, weights jsonb (trait→weight), source, support_count`.
 
-### 3c. Trait confidence & provenance MUST influence scoring
+- **Resolution (pinned):** embed the parsed goal phrase → if `cosine ≥ 0.92` to a stored goal, **reuse its
+  weights** (no LLM call). Else the **LLM decomposes** the goal into a weight vector **over the fixed trait
+  vocabulary only** (unknown traits dropped, weights renormalized to sum 1), with a one-line reason per
+  non-zero trait (powers explainability §7d). Persist the new mapping with its embedding.
+- **Seed (bootstrap only, ~10 goals)** so day-1 isn't cold; everything else is learned:
+  ```
+  running  → hydration .35 · electrolytes .30 · slow_energy .15 · low_sugar .10 · whole_food .10
+  diabetes → fiber_density .30 · low_sugar .30 · satiety .20 · whole_food .10 · low_sodium .10
+  PCOS     → fiber_density .30 · low_sugar .30 · whole_food .20 · low_calorie_density .10 · clean_label .10
+  ```
+- **The graph is learning, never hand-maintained.** We never add `running, cycling, swimming…` by hand. New
+  goals enter via LLM decomposition; weights are refined by behavior (§10). The embedding key means
+  "for my morning jog" matches "running" without any string rule.
+- **`goal_fit(p) = Σ weight_i · effective_trait_score_i(p)`** (§3c).
 
-`trait_source`, `trait_confidence` (LLM self-confidence), and `data_quality_score` are not just metadata —
-they **discount the trait's contribution** to goal matching. For LLM-derived traits:
+### 3c. Confidence & provenance discount scoring
+
+LLM-emitted `trait_confidence` is **calibrated against the eval set** (reliability curve) before use — raw
+self-reported confidence is never trusted directly. Then:
 
 ```
-effective_trait_score = trait_value × min(data_quality_score, trait_confidence)
+effective_trait_score = trait_value × min(data_quality_score, calibrated_trait_confidence)
 ```
-(derived-from-clean-nutrition traits use `data_quality_score` alone). Low-confidence traits contribute less;
-`goal_fit` uses `effective_trait_score`, never the raw value.
-
-> **Trustworthiness > recall.** The system must **never produce a highly confident recommendation from a
-> low-confidence OCR/LLM extraction.** A confident "Best Protein" pick requires confident protein data.
+Quantitative traits use `data_quality_score` alone (no LLM confidence term). `goal_fit` and buckets use
+`effective_trait_score`, never the raw value. A confident "Best Protein" pick therefore requires confident
+protein data — **trustworthiness > recall**.
 
 ---
 
@@ -143,308 +144,227 @@ effective_trait_score = trait_value × min(data_quality_score, trait_confidence)
 
 ```sql
 product_search_index (
-  product_id uuid pk, canonical_product_id uuid,   -- §8 clustering
-  -- TYPE / MODIFIERS  (name-driven, LLM-normalized)
-  primary_type text, type_aliases text[], form text,
-  flavours text[], variants text[],                -- variants incl. India: salted/masala/spicy/tomato/family pack
-  -- DIETARY / ALLERGENS / CLAIMS  (mostly from existing attributes)
+  product_id uuid pk, canonical_product_id uuid,        -- §8 (embedding-clustered)
+  -- TYPE / MODIFIERS  (LLM-extracted from the name; NO head-noun rule, NO atomic list)
+  primary_type text, base_name text, form text, flavours text[], variants text[],
+  type_embedding vector(N),                              -- for semantic type matching (replaces synonym map)
+  -- DIETARY / ALLERGENS / CLAIMS  (LLM inference + existing attributes)
   is_veg bool, is_vegan bool, is_gluten_free bool, is_jain bool, is_palm_oil_free bool, has_added_sugar bool,
   allergens text[], claims text[],
-  -- NUTRITION + relative tiers (per primary_type percentiles, deterministic)
+  -- NUTRITION + percentile tiers (deterministic)
   sugar_g numeric, protein_g numeric, fat_g numeric, sodium_mg numeric, energy_kcal numeric, price_inr numeric,
   sugar_tier text, protein_tier text, fat_tier text,
-  -- TRAITS  (§3) — the reasoning substrate
-  traits jsonb,            -- { hydration:0.8, protein_density:0.2, ... }  (0–1, null if undeterminable)
-  trait_source jsonb,      -- { hydration:"derived", kid_friendly:"llm" }
-  trait_confidence jsonb,  -- { kid_friendly:0.7, ... } LLM self-confidence; discounts scoring (§3c)
-  -- HEALTH
+  -- TRAITS  (§3) — value + provenance + confidence
+  traits jsonb, trait_source jsonb, trait_confidence jsonb,
+  -- HEALTH / TRUST
   scout_score numeric, nova_group int,
-  -- TRUST  (§5)
-  data_quality_score numeric,    -- 0–1 : OCR confidence · completeness · consistency
-  data_completeness numeric, facet_confidence jsonb,
-  -- INDIA  (§12)
-  brand_tier text,         -- national | regional | local
-  pack_size_value numeric, pack_size_unit text,
-  -- USE / SEARCH ASSETS
-  use_cases text[], search_doc text, embedding vector(N),
-  -- POPULARITY  (§10, updated online)
-  search_count int default 0, click_count int default 0, save_count int default 0
+  data_quality_score numeric, data_completeness numeric, facet_confidence jsonb,
+  -- INDIA
+  brand_tier text, pack_size_value numeric, pack_size_unit text,
+  -- SEARCH ASSETS
+  use_cases text[], search_doc text, embedding vector(N),  -- product doc embedding
+  -- POPULARITY (§10)
+  click_count int default 0, save_count int default 0, last_interaction_at timestamptz
 )
+category_trait_profile (category text pk, trait_means jsonb, trait_centroid vector(N), product_count int)
+goal_trait_map (goal_phrase text, goal_embedding vector(N), weights jsonb, source text, support_count int)
 ```
 
-**What the enrichment LLM actually does** (focused — not re-deriving what exists): `primary_type`,
-`flavours`, `variants`, `form`, `use_cases`, the few **LLM-only traits** (`kid_friendly`, etc.), dietary
-inference when claims/allergens are silent, and `brand_tier`. Everything else — nutrition tiers, derived
-traits, allergens/claims copy-through, scout_score — is **deterministic**, no token spend. Model: DeepSeek
-v4-flash for quality (one-time; much label data already extracted), Groq as the cheap/fast option for the
-easy extractions; both already wired in the repo.
+**Offline enrichment (batched DeepSeek v4-flash, ~20–40 products/call):** for each product, one structured
+JSON object → `primary_type, base_name, form, flavours, variants, dietary flags, semantic traits {value,
+confidence,reason}, use_cases, brand_tier, facet_confidence`. Quantitative traits, tiers, `data_quality_score`,
+embeddings, and `category_trait_profile` are computed deterministically afterward. Per-category runnable;
+re-enrich on source-hash change.
 
 ---
 
-## 5. OCR reality layer — `data_quality_score` (trust = paid-product table stakes)
+## 5. `data_quality_score` (pinned)
 
-Per product, combine: OCR/extraction confidence (`attributes.DeepSeek *Confidence`), **completeness**
-(how many key fields present: nutrition, ingredients, allergens), and **consistency** (passes
-`lib/nutrition/anomaly.ts` checks; macro sum sane; kcal↔macros agree).
-
-- `data_quality_score < threshold` → **hidden by default**, or shown with a visible "label not verified"
-  badge (never silently presented as fact).
-- Traits/constraints computed from absent data are **null**, not 0 — and the product is down-ranked and
-  labeled, never silently dropped or silently trusted.
-- High-quality, fully-verified products earn a **"Verified by Scout"** signal (premium, §13).
+```
+data_quality_score = 0.40·completeness + 0.30·ocr_confidence + 0.30·consistency      (each 0–1)
+  completeness   = fraction of {name, category, nutrition, ingredients, allergens} present
+  ocr_confidence = mean of attributes.DeepSeek *Confidence (default 0.5 if absent)
+  consistency    = 1 − normalized max anomaly severity from lib/nutrition/anomaly.ts
+```
+- `< 0.50` → **hidden by default** (or "label not verified" badge if explicitly surfaced).
+- `0.50–0.75` → shown with a caution badge.
+- `≥ 0.75` → eligible for **"Verified by Scout"**.
+- Thresholds are defaults, **tuned by the eval set**, never silently bypassed. Traits over absent data are
+  `null`, not 0.
 
 ---
 
-## 6. Online pipeline
+## 6. Online pipeline (the funnel, pinned)
 
 ```
 query
- └▶ INTENT UNDERSTANDING ─ { kind, goal, primary_type, modifiers, constraints, sort, confidence }
-      │                     (deterministic heuristic always; LLM only per §9)
+ └▶ (L3) LLM INTENT — fast model (Groq) default → { kind, goal, primary_type, flavours, constraints (each
+      with a priority rank), dietary, sort, intent_confidence }. Semantic cache: embed query; cosine ≥ 0.97
+      to a cached parse (same prefs) ⇒ reuse, 0 calls. Escalate to DeepSeek when intent_confidence < 0.6 OR
+      ≥2 simultaneous constraints. (LLM is the DEFAULT, not a fallback.)
       │  goal/vague → GOAL→TRAITS via Nutrition Graph (§3b)
       ▼
-   CANDIDATE GENERATION (~23k → ~500) ─ membership filters that CANNOT be wrong:
-      type ∈ {type,synonyms} · flavour⊇required · dietary · allergen-free · avoid scan ·
-      nutrition threshold/tier · data_quality gate.  (goal route: trait-relevant categories)
+ ① CANDIDATE GENERATION (~23k → ~500) — membership only, over LLM-extracted fields:
+      directed: primary_type matches (exact OR type_embedding cosine ≥ 0.85 — semantic, no synonym table)
+                · flavours ⊇ required · dietary · allergen-free · nutrition tier/threshold · data_quality gate
+      goal:     select top-K=8 categories by cosine(goal_weight_vector, category_trait_centroid) ≥ 0.5,
+                then the same hard filters within them
+      truncate to 500 by the hybrid retrieval score (②'s score), keeping all exact-type matches first
       ▼
-   RETRIEVE / RERANK (~500 → ~50) ─ hybrid (structured-first + vector expansion, RRF §7a)
+ ② HYBRID RETRIEVE / RERANK (~500 → ~50) — RRF(structured/lexical, vector), k=60, equal weight (tuned by eval).
+      Structured-first: lexical (Postgres FTS/trigram on search_doc) + vector (query embedding) fused; vector
+      may reorder/expand WITHIN ① only — it can never add an off-filter product.
       ▼
-   RANK (~50 → ~10) ─ directed: health-aware formula §7b · goal: goal_fit + health → BUCKETS §7c
+ ③ RANK (~50 → ~10) — directed: §7b formula · goal: goal_fit + health → BUCKETS (§7c) with reasons (§7d)
       ▼
-   RELAX if sparse (always explained §11) → results + chips + per-pick "why"
+ ④ RELAX if <3 (§11, LLM/embedding generalization, always explained) → results + structured "why"
 ```
 
-This is the canonical funnel: **Candidate Generation is its own stage** (membership — the relevance
-guarantee), distinct from rerank and final rank. We build it explicitly now even though ~500 fits in memory
-today, so the architecture already matches where every serious search system lands.
+**LLM verification net (optional, ② or ③):** when precision is at risk, one batched Groq call over the top
+~20 ("is each a {type} that is {flavours}? text only") removes survivors that slipped through; non-blocking.
 
-### 6a. Candidate generation for goal queries — auto-computed category trait profiles
+---
 
-A goal query must **not** scan the whole catalog, and we **must not** hand-maintain a category→trait table
-(same anti-pattern as a goal list). Instead, derive each category's character **automatically from its own
-products**:
+## 7. Retrieval & ranking (pinned math)
 
-```sql
-category_trait_profile (   -- rebuilt offline alongside the index
-  category text pk,         -- (and/or subcategory / L3)
-  trait_means jsonb,        -- aggregate trait distribution: mean (and spread) of each trait over its products
-  product_count int
-)
+### 7a. Hybrid retrieval — structured-first, semantic everywhere
+Membership comes from **filters on LLM-enriched structured fields**. Type **synonymy is embeddings**
+(`type_embedding` cosine), not a map — "soda≈soft drink≈cola" emerges from vector space. Lexical + vector are
+fused by **RRF (k=60)**; vectors handle fuzziness/typos/Hindi and sparse recovery but never breach §0.3.
+
+### 7b. Health-aware ranking (directed). Each component min-max normalized to [0,1] within the candidate set, then:
 ```
-Goal candidate generation:
-1. **Extract goal traits** (Nutrition Graph → weight vector).
-2. **Select categories** whose `trait_means` overlap strongly with the goal vector (cosine/weighted dot over
-   the shared trait space) — top-K categories, not all.
-3. **Apply hard filters** (allergens, dietary, `data_quality` gate).
-4. **Generate candidates only from those categories.**
-
-Example — `running` → {hydration, electrolytes, low_sugar} selects **beverages, electrolyte drinks, coconut
-water** (high-overlap profiles), not biscuits. Self-maintaining: add products/categories and profiles
-recompute; no manual mapping ever.
-
----
-
-## 7. Retrieval & ranking
-
-### 7a. Hybrid retrieval — **structured-first**
-> **Use vectors primarily for intent expansion, semantic matching, and sparse-query recovery — not as the
-> primary retrieval mechanism.** For a ~23k catalog, **structured retrieval > vector retrieval** most of the
-> time.
-
-- **Structured/lexical is the workhorse:** filter on indexed facets (type, flavour, dietary, nutrition,
-  traits) + lexical match on `search_doc`. This is precise and free.
-- **Vector is the assistant:** expands intent and recovers matches when the structured pass is sparse or the
-  query is vague/typo'd/Hindi. Fused with structured via **Reciprocal Rank Fusion (RRF)** — but **vector can
-  only reorder/expand within the filtered membership set; it can never add an off-filter product.**
-
-### 7b. Health-aware ranking formula (directed queries)
-> **relevance 40% · health (scout_score) 30% · trait/goal match 20% · popularity 10%.**
-
-Health must *materially* move ranking — otherwise Scout is generic search. Within ties: data-quality, then
-sort_intent (cheapest/lowest-sugar/etc.). `relative` nutrition (“high protein milk”) uses per-type tiers, not
-absolute thresholds. DeepSeek rerank only on hard multi-constraint cases (§9).
-
-### 7c. Recommendation layer (goal queries — the product moat)
-For goal searches, **don't return a flat list — return curated buckets** answering *what to buy*:
-
+score = 0.40·relevance + 0.30·health + 0.20·trait_match + 0.10·popularity
+  relevance   = RRF hybrid score
+  health      = scout_score/100
+  trait_match = goal_fit if a goal/health_context exists, else fraction of stated constraints satisfied
+  popularity  = time-decayed CTR (§10)
+directed query with NO goal/constraints → reweight 0.55·relevance + 0.35·health + 0.10·popularity
 ```
-"healthy drinks for running" →
-  Best Overall      (top goal_fit · health)
-  Best Hydration    (top hydration trait)
-  Best Endurance    (slow_energy · electrolytes)
-  Best Recovery     (protein_density · electrolytes)
-  Best Budget       (goal_fit per ₹)
-```
-Bucket definitions are derived from the goal's dominant traits (so they’re also infinite/automatic). Each pick
-carries a one-line **"why"** (the traits that earned it). Generic buckets for any goal: *Best Overall, Best
-Budget, Best for Diabetics, Best Protein, Cleanest Label.*
+Health must materially move ranking (≥30%). `relative` nutrition ("high protein milk") uses per-type tiers.
 
-### 7d. Explainability layer (every recommendation carries structured reasons)
+### 7c. Recommendation buckets (goal queries) — LLM/trait-derived, not hand-listed
+Buckets = **Best Overall** (goal_fit·health) + **Best Budget** (goal_fit per ₹/100g) + one bucket per the
+**top-3 traits by goal weight** (e.g. running→Hydration, Endurance, Recovery), each surfacing the top
+products on that trait. 3–5 items/bucket; a product may repeat across buckets (labeled). Bucket names come
+from the goal's dominant traits, so they're infinite/automatic.
 
-A recommendation is never a bare result — it ships **structured reasons** drawn from the traits, health
-score, and goal alignment that earned it. Because the Nutrition Graph and traits are explicit, the "why" is
-generated, not hand-written:
-
-```
-Tender Coconut Water — why recommended           Protein Shake — why recommended
-  • High hydration support                         • Recovery support (post-workout)
-  • Natural electrolytes                            • High protein density
-  • Low added sugar                                 • Low added sugar
-  • Strong match for endurance activities
-```
-Each reason maps to a (trait, contribution) pair, so explanations stay consistent and truthful. **Users must
-understand why Scout recommended something** — explainability is part of the decision-support moat, not a
-nicety. Reasons are confidence-gated (§3c): we don't cite a trait we can't stand behind.
+### 7d. Explainability — every pick carries structured, confidence-gated reasons
+Each recommendation ships `[(trait, contribution, reason)]` drawn from the traits/health/goal alignment that
+earned it (e.g. coconut water → "High hydration · Natural electrolytes · Low added sugar · Strong endurance
+match"). Reasons are generated from the trait math + LLM trait reasons, never hand-written, and are
+suppressed when `effective_trait_score` is low (no citing a trait we can't stand behind).
 
 ---
 
-## 8. Canonical product clustering
-
-Collapse pack-size/flavour variants under `canonical_product_id` so results aren’t flooded with
-"Lay’s 20g / 40g / 90g". Search shows **one representative** (best data-quality / most relevant variant);
-expand on click to see sizes/flavours/prices. Clustering key = normalized brand + base name + type, computed
-offline.
+## 8. Canonical clustering (embedding-based, no regex)
+The LLM extracts `base_name` (variant/size stripped) during enrichment. Products are clustered into
+`canonical_product_id` by **base_name + brand embedding proximity** (cosine), not a regex that strips "90g".
+Representative = highest `data_quality_score`. Search shows one; expand on click.
 
 ---
 
-## 9. Query-time AI discipline (LLM only when needed)
-
-Most searches resolve **deterministically** (heuristic intent + structured filter + trait scoring). Invoke an
-LLM **only when** `intent_confidence < threshold` **OR** `result_count` is very low (needs goal decomposition
-or verification). Keeps the hot path fast, free-tier-viable, and reproducible.
-
-- **Intent parse:** heuristic first; Groq `8b-instant` only on low confidence (cached 24h).
-- **Goal→trait decomposition:** curated map first; LLM only for novel goals (bounded to known traits).
-- **Verification net:** Groq batched, top ~20, only when precision is at risk; non-blocking.
-- **Hard rerank:** DeepSeek only for ≥2-constraint directed queries.
-
-Degradation ladder: full → (LLM down) heuristic + structured + traits → (vector down) structured only →
-(all down) lexical over `search_doc`. Every tier keeps the type filter; worst case is "precise keyword
-search," never random.
+## 9. Model orchestration (LLM-first; cost via batching/caching/tiering)
+- **Offline enrichment & trait inference:** DeepSeek v4-flash, **batched** (20–40 products/call).
+- **Query intent:** Groq fast model **by default**; **escalate to DeepSeek** on `intent_confidence < 0.6` or
+  ≥2 constraints. Reused via semantic cache (cosine ≥ 0.97).
+- **Goal decomposition:** LLM, cached in the Nutrition Graph by goal embedding (cosine ≥ 0.92).
+- **Verification:** Groq, batched ~20, only when precision is at risk; non-blocking.
+- **Embeddings:** load-bearing (type synonymy, goal hits, category selection, clustering, relaxation, hybrid
+  retrieval). *Prerequisite: pick the provider (recommend a multilingual model, e.g. Voyage/E5) — required
+  before the semantic layers ship.*
+- **Degradation ladder (fallback only, never the primary path):** LLM down → a minimal heuristic parse keeps
+  search alive; vector down → structured-only; all down → lexical over `search_doc`. Filters always hold.
 
 ---
 
-## 10. Popularity feedback loop — safe by design
-
-Track `search_count, click_count, save_count` → CTR per product/query, feeding the 10% popularity term in
-§7b. Popularity must **not** create self-reinforcing ranking loops (popular → shown more → more popular).
-Three guards:
-
-- **Exploration (~5% of traffic):** randomly promote one candidate from the top candidate set into the shown
-  results and measure its CTR/saves. Lets strong products that ranking would otherwise suppress get
-  discovered. (Keeps it out of the user's way — one slot, clearly still relevant.)
-- **Time decay:** popularity is time-weighted — last 30 days highest weight, older interactions decay
-  progressively. Prevents stale winners from dominating forever.
-- **Cold-start `new_product_boost`:** a new product is **not** penalized for having no history. For its first
-  **7–14 days**, ranking is driven by relevance, health score, and trait quality/confidence, with popularity
-  influence reduced; the boost **decays automatically**. Genuinely strong new products surface instead of
-  being buried by incumbents.
+## 10. Popularity — safe by design
+Track `click_count, save_count` → time-decayed CTR feeding the 10% term (§7b).
+- **Time decay (pinned):** exponential, 30-day half-life. Recent interactions dominate; stale winners fade.
+- **Exploration (~5% of queries):** randomly promote one top-set candidate into the shown results and measure
+  CTR/saves — discovers strong products ranking would suppress.
+- **Cold start `new_product_boost`:** first **14 days**, popularity weight ≈0 and rank is driven by
+  relevance/health/trait quality; boost decays linearly to 0. New strong products surface, not buried.
 
 ---
 
-## 11. Query relaxation (always explained)
-
-If membership < 3, relax **stepwise** and announce each step: *High Protein Snacks → Protein Snacks →
-Protein Foods*; or drop preferred modifiers → loosen numeric one tier → drop unverifiable avoids. **Never
-relax `primary_type` or a required flavour.** Banner states exactly what changed and why.
-
----
-
-## 12. India-specific enhancements
-
-- `brand_tier` ∈ {national, regional, local} — feeds trust/popularity priors.
-- `pack_size_value`/`unit` extracted ("500gm", "1 L") — powers value (₹/100g) and clustering.
-- **Variant awareness** as flavours/variants: salted, masala, spicy, tomato, family pack, etc.
-- **Multilingual** built in: synonym map (doodh→milk, atta→flour), EN+HI negation (`bina cheeni`,
-  `cheeni nahi`), multilingual embedding so Hindi lands near meaning.
+## 11. Relaxation (LLM/embedding generalization, always explained)
+If membership < 3: the LLM (with embedding neighbors as candidates) proposes the next-broader intent by
+relaxing the **lowest-priority constraint first** (priority comes from the parse, §6) — e.g.
+"high protein snacks" → "protein snacks" → "protein foods" — using embedding-nearest broader types, **not a
+hierarchy table**. `primary_type` and required flavours are never relaxed. A banner states exactly what
+changed and why.
 
 ---
 
-## 13. Premium / retention features (AFTER core search is solved — not core)
-
-Ship only once search quality is proven by the eval gate, and in priority order:
-
-- **Phase 1 (value + subscription justification):** Saved Searches · Alerts · **"Verified by Scout"** badge
-  (from §5 data-quality). These directly create user value and justify the subscription.
-- **Phase 2:** additional trust features.
-- **Phase 3:** health tracking / history — primarily a *retention* feature; it must **not** distract from
-  search quality and comes last.
+## 12. India-specific (semantic, not rule-based)
+- `brand_tier` (national/regional/local) — LLM-inferred during enrichment.
+- `pack_size` — LLM-extracted ("500gm", "1 L") → powers ₹/100g value and clustering.
+- Variants (salted/masala/spicy/tomato/family pack) — LLM-extracted into `variants`/`flavours`.
+- **Multilingual** — a multilingual embedding model means Hindi/Hinglish ("doodh", "bina cheeni") lands near
+  meaning **without a synonym/translation table**; the LLM intent parser handles EN+HI negation natively.
 
 ---
 
-## 14. Every query type → exact handling
+## 13. Premium / retention (after core search; phased)
+- **Phase 1 (value + subscription):** Saved Searches · Alerts · **"Verified by Scout"** badge (§5).
+- **Phase 2:** further trust features.
+- **Phase 3:** health tracking/history (retention; must not distract from search quality — last).
+
+---
+
+## 14. Every query type → handling (all LLM/embedding understanding)
 
 | Type | Example | Mechanism |
 |---|---|---|
 | Brand | `amul` | brand filter, health rank |
-| Type | `namkeen` | type filter, health rank |
+| Type | `namkeen` | enriched `primary_type` (+ type_embedding) filter, health rank |
 | Type + flavour | `strawberry smoothie` | type filter + `flavours⊇[strawberry]` + verify |
-| Type + abs nutrition | `biscuits under 5g sugar` | type filter + `sugar_g≤5` |
-| Type + rel nutrition | `high protein milk` | type filter + `protein_tier='high'` |
-| Type + negation | `peanut butter no palm oil` | type filter + `is_palm_oil_free` + scan |
-| Type + dietary/allergen | `vegan / nut-free X` | type filter + flags / allergen exclude |
-| Type + health ctx | `biscuits for diabetics` | type filter + diabetic traits rank |
-| **Goal/vague** | `healthy drinks for running` | **goal→traits → buckets (§7c)** |
-| Use-case | `pre-workout snack` | trait weights (quick_energy/protein) + use_cases |
-| Superlative/sort | `healthiest oats`, `cheapest milk` | type filter + sort_intent |
-| Comparison | `healthier than maggi` | resolve ref → same type, higher scout_score |
+| Type + abs/rel nutrition | `biscuits under 5g sugar` / `high protein milk` | `sugar_g≤5` / `protein_tier='high'` |
+| Type + negation/dietary/allergen | `peanut butter no palm oil`, `nut-free X` | `is_palm_oil_free` / allergen exclude |
+| Health context | `biscuits for diabetics` | diabetic traits rank |
+| **Goal/vague** | `healthy drinks for running` | **goal→traits → category-profile → buckets** |
+| Use-case | `pre-workout snack` | trait weights + `use_cases` |
+| Superlative/sort/comparison | `healthiest oats`, `healthier than maggi` | sort_intent / resolve ref → higher scout_score |
 | Multi-constraint | `strawberry smoothie low sugar no preservatives` | all filters ANDed + relax |
-| Misspelling / Hinglish | `smoothei`, `bina cheeni doodh` | fuzzy + synonyms + multilingual vector |
-| Vague NL | `tiffin stuff that isn't junk` | goal route, traits (clean_label/whole_food/kid_friendly) |
-| Ambiguous | `protein` | confidence split → type results + "looking for a goal?" affordance |
-| Word-order | `chocolate milk` vs `milk chocolate` | head-noun rule → opposite types |
+| Misspelling / Hinglish | `smoothei`, `bina cheeni doodh` | LLM parse + multilingual embedding (no fuzzy rules) |
+| Vague NL | `tiffin stuff that isn't junk` | goal route (clean_label/whole_food/kid_friendly traits) |
+| Word-order | `chocolate milk` vs `milk chocolate` | LLM understands → opposite `primary_type` (no head-noun rule) |
 
 ---
 
-## 15. Evaluation harness — how we *prove* SOTA (merge gate)
-
-`eval/search-cases.json` (~60 cases across **every** query type × category family) →
+## 15. Evaluation harness (merge gate)
+`eval/search-cases.json` (~60 cases across every query type × category) →
 `{must_include[], must_exclude[], expected_top1?, expected_buckets?}`; `scripts/eval-search.ts` runs the live
-pipeline. Metrics: **forbidden-leak rate = 0 (hard gate)**, precision@5 ≥ 0.8, top-1 accuracy,
-**goal-bucket sanity** (running query surfaces hydration/electrolyte picks), latency, LLM calls/search.
-Seed from §14 + real `search_history`. **No search change ships unless leak-rate = 0.**
+pipeline. Metrics: **forbidden-leak rate = 0 (hard gate)**, precision@5 ≥ 0.8, top-1 accuracy, goal-bucket
+sanity, latency, LLM calls/search. **Also produces the `trait_confidence` calibration curve (§3c).** Seed
+from §14 + real `search_history`. No search change ships unless leak-rate = 0.
 
 ---
 
 ## 16. Build order
-
-1. **Index + enrichment** — `product_search_index` schema (incl. `trait_confidence`); deterministic
-   computations (nutrition tiers, derived traits, allergens/claims copy-through, data_quality_score,
-   brand_tier, pack_size, clustering) + `category_trait_profile`; focused LLM extraction
-   (type/flavours/variants/use_cases/LLM-traits). Per-category runnable.
-2. **Intent understanding** — `lib/search/intent.ts`: head-noun, atomic compounds, "with", synonyms,
-   negation, fuzzy; heuristic-first, LLM-on-low-confidence; goal extraction.
-3. **Nutrition Graph + goal→trait engine** — `goal_trait_map` table (seed common goals), graph-hit →
-   bounded LLM decomposition → persist learned mappings; `goal_fit` over **effective_trait_score** (§3c).
-4. **Online pipeline as explicit funnel** — Candidate Generation (directed = membership filters; goal =
-   category-trait-profile selection §6a) → Retrieve/rerank → Rank; health-aware rank (directed) +
-   **bucketed recommendations with explainability** (goal, §7c/§7d).
-5. **Embeddings** — provider chosen later (parked); structured-first means core ships without it. Add
-   pgvector + RRF as the secondary expansion layer.
-6. **Verify net + relaxation + clustering UI + popularity loop.**
-7. **Eval harness** — leak-rate=0 merge gate.
-8. **Premium/retention features (§13).**
+1. **Index + enrichment (L1+math)** — schema; batched DeepSeek enrichment (semantic facets + traits + base_name
+   + brand_tier + confidences); deterministic quantitative traits, tiers, `data_quality_score`. Per-category.
+2. **Embedding layer (L2)** — provider chosen; product/type/category-centroid embeddings; pgvector + indexes.
+3. **Nutrition Graph + goal engine** — `goal_trait_map` (embedding-keyed, LLM-composed), `goal_fit` over
+   `effective_trait_score`.
+4. **Online intent (L3)** — LLM parser (fast→DeepSeek escalation) + semantic cache; no rule parser as primary.
+5. **Funnel** — candidate gen (directed filters / goal trait-profile selection) → RRF hybrid rerank →
+   health-aware rank (directed) / buckets+explainability (goal) → relaxation.
+6. **Verification net + popularity loop + clustering UI.**
+7. **Eval harness** — leak-rate=0 gate + confidence calibration.
+8. **Premium (§13).**
 
 ---
 
 ## 17. Non-negotiables
-
-- **Answer "what should I buy?", not "what matches?"** — recommendation > retrieval.
-- **Filters decide membership; scores decide order.** Vectors/LLM never inject off-filter products.
-- **Goals infinite, traits finite** — reason over traits, compose goals dynamically.
-- **Nutrition Graph is bootstrap + learning, never a hand-maintained goal list.** It grows from behavior +
-  validated LLM decomposition; we never add goals one by one.
-- **Candidate Generation is a distinct stage** — the funnel (23k→500→50→10) is explicit from day one.
-- **Structured retrieval > vector retrieval**; vectors are expansion/recovery, not the engine.
-- **Health must materially affect ranking** (30%+), else Scout is generic search.
-- **Category trait profiles are auto-computed, never hand-mapped** — goal candidate generation selects
-  categories by trait overlap (§6a).
-- **Confidence discounts scoring** — `effective_trait_score = trait × min(data_quality, trait_confidence)`;
-  **trustworthiness > recall**; never a confident rec from low-confidence data.
-- **Popularity is safe by design** — exploration (~5%), time decay, and `new_product_boost`; no
-  self-reinforcing loops.
-- **Every recommendation is explainable** — structured, confidence-gated trait reasons (§7d).
-- **Trust is core:** `data_quality_score` gates visibility; never silently drop or silently trust.
-- **LLM only when needed** (low confidence / sparse results); deterministic hot path.
-- **Never relax product type or required flavour**; always explain relaxation.
-- **Lexicons/traits/synonyms are data; per-query rules are forbidden.**
+- **Zero language rules** — no lexicons, synonym maps, head-noun rules, atomic-compound lists, or
+  hand-maintained category/goal/type-hierarchy tables. Understanding is LLM or embedding, always.
+- **Intelligence LLM-generated, serving deterministic** — determinism only for membership filters + math.
+- **LLM is the default path, not a fallback**; heuristics exist only for outage degradation.
+- **Cost via batching + semantic cache + model tiering** — never by avoiding the LLM.
+- **Filters decide membership; scores decide order**; vectors never inject off-filter products.
+- **Goals infinite, traits finite**; the Nutrition Graph learns, never hand-grown.
+- **Confidence discounts scoring**; trustworthiness > recall; calibrate LLM confidence via eval.
+- **Health ≥30% of ranking**; every recommendation is explainable; relaxation always explained.
+- **Answer "what should I buy?", not "what matches?"**
