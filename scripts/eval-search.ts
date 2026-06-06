@@ -196,12 +196,16 @@ async function main() {
     for (const item of result.items.slice(0, 3)) {
       for (const [trait, conf] of Object.entries(item.row.trait_confidence)) {
         if (item.row.trait_source[trait as keyof typeof item.row.trait_source] !== "llm") continue;
-        const hit = c.must_include_patterns.length
-          ? matchesAny(
-              `${item.row.name} ${item.row.search_doc}`,
-              c.must_include_patterns,
-            )
-          : true;
+        const traitId = trait as keyof typeof item.row.traits;
+        const traitValue = item.row.traits[traitId] ?? 0;
+        const relevant =
+          c.must_include_patterns.length > 0
+            ? matchesAny(
+                `${item.row.name} ${item.row.search_doc}`,
+                c.must_include_patterns,
+              )
+            : traitValue >= 0.55;
+        const hit = relevant && traitValue >= 0.55;
         traitSamples.push({ trait, raw: conf ?? 0.5, hit });
       }
     }

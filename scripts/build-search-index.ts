@@ -14,6 +14,7 @@
 import { config } from "dotenv";
 import { isCatalogVisible } from "@/lib/products/catalog-eligibility";
 import { adminClient } from "@/lib/supabase/admin";
+import { assignCanonicalClusters } from "@/lib/search/v2/canonical-cluster";
 import { buildCategoryTraitProfiles } from "@/lib/search/v2/category-profiles";
 import { buildIndexFromProducts, type EnrichSource } from "@/lib/search/v2/enrichment";
 import { embedText } from "@/lib/search/v2/embeddings";
@@ -166,7 +167,35 @@ async function main() {
     if (args.limit && allFinalized.length >= args.limit) break;
   }
 
-  const capped = args.limit ? allFinalized.slice(0, args.limit) : allFinalized;
+  let capped = args.limit ? allFinalized.slice(0, args.limit) : allFinalized;
+
+  if (capped.length) {
+    console.log(`[search:build-index] global canonical clustering (${capped.length} rows)…`);
+    capped = await assignCanonicalClusters(capped);
+
+    if (!args.dryRun) {
+      const clusterChunk = 200;
+      for (let i = 0; i < capped.length; i += clusterChunk) {
+        const slice = capped.slice(i, i + clusterChunk);
+        const { error: clusterErr } = await supabase.from("product_search_index").upsert(
+          slice.map((row) => ({
+            ...row,
+            embedding: row.embedding,
+            type_embedding: row.type_embedding,
+            canonical_product_id: row.canonical_product_id,
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: "product_id" },
+        );
+        if (clusterErr) {
+          console.error("[search:build-index] canonical upsert failed:", clusterErr.message);
+          process.exit(1);
+        }
+      }
+      console.log(`[search:build-index] canonical_product_id updated for ${capped.length} rows`);
+    }
+  }
+
   const profiles = capped.length ? await buildCategoryTraitProfiles(capped) : [];
 
   console.log(

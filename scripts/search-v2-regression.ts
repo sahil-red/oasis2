@@ -2,7 +2,8 @@
  * Search V2 regression — deterministic math + numeric extraction (no semantic rules).
  * Run: pnpm search:v2-regression
  */
-import { extractNumericConstraints, requiresLlmIntent } from "@/lib/search/v2/numeric-constraints";
+import { buildIndexCatalogMeta } from "@/lib/search/v2/index-meta";
+import { extractNumericConstraints, fastPathEligible } from "@/lib/search/v2/numeric-constraints";
 import { NUMERIC_CASES } from "@/lib/search/v2/v2-regression-cases";
 import { computeGoalFit } from "@/lib/search/v2/goal-graph";
 import { generateCandidates } from "@/lib/search/v2/candidate-generation";
@@ -134,12 +135,21 @@ for (const c of NUMERIC_CASES) {
   }
 }
 
-if (!requiresLlmIntent("strawberry smoothie no added sugar")) {
-  console.error("[gate] FAIL negation query should require LLM");
+const gateMeta = buildIndexCatalogMeta([
+  {
+    brand: "amul",
+    primary_type: "milk",
+  } as Parameters<typeof buildIndexCatalogMeta>[0][number],
+]);
+
+const negationResidual = extractNumericConstraints("strawberry smoothie no added sugar").residual_text;
+if (fastPathEligible(negationResidual, gateMeta)) {
+  console.error("[gate] FAIL negation query residual should not fast-path");
   failed++;
 }
-if (requiresLlmIntent("amul milk")) {
-  console.error("[gate] FAIL simple brand+type should not force LLM gate");
+const brandTypeResidual = extractNumericConstraints("amul milk").residual_text;
+if (!fastPathEligible(brandTypeResidual, gateMeta)) {
+  console.error("[gate] FAIL brand+type residual should fast-path");
   failed++;
 }
 

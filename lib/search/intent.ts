@@ -12,7 +12,7 @@ import { parseIntentWithLlm } from "@/lib/search/v2/llm-intent";
 import {
   countActiveConstraints,
   extractNumericConstraints,
-  requiresLlmIntent,
+  fastPathEligible,
 } from "@/lib/search/v2/numeric-constraints";
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
@@ -78,10 +78,8 @@ function buildFastPathIntent(
   meta: IndexCatalogMeta,
   numeric: ReturnType<typeof extractNumericConstraints>,
 ): SearchIntentV2 | null {
-  if (requiresLlmIntent(query)) return null;
-
   const residual = numeric.residual_text.toLowerCase().trim();
-  if (!residual) return null;
+  if (!residual || !fastPathEligible(residual, meta)) return null;
 
   const tokens = residual.split(/\s+/).filter(Boolean);
 
@@ -93,24 +91,18 @@ function buildFastPathIntent(
     if (meta.brands.has(tokens[0]!)) {
       brand = tokens[0]!;
       kind = "brand";
-    } else if (meta.primaryTypes.has(tokens[0]!)) {
-      primary_type = tokens[0]!;
     } else {
-      return null;
+      primary_type = tokens[0]!;
     }
-  } else if (tokens.length === 2) {
+  } else {
     const [a, b] = tokens;
     if (meta.brands.has(a!) && meta.primaryTypes.has(b!)) {
       brand = a!;
       primary_type = b!;
-    } else if (meta.brands.has(b!) && meta.primaryTypes.has(a!)) {
+    } else {
       brand = b!;
       primary_type = a!;
-    } else {
-      return null;
     }
-  } else {
-    return null;
   }
 
   const modifiers: string[] = [];

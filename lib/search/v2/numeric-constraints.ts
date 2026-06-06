@@ -2,6 +2,7 @@
  * §0.2 Allowed deterministic extraction — explicit numeric/comparator constraints only.
  * No semantic language rules.
  */
+import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
 
 export type NumericExtraction = {
@@ -113,14 +114,20 @@ export function countActiveConstraints(n: NumericExtraction): number {
   return c;
 }
 
-/** Fast-path gate: negation/flavour/goal phrasing requires LLM (§6). */
-export function requiresLlmIntent(query: string): boolean {
-  const q = query.toLowerCase();
-  if (/\b(no|without|free from|bina|nahi|nut[\s-]?free|gluten[\s-]?free|vegan|for\s+\w+)\b/.test(q)) {
-    return true;
+/** Fast-path eligible when every residual token is a known brand or primary_type (§6). */
+export function fastPathEligible(residual: string, meta: IndexCatalogMeta): boolean {
+  const tokens = residual
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
+  if (!tokens.length || tokens.length > 2) return false;
+  if (tokens.length === 1) {
+    return meta.brands.has(tokens[0]!) || meta.primaryTypes.has(tokens[0]!);
   }
-  if (/\b(healthy|healthiest|running|gym|diabetic|pcos|tiffin|junk|workout)\b/.test(q)) {
-    return true;
-  }
-  return false;
+  const [a, b] = tokens;
+  return (
+    (meta.brands.has(a!) && meta.primaryTypes.has(b!)) ||
+    (meta.brands.has(b!) && meta.primaryTypes.has(a!))
+  );
 }

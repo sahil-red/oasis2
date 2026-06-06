@@ -1,6 +1,5 @@
 import { isCatalogVisible } from "@/lib/products/catalog-eligibility";
 import type { ProductListItem } from "@/lib/products/queries";
-import { assignCanonicalClusters } from "@/lib/search/v2/canonical-cluster";
 import { computeDataQuality } from "@/lib/search/v2/data-quality";
 import { embedTextBatch } from "@/lib/search/v2/embeddings";
 import { computeProductSourceHash } from "@/lib/search/v2/source-hash";
@@ -289,7 +288,7 @@ export async function finalizeIndexBatch(
     };
   });
 
-  return assignCanonicalClusters(out);
+  return out;
 }
 
 export async function buildIndexFromProducts(

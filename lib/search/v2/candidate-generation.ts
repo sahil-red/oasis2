@@ -1,7 +1,8 @@
 import { ingredientPresent } from "@/lib/search/ai-retrieval";
 import { cosineSimilarity, embedText, isEmbeddingConfigured } from "@/lib/search/v2/embeddings";
 import { selectCategoriesForGoal } from "@/lib/search/v2/category-profiles";
-import { lexicalBlob, lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
+import { lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
+import { reciprocalRankFusion } from "@/lib/search/v2/rrf";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN, TYPE_EMBEDDING_THRESHOLD } from "@/lib/search/v2/types";
 import type { GoalTraitWeights } from "@/lib/search/v2/types";
@@ -99,6 +100,56 @@ function lexicalScore(row: ProductSearchIndexRow, query: string): number {
   return score;
 }
 
+type ScoredCandidate = {
+  row: ProductSearchIndexRow;
+  lex: number;
+  vec: number;
+  tier: number;
+};
+
+/** Truncate to cap with tier-first ordering, RRF(lex-rank, vec-rank) within each tier. */
+function truncateWithRrf(scored: ScoredCandidate[], cap: number): ProductSearchIndexRow[] {
+  if (scored.length <= cap) return scored.map((s) => s.row);
+
+  const tiers = [...new Set(scored.map((s) => s.tier))].sort((a, b) => a - b);
+  const out: ProductSearchIndexRow[] = [];
+
+  for (const tier of tiers) {
+    if (out.length >= cap) break;
+    const group = scored.filter((s) => s.tier === tier);
+    const room = cap - out.length;
+
+    if (group.length <= room) {
+      out.push(...group.map((s) => s.row));
+      continue;
+    }
+
+    const lexRanks = [...group]
+      .sort((a, b) => b.lex - a.lex)
+      .map((s, i) => ({ id: s.row.product_id, rank: i + 1 }));
+
+    const lists = [lexRanks];
+    if (group.some((s) => s.vec > 0)) {
+      const vecRanks = [...group]
+        .sort((a, b) => b.vec - a.vec)
+        .map((s, i) => ({ id: s.row.product_id, rank: i + 1 }));
+      lists.push(vecRanks);
+    }
+
+    const fused = reciprocalRankFusion(lists);
+    const picked = [...group]
+      .sort(
+        (a, b) =>
+          (fused.get(b.row.product_id) ?? 0) - (fused.get(a.row.product_id) ?? 0),
+      )
+      .slice(0, room)
+      .map((s) => s.row);
+    out.push(...picked);
+  }
+
+  return out;
+}
+
 /** §6 membership filters over LLM-enriched fields */
 export async function generateCandidates(
   index: ProductSearchIndexRow[],
@@ -124,10 +175,6 @@ export async function generateCandidates(
   }
 
   const queryTypeEmbed = intent.primary_type ? await embedText(intent.primary_type, "query") : null;
-  const queryEmbed =
-    pool.length > CANDIDATE_CAP && isEmbeddingConfigured()
-      ? await embedText(intent.raw_query, "query")
-      : null;
 
   if (intent.kind === "brand" && intent.brand) {
     const brandQ = intent.brand.toLowerCase();
@@ -148,84 +195,22 @@ export async function generateCandidates(
 
   pool = dedupeCanonical(pool);
 
-  // Directed short lookups: lexical membership on search_doc (§9 degradation, not semantics)
-  if (
-    intent.kind === "directed" &&
-    !intent.brand &&
-    !intent.goal_phrase &&
-    intent.required_flavours.length === 0
-  ) {
-    const STOP = new Set([
-      "for",
-      "with",
-      "under",
-      "over",
-      "below",
-      "above",
-      "without",
-      "the",
-      "and",
-      "healthy",
-      "healthiest",
-      "cheapest",
-      "best",
-      "free",
-      "zero",
-      "low",
-      "high",
-      "organic",
-      "instant",
-    ]);
-    const tokens = intent.raw_query
-      .toLowerCase()
-      .replace(/₹\s*\d+/g, "")
-      .split(/\s+/)
-      .filter((t) => t.length >= 3 && !STOP.has(t) && !/^\d/.test(t));
+  if (pool.length <= CANDIDATE_CAP) return pool;
 
-    const typeBlob = intent.primary_type?.toLowerCase() ?? "";
-
-    const DIETARY = new Set(["vegan", "vegetarian", "gluten", "jain", "nut", "sodium", "sugar", "protein", "fat"]);
-
-    if (tokens.length === 1) {
-      const t = tokens[0]!;
-      pool = pool.filter((row) => {
-        const blob = lexicalBlob(row);
-        if ((typeBlob === "milk" || t === "doodh") && /\bbiscuit|cookie\b/.test(blob)) return false;
-        return blob.includes(t) || (typeBlob && blob.includes(typeBlob));
-      });
-    } else if (tokens.length === 2 && !/\bfor\b/.test(intent.raw_query.toLowerCase())) {
-      const hasDietary = tokens.some((t) => DIETARY.has(t));
-      pool = pool.filter((row) => {
-        const blob = lexicalBlob(row);
-        if (hasDietary) {
-          const productTokens = tokens.filter((t) => !DIETARY.has(t));
-          return productTokens.length
-            ? productTokens.some((t) => blob.includes(t))
-            : tokens.some((t) => blob.includes(t));
-        }
-        const matched = tokens.filter((t) => blob.includes(t)).length;
-        return matched >= 1;
-      });
-    }
-  }
+  const queryEmbed = isEmbeddingConfigured()
+    ? await embedText(intent.raw_query, "query")
+    : null;
 
   const wanted = intent.primary_type?.toLowerCase() ?? null;
-  const scored = pool
-    .map((row) => {
-      const vec =
-        queryEmbed?.length && row.embedding?.length
-          ? cosineSimilarity(queryEmbed, row.embedding)
-          : 0;
-      return {
-        row,
-        lex: lexicalScore(row, intent.raw_query),
-        vec,
-        tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
-      };
-    })
-    .sort((a, b) => a.tier - b.tier || b.lex + b.vec - (a.lex + a.vec))
-    .slice(0, CANDIDATE_CAP)
-    .map((x) => x.row);
+  const scored: ScoredCandidate[] = pool.map((row) => ({
+    row,
+    lex: lexicalScore(row, intent.raw_query),
+    vec:
+      queryEmbed?.length && row.embedding?.length
+        ? cosineSimilarity(queryEmbed, row.embedding)
+        : 0,
+    tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
+  }));
 
-  return scored;
+  return truncateWithRrf(scored, CANDIDATE_CAP);
 }

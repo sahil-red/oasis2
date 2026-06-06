@@ -17,6 +17,7 @@ import { Panel } from "@/components/ui/Panel";
 import { fetchCatalogMeta } from "@/lib/api";
 import { runCatalogSearch } from "@/lib/run-search";
 import { useAccessToken } from "@/lib/auth";
+import { saveSearch } from "@/lib/saved-searches";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
 import type { AiSearchResult, CatalogMeta, CatalogProduct } from "@/types/api";
 
@@ -29,6 +30,8 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   useEffect(() => {
     fetchCatalogMeta().then(setCatalogMeta).catch(() => setCatalogMeta(null));
@@ -106,7 +109,29 @@ export default function SearchScreen() {
 
       {result ? (
         <Panel style={styles.summaryPanel}>
-          <Text style={styles.summary}>{result.summary}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summary, { flex: 1 }]}>{result.summary}</Text>
+            {token ? (
+              <Pressable
+                style={styles.saveBtn}
+                disabled={saveBusy || !prompt.trim()}
+                onPress={() => {
+                  const q = prompt.trim();
+                  if (!q) return;
+                  setSaveBusy(true);
+                  setSaveStatus(null);
+                  void saveSearch(token, { query: q })
+                    .then(() => setSaveStatus("Saved"))
+                    .catch((e: Error) => setSaveStatus(e.message))
+                    .finally(() => setSaveBusy(false));
+                }}
+              >
+                <Ionicons name="bookmark-outline" size={16} color={colors.fgMuted} />
+                <Text style={styles.saveBtnText}>{saveBusy ? "…" : "Save"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {saveStatus ? <Text style={styles.saveStatus}>{saveStatus}</Text> : null}
           {result.parse_warning ? (
             <Text style={styles.parseWarning}>{result.parse_warning}</Text>
           ) : null}
@@ -202,7 +227,20 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: { fontFamily: fonts.sansBold, color: colors.bg },
   summaryPanel: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
+  summaryRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
   summary: { fontFamily: fonts.sans, color: colors.fg, fontSize: 15, lineHeight: 22 },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  saveBtnText: { fontFamily: fonts.sansMedium, fontSize: 12, color: colors.fgMuted },
+  saveStatus: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgDim, marginTop: 4 },
   parseWarning: {
     fontFamily: fonts.sans,
     color: colors.fgMuted,

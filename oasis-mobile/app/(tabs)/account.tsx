@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 import { useAccessToken, useAuth } from "@/lib/auth";
-import { listSavedSearches } from "@/lib/saved-searches";
+import { deleteSavedSearch, listSavedSearches } from "@/lib/saved-searches";
 import { colors, fonts, radius, spacing } from "@/theme";
 import type { SavedSearchRow } from "@/types/api";
 
@@ -16,6 +16,7 @@ export default function AccountTab() {
   const { profile, signOut, refreshProfile } = useAuth();
   const accessToken = useAccessToken();
   const [savedSearches, setSavedSearches] = useState<SavedSearchRow[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSaved = useCallback(async () => {
     const rows = await listSavedSearches(accessToken);
@@ -25,6 +26,16 @@ export default function AccountTab() {
   useEffect(() => {
     void loadSaved();
   }, [loadSaved]);
+
+  async function handleDeleteSaved(id: string) {
+    setDeletingId(id);
+    try {
+      await deleteSavedSearch(accessToken, id);
+      await loadSaved();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <Screen>
@@ -72,18 +83,30 @@ export default function AccountTab() {
           <Panel style={styles.card}>
             <Text style={styles.label}>Saved searches</Text>
             {savedSearches.slice(0, 5).map((s) => (
-              <Pressable
-                key={s.id}
-                style={styles.savedRow}
-                onPress={() => router.push({ pathname: "/search", params: { q: s.query } })}
-              >
-                <Text style={styles.savedQuery} numberOfLines={1}>
-                  {s.label || s.query}
-                </Text>
-                {s.alert_enabled ? (
-                  <Text style={styles.savedAlert}>Alerts on</Text>
-                ) : null}
-              </Pressable>
+              <View key={s.id} style={styles.savedRow}>
+                <Pressable
+                  style={styles.savedMain}
+                  onPress={() => router.push({ pathname: "/search", params: { q: s.query } })}
+                >
+                  <Text style={styles.savedQuery} numberOfLines={1}>
+                    {s.label || s.query}
+                  </Text>
+                  {s.alert_enabled ? (
+                    <Text style={styles.savedAlert}>Alerts on</Text>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  disabled={deletingId === s.id}
+                  onPress={() => void handleDeleteSaved(s.id)}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={deletingId === s.id ? colors.fgDim : colors.fgMuted}
+                  />
+                </Pressable>
+              </View>
             ))}
           </Panel>
         ) : null}
@@ -132,11 +155,15 @@ const styles = StyleSheet.create({
   },
   rowText: { fontFamily: fonts.sans, color: colors.fg, fontSize: 16 },
   savedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
   },
+  savedMain: { flex: 1 },
   savedQuery: { fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg },
   savedAlert: { fontFamily: fonts.sans, fontSize: 12, color: colors.fgMuted, marginTop: 2 },
 });

@@ -168,6 +168,16 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
   }
 
   if (process.env.SEARCH_EVAL_USE_MEMORY === "1") {
+    const dbIndex = await loadIndexFromDb();
+    if (dbIndex && dbIndex.length >= 100) {
+      const dbProfiles = await loadProfilesFromDb();
+      const goalMap = await loadGoalMapFromDb();
+      const profiles =
+        dbProfiles?.length ? dbProfiles : await buildCategoryTraitProfiles(dbIndex);
+      const snap: SearchIndexSnapshot = { index: dbIndex, profiles, goalMap, source: "db" };
+      cachedSnapshot = { data: snap, at: Date.now() };
+      return snap;
+    }
     const mem = await buildInMemorySnapshot();
     cachedSnapshot = { data: mem, at: Date.now() };
     return mem;

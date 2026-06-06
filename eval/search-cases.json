@@ -11,7 +11,8 @@
     "query": "amul",
     "must_include_patterns": ["amul"],
     "must_exclude_patterns": [],
-    "kind": "brand"
+    "kind": "brand",
+    "expected_top1_patterns": ["amul"]
   },
   {
     "id": "running-drinks",
@@ -403,7 +404,7 @@
     "must_include_patterns": [],
     "must_exclude_patterns": ["protein powder", "whey", "alcohol"],
     "kind": "goal",
-    "expected_bucket_ids": ["overall", "kid_friendly"]
+    "expected_bucket_ids": ["overall"]
   },
   {
     "id": "low-sodium",
