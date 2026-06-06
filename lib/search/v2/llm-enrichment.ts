@@ -70,7 +70,8 @@ const ENRICHMENT_SYSTEM = `You enrich Indian grocery products for Scout Search. 
   "facet_confidence": { "type":0-1, "flavours":0-1, "dietary":0-1 }
 }]}
 Extract type and flavours from the product name — never from subcategory alone.
-Semantic traits: reason over full label context. null/omit when undeterminable.`;
+Semantic traits: reason over full label context. null/omit when undeterminable.
+Keep each "reason" ≤ 12 words. Omit traits you cannot justify rather than guessing.`;
 
 export type EnrichmentInput = {
   id: string;
@@ -105,7 +106,9 @@ async function enrichBatchOnce(batch: EnrichmentInput[]): Promise<Map<string, Ll
   const { content } = await deepseekChat({
     usageKind: "search",
     jsonObject: true,
-    maxTokens: 8000,
+    // 14 semantic traits × {value,confidence,reason} per product needs headroom;
+    // too-low a cap truncates JSON for full batches → split-retry churn + data loss.
+    maxTokens: 16000,
     timeoutMs: 120_000,
     system: ENRICHMENT_SYSTEM,
     user,

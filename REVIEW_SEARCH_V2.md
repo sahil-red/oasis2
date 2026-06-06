@@ -70,3 +70,57 @@ clustering) → **S1** (coverage-based fast-path, drop denylist) → S3/S4 → t
 
 Everything else from review v1 is confirmed resolved. The architecture remains faithful and the remaining
 items are contained — M1/M2/M3 are the ones that materially affect result quality.
+
+---
+
+## v3 — Opus hardening pass + verified run + cost (current)
+
+### Code fixes I made this pass (committed)
+1. **Enrichment truncation (real cost/data-loss bug).** `llm-enrichment.ts` `maxTokens` 8000 → **16000**, and
+   `enrichment.ts` default batch 28 → **20**. At batch 28, 14 trait-reasons/product overran 8000 tokens →
+   JSON truncated → split-retry churn that re-bills input. Also bounded each trait `reason` to **≤12 words**
+   in the prompt (caps output cost). Output is billed on actual tokens, so raising the cap costs nothing and
+   prevents the retry tax.
+2. **Embeddings → `voyage-3.5`** (was `voyage-multilingual-2`): multilingual, same 1024-dim (no migration
+   change), and **200M free tokens vs 50M**. Sends `output_dimension` for the voyage-3 family.
+3. **429/5xx retry with backoff** in `embeddings.ts` (honors `Retry-After`, 5 attempts). Without this a single
+   Voyage rate-limit silently produced **embedding-less rows** → index quietly degraded to lexical. This was
+   the biggest "search silently gets worse" risk during the build.
+4. `.env.example` updated: `voyage-3.5` + a note that you must **add a payment method on Voyage** to escape the
+   free-trial cap (3 RPM / 10K TPM) — you still pay **$0** within 200M free tokens, but Tier-1 limits
+   (2000 RPM / 8M TPM) are required or the full build throttles for hours.
+
+### Verified (not asserted)
+- `pnpm typecheck` — v2 module compiles clean. (Pre-existing errors in `scripts/search-regression.ts` /
+  `verify-swaps.ts` are old mock fixtures, unrelated to search-v2.)
+- `pnpm search:v2-regression` — passes (numeric/intent unit checks).
+- `SEARCH_EVAL_USE_MEMORY=1 pnpm search:eval` — **pipeline runs end-to-end, no crashes, p50 174ms.** Even in
+  fully degraded mode (no LLM enrichment, no embeddings, Groq rate-limited) it scores **58/64, precision@5
+  0.957, top1 1.000**. The 3 leaks + goal→directed misclassifications are all artifacts of the missing
+  enriched index / embeddings / Groq headroom (confirmed: intent fast-path correctly defers goal queries to
+  the LLM; failures are the §9 degradation ladder, not bugs).
+
+### Cost to go live (estimates)
+| Item | Volume | Cost |
+|---|---|---|
+| **DeepSeek V4 Flash enrichment** (one-time) | ~10–20k products × ~340 in + ~400 out tok | **~$2–3 total** (in $0.14/M, out $0.28/M; system prompt cache-hits at $0.0028/M). Re-runs only on changed rows (source-hash skip). |
+| **Voyage `voyage-3.5` embeddings** | ~2–3M tokens (index) + ~tiny/query | **$0** — 200M free tokens covers it ~60×. *Add a payment method for Tier-1 RPM (still $0 spend).* |
+| **Groq** (query-time intent + verification) | ~1–2 calls/search | **$0** — free tier (30 RPM). Throttles only above ~15 searches/min; fine for testing. |
+
+**Bottom line: ~$2–3 one-time, then effectively free to run.** The "cost" is really two rate-limit gates:
+Voyage needs a payment method (for RPM, not spend), and Groq's 30 RPM caps burst traffic.
+
+### One scale caveat (not blocking now)
+`index-queries.ts` loads the whole index (up to 25k rows incl. 1024-dim vectors) into memory and does cosine
+in JS, cached 10 min. Fine at your scale and keeps warm queries ~170ms, but at larger catalogs / high
+concurrency this is heavy memory + slow cold-start. The pgvector ivfflat indexes already exist (0017) — the
+SOTA next step is in-DB KNN (an RPC for vector search) instead of in-memory cosine. Recommend after quality is
+validated, not before.
+
+### Remaining to ship (ops, in order)
+1. Add a payment method on Voyage (lifts RPM; $0 spend) + set `VOYAGE_API_KEY`/`EMBEDDING_MODEL=voyage-3.5`,
+   `GROQ_API_KEY`, `DEEPSEEK_SEARCH_API_KEY`, `CRON_SECRET`.
+2. `pnpm db:migrate` (0013–0017).
+3. `pnpm search:build-index` (~$2–3 DeepSeek + free Voyage; one command).
+4. `SEARCH_EVAL_CALIBRATION=1 pnpm search:eval` — builds calibration curve + enforces leak-rate=0.
+5. `pnpm search:ship-check` → set `SEARCH_V2_ENABLED=true`.

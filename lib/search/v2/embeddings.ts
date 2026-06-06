@@ -44,7 +44,7 @@ function resolveEmbeddingEndpoint(): EmbeddingEndpoint | null {
     return {
       apiKey: voyageKey,
       baseUrl: (process.env.EMBEDDING_BASE_URL ?? "https://api.voyageai.com/v1").replace(/\/+$/, ""),
-      model: process.env.EMBEDDING_MODEL ?? "voyage-multilingual-2",
+      model: process.env.EMBEDDING_MODEL ?? "voyage-3.5",
       provider: "voyage",
     };
   }
@@ -59,7 +59,7 @@ function resolveEmbeddingEndpoint(): EmbeddingEndpoint | null {
     return {
       apiKey: process.env.EMBEDDING_API_KEY.trim(),
       baseUrl,
-      model: process.env.EMBEDDING_MODEL ?? (isVoyage ? "voyage-multilingual-2" : "text-embedding-3-small"),
+      model: process.env.EMBEDDING_MODEL ?? (isVoyage ? "voyage-3.5" : "text-embedding-3-small"),
       provider: isVoyage ? "voyage" : "openai",
     };
   }
@@ -108,38 +108,65 @@ export async function embedTexts(
   };
   if (provider === "voyage") {
     body.input_type = inputType;
+    // voyage-3 family supports output_dimension; multilingual-2 / older do not.
+    if (/voyage-(3|code-3)/.test(model)) body.output_dimension = dimensions;
   } else if (provider === "openai") {
     body.dimensions = dimensions;
   }
 
-  try {
-    const res = await undiciFetch(`${baseUrl}/embeddings`, {
-      method: "POST",
-      dispatcher,
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+  // Retry on rate-limit / transient errors so a 429 never silently yields embedding-less rows.
+  const MAX_ATTEMPTS = 5;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await undiciFetch(`${baseUrl}/embeddings`, {
+        method: "POST",
+        dispatcher,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    const payload = (await res.json()) as {
-      data?: Array<{ embedding?: number[]; index?: number }>;
-      error?: { message?: string };
-    };
-    if (!res.ok) throw new Error(payload.error?.message ?? `Embeddings HTTP ${res.status}`);
+      if (res.status === 429 || res.status >= 500) {
+        // Honor Retry-After when present, else exponential backoff (1s,2s,4s,8s).
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 2 ** (attempt - 1) * 1000;
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        throw new Error(`Embeddings HTTP ${res.status} after ${MAX_ATTEMPTS} attempts`);
+      }
 
-    const sorted = [...(payload.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-    return sorted.map((row) => row.embedding ?? []);
-  } catch (err) {
-    if (!embedWarned) {
-      embedWarned = true;
-      console.warn(
-        `[embeddings] unavailable (${err instanceof Error ? err.message : err}) — index will use lexical fallback`,
-      );
+      const payload = (await res.json()) as {
+        data?: Array<{ embedding?: number[]; index?: number }>;
+        error?: { message?: string };
+      };
+      if (!res.ok) throw new Error(payload.error?.message ?? `Embeddings HTTP ${res.status}`);
+
+      const sorted = [...(payload.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      return sorted.map((row) => row.embedding ?? []);
+    } catch (err) {
+      lastErr = err;
+      // Network error: brief backoff then retry.
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 2 ** (attempt - 1) * 1000));
+        continue;
+      }
     }
-    return texts.map(() => []);
   }
+
+  if (!embedWarned) {
+    embedWarned = true;
+    console.warn(
+      `[embeddings] unavailable (${lastErr instanceof Error ? lastErr.message : lastErr}) — index will use lexical fallback`,
+    );
+  }
+  return texts.map(() => []);
 }
 
 export async function embedText(text: string, inputType: EmbeddingInputType = "document"): Promise<number[]> {
