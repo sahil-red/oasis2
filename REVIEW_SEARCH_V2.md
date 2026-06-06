@@ -1,162 +1,115 @@
-# Search V2 — Implementation Review (branch `search-improvements`)
+# Search V2 — Implementation Review v2 (re-review of current working tree)
 
-Reviewed the full `lib/search/v2/` implementation (50 files), migrations 0013–0016, eval harness,
-scripts, and UI against `SEARCH_V2_PLAN.md`. Overall: **faithful and ~90% complete, no stubs/TODOs, no
-crash risks when data is absent (graceful degradation everywhere).** The items below must be fixed before
-treating it as spec-complete. Ordered by priority.
-
----
-
-## P0 — Bugs / blockers (fix first)
-
-1. **Allergen filter is inverted — breaks every allergen-exclusion query.**
-   `lib/search/v2/candidate-generation.ts:53` — `passesAllergens` returns `false` after the loop instead of
-   `true`. Any query with `allergens_excluded` (e.g. "nut-free chocolate") filters out **every** product →
-   0 results. Change line 53 to `return true;`.
-
-2. **Embeddings provider is NOT Voyage, and the 384-dim lock-in blocks the swap.**
-   `lib/search/v2/embeddings.ts:28-56` is a generic OpenAI-compatible adapter defaulting to
-   `text-embedding-3-small` (English-centric). Voyage appears only in a comment. Consequences:
-   - Multilingual (§9/§12, Hindi/Hinglish "doodh", "bina cheeni") is **not met** by default.
-   - `EMBEDDING_DIM=384` (`types.ts:39`) and `vector(384)` are hard-coded in `0014_search_v2_llm_embeddings.sql`.
-     OpenAI works via its `dimensions` param; **Voyage/E5 output 512/768/1024 and mostly ignore `dimensions=384`**,
-     so adopting the recommended provider needs a **new migration to widen the vector columns** — not a config flip.
-   - No query/document `input_type` distinction (Voyage/E5 support it; would improve retrieval).
-   - **Decision needed from you:** pick the provider. If Voyage → composer must widen the vector columns to the
-     real dim and set `input_type`. If staying OpenAI 3-small → accept English-mostly embeddings (Hindi then
-     leans on the LLM intent parser, which is fine, but §12 semantic recovery won't work well).
+Re-reviewed the **current uncommitted state** (composer applied a round of fixes since review v1). Read the
+actual code, not the status table. Verdict: **most P0/P1/P2 items are genuinely fixed.** But there are
+**3 real engineering problems still open** — including a rule-based regression composer *added* — and I'm
+explicitly retracting the "acceptable proxy" language from v1: the 500-cut is wrong and must be fixed.
 
 ---
 
-## P1 — §0.2 rule-based violations (your core concern: no semantic language rules)
+## ✅ Verified fixed (read the code, confirmed)
 
-3. **Hardcoded type-exclusion regexes in verification.**
-   `lib/search/v2/verification.ts:27-62` — `filterCandidatesDeterministic` hardcodes
-   `tea/green tea` excludes `milk`, `coffee` excludes `milk`, `poha` excludes `milk|paneer`,
-   `protein bar` excludes `juice`. This is exactly the banned "semantic language rules / head-noun rules,"
-   and it runs **unconditionally** (before and as fallback for the LLM net). Remove it, or gate it strictly to
-   the degradation path (only when Groq is unavailable).
+| # | Item | Evidence |
+|---|---|---|
+| P0 #1 | Allergen filter inverted | `candidate-generation.ts:53` now `return true;` — correct |
+| P1 #3 | Hardcoded tea/coffee/poha verification regexes | **removed** — `verification.ts` is now pure batched Groq, non-blocking |
+| P1 #4 | Seed-goal string-match shortcut | **removed** — `goal-graph.ts:resolveGoalWeights` goes straight to 0.92 embedding |
+| P2 #6 | 3 missing quantitative traits | `traits.ts:104-122` now computes `low_saturated_fat`, `healthy_fats` (unsaturated-ratio percentile), `calcium_rich` |
+| P2 #8 | trait_match not normalized | `ranking.ts:100` `normTrait = minMaxNormalize(...)` — all 4 components normalized |
+| P2 #9 | Best Budget per ₹ not ₹/100g | `buckets.ts:34-54` `pricePer100g()` with unit conversion |
+| P2 #10 | Buckets used raw trait value | `buckets.ts:61-64` `traitEffective()` uses `effectiveTraitScore` + calibration |
+| P2 #11 | Bucket size cap | `buckets.ts:56-58` enforces 3–5 (`MIN_BUCKET_ITEMS=3`, max 5) |
+| P2 #13 | Enrichment batch size 8 | `enrichment.ts:310` now `?? 28` (in 20–40 range) |
+| P2 #15 | Per-product embedding calls | `enrichment.ts:265-276` uses `embedTextBatch(..., 64, "document")`, batched, with query/document `input_type` |
+| P0 #2 | Voyage dim lock-in | `0017_voyage_embeddings_1024.sql` widens vectors to `vector(1024)` for `voyage-multilingual-2`; embeddings now pass `input_type` |
+| P2 #7 | Calibration identity passthrough | `trait-calibration.ts:38-39` now a **conservative clamp** `min(0.72, raw*0.85)` until the real curve exists — acceptable interim |
 
-4. **Seed-goal string-match shortcut bypasses the embedding key.**
-   `lib/search/v2/goal-graph.ts:133-164` — `matchSeedGoalPhrase` does substring/token-overlap matching
-   (`p.includes(l)`, `hits/tokens ≥ 0.5`) **before** the embedding path, so "running low on snacks" wrongly
-   resolves to the `running` goal. §3b says the embedding key should do this ("'for my morning jog' matches
-   'running' without any string rule"). Remove it and rely on the 0.92 embedding path already implemented below it.
-
-5. *(Minor, defensible — note only)* `requiresLlmIntent` keeps a hardcoded goal-keyword list
-   (`numeric-constraints.ts:122`). It only routes **to** the LLM (never assigns meaning), so it's not a strict
-   violation, but it's a non-exhaustive hand-list in the wrong module (misses "keto", "post-workout", "marathon").
-   Acceptable for now; ideally the LLM decides ambiguity.
-
----
-
-## P2 — Pinned-value deviations
-
-6. **3 quantitative traits never computed.** `lib/search/v2/traits.ts:73-92` computes only 7 of the 10
-   quantitative traits — `low_saturated_fat`, `healthy_fats`, `calcium_rich` are **never produced** (and aren't
-   in the LLM semantic list either), so they're silently absent from every product. Source fields exist
-   (`saturated_fat_g_100g`, `calcium_mg_100g`). Add their math.
-
-7. **Trait confidence calibration is inert.** `eval/trait-calibration.json` is empty → `calibrateTraitConfidence`
-   (`trait-calibration.ts:35-37`) is an **identity passthrough**, so raw self-reported LLM confidence is trusted
-   directly — the exact thing §3c forbids ("never trusted directly"). The machinery is real but gated behind
-   `SEARCH_EVAL_CALIBRATION=1` (never run; not set in CI). Also the "hit" signal (`eval-search.ts:196-205`)
-   conflates retrieval relevance with trait accuracy — a loose proxy. Run a real calibration pass (and improve the
-   signal), or conservatively clamp LLM confidence until then.
-
-8. **`trait_match` not normalized in ranking.** `lib/search/v2/ranking.ts:100-106` — relevance/health/popularity
-   are min-max normalized to [0,1] within the candidate set, but `trait_match` is used raw. §7b requires **each**
-   of the 4 components normalized. Normalize trait_match too.
-
-9. **Best Budget uses wrong value metric.** `lib/search/v2/buckets.ts:53-54` divides goal_fit by absolute
-   `price_inr`, not by **₹/100g** (§7c). Ignores pack size — a big cheap pack ties a small cheap pack. Use
-   `pack_size_value`/`unit` for ₹/100g.
-
-10. **Trait buckets use raw trait value, not `effective_trait_score`.** `buckets.ts:69` ranks by
-    `row.traits[trait]`, so a low-confidence/low-data product can win "Best Hydration". §3c/§7c require
-    `effective_trait_score` (value × min(data_quality, calibrated_confidence)) — trustworthiness > recall.
-
-11. **Bucket size caps at 3, spec is 3–5; no min-3 guard.** `buckets.ts:32` — allow 3–5 items and don't emit
-    buckets with <3 (or relax explicitly).
-
-12. **500-truncation uses a local lexical heuristic, not the RRF hybrid score.**
-    `candidate-generation.ts:213` cuts to 500 by a crude token-overlap `lexicalScore`, not stage ②'s RRF score
-    (§6). Exact-type-first is honored, but the cut isn't the pinned score. (Chicken/egg: RRF needs the candidates;
-    acceptable as a proxy, but worth aligning — at least incorporate the vector/lexical RRF before the hard cut.)
-
-13. **DeepSeek enrichment batch size is 8, spec says 20–40.** `enrichment.ts:254` (`?? 8`), and
-    `build-search-index.ts:140` doesn't override it → production runs at 8/call (more calls/cost than intended).
-    Set `llmBatchSize` to ~25–30.
-
-14. **Calibration parity bug in learning loop.** `goal-learning.ts:47` calls `effectiveTraitScore` **without**
-    the calibration fn, so the learning loop uses raw confidence while ranking/goal_fit use calibrated. Pass
-    `calibrateTraitConfidence` for parity.
-
-15. **Per-product embedding calls (not batched).** `enrichment.ts:221-224` issues **2 HTTP embed calls per
-    product** in a loop; `embedTextBatch` (`embeddings.ts:111`) is exported but **never used**. For ~10k products
-    that's ~20k near-serial requests — very slow / rate-limit-prone. Use the batch path before the full run.
+Good work by composer — this is a real, faithful pass.
 
 ---
 
-## P3 — Eval & coverage gaps
+## 🔴 Still open — must fix (I was too lax in v1; these are real)
 
-16. **Goal-bucket sanity & top-1 barely exercised.** 64 cases (good type×category coverage incl. Hinglish and
-    word-order), and the leak gate is real (58/64 have `must_exclude`). But only **1** case has
-    `expected_bucket_ids` and **1** has `expected_top1_patterns` — so the §15 "goal-bucket sanity" metric is
-    untested across 12 of 13 goal cases. Add expected buckets/top-1 to more goal cases.
-17. **CI doesn't generate the calibration curve** (`search-v2.yml` doesn't set `SEARCH_EVAL_CALIBRATION`).
-18. **Mobile saved-searches is read-only** (`oasis-mobile/src/lib/saved-searches.ts`) — no create/delete parity.
+### M1. Rule-based membership block in candidate generation (NEW regression, §0.2 violation)
+`lib/search/v2/candidate-generation.ts:152-210` — a "directed short lookups" block that hardcodes:
+- a **STOP-word list** (`for/with/healthy/best/…`),
+- a **DIETARY keyword set** (`vegan/gluten/sugar/protein/…`),
+- an explicit **`milk`/`doodh` excludes `biscuit|cookie`** regex (line 193).
 
----
+This is exactly the banned "semantic language rules / head-noun rules" — and it *alters membership* (filters
+the pool) based on hardcoded food keywords. It's also **redundant**: `verification.ts:14` already flags
+`directed && tokens ≤ 2 && !brand` as precision-at-risk, so the batched Groq net is meant to handle exactly
+these short-query precision cases. **Fix: delete lines 152-210.** Membership for short queries comes from the
+LLM-enriched `primary_type` + `type_embedding` similarity (already implemented above it); residual precision is
+the verification net's job. If "Milk Biscuit" leaks into a "milk" search, the real fix is its `primary_type`
+being correctly enriched to `biscuit`, not a keyword exclusion.
 
-## What's correct (no changes needed — credit where due)
+### M2. The 500-candidate cut uses scale-mismatched `lex + vec`, not RRF (retract v1 "acceptable proxy")
+`candidate-generation.ts:226` sorts the cut-to-500 by `tier`, then `b.lex + b.vec`. `lex` is a raw
+token-count (0..n) and `vec` is cosine (0..1) — **adding them lets lexical dominate**, so semantically-strong
+matches with low lexical overlap (the whole point of hybrid search, and common for goal/vague queries) can be
+dropped *before* stage ② ever reranks them. This is a recall bug for exactly the queries Scout exists to
+serve. **Fix: cut by RRF(lexical-rank, vector-rank)** — the same rank-based, scale-free fusion already in
+`retrieve.ts:23-31` (k=60) — keeping tier-0 (exact type) first. Reuse the RRF helper; don't invent a second
+scoring scheme for the cut. (Bites whenever the membership pool > 500: bare single-type queries like
+"biscuits", broad goal queries.)
 
-- Trait split honored: quantitative = percentile-rank math within `primary_type`; semantic = LLM `{value,
-  confidence, reason}`; values `null` (not 0) when absent; provenance/confidence populated. (`traits.ts`,
-  `llm-enrichment.ts`)
-- `data_quality_score` = exactly 0.40·completeness + 0.30·ocr + 0.30·consistency, with 0.50/0.75 bands +
-  "Verified by Scout" at ≥0.75. (`data-quality.ts`, `adapter.ts`)
-- Type synonymy via `type_embedding` cosine ≥ **0.85**; no synonym table. (`candidate-generation.ts`)
-- Filters decide membership; vectors only reorder within the filtered set. (architecture respected)
-- RRF **k=60**, equal weight, real Postgres pg_trgm lexical (`search_v2_lexical_scores` RPC). (`retrieve.ts`,
-  `0015`)
-- Goal candidate gen: top-**K=8** categories by centroid cosine ≥ **0.5**; `category_trait_profile`
-  auto-computed from products (no hand-mapped table). (`category-profiles.ts`)
-- Goal graph: embedding-keyed resolution ≥ **0.92**; LLM decomposition bounded to the trait vocab + renormalized
-  to sum 1; seeds (running/diabetes/PCOS + 4); learning/persistence. (`goal-graph.ts`, `goal-learning.ts`)
-- Semantic intent cache: cosine ≥ **0.97**, prefs-aware. (`intent-cache.ts`)
-- Fast-path reads brands/types from the **enriched index** (data, not a lexicon); falls through to LLM on
-  flavour/goal/negation; LLM escalates to DeepSeek at confidence < **0.6** or ≥**2** constraints.
-  (`intent.ts`, `llm-intent.ts`, `index-meta.ts`)
-- Numeric extractor stays within explicit numeric/comparator scope (no synonym/goal/hierarchy tables).
-  (`numeric-constraints.ts`)
-- Popularity safety: **30-day** exponential half-life, **5%** exploration, **14-day** cold-start boost.
-  (`popularity.ts`)
-- Relaxation via embedding-nearest broader types (no hierarchy table), lowest-priority-first, type/flavour never
-  relaxed, always explained. (`relaxation.ts`, `type-neighbors.ts`)
-- Clustering via base_name+brand **embedding** proximity ≥ 0.92 (no regex stripping); representative = highest
-  data_quality. (`canonical-cluster.ts`)
-- Verification batched (one call/~20), non-blocking with graceful fallback. (`verification.ts` — modulo the
-  rule regex in P1)
-- Explainability: structured (trait, contribution, reason), confidence-gated. (`explain.ts`)
-- Premium Phase 1 fully real (DB+RLS+API+cron+UI): saved searches, alerts, Verified-by-Scout badge. (`0016`,
-  `app/api/me/*`, `app/api/cron/search-alerts`, `saved-search-actions.tsx`)
-- V2 wired into the live endpoint behind `SEARCH_V2_ENABLED` (default false). (`app/api/search/ai/route.ts`)
+### M3. Canonical clustering is per-batch, not global (§8 incomplete)
+`enrichment.ts:292` calls `assignCanonicalClusters(out)` inside `finalizeIndexBatch`, which runs **per
+enrichment slice** (`build-search-index.ts:140` calls `buildIndexFromProducts` per load batch). So a brand's
+variants that land in different batches **never cluster together** — `canonical_product_id` is only correct
+within a batch. The dedupe in `candidate-generation.ts:78-88` then under-collapses. **Fix: run clustering once
+over the full built set** (after all batches are enriched, before profiles/upsert in `build-search-index.ts`),
+not inside each batch.
 
 ---
 
-## What you actually need to run (not just "Voyage + enrichment")
+## 🟠 Should fix (correctness / principle, lower urgency)
 
-1. **Decide the embedding provider** (P0 #2). If Voyage/E5 → widen `vector(384)` columns first.
-2. `pnpm db:migrate` — apply 0013–0016 (index + saved-search tables).
-3. `pnpm search:build-index` — **one command** that does DeepSeek enrichment + math + tiers + data-quality +
-   embeddings + category profiles + seed goal graph, and writes `product_search_index`. (Embeddings and
-   enrichment are NOT separate steps.)
-4. `pnpm search:eval` — must pass leak-rate=0 / precision@5 ≥ 0.8 before serving.
-5. Set env: `SEARCH_V2_ENABLED=true`, `GROQ_API_KEY`, `EMBEDDING_API_KEY/BASE_URL/MODEL/DIM`,
-   `DEEPSEEK_SEARCH_API_KEY` (+ label), `CRON_SECRET`.
-6. `pnpm search:ship-check` — readiness probe (fails if <1000 index rows).
+### S1. Replace the `requiresLlmIntent` goal-keyword denylist with strict fast-path coverage (P1 #5, re-judged)
+`numeric-constraints.ts:117-126` keeps a hand-maintained semantic word list
+(`healthy|running|gym|diabetic|pcos|tiffin|junk|workout`) to force the LLM path. It only routes (never assigns
+meaning), so it's not a hard violation — **but it's non-exhaustive** and will silently fast-path-mishandle
+"keto snacks", "post-workout", "for my marathon", "low-GI". The robust fix needs no denylist: make the
+fast-path fire **only when every residual token (after numeric stripping) is a known brand or `primary_type`
+from the index** — anything else (incl. "healthy", "keto") is uncovered → LLM. Then delete the denylist
+entirely. This is more correct *and* more in the spirit of "no semantic keyword lists."
 
-**Suggested fix order for composer:** P0 #1 (allergen one-liner) → P1 #3,#4 (rule violations) → P2 #6
-(missing traits), #8–#11 (ranking/buckets), #15 (batch embeddings) → P0 #2 (provider decision + migration) →
-#7/#14 (calibration) → run index build → eval.
+### S2. Calibration must actually run, and its accuracy signal is weak
+The conservative clamp (M-list "fixed") is a fine interim, but §3c isn't truly satisfied until the curve is
+built. Two things: (a) run `SEARCH_EVAL_CALIBRATION=1 pnpm search:eval` **after** the index exists, and wire
+it into CI; (b) the "hit" signal in `scripts/eval-search.ts:196-205` counts a trait correct when the product
+merely matches the case's include-patterns — that conflates *retrieval relevance* with *trait-label accuracy*.
+Improve the ground-truth signal before trusting the curve, or the calibration will be measuring the wrong thing.
+
+### S3. Mobile saved-search UI not wired (P3 #18)
+`oasis-mobile/src/lib/saved-searches.ts` now has `saveSearch`/`deleteSavedSearch`, but
+`oasis-mobile/app/(tabs)/account.tsx` still only lists — no save/delete buttons. Wire the actions.
+
+### S4. Eval goal-bucket / top-1 coverage thin (P3 #16)
+64 cases with a real leak gate (58 have `must_exclude`), but only ~1 case each exercises `expected_bucket_ids`
+and `expected_top1_patterns`. Add expected buckets/top-1 to more of the 13 goal cases so §15's "goal-bucket
+sanity" is actually tested.
+
+---
+
+## ⚙️ Ops (your side — after the above code fixes)
+1. Set `EMBEDDING_*` env to **Voyage** (`voyage-multilingual-2`, 1024-dim) + `EMBEDDING_DIM=1024`; `GROQ_API_KEY`;
+   `DEEPSEEK_SEARCH_API_KEY`; `SEARCH_V2_ENABLED=true`; `CRON_SECRET`.
+2. `pnpm db:migrate` — apply 0013–**0017** (0017 widens vectors to 1024; existing 384 vectors are cleared, so
+   migrate **before** building the index).
+3. `pnpm search:build-index` — one command: DeepSeek enrichment + math traits + tiers + data-quality +
+   batched Voyage embeddings + category profiles + seed goal map. (Apply M3 first, or clustering is per-batch.)
+4. `SEARCH_EVAL_CALIBRATION=1 pnpm search:eval` — build the calibration curve **and** enforce leak-rate=0 /
+   precision@5 ≥ 0.8 before serving.
+5. `pnpm search:ship-check` (fails < 1000 rows) → flip `SEARCH_V2_ENABLED=true`.
+
+---
+
+## Suggested fix order for composer
+**M1** (delete the rule block — quickest, biggest principle win) → **M2** (RRF cut) → **M3** (global
+clustering) → **S1** (coverage-based fast-path, drop denylist) → S3/S4 → then ops (build index) → **S2**
+(calibration run, now that the index exists).
+
+Everything else from review v1 is confirmed resolved. The architecture remains faithful and the remaining
+items are contained — M1/M2/M3 are the ones that materially affect result quality.
