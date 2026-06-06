@@ -17,6 +17,16 @@
 2. **Goals are infinite; traits are finite.** We never precompute goals. We precompute a finite set of
    reusable **traits** per product, and at query time we **compose any goal as a weighting over traits.**
    New goals (“drinks for running”, “snacks for night shift”) emerge automatically — no new data, no new code.
+   Long-term behavior emerges from a single flow, **not** from manually expanding goal taxonomies:
+
+   ```
+   Goal → Trait weights → Candidate generation → Ranking → Recommendation
+   ```
+   Curated goal mappings exist only as a bootstrap layer (§3b).
+
+> **Product vision.** Scout is **not** optimizing for *"Which products match this query?"* — it is optimizing
+> for *"What should I buy?"* The **recommendation layer is the primary product moat.** Search quality matters,
+> but **decision support is the differentiator.**
 
 ```
 DIRECTED query → Intent → Candidate Generation → Retrieve (filter+hybrid) → Rank (health-aware)
@@ -113,6 +123,20 @@ drops** (a graph hit needs no model call).
 Resolution order for any goal: **graph hit → (miss) LLM decomposition bounded to known traits → persist the
 validated mapping back into the graph.** Over time, fewer misses, fewer LLM calls.
 
+### 3c. Trait confidence & provenance MUST influence scoring
+
+`trait_source`, `trait_confidence` (LLM self-confidence), and `data_quality_score` are not just metadata —
+they **discount the trait's contribution** to goal matching. For LLM-derived traits:
+
+```
+effective_trait_score = trait_value × min(data_quality_score, trait_confidence)
+```
+(derived-from-clean-nutrition traits use `data_quality_score` alone). Low-confidence traits contribute less;
+`goal_fit` uses `effective_trait_score`, never the raw value.
+
+> **Trustworthiness > recall.** The system must **never produce a highly confident recommendation from a
+> low-confidence OCR/LLM extraction.** A confident "Best Protein" pick requires confident protein data.
+
 ---
 
 ## 4. `product_search_index` (offline-built source of truth)
@@ -132,6 +156,7 @@ product_search_index (
   -- TRAITS  (§3) — the reasoning substrate
   traits jsonb,            -- { hydration:0.8, protein_density:0.2, ... }  (0–1, null if undeterminable)
   trait_source jsonb,      -- { hydration:"derived", kid_friendly:"llm" }
+  trait_confidence jsonb,  -- { kid_friendly:0.7, ... } LLM self-confidence; discounts scoring (§3c)
   -- HEALTH
   scout_score numeric, nova_group int,
   -- TRUST  (§5)
@@ -193,6 +218,30 @@ This is the canonical funnel: **Candidate Generation is its own stage** (members
 guarantee), distinct from rerank and final rank. We build it explicitly now even though ~500 fits in memory
 today, so the architecture already matches where every serious search system lands.
 
+### 6a. Candidate generation for goal queries — auto-computed category trait profiles
+
+A goal query must **not** scan the whole catalog, and we **must not** hand-maintain a category→trait table
+(same anti-pattern as a goal list). Instead, derive each category's character **automatically from its own
+products**:
+
+```sql
+category_trait_profile (   -- rebuilt offline alongside the index
+  category text pk,         -- (and/or subcategory / L3)
+  trait_means jsonb,        -- aggregate trait distribution: mean (and spread) of each trait over its products
+  product_count int
+)
+```
+Goal candidate generation:
+1. **Extract goal traits** (Nutrition Graph → weight vector).
+2. **Select categories** whose `trait_means` overlap strongly with the goal vector (cosine/weighted dot over
+   the shared trait space) — top-K categories, not all.
+3. **Apply hard filters** (allergens, dietary, `data_quality` gate).
+4. **Generate candidates only from those categories.**
+
+Example — `running` → {hydration, electrolytes, low_sugar} selects **beverages, electrolyte drinks, coconut
+water** (high-overlap profiles), not biscuits. Self-maintaining: add products/categories and profiles
+recompute; no manual mapping ever.
+
 ---
 
 ## 7. Retrieval & ranking
@@ -230,6 +279,23 @@ Bucket definitions are derived from the goal's dominant traits (so they’re als
 carries a one-line **"why"** (the traits that earned it). Generic buckets for any goal: *Best Overall, Best
 Budget, Best for Diabetics, Best Protein, Cleanest Label.*
 
+### 7d. Explainability layer (every recommendation carries structured reasons)
+
+A recommendation is never a bare result — it ships **structured reasons** drawn from the traits, health
+score, and goal alignment that earned it. Because the Nutrition Graph and traits are explicit, the "why" is
+generated, not hand-written:
+
+```
+Tender Coconut Water — why recommended           Protein Shake — why recommended
+  • High hydration support                         • Recovery support (post-workout)
+  • Natural electrolytes                            • High protein density
+  • Low added sugar                                 • Low added sugar
+  • Strong match for endurance activities
+```
+Each reason maps to a (trait, contribution) pair, so explanations stay consistent and truthful. **Users must
+understand why Scout recommended something** — explainability is part of the decision-support moat, not a
+nicety. Reasons are confidence-gated (§3c): we don't cite a trait we can't stand behind.
+
 ---
 
 ## 8. Canonical product clustering
@@ -258,10 +324,21 @@ search," never random.
 
 ---
 
-## 10. Popularity feedback loop
+## 10. Popularity feedback loop — safe by design
 
-Track `search_count, click_count, save_count` → CTR per product/query. Feeds the 10% popularity term in §7b
-and improves continuously from real behavior. Cold-start safe (defaults to 0, health/relevance dominate).
+Track `search_count, click_count, save_count` → CTR per product/query, feeding the 10% popularity term in
+§7b. Popularity must **not** create self-reinforcing ranking loops (popular → shown more → more popular).
+Three guards:
+
+- **Exploration (~5% of traffic):** randomly promote one candidate from the top candidate set into the shown
+  results and measure its CTR/saves. Lets strong products that ranking would otherwise suppress get
+  discovered. (Keeps it out of the user's way — one slot, clearly still relevant.)
+- **Time decay:** popularity is time-weighted — last 30 days highest weight, older interactions decay
+  progressively. Prevents stale winners from dominating forever.
+- **Cold-start `new_product_boost`:** a new product is **not** penalized for having no history. For its first
+  **7–14 days**, ranking is driven by relevance, health score, and trait quality/confidence, with popularity
+  influence reduced; the boost **decays automatically**. Genuinely strong new products surface instead of
+  being buried by incumbents.
 
 ---
 
@@ -285,8 +362,13 @@ relax `primary_type` or a required flavour.** Banner states exactly what changed
 
 ## 13. Premium / retention features (AFTER core search is solved — not core)
 
-Saved searches · product alerts · **"Verified by Scout"** badge (from §5 data-quality) · health
-tracking/history. These are retention layers; they ship only once search quality is proven by the eval gate.
+Ship only once search quality is proven by the eval gate, and in priority order:
+
+- **Phase 1 (value + subscription justification):** Saved Searches · Alerts · **"Verified by Scout"** badge
+  (from §5 data-quality). These directly create user value and justify the subscription.
+- **Phase 2:** additional trust features.
+- **Phase 3:** health tracking / history — primarily a *retention* feature; it must **not** distract from
+  search quality and comes last.
 
 ---
 
@@ -326,15 +408,17 @@ Seed from §14 + real `search_history`. **No search change ships unless leak-rat
 
 ## 16. Build order
 
-1. **Index + enrichment** — `product_search_index` schema; deterministic computations (nutrition tiers,
-   derived traits, allergens/claims copy-through, data_quality_score, brand_tier, pack_size, clustering);
-   focused LLM extraction (type/flavours/variants/use_cases/LLM-traits). Per-category runnable.
+1. **Index + enrichment** — `product_search_index` schema (incl. `trait_confidence`); deterministic
+   computations (nutrition tiers, derived traits, allergens/claims copy-through, data_quality_score,
+   brand_tier, pack_size, clustering) + `category_trait_profile`; focused LLM extraction
+   (type/flavours/variants/use_cases/LLM-traits). Per-category runnable.
 2. **Intent understanding** — `lib/search/intent.ts`: head-noun, atomic compounds, "with", synonyms,
    negation, fuzzy; heuristic-first, LLM-on-low-confidence; goal extraction.
 3. **Nutrition Graph + goal→trait engine** — `goal_trait_map` table (seed common goals), graph-hit →
-   bounded LLM decomposition → persist learned mappings; `goal_fit` scorer.
-4. **Online pipeline as explicit funnel** — Candidate Generation (membership) → Retrieve/rerank → Rank;
-   health-aware rank (directed) + **bucketed recommendations** (goal).
+   bounded LLM decomposition → persist learned mappings; `goal_fit` over **effective_trait_score** (§3c).
+4. **Online pipeline as explicit funnel** — Candidate Generation (directed = membership filters; goal =
+   category-trait-profile selection §6a) → Retrieve/rerank → Rank; health-aware rank (directed) +
+   **bucketed recommendations with explainability** (goal, §7c/§7d).
 5. **Embeddings** — provider chosen later (parked); structured-first means core ships without it. Add
    pgvector + RRF as the secondary expansion layer.
 6. **Verify net + relaxation + clustering UI + popularity loop.**
@@ -353,6 +437,13 @@ Seed from §14 + real `search_history`. **No search change ships unless leak-rat
 - **Candidate Generation is a distinct stage** — the funnel (23k→500→50→10) is explicit from day one.
 - **Structured retrieval > vector retrieval**; vectors are expansion/recovery, not the engine.
 - **Health must materially affect ranking** (30%+), else Scout is generic search.
+- **Category trait profiles are auto-computed, never hand-mapped** — goal candidate generation selects
+  categories by trait overlap (§6a).
+- **Confidence discounts scoring** — `effective_trait_score = trait × min(data_quality, trait_confidence)`;
+  **trustworthiness > recall**; never a confident rec from low-confidence data.
+- **Popularity is safe by design** — exploration (~5%), time decay, and `new_product_boost`; no
+  self-reinforcing loops.
+- **Every recommendation is explainable** — structured, confidence-gated trait reasons (§7d).
 - **Trust is core:** `data_quality_score` gates visibility; never silently drop or silently trust.
 - **LLM only when needed** (low confidence / sparse results); deterministic hot path.
 - **Never relax product type or required flavour**; always explain relaxation.
