@@ -130,8 +130,13 @@ async function main() {
     }
 
     for (let i = 0; i < chunkProducts.length; i += enrichChunk) {
-      const slice = chunkProducts.slice(i, i + enrichChunk);
+      if (args.limit && allFinalized.length >= args.limit) break;
+
+      const room = args.limit ? args.limit - allFinalized.length : enrichChunk;
+      const slice = chunkProducts.slice(i, i + Math.min(enrichChunk, room));
       if (!slice.length) continue;
+
+      console.log(`[search:build-index] enriching ${slice.length} products…`);
       const finalized = await buildIndexFromProducts(slice, { useLlm: !args.noLlm });
       allFinalized.push(...finalized);
 
@@ -150,8 +155,10 @@ async function main() {
           console.error("Apply migrations: pnpm db:migrate");
           process.exit(1);
         }
-        console.log(`[search:build-index] upserted ${allFinalized.length} rows…`);
+        console.log(`[search:build-index] upserted ${allFinalized.length} rows total`);
       }
+
+      if (args.limit && allFinalized.length >= args.limit) break;
     }
 
     offset += loadBatch;
@@ -203,7 +210,9 @@ async function main() {
     );
   }
 
-  console.log("[search:build-index] done");
+  const { clearSearchIndexSnapshotCache } = await import("@/lib/search/v2/index-queries");
+  clearSearchIndexSnapshotCache();
+  console.log("[search:build-index] done (snapshot cache cleared)");
 }
 
 main().catch((e) => {

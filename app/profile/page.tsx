@@ -7,6 +7,13 @@ import { useAuth } from "@/lib/auth/context";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { supabase as supabaseClient } from "@/lib/supabase/client";
+import {
+  deleteSavedSearch,
+  listSavedSearches,
+  runSearchAlerts,
+  updateSavedSearch,
+  type SavedSearchRow,
+} from "@/lib/search/v2/saved-searches-client";
 
 type HistoryEntry = {
   id: string;
@@ -34,6 +41,10 @@ export default function ProfilePage() {
   const [linkStep, setLinkStep] = useState<"idle" | "phone" | "otp">("idle");
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkLoading, setLinkLoading] = useState(false);
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRow[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [savedBusyId, setSavedBusyId] = useState<string | null>(null);
+  const [alertCheckStatus, setAlertCheckStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (ready && !session) router.replace("/login");
@@ -53,6 +64,57 @@ export default function ProfilePage() {
   }, [session]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  const loadSavedSearches = useCallback(async () => {
+    if (!session) return;
+    setSavedLoading(true);
+    try {
+      const rows = await listSavedSearches(session.access_token);
+      setSavedSearches(rows);
+    } catch { /* ignore */ }
+    finally { setSavedLoading(false); }
+  }, [session]);
+
+  useEffect(() => { void loadSavedSearches(); }, [loadSavedSearches]);
+
+  const toggleSavedAlert = async (row: SavedSearchRow) => {
+    if (!session) return;
+    setSavedBusyId(row.id);
+    try {
+      const updated = await updateSavedSearch(session.access_token, {
+        id: row.id,
+        alert_enabled: !row.alert_enabled,
+      });
+      setSavedSearches(prev => prev.map(s => (s.id === row.id ? updated : s)));
+    } finally { setSavedBusyId(null); }
+  };
+
+  const removeSavedSearch = async (id: string) => {
+    if (!session) return;
+    setSavedBusyId(id);
+    try {
+      await deleteSavedSearch(session.access_token, id);
+      setSavedSearches(prev => prev.filter(s => s.id !== id));
+    } finally { setSavedBusyId(null); }
+  };
+
+  const checkAlertsNow = async () => {
+    if (!session) return;
+    setAlertCheckStatus("Checking…");
+    try {
+      const { triggered } = await runSearchAlerts(session.access_token);
+      if (triggered.length === 0) {
+        setAlertCheckStatus("No new matches since last check");
+      } else {
+        setAlertCheckStatus(
+          `${triggered.length} alert${triggered.length === 1 ? "" : "s"} with new matches`,
+        );
+      }
+      await loadSavedSearches();
+    } catch {
+      setAlertCheckStatus("Could not run alerts");
+    }
+  };
 
   // Load linked identities
   useEffect(() => {
@@ -180,7 +242,7 @@ export default function ProfilePage() {
               value: isUnlimited ? "∞" : profile?.ai_searches_remaining ?? 0,
               sub: isUnlimited ? "unlimited" : "left today",
             },
-            { label: "Queries saved", value: history.length, sub: "in history" },
+            { label: "Saved searches", value: savedSearches.length, sub: "bookmarked" },
             { label: "Daily limit", value: isUnlimited ? "∞" : profile?.ai_searches_limit ?? 10, sub: "per day" },
           ].map(s => (
             <div key={s.label} className="rounded-xl border border-(--color-line) bg-(--color-panel) p-4">
@@ -293,6 +355,90 @@ export default function ProfilePage() {
               {linkError ? <p className="mt-2 text-[11px] text-red-400">{linkError}</p> : null}
             </div>
           </div>
+        </div>
+
+        {/* Saved searches */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-xl text-(--color-fg)">Saved searches</h2>
+              <p className="mt-1 text-[13px] text-(--color-fg-muted)">
+                Re-run saved queries and get notified when new products match.
+              </p>
+            </div>
+            {savedSearches.some(s => s.alert_enabled) ? (
+              <button
+                type="button"
+                onClick={() => void checkAlertsNow()}
+                className="flex-shrink-0 rounded-lg border border-(--color-line) px-3 py-1.5 text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
+              >
+                Check alerts
+              </button>
+            ) : null}
+          </div>
+          {alertCheckStatus ? (
+            <p className="mt-2 text-[12px] text-(--color-fg-dim)">{alertCheckStatus}</p>
+          ) : null}
+          {savedLoading ? (
+            <div className="mt-4 space-y-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-(--color-bg-soft)" />
+              ))}
+            </div>
+          ) : savedSearches.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-(--color-line) bg-(--color-panel) py-8 text-center">
+              <p className="text-sm text-(--color-fg-muted)">No saved searches yet.</p>
+              <Link href="/search" className="mt-2 inline-block text-[13px] font-medium text-(--color-accent) hover:underline">
+                Search and save a query →
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 divide-y divide-(--color-line) overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel)">
+              {savedSearches.map(s => (
+                <div key={s.id} className="group flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/search?prompt=${encodeURIComponent(s.query)}`}
+                      className="block truncate text-[14px] font-medium text-(--color-fg) hover:text-(--color-accent)"
+                    >
+                      {s.label || s.query}
+                    </Link>
+                    {s.label && s.label !== s.query ? (
+                      <p className="mt-0.5 truncate text-[11px] text-(--color-fg-dim)">{s.query}</p>
+                    ) : null}
+                    <p className="mt-0.5 text-[11px] text-(--color-fg-dim)">
+                      Saved {formatDate(s.created_at)}
+                      {s.alert_enabled ? " · alerts on" : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savedBusyId === s.id}
+                    onClick={() => void toggleSavedAlert(s)}
+                    title={s.alert_enabled ? "Turn off alerts" : "Alert me when new matches appear"}
+                    className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-50 ${
+                      s.alert_enabled
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                        : "border-(--color-line) text-(--color-fg-dim) hover:text-(--color-fg)"
+                    }`}
+                  >
+                    {savedBusyId === s.id ? "…" : s.alert_enabled ? "Alerting" : "Alert"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savedBusyId === s.id}
+                    onClick={() => void removeSavedSearch(s.id)}
+                    className="flex-shrink-0 opacity-0 transition group-hover:opacity-60 hover:!opacity-100 text-(--color-fg-dim)"
+                    title="Remove"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M1 1l10 10M11 1 1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Search History */}

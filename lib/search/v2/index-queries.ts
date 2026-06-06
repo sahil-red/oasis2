@@ -158,6 +158,10 @@ async function buildInMemorySnapshot(): Promise<SearchIndexSnapshot> {
   return { index, profiles, goalMap, source: "memory" };
 }
 
+export function clearSearchIndexSnapshotCache(): void {
+  cachedSnapshot = null;
+}
+
 export async function getSearchIndexSnapshot(forceRefresh = false): Promise<SearchIndexSnapshot> {
   if (!forceRefresh && cachedSnapshot && Date.now() - cachedSnapshot.at < SNAPSHOT_TTL_MS) {
     return cachedSnapshot.data;

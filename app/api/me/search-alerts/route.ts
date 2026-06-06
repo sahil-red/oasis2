@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
-import { runSearchV2 } from "@/lib/search/v2/pipeline";
+import { runAlertsForRecords, type AlertRecord } from "@/lib/search/v2/alert-runner";
 import { isSearchV2Enabled } from "@/lib/search/v2/index-queries";
 
 export const dynamic = "force-dynamic";
@@ -50,30 +50,13 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .eq("active", true);
 
-  const updates: Array<{ id: string; query: string; new_matches: number; previous: number }> = [];
-
-  for (const alert of alerts ?? []) {
-    const prefs = (alert.preferences as Record<string, unknown>) ?? {};
-    const result = await runSearchV2(String(alert.query), {
-      limit: 12,
-      preferences: prefs as import("@/lib/search/ai-usage").AiSearchPreferences,
-    });
-    const count = result.items.length;
-    const prev = Number(alert.last_match_count ?? 0);
-    const hasNew = count > prev;
-
-    await supabase
-      .from("search_alerts")
-      .update({
-        last_match_count: count,
-        last_notified_at: hasNew ? new Date().toISOString() : alert.last_notified_at,
-      })
-      .eq("id", alert.id);
-
-    if (hasNew) {
-      updates.push({ id: String(alert.id), query: String(alert.query), new_matches: count, previous: prev });
-    }
-  }
+  const triggered = await runAlertsForRecords((alerts ?? []) as AlertRecord[]);
+  const updates = triggered.map(({ id, query, new_matches, previous }) => ({
+    id,
+    query,
+    new_matches,
+    previous,
+  }));
 
   return NextResponse.json({ triggered: updates });
 }

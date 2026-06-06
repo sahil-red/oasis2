@@ -71,6 +71,64 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ saved_search: data });
 }
 
+export async function PATCH(req: NextRequest) {
+  const user = await requireUser(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = (await req.json().catch(() => null)) as {
+    id?: string;
+    label?: string;
+    alert_enabled?: boolean;
+  } | null;
+
+  const id = body?.id?.trim();
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const supabase = adminClient();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (body?.label !== undefined) patch.label = body.label.trim().slice(0, 80);
+  if (body?.alert_enabled !== undefined) patch.alert_enabled = Boolean(body.alert_enabled);
+
+  const { data, error } = await supabase
+    .from("saved_searches")
+    .update(patch)
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id, label, query, preferences, alert_enabled, created_at, updated_at")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (body?.alert_enabled === true) {
+    const { data: existing } = await supabase
+      .from("search_alerts")
+      .select("id")
+      .eq("saved_search_id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("search_alerts").update({ active: true }).eq("id", existing.id);
+    } else {
+      await supabase.from("search_alerts").insert({
+        user_id: user.id,
+        saved_search_id: id,
+        query: data.query,
+        preferences: data.preferences ?? {},
+        active: true,
+      });
+    }
+  } else if (body?.alert_enabled === false) {
+    await supabase
+      .from("search_alerts")
+      .update({ active: false })
+      .eq("saved_search_id", id)
+      .eq("user_id", user.id);
+  }
+
+  return NextResponse.json({ saved_search: data });
+}
+
 export async function DELETE(req: NextRequest) {
   const user = await requireUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

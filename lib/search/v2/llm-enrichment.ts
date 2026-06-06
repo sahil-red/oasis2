@@ -84,9 +84,7 @@ export type EnrichmentInput = {
   nutrition: Record<string, unknown> | null;
 };
 
-export async function enrichProductsWithLlm(
-  batch: EnrichmentInput[],
-): Promise<Map<string, LlmProductEnrichment>> {
+async function enrichBatchOnce(batch: EnrichmentInput[]): Promise<Map<string, LlmProductEnrichment>> {
   const out = new Map<string, LlmProductEnrichment>();
   if (!batch.length) return out;
 
@@ -107,8 +105,8 @@ export async function enrichProductsWithLlm(
   const { content } = await deepseekChat({
     usageKind: "search",
     jsonObject: true,
-    maxTokens: 4000,
-    timeoutMs: 90_000,
+    maxTokens: 8000,
+    timeoutMs: 120_000,
     system: ENRICHMENT_SYSTEM,
     user,
   });
@@ -122,6 +120,33 @@ export async function enrichProductsWithLlm(
     out.set(row.id, row);
   }
   return out;
+}
+
+/** Batched enrichment with automatic split-retry on truncated/malformed JSON. */
+export async function enrichProductsWithLlm(
+  batch: EnrichmentInput[],
+): Promise<Map<string, LlmProductEnrichment>> {
+  if (!batch.length) return new Map();
+
+  try {
+    return await enrichBatchOnce(batch);
+  } catch (err) {
+    if (batch.length === 1) {
+      console.warn(
+        `[llm-enrichment] failed for product ${batch[0]!.id}: ${err instanceof Error ? err.message : err}`,
+      );
+      return new Map();
+    }
+    const mid = Math.ceil(batch.length / 2);
+    console.warn(
+      `[llm-enrichment] batch of ${batch.length} failed, splitting ${mid}+${batch.length - mid}`,
+    );
+    const [left, right] = await Promise.all([
+      enrichProductsWithLlm(batch.slice(0, mid)),
+      enrichProductsWithLlm(batch.slice(mid)),
+    ]);
+    return new Map([...left, ...right]);
+  }
 }
 
 export function mergeSemanticTraits(

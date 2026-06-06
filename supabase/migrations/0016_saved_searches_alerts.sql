@@ -17,12 +17,16 @@ create index if not exists saved_searches_user_idx
 
 alter table public.saved_searches enable row level security;
 
+drop policy if exists "users_select_own_saved_searches" on public.saved_searches;
 create policy "users_select_own_saved_searches" on public.saved_searches
   for select using (auth.uid() = user_id);
+drop policy if exists "users_insert_own_saved_searches" on public.saved_searches;
 create policy "users_insert_own_saved_searches" on public.saved_searches
   for insert with check (auth.uid() = user_id);
+drop policy if exists "users_update_own_saved_searches" on public.saved_searches;
 create policy "users_update_own_saved_searches" on public.saved_searches
   for update using (auth.uid() = user_id);
+drop policy if exists "users_delete_own_saved_searches" on public.saved_searches;
 create policy "users_delete_own_saved_searches" on public.saved_searches
   for delete using (auth.uid() = user_id);
 
@@ -43,11 +47,15 @@ create index if not exists search_alerts_user_idx
 
 alter table public.search_alerts enable row level security;
 
+drop policy if exists "users_select_own_search_alerts" on public.search_alerts;
 create policy "users_select_own_search_alerts" on public.search_alerts
   for select using (auth.uid() = user_id);
+drop policy if exists "users_insert_own_search_alerts" on public.search_alerts;
 create policy "users_insert_own_search_alerts" on public.search_alerts
   for insert with check (auth.uid() = user_id);
+drop policy if exists "users_update_own_search_alerts" on public.search_alerts;
 create policy "users_update_own_search_alerts" on public.search_alerts
   for update using (auth.uid() = user_id);
+drop policy if exists "users_delete_own_search_alerts" on public.search_alerts;
 create policy "users_delete_own_search_alerts" on public.search_alerts
   for delete using (auth.uid() = user_id);

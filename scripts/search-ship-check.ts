@@ -10,27 +10,44 @@ import { adminClient } from "@/lib/supabase/admin";
 config({ path: ".env.local" });
 
 async function main() {
-  const required = [
-    "SEARCH_V2_ENABLED",
-    "EMBEDDING_API_KEY",
-    "GROQ_API_KEY",
-    "DEEPSEEK_SEARCH_API_KEY",
-  ];
-  const optional = ["OPENAI_API_KEY"];
-
   let ok = true;
   console.log("[search:ship-check] environment");
-  for (const key of required) {
-    const val = process.env[key] || (key === "EMBEDDING_API_KEY" ? process.env.OPENAI_API_KEY : "");
-    if (!val) {
-      console.error(`  ✗ ${key} missing`);
-      ok = false;
-    } else {
-      console.log(`  ✓ ${key}`);
-    }
+
+  const embeddingSource = process.env.EMBEDDING_API_KEY?.trim()
+    ? "EMBEDDING_API_KEY"
+    : process.env.OPENAI_API_KEY?.trim()
+      ? "OPENAI_API_KEY"
+      : process.env.EMBEDDING_BASE_URL?.trim()
+        ? "EMBEDDING_BASE_URL"
+        : null;
+  if (!embeddingSource) {
+    console.log("  · embeddings: no cloud key (lexical fallback only; optional EMBEDDING_API_KEY for full quality)");
+  } else {
+    console.log(`  ✓ embeddings (${embeddingSource})`);
   }
-  for (const key of optional) {
-    if (process.env[key]) console.log(`  · ${key} (optional)`);
+
+  if (!process.env.GROQ_API_KEY?.trim()) {
+    console.error("  ✗ GROQ_API_KEY missing");
+    ok = false;
+  } else {
+    console.log("  ✓ GROQ_API_KEY");
+  }
+
+  const deepseekKey =
+    process.env.DEEPSEEK_SEARCH_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
+  if (!deepseekKey) {
+    console.error("  ✗ DEEPSEEK_SEARCH_API_KEY or DEEPSEEK_API_KEY missing");
+    ok = false;
+  } else {
+    console.log(`  ✓ deepseek (${process.env.DEEPSEEK_SEARCH_API_KEY ? "DEEPSEEK_SEARCH_API_KEY" : "DEEPSEEK_API_KEY"})`);
+  }
+
+  const v2Enabled =
+    process.env.SEARCH_V2_ENABLED === "1" || process.env.SEARCH_V2_ENABLED === "true";
+  if (!v2Enabled) {
+    console.log("  · SEARCH_V2_ENABLED=false (set true when ready to flip live)");
+  } else {
+    console.log("  ✓ SEARCH_V2_ENABLED");
   }
 
   console.log("\n[search:ship-check] database");
@@ -57,10 +74,20 @@ async function main() {
       .limit(5);
     const withEmbed = (sample ?? []).filter((r) => r.embedding != null).length;
     if (withEmbed === 0) {
-      console.error("  ✗ no embeddings on sample rows — rebuild index with EMBEDDING_API_KEY");
-      ok = false;
+      console.log("  · no embeddings in index yet (optional — add EMBEDDING_API_KEY + rebuild for semantic quality)");
     } else {
       console.log(`  ✓ embeddings present on sample`);
+    }
+
+    const { error: savedErr } = await supabase.from("saved_searches").select("id", { head: true, count: "exact" });
+    if (savedErr?.message?.includes("does not exist")) {
+      console.error("  ✗ saved_searches table missing — run pnpm db:migrate");
+      ok = false;
+    } else if (savedErr) {
+      console.error(`  ✗ saved_searches: ${savedErr.message}`);
+      ok = false;
+    } else {
+      console.log("  ✓ saved_searches table");
     }
   } catch (e) {
     console.error(`  ✗ db: ${e instanceof Error ? e.message : e}`);
@@ -70,6 +97,11 @@ async function main() {
   if (!ok) {
     console.error("\n[search:ship-check] NOT READY");
     process.exit(1);
+  }
+  if (!process.env.CRON_SECRET) {
+    console.log("\n[search:ship-check] note: set CRON_SECRET for /api/cron/search-alerts (daily sweep)");
+  } else {
+    console.log("\n[search:ship-check] cron: GET /api/cron/search-alerts with Authorization: Bearer $CRON_SECRET");
   }
   console.log("\n[search:ship-check] READY for SEARCH_V2_ENABLED=true");
 }

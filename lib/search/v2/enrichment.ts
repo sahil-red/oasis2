@@ -251,7 +251,7 @@ export async function buildIndexFromProducts(
   );
 
   const useLlm = opts.useLlm !== false && Boolean(process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY);
-  const batchSize = opts.llmBatchSize ?? 25;
+  const batchSize = opts.llmBatchSize ?? 8;
   const partial: ProductSearchIndexRow[] = [];
 
   for (let i = 0; i < eligible.length; i += batchSize) {
