@@ -27,6 +27,7 @@ Schema:
     "max_price"?: number,
     "max_sugar_g"?: number,
     "max_fat_g"?: number,
+    "max_calories"?: number,
     "min_protein_g"?: number,
     "vegan"?: boolean,
     "vegetarian"?: boolean,
@@ -48,7 +49,7 @@ Rules:
 - "chocolate milk" vs "milk chocolate" are opposite primary_types — use product meaning, not word order rules.
 - Goal/vague queries (healthy drinks for running, tiffin not junk) → kind:"goal" with goal_phrase.
 - Use-case queries (pre-workout snack, school lunch) → kind:"directed" or "goal" with use_case slug (pre_workout, school_lunch).
-- Type + health context (biscuits for diabetics) → kind:"directed", rank by diabetic traits.
+- Type + health context or vague nutrition adjective WITHOUT a number (diabetic bread, protein shake with low calories, drinks for athletes with a type) → kind:"directed", set primary_type for membership AND set goal_phrase to the health/nutrition intent ("diabetic friendly", "low calorie", "athlete recovery") so ranking uses its traits. Set max_calories only when a number is given ("under 100 calories").
 - "high protein milk" → primary_type:"milk", sort:"highest_protein", do NOT set min_protein_g.
 - constraint_priorities: lower number = relax first (price before sugar before avoid_ingredients).
 - modifiers may include: high_protein_tier, low_sugar, no_added_sugar when user asks relatively.
@@ -81,6 +82,7 @@ function mergeNumericIntoIntent(
   if (numeric.max_price != null) constraints.max_price = numeric.max_price;
   if (numeric.max_sugar_g != null) constraints.max_sugar_g = numeric.max_sugar_g;
   if (numeric.max_fat_g != null) constraints.max_fat_g = numeric.max_fat_g;
+  if (numeric.max_calories != null) constraints.max_calories = numeric.max_calories;
   if (numeric.min_protein_g != null && !base.primary_type) {
     constraints.min_protein_g = numeric.min_protein_g;
   }
@@ -109,6 +111,7 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     max_price: raw.constraints?.max_price,
     max_sugar_g: raw.constraints?.max_sugar_g,
     max_fat_g: raw.constraints?.max_fat_g,
+    max_calories: raw.constraints?.max_calories,
     min_protein_g: raw.constraints?.min_protein_g,
     vegan: raw.constraints?.vegan,
     vegetarian: raw.constraints?.vegetarian,
@@ -123,7 +126,10 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
 
   return {
     kind,
-    goal_phrase: kind === "goal" ? (raw.goal_phrase?.trim() || null) : null,
+    // Keep goal_phrase even for directed queries — "diabetic bread" / "protein shake
+    // with low calories" stay type-filtered (membership) but rank by the health/nutrition
+    // traits the goal_phrase decomposes into. Pure-pointed queries leave it null.
+    goal_phrase: raw.goal_phrase?.trim() || null,
     goal_id: null,
     brand: raw.brand?.trim() || null,
     primary_type: raw.primary_type?.trim().toLowerCase() || null,

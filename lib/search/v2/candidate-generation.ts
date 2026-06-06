@@ -65,6 +65,7 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   if (c.max_price != null && row.price_inr != null && row.price_inr > c.max_price) return false;
   if (c.max_sugar_g != null && row.sugar_g != null && row.sugar_g > c.max_sugar_g) return false;
   if (c.max_fat_g != null && row.fat_g != null && row.fat_g > c.max_fat_g) return false;
+  if (c.max_calories != null && row.energy_kcal != null && row.energy_kcal > c.max_calories) return false;
   if (c.min_protein_g != null && row.protein_g != null && row.protein_g < c.min_protein_g) return false;
   if (intent.modifiers.includes("high_protein_tier") && row.protein_tier === "low") return false;
   if (intent.modifiers.includes("low_sugar") && row.sugar_tier === "high") return false;

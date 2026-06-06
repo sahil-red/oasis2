@@ -9,6 +9,7 @@ export type NumericExtraction = {
   max_price?: number;
   max_sugar_g?: number;
   max_fat_g?: number;
+  max_calories?: number;
   min_protein_g?: number;
   high_protein_tier: boolean;
   low_sugar_tier: boolean;
@@ -42,8 +43,12 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
   };
 
   const maxPrice =
-    firstNumber(text, /(?:under|below|less than|<|₹|rs\.?|inr)\s*(\d{2,5})/) ??
-    firstNumber(text, /(\d{2,5})\s*(?:rs|rupees|inr|₹)/);
+    // Negative lookahead: "under 100 calories" / "below 150 kcal" / "under 20g" are
+    // nutrient limits, not prices — don't capture them here.
+    firstNumber(
+      text,
+      /(?:under|below|less than|<|₹|rs\.?|inr)\s*(\d{2,5})(?!\d)(?!\s*(?:k?cal|calorie|gm?\b|gram|ml\b|%))/,
+    ) ?? firstNumber(text, /(\d{2,5})\s*(?:rs|rupees|inr|₹)/);
   if (maxPrice) {
     out.max_price = maxPrice;
     text = text.replace(/(?:under|below|less than|<|₹|rs\.?|inr)\s*\d{2,5}/g, " ");
@@ -69,6 +74,13 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
 
   const proteinMin = firstNumber(text, /(?:protein)\D{0,12}(\d{1,3})\s*g/);
   if (proteinMin) out.min_protein_g = proteinMin;
+
+  // Explicit calorie ceiling ("under 100 calories", "150 kcal"). Vague "low calorie"
+  // (no number) is intentionally left for the LLM → goal_phrase → low_calorie_density trait.
+  const calLimit =
+    firstNumber(text, /(?:under|below|less than|max|<)\s*(\d{2,4})\s*(?:k?cal|calorie|calories)/) ??
+    firstNumber(text, /(\d{2,4})\s*(?:k?cal|calorie|calories)/);
+  if (calLimit) out.max_calories = calLimit;
 
   if (/\b(highest protein|high protein|most protein)\b/.test(text)) {
     out.high_protein_tier = true;
@@ -115,6 +127,7 @@ export function countActiveConstraints(n: NumericExtraction): number {
   if (n.max_price != null) c++;
   if (n.max_sugar_g != null) c++;
   if (n.max_fat_g != null) c++;
+  if (n.max_calories != null) c++;
   if (n.min_protein_g != null) c++;
   if (n.high_protein_tier) c++;
   if (n.low_sugar_tier) c++;

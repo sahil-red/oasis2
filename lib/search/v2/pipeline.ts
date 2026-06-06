@@ -63,8 +63,11 @@ export async function runSearchV2(
     }
   }
 
+  // Resolve trait weights whenever a goal_phrase exists — not only for pure goal
+  // queries. A directed "diabetic bread" keeps its type filter (candidate gen only
+  // applies category-selection for kind==="goal") but ranks by diabetic traits.
   let goalWeights = null as Awaited<ReturnType<typeof resolveGoalWeights>> | null;
-  if (intent.kind === "goal" && intent.goal_phrase) {
+  if (intent.goal_phrase) {
     goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
     intent = { ...intent, goal_id: goalWeights.goal_id };
     llm_calls += goalWeights.llm_calls;

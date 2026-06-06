@@ -138,6 +138,7 @@ export type SearchIntentV2 = {
   constraints: {
     max_sugar_g?: number;
     max_fat_g?: number;
+    max_calories?: number;
     min_protein_g?: number;
     max_price?: number;
     vegan?: boolean;

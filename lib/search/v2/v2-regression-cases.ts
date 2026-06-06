@@ -36,4 +36,12 @@ export const NUMERIC_CASES: Array<{
     query: "biscuits under 5g sugar",
     check: (n) => n.max_sugar_g === 5 && n.residual_text.includes("biscuit"),
   },
+  {
+    query: "protein shake under 100 calories",
+    check: (n) => n.max_calories === 100 && n.residual_text.includes("protein shake"),
+  },
+  {
+    query: "snacks below 150 kcal",
+    check: (n) => n.max_calories === 150 && n.residual_text.includes("snack"),
+  },
 ];
