@@ -1,10 +1,8 @@
 /**
- * L3 online intent — Groq fast model, DeepSeek escalation (§6, §9).
+ * L3 online intent — DeepSeek for all live calls (single provider).
  */
-import { deepseekChat } from "@/lib/search/deepseek-client";
-import { groqChat, parseGroqJson } from "@/lib/search/v2/groq-client";
+import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
 import {
-  countActiveConstraints,
   extractNumericConstraints,
   type NumericExtraction,
 } from "@/lib/search/v2/numeric-constraints";
@@ -45,8 +43,18 @@ Schema:
 }
 
 Rules:
+- BRAND = a manufacturer / company name (the maker), e.g. Amul, Nestlé, Epigamia, Wedel.
+  Descriptive qualifiers that describe the product itself — cow, buffalo, olive, milk, dark,
+  fresh, raw, organic, salted, roasted — are NOT brands; put such a qualifier in
+  required_flavours (it narrows the variant), and leave brand null unless an actual maker is named.
+- kind:"brand" ONLY when the query is purely a brand name with no product type. If a product
+  type is present, kind:"directed" and brand is just an optional filter (often null).
+  e.g. "cow ghee" → kind:"directed", primary_type:"ghee", required_flavours:["cow"], brand:null.
+  "olive oil" → primary_type:"olive oil" (keep multi-word types together), brand:null.
 - Understand Hindi/Hinglish natively (doodh, bina cheeni, nahi).
-- "chocolate milk" vs "milk chocolate" are opposite primary_types — use product meaning, not word order rules.
+- "chocolate milk" → primary_type:"milk", required_flavours:["chocolate"]. "milk chocolate" →
+  primary_type:"chocolate", required_flavours:["milk"]. Decide the head noun by product meaning;
+  the qualifier is a flavour, never a brand.
 - Goal/vague queries (healthy drinks for running, tiffin not junk) → kind:"goal" with goal_phrase.
 - Use-case queries (pre-workout snack, school lunch) → kind:"directed" or "goal" with use_case slug (pre_workout, school_lunch).
 - Type + health context or vague nutrition adjective WITHOUT a number (diabetic bread, protein shake with low calories, drinks for athletes with a type) → kind:"directed", set primary_type for membership AND set goal_phrase to the health/nutrition intent ("diabetic friendly", "low calorie", "athlete recovery") so ranking uses its traits. Set max_calories only when a number is given ("under 100 calories").
@@ -142,7 +150,7 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     comparison_ref: raw.comparison_ref?.trim() || null,
     comparison_mode: raw.comparison_mode ?? null,
     confidence: Math.max(0, Math.min(1, raw.intent_confidence ?? 0.7)),
-    intent_source: "llm-groq",
+    intent_source: "llm-deepseek",
     raw_query: query,
   };
 }
@@ -162,36 +170,20 @@ function defaultConstraintPriorities(
 
 export async function parseIntentWithLlm(
   query: string,
-  opts: { escalateDeepseek?: boolean } = {},
+  _opts: { escalateDeepseek?: boolean } = {},
 ): Promise<{ intent: SearchIntentV2; llm_calls: number }> {
   const numeric = extractNumericConstraints(query);
-  const constraintCount = countActiveConstraints(numeric);
-  const useDeepseek =
-    opts.escalateDeepseek || constraintCount >= 2;
 
-  let llm_calls = 0;
-  let intent: SearchIntentV2;
-
-  if (useDeepseek) {
-    const { content } = await deepseekChat({
-      usageKind: "search",
-      jsonObject: true,
-      maxTokens: 1000,
-      timeoutMs: 20_000,
-      system: INTENT_SYSTEM_PROMPT,
-      user: `Query: ${query}`,
-    });
-    llm_calls += 1;
-    intent = normalizeLlmIntent(parseGroqJson<LlmIntentJson>(content), query);
-    intent.intent_source = "llm-deepseek";
-  } else {
-    const { content } = await groqChat({
-      system: INTENT_SYSTEM_PROMPT,
-      user: `Query: ${query}`,
-    });
-    llm_calls += 1;
-    intent = normalizeLlmIntent(parseGroqJson<LlmIntentJson>(content), query);
-  }
+  const { content } = await deepseekChat({
+    usageKind: "search",
+    jsonObject: true,
+    maxTokens: 1000,
+    timeoutMs: 20_000,
+    system: INTENT_SYSTEM_PROMPT,
+    user: `Query: ${query}`,
+  });
+  let intent = normalizeLlmIntent(extractJsonObject(content) as LlmIntentJson, query);
+  intent.intent_source = "llm-deepseek";
 
   intent = mergeNumericIntoIntent(intent, numeric);
   if (!intent.comparison_ref && numeric.comparison_ref) {
@@ -201,12 +193,8 @@ export async function parseIntentWithLlm(
       comparison_mode: numeric.comparison_mode ?? null,
     };
   }
-  if (intent.confidence < 0.6 && !useDeepseek) {
-    const escalated = await parseIntentWithLlm(query, { escalateDeepseek: true });
-    return { intent: escalated.intent, llm_calls: llm_calls + escalated.llm_calls };
-  }
 
-  return { intent, llm_calls };
+  return { intent, llm_calls: 1 };
 }
 
 /** §11 relaxation: LLM proposes next-broader intent */
@@ -217,17 +205,20 @@ export async function relaxIntentWithLlm(
   const sorted = [...intent.constraint_priorities].sort((a, b) => a.priority - b.priority);
   const next = sorted[0]?.field;
 
-  const { content } = await groqChat({
+  const { content } = await deepseekChat({
+    usageKind: "search",
+    jsonObject: true,
+    maxTokens: 800,
+    timeoutMs: 20_000,
     system: `You broaden a grocery search intent when results are sparse. Never change primary_type or required_flavours. Return JSON: {"intent":{...same schema as parse...},"explanation":string}`,
     user: JSON.stringify({
       current_intent: intent,
       relax_field: next ?? "modifiers",
       embedding_neighbor_types: opts.type_neighbors ?? [],
     }),
-    maxTokens: 800,
   });
 
-  const parsed = parseGroqJson<{ intent?: LlmIntentJson; explanation?: string }>(content);
+  const parsed = extractJsonObject(content) as { intent?: LlmIntentJson; explanation?: string };
   const relaxed = normalizeLlmIntent(parsed.intent ?? {}, intent.raw_query);
   relaxed.intent_source = intent.intent_source;
 

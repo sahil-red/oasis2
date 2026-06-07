@@ -91,7 +91,7 @@ export async function runSearchV2(
       intent = deterministic.intent;
       relaxation_steps.push(deterministic.explanation);
       relaxed = true;
-    } else if (process.env.GROQ_API_KEY?.trim()) {
+    } else if ((process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY)?.trim()) {
       try {
         const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
         llm_calls += relaxedResult.llm_calls;

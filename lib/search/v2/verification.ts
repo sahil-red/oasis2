@@ -1,7 +1,7 @@
 /**
- * §6 LLM verification net — batched Groq over top results when precision is at risk.
+ * §6 LLM verification net — batched DeepSeek over top results when precision is at risk.
  */
-import { groqChat, parseGroqJson } from "@/lib/search/v2/groq-client";
+import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
 export const VERIFICATION_CAP = 50;
@@ -32,7 +32,7 @@ export async function verifyTopCandidates(
     return { rows, llm_calls: 0 };
   }
 
-  if (!process.env.GROQ_API_KEY?.trim()) {
+  if (!(process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY)?.trim()) {
     return { rows, llm_calls: 0 };
   }
 
@@ -53,13 +53,19 @@ export async function verifyTopCandidates(
     : "";
 
   try {
-    const { content } = await groqChat({
-      system: `You verify grocery search results. Return JSON: {"keep_ids": string[]}
-Keep only products that are genuinely a ${typeDesc}${flavourDesc}${useCaseDesc} for the shopper query. Text-only judgment. Be strict.`,
-      user: JSON.stringify({ query: intent.raw_query, products: payload }),
+    const { content } = await deepseekChat({
+      usageKind: "search",
+      jsonObject: true,
       maxTokens: 800,
+      timeoutMs: 20_000,
+      system: `You verify grocery search results. Return JSON: {"keep_ids": string[]}
+Keep a product ONLY if its actual product FORM/CATEGORY is genuinely a ${typeDesc}${flavourDesc}${useCaseDesc}.
+Judge what the product fundamentally IS, not shared flavour words: a chocolate BAR is NOT
+chocolate MILK; a "milk chocolate" bar is still a chocolate bar — reject it for a "milk" query
+even though it contains the word milk. When unsure, exclude. Be strict.`,
+      user: JSON.stringify({ query: intent.raw_query, products: payload }),
     });
-    const parsed = parseGroqJson<{ keep_ids?: string[] }>(content);
+    const parsed = extractJsonObject(content) as { keep_ids?: string[] };
     const keep = new Set((parsed.keep_ids ?? []).map(String));
     if (!keep.size) return { rows: [], llm_calls: 1 };
 
