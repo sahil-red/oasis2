@@ -145,8 +145,13 @@ export async function runSearchV2(
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 
   const { items, explored } = applyExplorationSlot(ranked, intent.raw_query, limit);
+  // Build recommendation buckets whenever a goal/health intent resolved trait weights —
+  // not only pure kind="goal". "diabetic bread" / "kids tiffin" parse as directed+goal_phrase
+  // but still deserve Best-For buckets.
   const buckets =
-    intent.kind === "goal" ? buildGoalBuckets(ranked, goalWeights?.weights ?? null) : null;
+    goalWeights?.weights && Object.keys(goalWeights.weights).length
+      ? buildGoalBuckets(ranked, goalWeights.weights)
+      : null;
 
   const goalLabel =
     intent.goal_id != null

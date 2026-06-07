@@ -91,7 +91,8 @@ async function main() {
         "id, slug, name, brand, super_category, category, subcategory, l3_category, net_weight, price_inr, mrp_inr, nutrition, ingredients_raw, attributes, core_scores ( score, subscores )",
       )
       .eq("platform", "zepto")
-      .not("nutrition", "is", null);
+      .not("nutrition", "is", null)
+      .not("ingredients_raw", "is", null);
 
     if (args.category) query = query.eq("category", args.category);
     if (args.subcategory) query = query.eq("subcategory", args.subcategory);
@@ -99,15 +100,22 @@ async function main() {
     const { data, error } = await query.range(offset, offset + loadBatch - 1);
     if (error) throw new Error(error.message);
 
-    const rows = (data ?? []).filter((p) =>
-      isCatalogVisible({
+    const rows = (data ?? []).filter((p) => {
+      // Only enrich products that actually went through DeepSeek OCR label extraction —
+      // they have real nutrition + ingredients + label fields for the LLM to reason over.
+      const attrs = (p.attributes ?? {}) as Record<string, string>;
+      const hasDeepseekLabel =
+        attrs["DeepSeek Label Extracted"] != null ||
+        attrs["DeepSeek Overall Confidence"] != null;
+      if (!hasDeepseekLabel) return false;
+      return isCatalogVisible({
         name: p.name,
         category: p.category,
         subcategory: p.subcategory,
         ingredients_raw: p.ingredients_raw,
         nutrition: p.nutrition,
-      }),
-    );
+      });
+    });
 
     const chunkProducts: EnrichSource[] = [];
     for (const p of rows) {
@@ -140,7 +148,7 @@ async function main() {
         attributes: source.attributes,
       });
       if (args.skipUnchanged && existingHashes.get(source.id) === hash) continue;
-      chunkProducts.push(source);
+      chunkProducts.push(source as EnrichSource);
     }
 
     for (let i = 0; i < chunkProducts.length; i += enrichChunk) {

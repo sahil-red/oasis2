@@ -3,11 +3,14 @@ import { buildReasons } from "@/lib/search/v2/explain";
 import { comparisonBeatScore, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { computePopularitySignal } from "@/lib/search/v2/popularity";
 import { useCaseMatchScore } from "@/lib/search/v2/use-case";
+import { effectiveTraitScore } from "@/lib/search/v2/traits";
+import { calibrateTraitConfidence } from "@/lib/search/v2/trait-calibration";
 import type {
   GoalTraitWeights,
   ProductSearchIndexRow,
   RankedCandidate,
   SearchIntentV2,
+  TraitId,
 } from "@/lib/search/v2/types";
 
 function clamp01(n: number): number {
@@ -22,9 +25,32 @@ function minMaxNormalize(values: number[]): number[] {
   return values.map((v) => (v - min) / (max - min));
 }
 
+/** LLM-derived "cleanliness/wholeness" signal — reads the model's ingredient judgment. */
+const HEALTH_TRAITS: TraitId[] = ["whole_food", "clean_label", "no_added_sugar", "low_sugar"];
+
+function cleanComposite(row: ProductSearchIndexRow): number | null {
+  const vals = HEALTH_TRAITS.map((t) =>
+    row.traits[t] != null
+      ? effectiveTraitScore(t, row.traits[t], row, calibrateTraitConfidence)
+      : null,
+  ).filter((v): v is number => v != null);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/**
+ * Health = the deterministic Scout score blended with the LLM's ingredient understanding
+ * (whole_food / clean_label / no_added_sugar / low_sugar). This is what lets natural coconut
+ * water outrank a sugar+preservative one even on a bare "coconut water" query — the flat
+ * Scout score alone does not separate them.
+ */
 function healthScore(row: ProductSearchIndexRow): number {
-  if (row.scout_score == null) return 0.45;
-  return clamp01(row.scout_score / 100);
+  const scout = row.scout_score != null ? clamp01(row.scout_score / 100) : null;
+  const comp = cleanComposite(row);
+  if (scout != null && comp != null) return clamp01(0.5 * scout + 0.5 * comp);
+  if (comp != null) return comp;
+  if (scout != null) return scout;
+  return 0.45;
 }
 
 
