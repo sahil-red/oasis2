@@ -177,7 +177,7 @@ export async function parseIntentWithLlm(
   const { content } = await deepseekChat({
     usageKind: "search",
     jsonObject: true,
-    maxTokens: 1000,
+    maxTokens: 600,
     timeoutMs: 20_000,
     system: INTENT_SYSTEM_PROMPT,
     user: `Query: ${query}`,

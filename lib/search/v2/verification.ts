@@ -7,18 +7,14 @@ import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/type
 export const VERIFICATION_CAP = 50;
 
 export function isPrecisionAtRisk(intent: SearchIntentV2): boolean {
+  // Only verify when there's genuine mismatch/safety risk — a required flavour/variant
+  // (the chocolate-bar-vs-milk case) or an avoid/allergen constraint. The deterministic
+  // type-gate already handles plain type queries, so verifying every short query just
+  // adds a ~2.5s DeepSeek call for no precision gain.
   if (intent.required_flavours.length > 0) return true;
-  if (intent.modifiers.length > 0) return true;
-  if (intent.use_case) return true;
-  if (intent.confidence < 0.75) return true;
-  const tokens = intent.raw_query.trim().split(/\s+/).filter(Boolean);
-  if (intent.kind === "directed" && tokens.length <= 2 && !intent.brand) return true;
-  if (
-    intent.constraints.avoid_ingredients.length > 0 ||
-    intent.constraints.allergens_excluded.length > 0
-  ) {
-    return true;
-  }
+  if (intent.constraints.avoid_ingredients.length > 0) return true;
+  if (intent.constraints.allergens_excluded.length > 0) return true;
+  if (intent.confidence < 0.5) return true;
   return false;
 }
 

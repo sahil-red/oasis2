@@ -63,35 +63,49 @@ export async function runSearchV2(
     }
   }
 
-  // Resolve trait weights whenever a goal_phrase exists — not only for pure goal
-  // queries. A directed "diabetic bread" keeps its type filter (candidate gen only
-  // applies category-selection for kind==="goal") but ranks by diabetic traits.
+  // Resolve trait weights whenever a goal_phrase exists — not only for pure goal queries.
+  // A directed "diabetic bread" keeps its type filter (candidate gen only applies
+  // category-selection for kind==="goal") but ranks by diabetic traits.
   let goalWeights = null as Awaited<ReturnType<typeof resolveGoalWeights>> | null;
-  if (intent.goal_phrase) {
+  let candidates: Awaited<ReturnType<typeof generateCandidates>>;
+
+  if (intent.kind === "goal" && intent.goal_phrase) {
+    // Goal route: weights drive candidate category-selection → must resolve first.
     goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
     intent = { ...intent, goal_id: goalWeights.goal_id };
     llm_calls += goalWeights.llm_calls;
+    candidates = await generateCandidates(snapshot.index, intent, snapshot.profiles, goalWeights.weights, minDataQuality);
+  } else {
+    // Directed: goal weights only feed ranking, so resolve them in PARALLEL with
+    // candidate generation+retrieval instead of serially (saves a ~2.5s DeepSeek call).
+    const [gw, cands] = await Promise.all([
+      intent.goal_phrase ? resolveGoalWeights(intent.goal_phrase, snapshot.goalMap) : Promise.resolve(null),
+      generateCandidates(snapshot.index, intent, snapshot.profiles, null, minDataQuality),
+    ]);
+    goalWeights = gw;
+    if (gw) {
+      intent = { ...intent, goal_id: gw.goal_id };
+      llm_calls += gw.llm_calls;
+    }
+    candidates = cands;
   }
-
-  let candidates = await generateCandidates(
-    snapshot.index,
-    intent,
-    snapshot.profiles,
-    goalWeights?.weights ?? null,
-    minDataQuality,
-  );
 
   const typeNeighbors = intent.primary_type
     ? await nearestPrimaryTypes(intent.primary_type, snapshot.index)
     : [];
 
+  // Cap LLM-based relaxation to ONE call — deterministic relaxation is free; the LLM
+  // broadening is a ~2.5s call, and looping it on a genuinely-empty query (product not in
+  // catalog) just burns 4 calls / 10s for nothing.
+  let llmRelaxUsed = false;
   while (candidates.length < MIN_RESULTS) {
     const deterministic = relaxIntentDeterministic(intent);
     if (deterministic) {
       intent = deterministic.intent;
       relaxation_steps.push(deterministic.explanation);
       relaxed = true;
-    } else if ((process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY)?.trim()) {
+    } else if (!llmRelaxUsed && (process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY)?.trim()) {
+      llmRelaxUsed = true;
       try {
         const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
         llm_calls += relaxedResult.llm_calls;
