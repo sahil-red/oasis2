@@ -59,10 +59,11 @@ export async function verifyTopCandidates(
       maxTokens: 800,
       timeoutMs: 20_000,
       system: `You verify grocery search results. Return JSON: {"keep_ids": string[]}
-Keep a product ONLY if its actual product FORM/CATEGORY is genuinely a ${typeDesc}${flavourDesc}${useCaseDesc}.
-Judge what the product fundamentally IS, not shared flavour words: a chocolate BAR is NOT
-chocolate MILK; a "milk chocolate" bar is still a chocolate bar — reject it for a "milk" query
-even though it contains the word milk. When unsure, exclude. Be strict.`,
+KEEP every product whose core form/category plausibly IS a ${typeDesc}${flavourDesc}${useCaseDesc}
+— e.g. "Tender Coconut Water" and "Coconut Water Concentrate" are both coconut water; keep them.
+ONLY EXCLUDE products that are a clearly DIFFERENT form despite shared words: a chocolate BAR is
+not chocolate MILK; a biscuit is not a juice. When the type plausibly matches, KEEP it (favour
+recall); reject only obvious category mismatches.`,
       user: JSON.stringify({ query: intent.raw_query, products: payload }),
     });
     const parsed = extractJsonObject(content) as { keep_ids?: string[] };

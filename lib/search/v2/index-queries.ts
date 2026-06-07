@@ -152,9 +152,22 @@ async function loadProfilesFromDb(): Promise<CategoryTraitProfileRow[] | null> {
 async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
   try {
     const supabase = adminClient();
-    const { data, error } = await supabase.from("product_search_index").select("*").limit(25000);
-    if (error || !data?.length) return null;
-    return data.map((row) => mapDbRow(row as Record<string, unknown>));
+    // Paginate — PostgREST caps a single response at ~1000 rows, so a bare
+    // .select() silently returned only the first 1000 products and the rest of the
+    // enriched index was invisible to search (the cause of phantom 0-result queries).
+    const PAGE = 1000;
+    const all: ProductSearchIndexRow[] = [];
+    for (let from = 0; from < 50000; from += PAGE) {
+      const { data, error } = await supabase
+        .from("product_search_index")
+        .select("*")
+        .range(from, from + PAGE - 1);
+      if (error) return all.length ? all : null;
+      if (!data?.length) break;
+      for (const row of data) all.push(mapDbRow(row as Record<string, unknown>));
+      if (data.length < PAGE) break;
+    }
+    return all.length ? all : null;
   } catch {
     return null;
   }
