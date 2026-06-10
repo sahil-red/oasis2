@@ -41,7 +41,7 @@ function parseArgs(): Args {
   let sku: string | null = null;
   for (const a of argv) {
     if (a.startsWith("--limit=")) limit = Math.max(0, Number(a.split("=")[1]) || 0);
-    else if (a.startsWith("--concurrency=")) concurrency = Math.max(1, Math.min(20, Number(a.split("=")[1]) || 6));
+    else if (a.startsWith("--concurrency=")) concurrency = Math.max(1, Math.min(50, Number(a.split("=")[1]) || 6));
     else if (a.startsWith("--sku=")) sku = a.slice("--sku=".length).trim() || null;
   }
   return { limit, resume: argv.includes("--resume"), dryRun: argv.includes("--dry-run"), concurrency, sku };

@@ -82,14 +82,16 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{2,4})\s*(?:k?cal|calorie|calories)/);
   if (calLimit) out.max_calories = calLimit;
 
-  if (/\b(highest protein|high protein|most protein)\b/.test(text)) {
+  if (/\b(highest protein|higher protein|high protein|most protein|more protein)\b/.test(text)) {
     out.high_protein_tier = true;
     out.sort = "highest_protein";
-    text = text.replace(/\b(highest protein|high protein|most protein)\b/g, " ");
+    text = text.replace(/\b(highest protein|higher protein|high protein|most protein|more protein)\b/g, " ");
   }
-  if (/\b(cheapest|cheap|budget|lowest price)\b/.test(text)) {
+  // Bare "cheaper" sorts by price; "cheaper than X" must fall through to the
+  // comparison branch below, so exclude it here.
+  if (/\b(cheapest|cheaper(?!\s+than)|cheap|budget|lowest price)\b/.test(text)) {
     out.sort = "cheapest";
-    text = text.replace(/\b(cheapest|cheap|budget|lowest price)\b/g, " ");
+    text = text.replace(/\b(cheapest|cheaper(?!\s+than)|cheap|budget|lowest price)\b/g, " ");
   }
   const healthierThan = text.match(/\bhealthier\s+than\s+(.+?)(?:\s+under|\s+below|$)/);
   const cheaperThan = text.match(/\bcheaper\s+than\s+(.+?)(?:\s+under|\s+below|$)/);

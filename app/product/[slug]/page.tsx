@@ -137,7 +137,18 @@ export default async function ProductPage({
   });
   const productForGoals = displayNutrition ? { ...product, nutrition: displayNutrition } : product;
 
-  const swapPool = await getProductsForSwaps(product, 180);
+  const displayIngredients = reconcileDisplayIngredients({
+    ingredients_raw: product.ingredients_raw,
+    ocr_payload: product.ocr_payload,
+    productName: product.name,
+  });
+
+  // Both depend only on the product row — run in parallel, not back to back.
+  const [swapPool, ingredientIntelligence] = await Promise.all([
+    getProductsForSwaps(product, 180),
+    loadIngredientIntelligenceForDisplay(displayIngredients),
+  ]);
+
   const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
   const similarProducts = findSimilarProducts(product, swapPool, goal, 8, {
     diet,
@@ -151,14 +162,6 @@ export default async function ProductPage({
   const subscores = score?.subscores as SubScores | undefined;
   const attrs = product.attributes ?? {};
   const attrEntries = Object.entries(attrs).filter(([k]) => !DETAIL_SKIP.has(k));
-  const displayIngredients = reconcileDisplayIngredients({
-    ingredients_raw: product.ingredients_raw,
-    ocr_payload: product.ocr_payload,
-    productName: product.name,
-  });
-  const ingredientIntelligence = await loadIngredientIntelligenceForDisplay(
-    displayIngredients,
-  );
   const provenance = buildProductProvenance({
     nutrition: displayNutrition ?? product.nutrition,
     ingredients_raw: displayIngredients,
@@ -305,6 +308,7 @@ export default async function ProductPage({
               </div>
             ) : scoreWhy || deepseekDisplay?.why ? (
               <ProductTakePanel
+                className="mt-5"
                 explanation={scoreWhy}
                 deepseekWhy={deepseekDisplay?.why}
               />

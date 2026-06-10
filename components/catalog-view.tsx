@@ -1095,7 +1095,8 @@ export function CatalogView({
                 </div>
               ) : null}
               {/* Conversational refinement — server suggestions + standing quick modifiers.
-                  Each click composes with the current ask and re-runs the search. */}
+                  Sort-type chips re-rank the CURRENT results instantly (no LLM round-trip);
+                  constraint chips compose with the ask and re-run the search. */}
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <span className="text-[11px] text-(--color-fg-dim)">Refine:</span>
                 {aiRefinements.map((refinement) => (
@@ -1111,7 +1112,7 @@ export function CatalogView({
                 ))}
                 {QUICK_REFINEMENTS.filter(
                   (q) =>
-                    !aiPrompt.toLowerCase().includes(q.phrase.toLowerCase()) &&
+                    !(q.phrase && aiPrompt.toLowerCase().includes(q.phrase.toLowerCase())) &&
                     !aiRefinements.some((r) =>
                       r.toLowerCase().includes(q.label.toLowerCase()),
                     ),
@@ -1120,6 +1121,21 @@ export function CatalogView({
                     key={q.label}
                     label={q.label}
                     onClick={() => {
+                      if (q.clientSort === "price") {
+                        // Instant: re-rank what's already on screen by price.
+                        setItems((prev) =>
+                          [...prev].sort(
+                            (a, b) =>
+                              (a.price_inr ?? Number.MAX_SAFE_INTEGER) -
+                              (b.price_inr ?? Number.MAX_SAFE_INTEGER),
+                          ),
+                        );
+                        setAiBuckets(null);
+                        setAiSummary((s) =>
+                          s && !/by price/i.test(s) ? `${s} · by price` : (s ?? "by price"),
+                        );
+                        return;
+                      }
                       const next = `${aiPrompt.trim()} ${q.phrase}`.trim();
                       setAiPrompt(next);
                       void runAiSearch(next);
@@ -1470,8 +1486,9 @@ export function CatalogView({
 
 /** Standing one-tap modifiers — compose with the current ask like a follow-up
  *  sentence ("paneer under 150" + "with less sugar"). */
-const QUICK_REFINEMENTS: { label: string; phrase: string }[] = [
-  { label: "Cheaper", phrase: "cheaper" },
+const QUICK_REFINEMENTS: { label: string; phrase: string; clientSort?: "price" }[] = [
+  // clientSort chips never hit the network — they re-rank the current results.
+  { label: "Cheaper", phrase: "cheaper", clientSort: "price" },
   { label: "Higher protein", phrase: "with higher protein" },
   { label: "Less sugar", phrase: "with less sugar" },
   { label: "No palm oil", phrase: "without palm oil" },

@@ -1,4 +1,3 @@
-import { isCatalogVisible } from "@/lib/products/catalog-eligibility";
 import type { ProductListItem } from "@/lib/products/queries";
 import { computeDataQuality } from "@/lib/search/v2/data-quality";
 import { embedTextBatch } from "@/lib/search/v2/embeddings";
@@ -345,15 +344,9 @@ export async function buildIndexFromProducts(
   products: EnrichSource[],
   opts: { llmBatchSize?: number; useLlm?: boolean; llmConcurrency?: number } = {},
 ): Promise<ProductSearchIndexRow[]> {
-  const eligible = products.filter((p) =>
-    isCatalogVisible({
-      name: p.name,
-      category: p.category,
-      subcategory: p.subcategory,
-      ingredients_raw: p.ingredients_raw,
-      nutrition: p.nutrition,
-    }),
-  );
+  // Caller (build-search-index) handles filtering. No isCatalogVisible gate here —
+  // DeepSeek-labeled products always enrich, LLM handles sparse data gracefully.
+  const eligible = products;
 
   const useLlm = opts.useLlm !== false && Boolean(process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY);
   const batchSize = opts.llmBatchSize ?? 20;

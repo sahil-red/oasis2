@@ -1136,8 +1136,10 @@ export async function getScoredVerdictStats(): Promise<ScoredVerdictStats> {
 /** PostgREST caps a single response at its max-rows setting (1k on this
  * project), so a bare `.limit(6000)` silently returns the first 1k rows by
  * insertion id — the oldest scrape batch, which badly skews every insight.
- * Page in parallel `range()` windows instead, ordered by slug so the sample
- * mixes brands and categories rather than scrape order. */
+ * Page in `range()` windows instead, ordered by slug so the sample mixes
+ * brands and categories rather than scrape order. Pages run SEQUENTIALLY —
+ * this is a background cache refresh, and six concurrent 1k-row scans can
+ * starve the connection pool while batch jobs (scoring, enrichment) run. */
 const INSIGHTS_PAGE_SIZE = 1_000;
 
 /** Scored visible products for insights — bounded representative sample, slim fields. */
@@ -1166,10 +1168,12 @@ export async function getScoredProductsForInsights(): Promise<ProductListItem[]>
     return (data ?? []) as unknown as Record<string, unknown>[];
   };
 
-  const pages = await Promise.all(
-    Array.from({ length: pageCount }, (_, i) => fetchPage(i)),
-  );
-  const rows = pages.flat();
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < pageCount; i++) {
+    const page = await fetchPage(i);
+    rows.push(...page);
+    if (page.length < INSIGHTS_PAGE_SIZE) break; // catalog exhausted
+  }
   const mapped = sqlVisible ? rows.map(mapListRow) : mapVisibleBatch(rows);
   return mapped.map(slimListItemForCatalog);
 }

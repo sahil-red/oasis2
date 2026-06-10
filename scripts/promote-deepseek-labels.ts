@@ -106,7 +106,10 @@ async function fetchProductsBatch(
   skus: string[],
 ): Promise<Map<string, ProductRow>> {
   const map = new Map<string, ProductRow>();
-  const chunkSize = 80;
+  // Larger chunks than original 80 — fewer queries, same correctness.
+  const chunkSize = 200;
+  const total = skus.length;
+  let fetched = 0;
   for (let i = 0; i < skus.length; i += chunkSize) {
     const chunk = skus.slice(i, i + chunkSize);
     const { data, error } = await supabase
@@ -117,6 +120,8 @@ async function fetchProductsBatch(
     for (const row of (data ?? []) as ProductRow[]) {
       if (row.zepto_sku) map.set(row.zepto_sku, row);
     }
+    fetched += chunk.length;
+    if (i % 2000 === 0 && i > 0) console.log(`[promote-deepseek] fetch ${Math.round(fetched/total*100)}%`);
   }
   return map;
 }

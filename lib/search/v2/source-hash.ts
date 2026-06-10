@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto";
 
+/** Deterministic JSON stringify — sorts keys so JSONB ordering doesn't break hashes. */
+function stableJson(obj: unknown): string {
+  if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
+  if (Array.isArray(obj)) return "[" + obj.map(stableJson).join(",") + "]";
+  return "{" + Object.keys(obj as Record<string, unknown>).sort().map(k =>
+    JSON.stringify(k) + ":" + stableJson((obj as Record<string, unknown>)[k])
+  ).join(",") + "}";
+}
+
 /** Hash of raw catalog fields — skip re-enrichment when unchanged (§16.1). */
 export function computeProductSourceHash(opts: {
   name: string;
@@ -12,7 +21,7 @@ export function computeProductSourceHash(opts: {
   ingredients_raw: string | null;
   attributes: Record<string, string> | null;
 }): string {
-  const payload = JSON.stringify({
+  const payload = stableJson({
     name: opts.name?.trim(),
     brand: opts.brand?.trim() ?? null,
     category: opts.category?.trim() ?? null,
