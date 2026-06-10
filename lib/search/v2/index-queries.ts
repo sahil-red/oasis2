@@ -169,20 +169,49 @@ async function loadProfilesFromDb(): Promise<CategoryTraitProfileRow[] | null> {
 async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
   try {
     const supabase = adminClient();
-    // Paginate — PostgREST caps a single response at ~1000 rows, so a bare
-    // .select() silently returned only the first 1000 products and the rest of the
-    // enriched index was invisible to search (the cause of phantom 0-result queries).
+    // Paginate — PostgREST caps a single response at ~1000 rows. Pages carry
+    // ~12KB of embedding JSON per row, so SEQUENTIAL paging made cold starts
+    // pay 17+ serial round-trips (10s+). Count first, then fetch all pages in
+    // parallel waves — cold load drops to roughly the latency of one page.
     const PAGE = 1000;
+    // 3 concurrent pages is the sweet spot on the current DB tier: each page
+    // carries ~12MB of embedding JSON, and wider waves contend on I/O until
+    // every statement hits the timeout. One retry per page, partial-tolerant.
+    const CONCURRENCY = 3;
+
+    const { count, error: countErr } = await supabase
+      .from("product_search_index")
+      .select("*", { count: "exact", head: true });
+    if (countErr || !count) return null;
+
+    const fetchPage = async (p: number): Promise<Record<string, unknown>[]> => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error } = await supabase
+          .from("product_search_index")
+          .select("*")
+          .order("product_id", { ascending: true })
+          .range(p * PAGE, p * PAGE + PAGE - 1);
+        if (!error) return (data ?? []) as Record<string, unknown>[];
+      }
+      return [];
+    };
+
+    const pageCount = Math.ceil(Math.min(count, 50_000) / PAGE);
+    const pages: Record<string, unknown>[][] = new Array(pageCount);
+    for (let wave = 0; wave < pageCount; wave += CONCURRENCY) {
+      const slice = Array.from(
+        { length: Math.min(CONCURRENCY, pageCount - wave) },
+        (_, i) => wave + i,
+      );
+      const results = await Promise.all(slice.map(fetchPage));
+      slice.forEach((p, i) => {
+        pages[p] = results[i];
+      });
+    }
+
     const all: ProductSearchIndexRow[] = [];
-    for (let from = 0; from < 50000; from += PAGE) {
-      const { data, error } = await supabase
-        .from("product_search_index")
-        .select("*")
-        .range(from, from + PAGE - 1);
-      if (error) return all.length ? all : null;
-      if (!data?.length) break;
-      for (const row of data) all.push(mapDbRow(row as Record<string, unknown>));
-      if (data.length < PAGE) break;
+    for (const page of pages) {
+      for (const row of page ?? []) all.push(mapDbRow(row));
     }
     return all.length ? all : null;
   } catch {
