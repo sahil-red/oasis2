@@ -1101,24 +1101,75 @@ export async function getScoredCatalogStats(): Promise<ScoredCatalogStats> {
   return { totalScored: count ?? 0 };
 }
 
-/** Scored visible products for insights — single bounded query, slim fields. */
+export type ScoredVerdictStats = {
+  totalScored: number;
+  dailyStapleCount: number;
+  skipCount: number;
+};
+
+/** Count a verdict across the FULL visible scored catalog (not the sample). */
+async function countVerdict(verdict: string, sqlVisible: boolean): Promise<number> {
+  const supabase = db();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("core_scores")
+    .select("product_id, products!inner(id)", { count: "exact", head: true })
+    .eq("verdict", verdict)
+    .eq("products.platform", "zepto");
+  if (sqlVisible) q = q.eq("products.catalog_visible", true);
+  const { count, error } = await q;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** True header numbers for insights — exact counts over the whole catalog. */
+export async function getScoredVerdictStats(): Promise<ScoredVerdictStats> {
+  const sqlVisible = await catalogHasVisibleColumn();
+  const [{ totalScored }, dailyStapleCount, skipCount] = await Promise.all([
+    getScoredCatalogStats(),
+    countVerdict("daily_staple", sqlVisible),
+    countVerdict("skip", sqlVisible),
+  ]);
+  return { totalScored, dailyStapleCount, skipCount };
+}
+
+/** PostgREST caps a single response at its max-rows setting (1k on this
+ * project), so a bare `.limit(6000)` silently returns the first 1k rows by
+ * insertion id — the oldest scrape batch, which badly skews every insight.
+ * Page in parallel `range()` windows instead, ordered by slug so the sample
+ * mixes brands and categories rather than scrape order. */
+const INSIGHTS_PAGE_SIZE = 1_000;
+
+/** Scored visible products for insights — bounded representative sample, slim fields. */
 export async function getScoredProductsForInsights(): Promise<ProductListItem[]> {
   const supabase = db();
   const sqlVisible = await catalogHasVisibleColumn();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q = (supabase as any)
-    .from("products")
-    .select(`${INSIGHTS_LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
-    .eq("platform", "zepto")
-    .not("core_scores", "is", null)
-    .order("id", { ascending: true })
-    .limit(INSIGHTS_CATALOG_SAMPLE_LIMIT);
-  if (sqlVisible) q = q.eq("catalog_visible", true);
+  const pageCount = Math.ceil(INSIGHTS_CATALOG_SAMPLE_LIMIT / INSIGHTS_PAGE_SIZE);
+  const fetchPage = async (page: number): Promise<Record<string, unknown>[]> => {
+    const start = page * INSIGHTS_PAGE_SIZE;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase as any)
+      .from("products")
+      .select(`${INSIGHTS_LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
+      .eq("platform", "zepto")
+      .not("core_scores", "is", null)
+      .order("slug", { ascending: true })
+      .range(start, Math.min(start + INSIGHTS_PAGE_SIZE, INSIGHTS_CATALOG_SAMPLE_LIMIT) - 1);
+    if (sqlVisible) q = q.eq("catalog_visible", true);
+    const { data, error } = await q;
+    // Out-of-range pages 416 once the catalog is exhausted — treat as empty.
+    if (error) {
+      if (page > 0) return [];
+      throw new Error(error.message);
+    }
+    return (data ?? []) as unknown as Record<string, unknown>[];
+  };
 
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => fetchPage(i)),
+  );
+  const rows = pages.flat();
   const mapped = sqlVisible ? rows.map(mapListRow) : mapVisibleBatch(rows);
   return mapped.map(slimListItemForCatalog);
 }
@@ -1452,9 +1503,19 @@ export async function getHomeShelves(): Promise<HomeShelves> {
     baseQ("occasional_treat")
       .order("score", { referencedTable: "core_scores", ascending: false, nullsFirst: false })
       .limit(HOME_POOL_LIMIT),
+    // Count what users can actually browse (visible catalog), so the landing
+    // numbers agree with /insights and /search rather than raw table sizes.
     Promise.all([
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("platform", "zepto"),
-      supabase.from("core_scores").select("product_id", { count: "exact", head: true }),
+      supabase
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("platform", "zepto")
+        .eq("catalog_visible", true),
+      supabase
+        .from("products")
+        .select("id, core_scores!inner(product_id)", { count: "exact", head: true })
+        .eq("platform", "zepto")
+        .eq("catalog_visible", true),
     ]),
   ]);
 

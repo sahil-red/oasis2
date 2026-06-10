@@ -96,6 +96,55 @@ export function VerdictSublabelChips({
   );
 }
 
+function dedupeReasons(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const label of labels) {
+    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out;
+}
+
+/** Circular score gauge — the arc fills with score/100 in the verdict color. */
+export function ScoreRing({ score, color }: { score: number; color: string }) {
+  const r = 26;
+  const circumference = 2 * Math.PI * r;
+  const filled = (Math.max(0, Math.min(100, score)) / 100) * circumference;
+  return (
+    <div className="relative h-16 w-16 shrink-0" role="img" aria-label={`Score ${score} out of 100`}>
+      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          fill="none"
+          stroke={`color-mix(in srgb, ${color} 18%, transparent)`}
+          strokeWidth="5"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${circumference - filled}`}
+        />
+      </svg>
+      <span
+        className="absolute inset-0 grid place-items-center font-display text-[22px] font-semibold tabular-nums"
+        style={{ color }}
+      >
+        {score}
+      </span>
+    </div>
+  );
+}
+
 export function VerdictBlock({
   verdict,
   score,
@@ -122,41 +171,41 @@ export function VerdictBlock({
   const c = VERDICT_COLORS[verdict];
   const showCohort =
     cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
-  const topReasons = [
+  // Sublabels and deepseek chips often describe the same signal with different
+  // casing ("High saturated fat" vs "High Saturated Fat") — dedupe before joining.
+  const topReasons = dedupeReasons([
     ...sublabelChipLabels(sublabelIds),
     ...(deepseekChips ?? []).map(formatDeepseekChip),
-  ].slice(0, 3);
-  const reasonText = topReasons.length ? topReasons.slice(0, 2).join(", ") : verdictTitle(verdict);
-  const verdictSentence: Record<VerdictId, string> = {
-    daily_staple: `${reasonText} — strong regular buy.`,
-    good_choice: `${reasonText} — a good pick for this aisle.`,
-    occasional_treat: `${reasonText} — fine occasionally, not daily.`,
-    skip: `${reasonText} — not worth it.`,
+  ]).slice(0, 3);
+  const verdictSuffix: Record<VerdictId, string> = {
+    daily_staple: "strong regular buy",
+    good_choice: "a good pick for this aisle",
+    occasional_treat: "fine occasionally, not daily",
+    skip: "not worth it",
   };
+  const suffix = verdictSuffix[verdict];
+  // With no reasons available, don't echo the verdict title back as a reason.
+  const verdictSentence = topReasons.length
+    ? `${topReasons.slice(0, 2).join(", ")} — ${suffix}.`
+    : `${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}.`;
 
   return (
     <div
-      className={cn("rounded-xl border p-4", className)}
+      className={cn("rounded-2xl border p-4", className)}
       style={{ backgroundColor: c.bg, borderColor: c.border }}
     >
       <div className="flex items-start gap-4">
-        {score != null ? (
-          <div
-            className="flex h-16 min-w-16 items-center justify-center rounded-xl border bg-(--color-panel)/70 px-3 font-display text-4xl font-semibold tabular-nums leading-none"
-            style={{ color: c.fg, borderColor: c.border }}
-          >
-            {score}
-          </div>
-        ) : null}
+        {score != null ? <ScoreRing score={score} color={c.fg} /> : null}
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: c.fg }}>
-            Overall health score
+            {verdictTitle(verdict)}
+            <span className="opacity-60"> · health score</span>
           </p>
           <p className="mt-1 text-[15px] font-semibold leading-snug text-(--color-fg)">
-            {verdictSentence[verdict]}
+            {verdictSentence}
           </p>
           {showCohort ? (
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <BestInCohortChip
                 cohortId={cohortId}
                 subcategoryLabel={subcategory ?? ""}
@@ -165,16 +214,13 @@ export function VerdictBlock({
                 fgColor={c.chipFg}
                 labelOverride={`Better than ${relativeScore}%`}
               />
+              <span className="text-[11px] leading-snug text-(--color-fg-muted)">
+                of {cohortSize} {subcategory ? subcategory.toLowerCase() : "similar products"} in this aisle
+              </span>
             </div>
           ) : null}
         </div>
       </div>
-
-      {showCohort ? (
-        <p className="mt-3 text-[11px] leading-snug text-(--color-fg-muted)">
-          Ranked against {cohortSize} similar products in this aisle.
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -7,9 +7,11 @@ import {
   getCatalogMeta,
   getScoredCatalogStats,
   getScoredProductsForInsights,
+  getScoredVerdictStats,
   searchCatalogGrid,
   type CatalogMeta,
   type CatalogSearchResult,
+  type ScoredVerdictStats,
 } from "@/lib/products/queries";
 import type { Grade } from "@/lib/supabase/types";
 
@@ -27,9 +29,16 @@ export async function getCachedCatalogMeta(category?: string): Promise<CatalogMe
 export async function getCachedScoredCatalogForInsights() {
   return unstable_cache(
     () => getScoredProductsForInsights(),
-    ["catalog-insights-scored-v2"],
+    ["catalog-insights-scored-v3"],
     { revalidate: 300 },
   )();
+}
+
+/** Exact verdict counts over the full catalog — for honest insights headlines. */
+export async function getCachedScoredVerdictStats(): Promise<ScoredVerdictStats> {
+  return unstable_cache(() => getScoredVerdictStats(), ["catalog-verdict-stats-v1"], {
+    revalidate: 600,
+  })();
 }
 
 export async function getCachedLandingInsights() {
@@ -43,7 +52,7 @@ export async function getCachedLandingInsights() {
         totalScored: stats.totalScored || products.filter((p) => p.core_scores).length,
       });
     },
-    ["catalog-landing-insights-v2"],
+    ["catalog-landing-insights-v3"],
     { revalidate: 3600 },
   )();
 }

@@ -7,13 +7,7 @@ import { ArrowUpRight } from "lucide-react";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
 import { displayPriceInr } from "@/lib/products/display-price";
 import type { LandingGoalBoard, LandingPick } from "@/lib/products/landing-insights";
-
-const GRADE_DOT: Record<string, string> = {
-  A: "bg-emerald-500",
-  B: "bg-green-400",
-  C: "bg-yellow-400",
-  D: "bg-red-500",
-};
+import { colorForGrade, type Grade } from "@/lib/utils";
 
 const GOAL_SEARCH_PARAMS: Record<string, string> = {
   balanced: "/search?verdict=daily_staple",
@@ -28,7 +22,7 @@ const GOAL_SEARCH_PARAMS: Record<string, string> = {
 
 function GoalProductCard({ pick }: { pick: LandingPick }) {
   const name = catalogCardDisplayName(pick.name);
-  const dotColor = pick.grade ? (GRADE_DOT[pick.grade] ?? "bg-gray-400") : null;
+  const dotColor = pick.grade ? colorForGrade(pick.grade as Grade) : null;
 
   return (
     <Link href={`/product/${pick.slug}`} className="group flex flex-col">
@@ -63,7 +57,10 @@ function GoalProductCard({ pick }: { pick: LandingPick }) {
         </p>
         <div className="mt-1.5 flex items-center gap-1.5">
           {dotColor && (
-            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`} />
+            <span
+              className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: dotColor }}
+            />
           )}
           {pick.price != null && (
             <span className="text-[11px] tabular-nums text-(--color-fg-dim)">

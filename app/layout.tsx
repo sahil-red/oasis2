@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Instrument_Serif, Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { CompareTray } from "@/components/compare-tray";
 import { ThemeScript } from "@/components/theme-script";
 import { AuthProvider } from "@/lib/auth/context";
 import "./globals.css";
@@ -46,6 +47,9 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           {children}
+          <Suspense fallback={null}>
+            <CompareTray />
+          </Suspense>
         </AuthProvider>
         <Suspense fallback={null}>
           <Analytics />

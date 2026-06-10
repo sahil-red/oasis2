@@ -1,12 +1,13 @@
 import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates } from "@/lib/search/v2/candidate-generation";
+import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
 import { buildGoalBuckets } from "@/lib/search/v2/buckets";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
-import { buildIndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
+import type { GoalTraitWeights } from "@/lib/search/v2/types";
 import { applyExplorationSlot } from "@/lib/search/v2/popularity";
 import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
@@ -41,7 +42,21 @@ export async function runSearchV2(
   const started = Date.now();
   const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
   const snapshot = await getSearchIndexSnapshot();
-  const catalogMeta = buildIndexCatalogMeta(snapshot.index);
+  const catalogMeta = snapshot.catalogMeta;
+
+  // Fetch candidates either from the in-memory index or, in pgvector mode, from the DB
+  // (filtered vector-KNN) — then the same in-memory refine runs over the bounded pool.
+  const getCandidates = async (
+    intentArg: SearchIntentV2,
+    gw: GoalTraitWeights | null,
+    minQ: number,
+  ) => {
+    const pool =
+      snapshot.source === "pgvector"
+        ? await fetchCandidatePool(intentArg, minQ)
+        : snapshot.index;
+    return generateCandidates(pool, intentArg, snapshot.profiles, gw, minQ);
+  };
 
   let llm_calls = 0;
   const resolved = await resolveSearchIntent(rawQuery, {
@@ -74,13 +89,13 @@ export async function runSearchV2(
     goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
     intent = { ...intent, goal_id: goalWeights.goal_id };
     llm_calls += goalWeights.llm_calls;
-    candidates = await generateCandidates(snapshot.index, intent, snapshot.profiles, goalWeights.weights, minDataQuality);
+    candidates = await getCandidates(intent, goalWeights.weights, minDataQuality);
   } else {
     // Directed: goal weights only feed ranking, so resolve them in PARALLEL with
     // candidate generation+retrieval instead of serially (saves a ~2.5s DeepSeek call).
     const [gw, cands] = await Promise.all([
       intent.goal_phrase ? resolveGoalWeights(intent.goal_phrase, snapshot.goalMap) : Promise.resolve(null),
-      generateCandidates(snapshot.index, intent, snapshot.profiles, null, minDataQuality),
+      getCandidates(intent, null, minDataQuality),
     ]);
     goalWeights = gw;
     if (gw) {
@@ -94,11 +109,11 @@ export async function runSearchV2(
     ? await nearestPrimaryTypes(intent.primary_type, snapshot.index)
     : [];
 
-  // Cap LLM-based relaxation to ONE call — deterministic relaxation is free; the LLM
-  // broadening is a ~2.5s call, and looping it on a genuinely-empty query (product not in
-  // catalog) just burns 4 calls / 10s for nothing.
+  // Relax ONLY when truly empty — if even 1-2 products genuinely match (e.g. a niche
+  // "coconut water" with 2 entries), show them rather than broadening to less-relevant
+  // items. LLM broadening is capped to one call; deterministic relaxation is free.
   let llmRelaxUsed = false;
-  while (candidates.length < MIN_RESULTS) {
+  while (candidates.length === 0) {
     const deterministic = relaxIntentDeterministic(intent);
     if (deterministic) {
       intent = deterministic.intent;
@@ -120,13 +135,7 @@ export async function runSearchV2(
     }
 
     minDataQuality = Math.max(0.35, minDataQuality - 0.1);
-    candidates = await generateCandidates(
-      snapshot.index,
-      intent,
-      snapshot.profiles,
-      goalWeights?.weights ?? null,
-      minDataQuality,
-    );
+    candidates = await getCandidates(intent, goalWeights?.weights ?? null, minDataQuality);
     if (candidates.length >= MIN_RESULTS) break;
     if (relaxation_steps.length >= 4) break;
   }

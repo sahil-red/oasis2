@@ -12,6 +12,7 @@ import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
 import { writeDietMode } from "@/lib/diet/storage";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
+import { useAuth } from "@/lib/auth/context";
 import {
   catalogContextQuery,
   catalogSearchPath,
@@ -38,6 +39,7 @@ import {
 import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
+import { AiQuotaCard } from "@/components/ai-quota-card";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import { SavedSearchActions } from "@/components/saved-search-actions";
 import { setLastSearchContext } from "@/lib/search/v2/search-session";
@@ -338,9 +340,12 @@ export function CatalogView({
   const [aiRelaxationExplanations, setAiRelaxationExplanations] = useState<string[]>([]);
   const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
+  const [quotaHit, setQuotaHit] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const examplePrompts = useRotatingPrompts();
+  const { profile } = useAuth();
+  const isPlus = profile?.plan === "plus";
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
@@ -724,14 +729,13 @@ export function CatalogView({
     });
     setAiIntentTier(intent);
 
-    if (!canUseAiSearch()) {
-      const usage = readAiSearchUsage();
-      setAiUsage(usage);
-      setLoadError(
-        `Free AI searches used for today (${usage.count}/${usage.limit}). Upgrade will unlock unlimited searches.`,
-      );
+    // Plus members are unlimited; the client-side gate only applies to free use.
+    if (!isPlus && !canUseAiSearch()) {
+      setAiUsage(readAiSearchUsage());
+      setQuotaHit(true);
       return;
     }
+    setQuotaHit(false);
 
     const gen = ++fetchGen.current;
     setAiSearching(true);
@@ -761,7 +765,7 @@ export function CatalogView({
       setAiRelaxationExplanations(result.relaxation_explanations ?? []);
       setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
-      setAiUsage(recordAiSearch());
+      if (!isPlus) setAiUsage(recordAiSearch());
       if (result.v2) {
         setLastSearchContext({
           query: prompt,
@@ -784,7 +788,7 @@ export function CatalogView({
         setLoading(false);
       }
     }
-  }, [aiPrompt, items.length, savedPrefs, meta?.filters.brands, meta?.filters.subcategories, patch]);
+  }, [aiPrompt, items.length, savedPrefs, meta?.filters.brands, meta?.filters.subcategories, patch, isPlus]);
 
   const handleFactAction = useCallback(
     async (fact: LandingFact) => {
@@ -901,9 +905,16 @@ export function CatalogView({
 
   if (loadError && !items.length && !meta) {
     return (
-      <p className="py-16 text-center text-sm text-(--color-bad)">
-        Could not load catalog ({loadError}). Refresh to try again.
-      </p>
+      <div className="py-16 text-center">
+        <p className="text-sm text-(--color-bad)">Could not load catalog ({loadError}).</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
+        >
+          Try again
+        </button>
+      </div>
     );
   }
 
@@ -936,7 +947,7 @@ export function CatalogView({
                 disabled={aiSearching}
                 className="min-h-[48px] rounded-2xl bg-(--color-fg) px-6 text-sm font-semibold text-(--color-bg) transition hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
               >
-                {aiSearching ? "Scout is matching on nutrition…" : "Search"}
+                {aiSearching ? "Searching…" : "Search"}
               </button>
               <button
                 type="button"
@@ -954,6 +965,21 @@ export function CatalogView({
               </button>
             </div>
           </form>
+
+          {quotaHit && !isPlus ? (
+            <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
+          ) : null}
+
+          {/* Gentle heads-up when the free allowance is nearly used */}
+          {!quotaHit && !isPlus && aiUsage && aiUsage.limit - aiUsage.count <= 3 && aiUsage.count > 0 ? (
+            <p className="mt-2 text-[11px] text-(--color-fg-dim)">
+              {Math.max(0, aiUsage.limit - aiUsage.count)} free AI search
+              {aiUsage.limit - aiUsage.count === 1 ? "" : "es"} left today ·{" "}
+              <Link href="/pricing" className="underline underline-offset-2 hover:text-(--color-fg)">
+                Plus is unlimited
+              </Link>
+            </p>
+          ) : null}
 
           {/* Prompt chips — single scroll row, hidden when results are showing */}
           {!aiMode && (
@@ -1019,39 +1045,61 @@ export function CatalogView({
                 <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
               </div>
               {aiRelaxed ? (
-                <div className="mt-1 space-y-0.5">
-                  {aiRelaxationExplanations.length > 0 ? (
-                    aiRelaxationExplanations.map((step) => (
-                      <p key={step} className="text-[11px] text-(--color-fg-dim)">
-                        {step}
+                <div
+                  className="mt-2 rounded-lg border border-(--color-line) bg-(--color-bg-soft)/60 px-3 py-2 text-left"
+                  style={{ borderLeft: "2px solid var(--color-accent)" }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-(--color-fg-muted)">
+                    Why these results
+                  </p>
+                  <div className="mt-1 space-y-0.5">
+                    {aiRelaxationExplanations.length > 0 ? (
+                      aiRelaxationExplanations.map((step) => (
+                        <p key={step} className="text-[12px] leading-snug text-(--color-fg-muted)">
+                          {step}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-[12px] leading-snug text-(--color-fg-muted)">
+                        Exact matches were limited — showing closest options.
                       </p>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-(--color-fg-dim)">
-                      Exact matches were limited — showing closest options.
-                    </p>
-                  )}
+                    )}
+                  </div>
                 </div>
               ) : null}
-              {/* Refinement chips */}
-              {aiRefinements.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5">
-                  {aiRefinements.map((refinement) => (
-                    <button
-                      key={refinement}
-                      type="button"
-                      onClick={() => {
-                        const next = `${aiPrompt.trim()} ${refinement.replace(/^Add /i, "")}`.trim();
-                        setAiPrompt(next);
-                        void runAiSearch(next);
-                      }}
-                      className="text-[11px] text-(--color-fg-muted) underline decoration-(--color-line) underline-offset-2 transition hover:text-(--color-fg)"
-                    >
-                      {refinement}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              {/* Conversational refinement — server suggestions + standing quick modifiers.
+                  Each click composes with the current ask and re-runs the search. */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-(--color-fg-dim)">Refine:</span>
+                {aiRefinements.map((refinement) => (
+                  <RefineChip
+                    key={refinement}
+                    label={refinement}
+                    onClick={() => {
+                      const next = `${aiPrompt.trim()} ${refinement.replace(/^Add /i, "")}`.trim();
+                      setAiPrompt(next);
+                      void runAiSearch(next);
+                    }}
+                  />
+                ))}
+                {QUICK_REFINEMENTS.filter(
+                  (q) =>
+                    !aiPrompt.toLowerCase().includes(q.phrase.toLowerCase()) &&
+                    !aiRefinements.some((r) =>
+                      r.toLowerCase().includes(q.label.toLowerCase()),
+                    ),
+                ).map((q) => (
+                  <RefineChip
+                    key={q.label}
+                    label={q.label}
+                    onClick={() => {
+                      const next = `${aiPrompt.trim()} ${q.phrase}`.trim();
+                      setAiPrompt(next);
+                      void runAiSearch(next);
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           ) : null}
         </section>
@@ -1240,9 +1288,7 @@ export function CatalogView({
       {/* ── Data-rich landing or product grid ────────────────────────── */}
       {aiSearching ? (
         <div className="space-y-4 py-8">
-          <p className="text-center text-sm text-(--color-fg-muted)">
-            Scout is matching products and nutrition for your request…
-          </p>
+          <AiSearchProgress />
           <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="animate-pulse space-y-2">
@@ -1268,7 +1314,40 @@ export function CatalogView({
           ))}
         </div>
       ) : total === 0 ? (
-        <p className="py-16 text-center text-sm text-(--color-fg-muted)">No products match.</p>
+        <div className="mx-auto max-w-lg py-14 text-center">
+          <p className="font-display text-2xl text-(--color-fg)">No products match</p>
+          <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-(--color-fg-muted)">
+            {aiMode
+              ? "Nothing in the catalog satisfies every part of that ask. Drop one constraint — the price cap, a brand, or a nutrition limit — and try again."
+              : "These filters rule out the whole catalog. Remove one to widen the net:"}
+          </p>
+          {!aiMode && hasFilters ? (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {activeState.category ? <FilterChip label={activeState.category} onClear={() => patch({ category: "" })} /> : null}
+              {activeState.subcategory ? <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} /> : null}
+              {activeState.brand ? <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} /> : null}
+              {activeState.q ? <FilterChip label={`"${activeState.q}"`} onClear={() => patch({ q: "" })} /> : null}
+              {activeState.minScore > 0 ? <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} /> : null}
+              {activeState.maxPrice > 0 ? <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} /> : null}
+              {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
+              {activeState.verdict ? <FilterChip label={activeState.verdict.replace(/_/g, " ")} onClear={() => patch({ verdict: "" })} /> : null}
+              {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
+              {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
+            </div>
+          ) : null}
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => {
+                if (aiMode) setAiPrompt("");
+                clearAll();
+              }}
+              className="rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
+            >
+              {aiMode ? "Start over" : "Clear all filters"}
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {factBrowse ? (
@@ -1347,6 +1426,10 @@ export function CatalogView({
             {loadingMore ? "Loading…" : `Show more (${Math.max(0, total - items.length).toLocaleString()} left)`}
           </button>
         </div>
+      ) : items.length > 0 && (aiMode || hasFilters || factBrowse) ? (
+        <p className="pt-2 text-center text-[12px] text-(--color-fg-dim)">
+          All {total.toLocaleString()} result{total === 1 ? "" : "s"} shown
+        </p>
       ) : null}
 
       {stats ? (
@@ -1354,6 +1437,56 @@ export function CatalogView({
           {stats.scored.toLocaleString()} scored · {stats.visible.toLocaleString()} with labels
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/** Standing one-tap modifiers — compose with the current ask like a follow-up
+ *  sentence ("paneer under 150" + "with less sugar"). */
+const QUICK_REFINEMENTS: { label: string; phrase: string }[] = [
+  { label: "Cheaper", phrase: "cheaper" },
+  { label: "Higher protein", phrase: "with higher protein" },
+  { label: "Less sugar", phrase: "with less sugar" },
+  { label: "No palm oil", phrase: "without palm oil" },
+  { label: "Cleaner ingredients", phrase: "with cleaner ingredients" },
+];
+
+function RefineChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-(--color-line) px-2.5 py-0.5 text-[11px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+    >
+      {label}
+    </button>
+  );
+}
+
+const AI_SEARCH_STAGES = [
+  "Reading your request…",
+  "Matching products…",
+  "Checking nutrition against your ask…",
+  "Ranking the shortlist…",
+];
+
+/** Staged progress line for AI search — cycles through pipeline stages so the
+ *  1–5s wait reads as work happening, not a hang. */
+function AiSearchProgress() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      setStage((s) => Math.min(s + 1, AI_SEARCH_STAGES.length - 1));
+    }, 1500);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="flex items-center justify-center gap-2.5 text-sm text-(--color-fg-muted)">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
+      </span>
+      <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
     </div>
   );
 }

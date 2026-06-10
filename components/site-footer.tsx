@@ -39,8 +39,11 @@ export function SiteFooter() {
             <Link href="/basket" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
               Your basket
             </Link>
-            <Link href="/search" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
-              Set a goal
+            <Link href="/compare" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
+              Compare
+            </Link>
+            <Link href="/pricing" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
+              Scout Plus
             </Link>
           </div>
         </div>

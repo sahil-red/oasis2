@@ -2,17 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import type { LandingPickOfDay } from "@/lib/products/landing-insights";
-
-const GRADE_COLORS: Record<string, string> = {
-  A: "bg-emerald-500 text-white",
-  B: "bg-green-400 text-white",
-  C: "bg-yellow-400 text-gray-900",
-  D: "bg-red-500 text-white",
-};
+import { colorForGrade, type Grade } from "@/lib/utils";
 
 export function LandingPickOfDay({ data }: { data: LandingPickOfDay }) {
   const { pick, reasons } = data;
-  const gradeColor = pick.grade ? (GRADE_COLORS[pick.grade] ?? "bg-gray-400 text-white") : null;
+  const gradeColor = pick.grade ? colorForGrade(pick.grade as Grade) : null;
 
   return (
     <section className="border-b border-(--color-line)">
@@ -64,7 +58,10 @@ export function LandingPickOfDay({ data }: { data: LandingPickOfDay }) {
                   </div>
                 )}
                 {gradeColor && (
-                  <span className={`rounded-md px-2.5 py-1 text-sm font-bold ${gradeColor}`}>
+                  <span
+                    className="rounded-md px-2.5 py-1 text-sm font-bold text-white"
+                    style={{ backgroundColor: gradeColor }}
+                  >
                     {pick.grade}
                   </span>
                 )}
@@ -80,7 +77,7 @@ export function LandingPickOfDay({ data }: { data: LandingPickOfDay }) {
                 <ul className="mt-6 space-y-2">
                   {reasons.map((r, i) => (
                     <li key={i} className="flex items-center gap-2.5 text-sm text-(--color-fg-muted)">
-                      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-500" />
+                      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-(--color-good)" />
                       {r}
                     </li>
                   ))}

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import type { ProductListItem } from "@/lib/products/queries";
+import { colorForGrade } from "@/lib/utils";
 
 type BestInClassCategory = {
   label: string;
@@ -9,13 +10,6 @@ type BestInClassCategory = {
   products: ProductListItem[];
   avgScore: number;
   skipPct: number;
-};
-
-const GRADE_COLOR: Record<string, string> = {
-  A: "text-emerald-500",
-  B: "text-green-400",
-  C: "text-yellow-500",
-  D: "text-red-500",
 };
 
 function MiniCard({ product }: { product: ProductListItem }) {
@@ -40,7 +34,11 @@ function MiniCard({ product }: { product: ProductListItem }) {
           {product.name}
         </p>
         <div className="mt-0.5 flex items-center gap-2 text-[10px] text-(--color-fg-dim)">
-          {grade && <span className={`font-bold ${GRADE_COLOR[grade] ?? ""}`}>{grade}</span>}
+          {grade && (
+            <span className="font-bold" style={{ color: colorForGrade(grade) }}>
+              {grade}
+            </span>
+          )}
           {score != null && <span>{score}/100</span>}
           {protein != null && <span>· {Math.round(protein)}g P</span>}
           {sugar != null && <span>· {sugar.toFixed(1)}g S</span>}
@@ -75,7 +73,7 @@ export function LandingBestInClass({ categories }: { categories: BestInClassCate
                   <div className="mt-0.5 flex gap-3 text-[11px] text-(--color-fg-dim)">
                     <span>Avg score <span className="font-medium text-(--color-fg)">{cat.avgScore}</span></span>
                     <span>·</span>
-                    <span className="text-red-400">{cat.skipPct}% skip-worthy</span>
+                    <span className="text-(--color-bad)">{cat.skipPct}% skip-worthy</span>
                   </div>
                 </div>
                 <Link

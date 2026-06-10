@@ -2,7 +2,9 @@ import { getAiSearchProductPool } from "@/lib/products/queries";
 import { adminClient } from "@/lib/supabase/admin";
 import { buildIndexFromProducts } from "@/lib/search/v2/enrichment";
 import { buildCategoryTraitProfiles } from "@/lib/search/v2/category-profiles";
+import { buildIndexCatalogMeta, type IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import { embedText } from "@/lib/search/v2/embeddings";
+import { isPgvectorMode } from "@/lib/search/v2/config";
 import { SEED_GOAL_TRAIT_MAP } from "@/lib/search/v2/goal-graph";
 import type {
   CategoryTraitProfileRow,
@@ -14,8 +16,23 @@ export type SearchIndexSnapshot = {
   index: ProductSearchIndexRow[];
   profiles: CategoryTraitProfileRow[];
   goalMap: Map<string, GoalTraitMapRow>;
-  source: "db" | "memory";
+  catalogMeta: IndexCatalogMeta;
+  source: "db" | "memory" | "pgvector";
 };
+
+async function loadFacets(): Promise<IndexCatalogMeta> {
+  try {
+    const supabase = adminClient();
+    const { data } = await supabase.rpc("search_v2_facets");
+    const obj = (data ?? {}) as { brands?: string[]; primary_types?: string[] };
+    return {
+      brands: new Set((obj.brands ?? []).map((b) => b.toLowerCase())),
+      primaryTypes: new Set((obj.primary_types ?? []).map((t) => t.toLowerCase())),
+    };
+  } catch {
+    return { brands: new Set(), primaryTypes: new Set() };
+  }
+}
 
 let cachedSnapshot: { data: SearchIndexSnapshot; at: number } | null = null;
 const SNAPSHOT_TTL_MS = 10 * 60 * 1000;
@@ -33,7 +50,7 @@ function parseVector(raw: unknown): number[] | null {
   return null;
 }
 
-function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
+export function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
   return {
     product_id: String(raw.product_id),
     canonical_product_id: raw.canonical_product_id ? String(raw.canonical_product_id) : null,
@@ -178,7 +195,7 @@ async function buildInMemorySnapshot(): Promise<SearchIndexSnapshot> {
   const index = await buildIndexFromProducts(products, { useLlm: false });
   const profiles = await buildCategoryTraitProfiles(index);
   const goalMap = await loadGoalMapFromDb();
-  return { index, profiles, goalMap, source: "memory" };
+  return { index, profiles, goalMap, catalogMeta: buildIndexCatalogMeta(index), source: "memory" };
 }
 
 export function clearSearchIndexSnapshotCache(): void {
@@ -190,6 +207,26 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     return cachedSnapshot.data;
   }
 
+  // pgvector mode: do NOT load the full index into memory — candidates are fetched
+  // per-query from Postgres (search_v2_candidates RPC). Only the small facets + profiles
+  // + goal map are kept in memory. The in-memory eval path (below) is exempt.
+  if (isPgvectorMode() && process.env.SEARCH_EVAL_USE_MEMORY !== "1") {
+    const [profilesRaw, goalMap, catalogMeta] = await Promise.all([
+      loadProfilesFromDb(),
+      loadGoalMapFromDb(),
+      loadFacets(),
+    ]);
+    const snap: SearchIndexSnapshot = {
+      index: [],
+      profiles: profilesRaw ?? [],
+      goalMap,
+      catalogMeta,
+      source: "pgvector",
+    };
+    cachedSnapshot = { data: snap, at: Date.now() };
+    return snap;
+  }
+
   if (process.env.SEARCH_EVAL_USE_MEMORY === "1") {
     const dbIndex = await loadIndexFromDb();
     if (dbIndex && dbIndex.length >= 100) {
@@ -197,7 +234,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
       const goalMap = await loadGoalMapFromDb();
       const profiles =
         dbProfiles?.length ? dbProfiles : await buildCategoryTraitProfiles(dbIndex);
-      const snap: SearchIndexSnapshot = { index: dbIndex, profiles, goalMap, source: "db" };
+      const snap: SearchIndexSnapshot = { index: dbIndex, profiles, goalMap, catalogMeta: buildIndexCatalogMeta(dbIndex), source: "db" };
       cachedSnapshot = { data: snap, at: Date.now() };
       return snap;
     }
@@ -215,7 +252,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
   if (dbIndex && dbIndex.length >= 100) {
     const profiles =
       dbProfiles?.length ? dbProfiles : await buildCategoryTraitProfiles(dbIndex);
-    const snap: SearchIndexSnapshot = { index: dbIndex, profiles, goalMap, source: "db" };
+    const snap: SearchIndexSnapshot = { index: dbIndex, profiles, goalMap, catalogMeta: buildIndexCatalogMeta(dbIndex), source: "db" };
     cachedSnapshot = { data: snap, at: Date.now() };
     return snap;
   }

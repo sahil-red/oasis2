@@ -1,6 +1,7 @@
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { GOAL_PROFILES, type GoalId } from "@/lib/goals/types";
 import { matchAdditives } from "@/lib/scoring/rules";
+import type { SwapSuggestion } from "@/lib/products/alternatives";
 import type { ProductListItem } from "@/lib/products/queries";
 
 export type BasketLine = {
@@ -25,6 +26,72 @@ export type BasketAnalysis = {
 function avg(nums: number[]): number | null {
   if (!nums.length) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+export type SwapImpact = {
+  /** Lines that have at least one suggested swap. */
+  swappableLines: number;
+  scoreNow: number | null;
+  scoreAfter: number | null;
+  sugarNowG: number | null;
+  sugarAfterG: number | null;
+  skipsNow: number;
+  skipsAfter: number;
+  priceDeltaInr: number;
+};
+
+/** Project the basket as if every line took its top swap — the "what you'd
+ *  gain" headline for the basket report. Quantity-weighted. */
+export function computeSwapImpact(
+  lines: BasketLine[],
+  swapsBySlug: Record<string, SwapSuggestion[]>,
+): SwapImpact | null {
+  if (!lines.length) return null;
+
+  let swappableLines = 0;
+  let priceDeltaInr = 0;
+  let skipsNow = 0;
+  let skipsAfter = 0;
+  const scoresNow: number[] = [];
+  const scoresAfter: number[] = [];
+  const sugarsNow: number[] = [];
+  const sugarsAfter: number[] = [];
+
+  for (const { product, qty } of lines) {
+    const best = swapsBySlug[product.slug]?.[0]?.product;
+    const after = best ?? product;
+    if (best) {
+      swappableLines += 1;
+      if (best.price_inr != null && product.price_inr != null) {
+        priceDeltaInr += (best.price_inr - product.price_inr) * qty;
+      }
+    }
+
+    if (product.core_scores?.verdict === "skip") skipsNow += qty;
+    if (after.core_scores?.verdict === "skip") skipsAfter += qty;
+
+    for (let i = 0; i < qty; i++) {
+      if (product.core_scores?.score != null) scoresNow.push(product.core_scores.score);
+      if (after.core_scores?.score != null) scoresAfter.push(after.core_scores.score);
+      const sNow = product.nutrition?.sugar_g_100g ?? product.nutrition?.added_sugar_g_100g;
+      const sAfter = after.nutrition?.sugar_g_100g ?? after.nutrition?.added_sugar_g_100g;
+      if (typeof sNow === "number") sugarsNow.push(sNow);
+      if (typeof sAfter === "number") sugarsAfter.push(sAfter);
+    }
+  }
+
+  if (!swappableLines) return null;
+
+  return {
+    swappableLines,
+    scoreNow: avg(scoresNow),
+    scoreAfter: avg(scoresAfter),
+    sugarNowG: avg(sugarsNow),
+    sugarAfterG: avg(sugarsAfter),
+    skipsNow,
+    skipsAfter,
+    priceDeltaInr: Math.round(priceDeltaInr),
+  };
 }
 
 export function analyzeBasket(

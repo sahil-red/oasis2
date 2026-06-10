@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { SCOUT_PLUS_PLAN } from "@/lib/billing/plans";
+import { planForInterval, type PlanInterval } from "@/lib/billing/plans";
 
 const RAZORPAY_BASE = "https://api.razorpay.com/v1";
 
@@ -38,21 +38,25 @@ export type RazorpaySubscriptionCreate = {
   status: string;
 };
 
-/** Create or reuse Razorpay plan for Scout Plus monthly. */
-export async function ensureRazorpayPlan(): Promise<string> {
-  const envPlanId = process.env.RAZORPAY_PLAN_ID;
+/** Create or reuse the Razorpay plan for the requested billing interval. */
+export async function ensureRazorpayPlan(interval: PlanInterval = "monthly"): Promise<string> {
+  const envPlanId =
+    interval === "yearly"
+      ? process.env.RAZORPAY_PLAN_ID_YEARLY
+      : process.env.RAZORPAY_PLAN_ID;
   if (envPlanId) return envPlanId;
 
+  const plan = planForInterval(interval);
   const created = await razorpayFetch<{ id: string }>("/plans", {
     method: "POST",
     body: JSON.stringify({
-      period: "monthly",
+      period: interval,
       interval: 1,
       item: {
-        name: SCOUT_PLUS_PLAN.name,
-        amount: SCOUT_PLUS_PLAN.amount_paise,
-        currency: SCOUT_PLUS_PLAN.currency,
-        description: SCOUT_PLUS_PLAN.description,
+        name: plan.name,
+        amount: plan.amount_paise,
+        currency: plan.currency,
+        description: plan.description,
       },
     }),
   });

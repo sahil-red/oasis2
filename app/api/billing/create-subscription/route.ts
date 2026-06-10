@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
-import { SCOUT_PLUS_PLAN, formatInr } from "@/lib/billing/plans";
+import { formatInr, planForInterval, type PlanInterval } from "@/lib/billing/plans";
 import {
   createRazorpayCustomer,
   createRazorpaySubscription,
@@ -19,6 +19,10 @@ export async function POST(request: Request) {
   if (error || !data.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const body = (await request.json().catch(() => ({}))) as { interval?: string };
+  const interval: PlanInterval = body.interval === "yearly" ? "yearly" : "monthly";
+  const plan = planForInterval(interval);
 
   const admin = adminClient();
   const { data: profile } = await admin
@@ -44,8 +48,13 @@ export async function POST(request: Request) {
       .eq("id", data.user.id);
   }
 
-  const planId = await ensureRazorpayPlan();
-  const sub = await createRazorpaySubscription({ customerId, planId });
+  const planId = await ensureRazorpayPlan(interval);
+  const sub = await createRazorpaySubscription({
+    customerId,
+    planId,
+    // Razorpay total_count is the number of billing cycles to run.
+    totalCount: interval === "yearly" ? 10 : 120,
+  });
 
   await admin.from("subscriptions").insert({
     user_id: data.user.id,
@@ -59,9 +68,9 @@ export async function POST(request: Request) {
     checkout_url: sub.short_url ?? null,
     key_id: process.env.RAZORPAY_KEY_ID,
     plan: {
-      name: SCOUT_PLUS_PLAN.name,
-      amount_display: formatInr(SCOUT_PLUS_PLAN.amount_paise),
-      interval: SCOUT_PLUS_PLAN.interval,
+      name: plan.name,
+      amount_display: formatInr(plan.amount_paise),
+      interval: plan.interval,
     },
   });
 }

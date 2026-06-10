@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
 import { PdpLabelInsights } from "@/components/pdp-label-insights";
+import { PdpServingNote } from "@/components/pdp-serving-note";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
@@ -15,6 +16,8 @@ import { dietFromParam } from "@/lib/diet/types";
 import { productDietBadge } from "@/lib/diet/match";
 import { DietBadgeRow } from "@/components/diet-badge";
 import { explainScore } from "@/lib/products/score-explain";
+import { explainLabelMismatch } from "@/lib/scoring/labels-score";
+import { LabelMismatchCallout } from "@/components/label-mismatch-callout";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { VerdictBlock } from "@/components/verdict-chips";
@@ -159,6 +162,13 @@ export default async function ProductPage({
     ? mergePdpSublabelIds(score.verdict_sublabels, score.breakdown, 8)
     : [];
 
+  // Scout's signature catch: the front-of-pack claim contradicts the panel.
+  const labelMismatch = explainLabelMismatch(
+    displayIngredients,
+    product.attributes ?? null,
+    displayNutrition ?? product.nutrition,
+  );
+
   return (
     <main className="min-h-screen">
       <SiteNav />
@@ -210,6 +220,7 @@ export default async function ProductPage({
             <ProductGoalToolbar
               slug={product.slug}
               name={product.name}
+              image={product.image_urls?.[0] ?? null}
               zeptoBuyUrl={zeptoBuyUrl}
             />
 
@@ -226,6 +237,12 @@ export default async function ProductPage({
                   productId={product.id}
                   deepseekChips={deepseekDisplay?.chips}
                 />
+              </div>
+            ) : null}
+
+            {labelMismatch ? (
+              <div className="mt-3">
+                <LabelMismatchCallout detail={labelMismatch} />
               </div>
             ) : null}
 
@@ -267,6 +284,11 @@ export default async function ProductPage({
           </section>
 
           <aside className="min-w-0 space-y-5">
+            <PdpServingNote
+              roleCohort={score?.role_cohort}
+              servingG={score?.serving_g_effective}
+              nutrition={displayNutrition ?? product.nutrition}
+            />
             {displayNutrition ? (
               <PdpNutritionGlance
                 nutrition={displayNutrition}

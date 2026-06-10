@@ -20,7 +20,10 @@ import {
 import { InsightsBrandBoard } from "@/components/insights-brand-board";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { getCachedScoredCatalogForInsights } from "@/lib/products/catalog-cache";
+import {
+  getCachedScoredCatalogForInsights,
+  getCachedScoredVerdictStats,
+} from "@/lib/products/catalog-cache";
 import { marketingCallout } from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
 
@@ -34,6 +37,13 @@ export default async function InsightsPage() {
     console.warn("[insights] catalog load failed:", err);
   }
   const ins = buildInsights(products.filter((p) => p.core_scores));
+  // Header numbers come from exact counts over the whole catalog; the lists
+  // below still draw from the bounded sample.
+  const stats = await getCachedScoredVerdictStats().catch(() => ({
+    totalScored: ins.totalScored,
+    dailyStapleCount: ins.dailyStapleCount,
+    skipCount: ins.skipCount,
+  }));
 
   const topCategories = ins.categoryStats.slice(0, 5);
   const bottomCategories = [...ins.categoryStats].reverse().slice(0, 5);
@@ -45,7 +55,7 @@ export default async function InsightsPage() {
       <div className="border-b border-(--color-line)">
         <div className="mx-auto max-w-6xl px-5 py-12 md:px-6 md:py-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-            {ins.totalScored.toLocaleString()} products analysed
+            {stats.totalScored.toLocaleString()} products analysed
           </p>
           <h1 className="mt-3 font-display text-4xl leading-tight md:text-5xl">
             What we found
@@ -56,9 +66,9 @@ export default async function InsightsPage() {
           <div className="mt-5 flex flex-wrap gap-4 text-sm text-(--color-fg-muted)">
             <span>Avg score <strong className="text-(--color-fg)">{ins.avgScore}/100</strong></span>
             <span>·</span>
-            <span><strong className="text-emerald-500">{ins.dailyStapleCount.toLocaleString()}</strong> daily staples</span>
+            <span><strong className="text-(--color-good)">{stats.dailyStapleCount.toLocaleString()}</strong> daily staple{stats.dailyStapleCount === 1 ? "" : "s"}</span>
             <span>·</span>
-            <span><strong className="text-red-500">{ins.skipCount.toLocaleString()}</strong> skip-worthy</span>
+            <span><strong className="text-(--color-bad)">{stats.skipCount.toLocaleString()}</strong> skip-worthy</span>
             <span>·</span>
             <span><strong className="text-(--color-fg)">{ins.categoryStats.length}</strong> categories</span>
           </div>
@@ -70,7 +80,7 @@ export default async function InsightsPage() {
           icon={<Leaf className="h-5 w-5" />}
           tone="good"
           title="Daily staple shelf"
-          subtitle={`${ins.dailyStapleCount.toLocaleString()} products score ≥80 with clean ingredients — worth buying every week.`}
+          subtitle={`${stats.dailyStapleCount.toLocaleString()} ${stats.dailyStapleCount === 1 ? "product scores" : "products score"} ≥80 with clean ingredients — worth buying every week.`}
           href="/search?verdict=daily_staple"
           hrefLabel="Browse staples"
         >

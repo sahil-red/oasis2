@@ -4,6 +4,7 @@ import { memo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
+import { CompareButton } from "@/components/compare-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import { SearchScoreStack } from "@/components/search-score-tabs";
 import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
@@ -254,7 +255,10 @@ export const ProductCard = memo(function ProductCard({
               </span>
             ) : null}
           </div>
-          <AddToBasketButton slug={product.slug} name={product.name} productId={product.id} size="icon" />
+          <div className="flex items-center gap-1.5">
+            <CompareButton slug={product.slug} name={product.name} image={thumb ?? null} />
+            <AddToBasketButton slug={product.slug} name={product.name} productId={product.id} size="icon" />
+          </div>
         </div>
       </div>
     </article>

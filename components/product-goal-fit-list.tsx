@@ -72,6 +72,11 @@ export function ProductGoalFitList({
   const activeGoal = gridGoals.find((g) => g.id === active);
   const goalSummary = summarizeGoals(gridGoals);
 
+  // Treats and snacks legitimately score 0 for most goals — render those as a
+  // quiet chip row instead of a column of alarming zeros.
+  const strongGoals = [...gridGoals].filter((g) => g.fit >= 30).sort((a, b) => b.fit - a.fit);
+  const weakGoals = gridGoals.filter((g) => g.fit < 30);
+
   if (!gridGoals.length) {
     return (
       <p className={cn("mt-6 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 py-3 text-sm text-(--color-fg-muted)", className)}>
@@ -83,7 +88,7 @@ export function ProductGoalFitList({
   return (
     <section className={cn("mt-6", className)}>
       <div className={cn("rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5", cardClassName)}>
-        <div className="border-b border-(--color-line) pb-4">
+        <div className={cn(strongGoals.length > 0 && "border-b border-(--color-line) pb-4")}>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
               Goals at a glance
@@ -99,17 +104,42 @@ export function ProductGoalFitList({
           </div>
         </div>
 
-        <ul className="mt-3 grid gap-x-5 gap-y-1.5 sm:grid-cols-2">
-          {gridGoals.map((g) => (
-            <GoalFitRowCompact
-              key={g.id}
-              label={g.label}
-              fit={g.fit}
-              active={active === g.id}
-              onSelect={() => select(g.id)}
-            />
-          ))}
-        </ul>
+        {strongGoals.length > 0 ? (
+          <ul className="mt-3 grid gap-x-5 gap-y-1.5 sm:grid-cols-2">
+            {strongGoals.map((g) => (
+              <GoalFitRowCompact
+                key={g.id}
+                label={g.label}
+                fit={g.fit}
+                active={active === g.id}
+                onSelect={() => select(g.id)}
+              />
+            ))}
+          </ul>
+        ) : null}
+
+        {weakGoals.length > 0 ? (
+          <div className={cn("flex flex-wrap items-center gap-1.5", strongGoals.length > 0 ? "mt-3 border-t border-(--color-line) pt-3" : "mt-3")}>
+            <span className="text-[11px] text-(--color-fg-dim)">Not a fit:</span>
+            {weakGoals.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => select(g.id)}
+                aria-pressed={active === g.id}
+                title={`${g.label}: fit ${g.fit}/100 — see the product through this goal`}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)",
+                  active === g.id
+                    ? "border-(--color-line-strong) bg-(--color-bg-soft) text-(--color-fg)"
+                    : "border-(--color-line) text-(--color-fg-muted) hover:border-(--color-line-strong) hover:text-(--color-fg)",
+                )}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -118,18 +148,16 @@ export function ProductGoalFitList({
 function summarizeGoals(goals: Array<{ label: string; fit: number }>): string {
   const sorted = [...goals].sort((a, b) => b.fit - a.fit);
   const meaningful = sorted.filter((g) => g.fit >= 30).slice(0, 2);
-  const weak = sorted.filter((g) => g.fit <= 15).map((g) => g.label);
 
   if (meaningful.length === 0) {
-    return `Weak fit across all listed goals; best is ${sorted[0]?.label ?? "none"} (${sorted[0]?.fit ?? 0}).`;
+    return "Not a strong fit for any tracked goal — treat it as an occasional buy.";
   }
 
   const strongText = meaningful.map((g) => `${g.label} (${g.fit})`).join(", ");
-  if (weak.length >= Math.max(3, goals.length - 2)) {
-    return `Only meaningful for ${strongText}; weak for ${weak.slice(0, 5).join(", ")}.`;
+  if (meaningful.length < Math.min(2, goals.length)) {
+    return `Only meaningful for ${strongText}.`;
   }
-
-  return `Best fit: ${strongText}; check the low scores before making it a regular buy.`;
+  return `Best fit: ${strongText}.`;
 }
 
 function GoalFitRowCompact({

@@ -17,7 +17,8 @@ function DodgeCard({ product }: { product: DodgeProduct }) {
   return (
     <Link
       href={`/product/${product.slug}`}
-      className="group flex flex-col rounded-2xl border border-red-500/20 bg-(--color-panel) p-4 transition hover:border-red-500/40"
+      className="group flex flex-col rounded-2xl border bg-(--color-panel) p-4 transition"
+      style={{ borderColor: "color-mix(in srgb, var(--color-bad) 24%, transparent)" }}
     >
       <div className="flex items-start gap-3">
         <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl bg-(--color-bg-soft)">
@@ -34,18 +35,28 @@ function DodgeCard({ product }: { product: DodgeProduct }) {
           </p>
         </div>
         <div className="flex-shrink-0 text-right">
-          <span className="block text-lg font-bold tabular-nums text-red-500">{product.score}</span>
+          <span className="block text-lg font-bold tabular-nums text-(--color-bad)">{product.score}</span>
           <span className="text-[9px] text-(--color-fg-dim)">score</span>
         </div>
       </div>
 
       <div className="mt-3 space-y-1.5">
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 flex-shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-green-600">Claims</span>
+          <span
+            className="mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-(--color-good)"
+            style={{ backgroundColor: "color-mix(in srgb, var(--color-good) 10%, transparent)" }}
+          >
+            Claims
+          </span>
           <p className="text-[12px] text-(--color-fg-muted)">{product.claim}</p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 flex-shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-500">Reality</span>
+          <span
+            className="mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-(--color-bad)"
+            style={{ backgroundColor: "color-mix(in srgb, var(--color-bad) 10%, transparent)" }}
+          >
+            Reality
+          </span>
           <p className="text-[12px] text-(--color-fg-muted)">{product.reality}</p>
         </div>
       </div>
@@ -61,7 +72,7 @@ export function LandingDodgeList({ products }: { products: DodgeProduct[] }) {
       <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
         <div className="mb-10 flex items-end justify-between">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-red-500">Scout warning</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-bad)">Scout warning</p>
             <h2 className="font-display mt-3 text-3xl leading-tight md:text-[2.5rem]">
               The marketing's a lie.
             </h2>

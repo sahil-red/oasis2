@@ -11,7 +11,8 @@ import { readDietMode, writeDietMode } from "@/lib/diet/storage";
 import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import type { GoalId } from "@/lib/goals/types";
 import type { DietMode } from "@/lib/diet/types";
-import { analyzeBasket } from "@/lib/products/basket-analysis";
+import { analyzeBasket, computeSwapImpact } from "@/lib/products/basket-analysis";
+import { BasketHealthReport } from "@/components/basket-health-report";
 import type { SwapSuggestion } from "@/lib/products/alternatives";
 import { scoreTileSurface } from "@/lib/score/surfaces";
 import {
@@ -23,7 +24,7 @@ import {
   replaceInBasket,
 } from "@/lib/basket/storage";
 import type { ProductListItem } from "@/lib/products/queries";
-import { bandFromScore, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export function BasketView() {
   const [entries, setEntries] = useState<ReturnType<typeof readBasket>>([]);
@@ -140,7 +141,7 @@ export function BasketView() {
   }, [entries, catalog]);
 
   const analysis = useMemo(() => analyzeBasket(lines, goal), [lines, goal]);
-  const headlineScore = analysis.avgGoalFit ?? analysis.avgCoreScore;
+  const swapImpact = useMemo(() => computeSwapImpact(lines, swapsBySlug), [lines, swapsBySlug]);
   const swapCount = Object.values(swapsBySlug).reduce((n, s) => n + s.length, 0);
 
   if (loading && entries.length > 0) {
@@ -205,10 +206,9 @@ export function BasketView() {
                 : ""}
           </p>
         </div>
-        {headlineScore != null ? (
-          <ScorePill fit={Math.round(headlineScore)} label={goal !== "balanced" ? analysis.goalLabel : "Avg score"} />
-        ) : null}
       </div>
+
+      <BasketHealthReport analysis={analysis} impact={swapImpact} swapsLoading={swapsLoading} />
 
       <div className="space-y-2">
         <GoalModePicker value={goal} onChange={pickGoal} compact />
@@ -275,34 +275,6 @@ export function BasketView() {
         >
           Add more items
         </Link>
-      </div>
-    </div>
-  );
-}
-
-function ScorePill({ fit, label }: { fit: number; label: string }) {
-  const surface = scoreTileSurface(fit);
-  const band = bandFromScore(fit);
-  return (
-    <div className="text-right">
-      <p className="text-[10px] uppercase tracking-wider text-(--color-fg-dim)">{label}</p>
-      <div className="mt-1 flex items-center justify-end gap-2">
-        <span
-          data-band={band}
-          className="score-band-chip rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
-        >
-          {band === "excellent" ? "A" : band === "good" ? "B" : band === "poor" ? "C" : "D"}
-        </span>
-        <span
-          className="flex h-10 min-w-[2.75rem] items-center justify-center rounded-xl border font-display text-xl tabular-nums leading-none"
-          style={{
-            backgroundColor: surface.backgroundColor,
-            borderColor: surface.borderColor,
-            color: surface.accentColor,
-          }}
-        >
-          {fit}
-        </span>
       </div>
     </div>
   );

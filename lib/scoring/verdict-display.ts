@@ -54,18 +54,18 @@ export function sublabelChipLabels(ids: string[] | null | undefined): string[] {
   return ids.map((id) => SUBLABEL_DISPLAY[id as SublabelId] ?? id);
 }
 
-const VERDICT_TIER: Record<VerdictId, { accent: string; background: string }> = {
-  daily_staple: { accent: "var(--score-excellent)", background: "#0d2822" },
-  good_choice: { accent: "var(--score-good)", background: "#141e08" },
-  occasional_treat: { accent: "var(--score-poor)", background: "#2b1600" },
-  skip: { accent: "var(--score-bad)", background: "#220808" },
+const VERDICT_TIER: Record<VerdictId, { accent: string }> = {
+  daily_staple: { accent: "var(--score-excellent)" },
+  good_choice: { accent: "var(--score-good)" },
+  occasional_treat: { accent: "var(--score-poor)" },
+  skip: { accent: "var(--score-bad)" },
 };
 
-const BAND_TIER: Record<string, { accent: string; background: string }> = {
-  excellent: { accent: "var(--score-excellent)", background: "#0a3d32" },
-  good: { accent: "var(--score-good)", background: "#14331f" },
-  poor: { accent: "var(--score-poor)", background: "#3d2a0a" },
-  bad: { accent: "var(--score-bad)", background: "#3d1212" },
+const BAND_TIER: Record<string, { accent: string }> = {
+  excellent: { accent: "var(--score-excellent)" },
+  good: { accent: "var(--score-good)" },
+  poor: { accent: "var(--score-poor)" },
+  bad: { accent: "var(--score-bad)" },
 };
 
 /** Catalog score badge — full tier fill color (score only on card). */
@@ -75,7 +75,7 @@ export function catalogTierStyle(
 ): { fill: string } {
   if (verdict) return { fill: VERDICT_TIER[verdict].accent };
   const band = bandFromScore(score);
-  return { fill: BAND_TIER[band]?.accent ?? "#64748b" };
+  return { fill: BAND_TIER[band]?.accent ?? "var(--color-fg-dim)" };
 }
 
 /** @deprecated Use catalogTierStyle for cards; kept for title tooltips elsewhere. */
@@ -91,6 +91,6 @@ export function catalogScorePresentation(
 }
 
 export function tierAccentForVerdict(verdict: VerdictId | null | undefined): string {
-  if (!verdict) return "#94a3b8";
+  if (!verdict) return "var(--color-fg-dim)";
   return VERDICT_TIER[verdict].accent;
 }
