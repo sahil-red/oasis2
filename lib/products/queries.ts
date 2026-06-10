@@ -187,7 +187,7 @@ const LIST_SCORE_FIELDS =
   "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size";
 
 /** PDP join — includes V9 verdict + cohort fields for chips and percentile line. */
-const DETAIL_SCORE_FIELDS = `${LIST_SCORE_FIELDS}, absolute_score, role_cohort, serving_g_effective, cohort_id`;
+const DETAIL_SCORE_FIELDS = `${LIST_SCORE_FIELDS}, absolute_score, role_cohort, serving_g_effective, cohort_id, opinion`;
 
 export type ProductListItem = Pick<
   Product,

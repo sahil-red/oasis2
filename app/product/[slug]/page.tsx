@@ -8,6 +8,7 @@ import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
+import { ProductOpinionPanel } from "@/components/product-opinion-panel";
 import { ProductTakePanel } from "@/components/product-take-panel";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
@@ -36,9 +37,48 @@ import { resolveZeptoBuyUrl } from "@/lib/products/zepto-product-url";
 import { findAlternatives, findSimilarProducts } from "@/lib/products/alternatives";
 import { getProductBySlug, getProductsForSwaps } from "@/lib/products/queries";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
+import type { Metadata } from "next";
 import type { SubScores } from "@/lib/supabase/types";
 
 export const revalidate = 300;
+
+/** Share cards carry the verdict — the score IS the story. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
+  if (!product) return { title: "Product not found · Scout" };
+
+  const score = product.core_scores;
+  const title = score
+    ? `${product.name} — ${score.score}/100 · Scout`
+    : `${product.name} · Scout`;
+  const description =
+    score?.opinion?.headline ??
+    (score
+      ? `Scout health score ${score.score}/100. We read the back label so you don't have to.`
+      : "We read the back label so you don't have to.");
+  const image = product.image_urls?.[0];
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+    },
+  };
+}
 
 const DETAIL_SKIP = new Set([
   "Description",
@@ -259,7 +299,11 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            {scoreWhy || deepseekDisplay?.why ? (
+            {score?.opinion ? (
+              <div className="mt-5">
+                <ProductOpinionPanel opinion={score.opinion} />
+              </div>
+            ) : scoreWhy || deepseekDisplay?.why ? (
               <ProductTakePanel
                 explanation={scoreWhy}
                 deepseekWhy={deepseekDisplay?.why}

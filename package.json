@@ -19,6 +19,7 @@
     "catalog:migrate": "tsx scripts/apply-catalog-migration.ts",
     "db:migrate": "tsx scripts/apply-all-migrations.ts",
     "score": "tsx scripts/05-compute-scores.ts",
+    "opinions": "tsx scripts/generate-opinions.ts",
     "nutrition:fix": "tsx scripts/fix-nutrition-outliers.ts",
     "nutrition:purge-scores": "tsx scripts/purge-untrustworthy-scores.ts",
     "seed:produce": "tsx scripts/seed-fresh-produce.ts",

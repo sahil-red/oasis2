@@ -54,6 +54,7 @@ import {
   type AiSearchUsage,
 } from "@/lib/search/ai-usage";
 import { classifyIntent } from "@/lib/search/intent-classify";
+import { readRecentSearches, recordRecentSearch } from "@/lib/search/recent-searches";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
@@ -343,6 +344,7 @@ export function CatalogView({
   const [quotaHit, setQuotaHit] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const examplePrompts = useRotatingPrompts();
   const { profile } = useAuth();
   const isPlus = profile?.plan === "plus";
@@ -451,6 +453,7 @@ export function CatalogView({
     );
     setAiUsage(readAiSearchUsage());
     setSavedPrefs(readAiSearchPreferences());
+    setRecentSearches(readRecentSearches());
   }, []);
 
   useEffect(() => {
@@ -766,6 +769,7 @@ export function CatalogView({
       setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
       if (!isPlus) setAiUsage(recordAiSearch());
+      setRecentSearches(recordRecentSearch(prompt));
       if (result.v2) {
         setLastSearchContext({
           query: prompt,
@@ -981,23 +985,46 @@ export function CatalogView({
             </p>
           ) : null}
 
-          {/* Prompt chips — single scroll row, hidden when results are showing */}
+          {/* Prompt chips — recent asks first, then rotating examples. Hidden when results show. */}
           {!aiMode && (
             <div className="mt-3 -mx-1 overflow-x-auto px-1 pb-0.5 scrollbar-none">
-              <div className="flex gap-1.5 whitespace-nowrap">
-                {examplePrompts.map((example) => (
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                {recentSearches.length > 0 ? (
+                  <span className="flex-shrink-0 text-[10px] uppercase tracking-wide text-(--color-fg-dim)">
+                    Recent
+                  </span>
+                ) : null}
+                {recentSearches.map((recent) => (
                   <button
-                    key={example}
+                    key={`recent-${recent}`}
                     type="button"
                     onClick={() => {
-                      setAiPrompt(example);
-                      void runAiSearch(example);
+                      setAiPrompt(recent);
+                      void runAiSearch(recent);
                     }}
-                    className="flex-shrink-0 rounded-full border border-(--color-line) px-3 py-1 text-[11px] text-(--color-fg-dim) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                    className="flex-shrink-0 rounded-full border border-(--color-line-strong) bg-(--color-bg-soft) px-3 py-1 text-[11px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
                   >
-                    {example}
+                    {recent}
                   </button>
                 ))}
+                {recentSearches.length > 0 ? (
+                  <span className="h-4 w-px flex-shrink-0 bg-(--color-line)" aria-hidden />
+                ) : null}
+                {examplePrompts
+                  .filter((e) => !recentSearches.some((r) => r.toLowerCase() === e.toLowerCase()))
+                  .map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      onClick={() => {
+                        setAiPrompt(example);
+                        void runAiSearch(example);
+                      }}
+                      className="flex-shrink-0 rounded-full border border-(--color-line) px-3 py-1 text-[11px] text-(--color-fg-dim) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                    >
+                      {example}
+                    </button>
+                  ))}
               </div>
             </div>
           )}

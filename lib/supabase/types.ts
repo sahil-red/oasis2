@@ -152,6 +152,18 @@ export interface CoreScore {
   serving_g_effective?: number | null;
   cohort_id?: string | null;
   cohort_size?: number | null;
+  /** v10 LLM editorial verdict — prose only, cached per rule_version. */
+  opinion?: ProductOpinionRow | null;
+}
+
+export interface ProductOpinionRow {
+  headline: string;
+  why: string;
+  caveat?: string | null;
+  tone: "honest" | "enthusiastic" | "skeptical" | "dismissive";
+  model: string;
+  rule_version: number;
+  generated_at: string;
 }
 
 /** Yuka-style decomposition. Each value is on its own scale and summed to 100. */
