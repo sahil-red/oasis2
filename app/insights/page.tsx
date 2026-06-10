@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -28,6 +29,12 @@ import { marketingCallout } from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
 
 export const revalidate = 600;
+
+export const metadata: Metadata = {
+  title: "What we found · Scout",
+  description:
+    "Patterns across the Indian grocery catalog — daily staples, marketing traps, and the aisles that actually deliver.",
+};
 
 export default async function InsightsPage() {
   let products: Awaited<ReturnType<typeof getCachedScoredCatalogForInsights>> = [];

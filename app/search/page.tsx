@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { CatalogLoader } from "@/components/catalog-loader";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
@@ -5,6 +6,12 @@ import {
   getCachedCatalogMeta,
   getCachedCatalogSearch,
 } from "@/lib/products/catalog-cache";
+
+export const metadata: Metadata = {
+  title: "Ask Scout — search the catalog · Scout",
+  description:
+    "Ask for what you actually need — low-sugar biscuits, high-protein snacks under ₹200 — and get answers scored from the back label.",
+};
 
 type SearchParams = {
   prompt?: string;
