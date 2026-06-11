@@ -1,5 +1,6 @@
 "use client";
 
+import Script from "next/script";
 import Link from "next/link";
 import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
@@ -69,8 +70,8 @@ export function PlanCards() {
       });
       const data = (await res.json()) as { order_id?: string; amount?: number; key_id?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      if (data.order_id && data.key_id) {
-        openRazorpayCheckout(data);
+      if (data.order_id && data.key_id && data.amount != null) {
+        openRazorpayCheckout({ order_id: data.order_id, amount: data.amount, key_id: data.key_id });
       } else {
         throw new Error("Checkout unavailable — try again.");
       }
