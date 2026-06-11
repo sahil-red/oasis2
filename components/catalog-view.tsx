@@ -57,6 +57,7 @@ import {
 } from "@/lib/search/ai-usage";
 import { classifyIntent } from "@/lib/search/intent-classify";
 import { readRecentSearches, recordRecentSearch } from "@/lib/search/recent-searches";
+import type { DietaryPrevalenceMap } from "@/lib/search/v2/types";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
@@ -347,6 +348,7 @@ export function CatalogView({
   // Anonymous visitor used up the free searches — show the sign-in invitation.
   const [signInGate, setSignInGate] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
+  const [dietaryPrevalence, setDietaryPrevalence] = useState<DietaryPrevalenceMap | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const examplePrompts = useRotatingPrompts();
@@ -855,6 +857,7 @@ export function CatalogView({
       setHasMore(false);
       setAiMode(true);
       setFactBrowse(null);
+      setDietaryPrevalence(result.dietary_prevalence ?? null);
       setAiSummary(result.summary);
       setAiParseSource(result.parse_source);
       setAiRankSource(result.rank_source);
@@ -1603,6 +1606,7 @@ export function CatalogView({
                           hrefQuery={productQuery}
                           goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
                           onSublabelClick={handleSublabelClick}
+                          dietaryPrevalence={dietaryPrevalence}
                         />
                       ))}
                     </div>
@@ -1623,6 +1627,7 @@ export function CatalogView({
                   hrefQuery={productQuery}
                   goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
                   onSublabelClick={handleSublabelClick}
+                  dietaryPrevalence={dietaryPrevalence}
                 />
               ))}
             </div>

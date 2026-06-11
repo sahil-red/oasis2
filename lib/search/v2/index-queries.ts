@@ -4,6 +4,7 @@ import { embedText } from "@/lib/search/v2/embeddings";
 import { SEED_GOAL_TRAIT_MAP } from "@/lib/search/v2/goal-graph";
 import type {
   CategoryTraitProfileRow,
+  DietaryPrevalenceMap,
   GoalTraitMapRow,
   ProductSearchIndexRow,
 } from "@/lib/search/v2/types";
@@ -14,6 +15,7 @@ export type SearchIndexSnapshot = {
   goalMap: Map<string, GoalTraitMapRow>;
   catalogMeta: IndexCatalogMeta;
   source: "db" | "memory" | "pgvector";
+  dietary_prevalence: DietaryPrevalenceMap;
 };
 
 async function loadFacets(): Promise<IndexCatalogMeta> {
@@ -229,6 +231,74 @@ async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
   }
 }
 
+/** Compute dietary attribute prevalence per primary_type via a lightweight COUNT query.
+ *  Avoids loading the full index (which is never populated in the snapshot). */
+async function loadDietaryPrevalence(): Promise<DietaryPrevalenceMap> {
+  try {
+    const supabase = adminClient();
+    const { data, error } = await supabase.rpc("search_v2_dietary_prevalence");
+    if (!error && data) {
+      const out: DietaryPrevalenceMap = {};
+      for (const row of data as Array<{
+        primary_type: string;
+        total: number;
+        vegan: number;
+        gf: number;
+        pof: number;
+        jain: number;
+      }>) {
+        const t = row.primary_type || "unknown";
+        out[t] = {
+          total: row.total,
+          is_vegan: row.total > 0 ? row.vegan / row.total : 0,
+          is_gluten_free: row.total > 0 ? row.gf / row.total : 0,
+          is_palm_oil_free: row.total > 0 ? row.pof / row.total : 0,
+          is_jain: row.total > 0 ? row.jain / row.total : 0,
+        };
+      }
+      return out;
+    }
+    // Fallback: direct query if RPC doesn't exist yet
+    const { data: fallback } = await supabase
+      .from("product_search_index")
+      .select("primary_type, is_vegan, is_gluten_free, is_palm_oil_free, is_jain");
+    if (!fallback) return {};
+    const byType = new Map<string, { total: number; vegan: number; gf: number; pof: number; jain: number }>();
+    for (const r of fallback as Array<{
+      primary_type: string | null;
+      is_vegan: boolean | null;
+      is_gluten_free: boolean | null;
+      is_palm_oil_free: boolean | null;
+      is_jain: boolean | null;
+    }>) {
+      const t = r.primary_type || "unknown";
+      let bucket = byType.get(t);
+      if (!bucket) {
+        bucket = { total: 0, vegan: 0, gf: 0, pof: 0, jain: 0 };
+        byType.set(t, bucket);
+      }
+      bucket.total++;
+      if (r.is_vegan) bucket.vegan++;
+      if (r.is_gluten_free) bucket.gf++;
+      if (r.is_palm_oil_free) bucket.pof++;
+      if (r.is_jain) bucket.jain++;
+    }
+    const out: DietaryPrevalenceMap = {};
+    for (const [type, bucket] of byType) {
+      out[type] = {
+        total: bucket.total,
+        is_vegan: bucket.total > 0 ? bucket.vegan / bucket.total : 0,
+        is_gluten_free: bucket.total > 0 ? bucket.gf / bucket.total : 0,
+        is_palm_oil_free: bucket.total > 0 ? bucket.pof / bucket.total : 0,
+        is_jain: bucket.total > 0 ? bucket.jain / bucket.total : 0,
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export function clearSearchIndexSnapshotCache(): void {
   cachedSnapshot = null;
 }
@@ -238,10 +308,11 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     return cachedSnapshot.data;
   }
 
-  const [profilesRaw, goalMap, catalogMeta] = await Promise.all([
+  const [profilesRaw, goalMap, catalogMeta, dietary_prevalence] = await Promise.all([
     loadProfilesFromDb(),
     loadGoalMapFromDb(),
     loadFacets(),
+    loadDietaryPrevalence(),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],
@@ -249,6 +320,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     goalMap,
     catalogMeta,
     source: "pgvector",
+    dietary_prevalence,
   };
   cachedSnapshot = { data: snap, at: Date.now() };
   return snap;

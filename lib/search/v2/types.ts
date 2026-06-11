@@ -105,6 +105,13 @@ export type ProductSearchIndexRow = {
   source_hash: string | null;
 };
 
+/** Per-primary-type prevalence of dietary attributes (0-1). Used by getDisplayChips()
+ *  to suppress non-differentiating badges (≥80% prevalence → hidden unless cohort < 5). */
+export type DietaryPrevalenceMap = Record<
+  string,
+  { total: number; is_vegan: number; is_gluten_free: number; is_palm_oil_free: number; is_jain: number }
+>;
+
 export type GoalTraitWeights = Partial<Record<TraitId, number>>;
 
 export type GoalTraitMapRow = {

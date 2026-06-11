@@ -3,8 +3,9 @@ import type { AiSearchBucket, AiSearchItem, AiSearchResult } from "@/lib/search/
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
+import { getDisplayChips } from "@/lib/search/v2/display-chips";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
-import type { RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
+import type { DietaryPrevalenceMap, RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
 import type { Grade, ScoreBand } from "@/lib/supabase/types";
 
 function dataQualityWarning(score: number): string | null {
@@ -68,6 +69,7 @@ function rankedToAiItem(
   c: RankedCandidate,
   display: Map<string, DisplayEnrichment>,
   snapshotIndex: Awaited<ReturnType<typeof getSearchIndexSnapshot>>["index"],
+  dietaryPrevalence: DietaryPrevalenceMap,
 ): AiSearchItem {
   const row = c.row;
   const extra = display.get(row.product_id);
@@ -139,6 +141,7 @@ function rankedToAiItem(
     is_gluten_free: row.is_gluten_free,
     is_palm_oil_free: row.is_palm_oil_free,
     has_added_sugar: row.has_added_sugar,
+    display_chips: getDisplayChips(row, dietaryPrevalence, enrichedReasons),
   };
 }
 
@@ -153,8 +156,10 @@ export async function searchV2ToAiResult(
     getSearchIndexSnapshot(),
   ]);
 
+  const dietaryPrevalence = snapshot.dietary_prevalence;
+
   const items: AiSearchItem[] = v2.items.map((c) =>
-    rankedToAiItem(c, display, snapshot.index),
+    rankedToAiItem(c, display, snapshot.index, dietaryPrevalence),
   );
 
   const buckets: AiSearchBucket[] | null = v2.buckets?.length
@@ -162,7 +167,7 @@ export async function searchV2ToAiResult(
         id: b.id,
         label: b.label,
         trait_focus: String(b.trait_focus),
-        items: b.items.map((c) => rankedToAiItem(c, display, snapshot.index)),
+        items: b.items.map((c) => rankedToAiItem(c, display, snapshot.index, dietaryPrevalence)),
       }))
     : null;
 
@@ -189,6 +194,7 @@ export async function searchV2ToAiResult(
     limit,
     total: v2.candidates_total,
     relaxed: v2.relaxed,
+    dietary_prevalence: dietaryPrevalence,
     v2: {
       goal_id: v2.intent.goal_id,
       goal_phrase: v2.intent.goal_phrase,

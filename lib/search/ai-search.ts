@@ -18,6 +18,7 @@ import {
   type ProductListItem,
 } from "@/lib/products/queries";
 import type { ParsedProductQuery, QueryParseResult } from "@/lib/search/query-parse";
+import type { DietaryPrevalenceMap } from "@/lib/search/v2/types";
 
 export type AiSearchItem = CatalogGridItem & {
   ai_match_score: number;
@@ -28,6 +29,8 @@ export type AiSearchItem = CatalogGridItem & {
   scout_verified?: boolean;
   /** §8 canonical cluster sibling count (expand on click) */
   canonical_variant_count?: number;
+  /** §14 smart display chips — computed by getDisplayChips() in the V2 adapter */
+  display_chips?: string[];
   /** Rich nutrition + trait data for search cards */
   primary_type?: string | null;
   sugar_g?: number | null;
@@ -67,6 +70,8 @@ export type AiSearchResult = {
   limit: number;
   total: number;
   relaxed: boolean;
+  /** Dietary prevalence map for smart chip suppression — populated by V2 adapter */
+  dietary_prevalence?: DietaryPrevalenceMap;
   /** Search V2 metadata when SEARCH_V2_ENABLED */
   v2?: {
     goal_id: string | null;

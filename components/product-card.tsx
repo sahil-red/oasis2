@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
@@ -18,6 +18,7 @@ import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { sublabelChipLabels, VERDICT_COLORS } from "@/lib/scoring/verdict-display";
 import type { VerdictId } from "@/lib/scoring/verdict";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
+import type { DietaryPrevalenceMap } from "@/lib/search/v2/types";
 import { displayPriceInr, showMrpStrike } from "@/lib/products/display-price";
 
 const VERDICT_SHORT: Record<VerdictId, string> = {
@@ -27,16 +28,100 @@ const VERDICT_SHORT: Record<VerdictId, string> = {
   skip: "Skip",
 };
 
+const CHIP_MAX = 4;
+const CHIP_PRODUCT_SLOTS = 3;
+
+function renderChips(
+  obj: Record<string, unknown>,
+  deepseekOrScoreChips: string[],
+  aiReasons: string[],
+  dietaryPrevalence?: DietaryPrevalenceMap | null,
+): ReactNode[] {
+  const chipClass = "rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)";
+  const itemType = obj.primary_type as string | undefined;
+
+  // Pre-computed display_chips from backend — use directly
+  if (Array.isArray(obj.display_chips)) {
+    return (obj.display_chips as string[]).slice(0, CHIP_MAX).map((l) => (
+      <span key={l} className={chipClass}>{l}</span>
+    ));
+  }
+
+  // Fallback: collect dietary badges with optional prevalence suppression
+  const typePrev = itemType ? (dietaryPrevalence?.[itemType] ?? null) : null;
+  const cohortTooSmall = typePrev ? typePrev.total < 5 : null;
+  const candidates: Array<{ label: string; priority: number; isAi: boolean }> = [];
+  const dietaryFlags: Array<{ key: string; label: string }> = [
+    { key: "is_vegan", label: "Vegan" },
+    { key: "is_gluten_free", label: "Gluten Free" },
+    { key: "is_palm_oil_free", label: "No palm oil" },
+    { key: "is_jain", label: "Jain" },
+  ];
+  for (const flag of dietaryFlags) {
+    if (!obj[flag.key]) continue;
+    if (typePrev && !cohortTooSmall) {
+      const pct = typePrev[flag.key as keyof typeof typePrev] as number | undefined;
+      if (pct != null && pct >= 0.8) continue;
+    }
+    candidates.push({ label: flag.label, priority: 60, isAi: false });
+  }
+
+  // deepseek chips or score-based chips
+  for (const label of deepseekOrScoreChips) {
+    candidates.push({ label, priority: 70, isAi: false });
+  }
+
+  // AI match reasons
+  for (const reason of aiReasons) {
+    candidates.push({ label: reason, priority: 65, isAi: true });
+  }
+
+  candidates.sort((a, b) => b.priority - a.priority);
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  // Fill product slots first
+  for (const c of candidates) {
+    if (c.isAi) continue;
+    if (result.length >= CHIP_PRODUCT_SLOTS) break;
+    if (seen.has(c.label)) continue;
+    seen.add(c.label);
+    result.push(c.label);
+  }
+
+  // Fill remaining with AI reasons
+  for (const c of candidates) {
+    if (!c.isAi) continue;
+    if (result.length >= CHIP_MAX) break;
+    if (seen.has(c.label)) continue;
+    seen.add(c.label);
+    result.push(c.label);
+  }
+
+  // Ensure at least 1 AI reason if available
+  const hasAnyAi = result.some((r) => aiReasons.includes(r));
+  if (!hasAnyAi && aiReasons.length > 0 && result.length >= CHIP_MAX) {
+    result[CHIP_MAX - 1] = aiReasons[0]!;
+  }
+
+  return result.slice(0, CHIP_MAX).map((l) => (
+    <span key={l} className={chipClass}>{l}</span>
+  ));
+}
+
 export const ProductCard = memo(function ProductCard({
   product,
   goalFit,
   hrefQuery = "",
   onSublabelClick: _onSublabelClick,
+  dietaryPrevalence,
 }: {
   product: ProductListItem | CatalogGridItem;
   goalFit?: number;
   hrefQuery?: string;
   onSublabelClick?: (sublabel: string) => void;
+  dietaryPrevalence?: DietaryPrevalenceMap | null;
 }) {
   const thumb = product.image_urls[0];
   const core = product.core_scores;
@@ -188,20 +273,9 @@ export const ProductCard = memo(function ProductCard({
             {displayName}
           </h3>
 
-          {/* Chips — dietary badges + nutrition highlights + score */}
+          {/* Chips — unified display chips (pre-computed by getDisplayChips) or fallback */}
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {p.is_vegan ? (
-              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">Vegan</span>
-            ) : null}
-            {p.is_gluten_free ? (
-              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">Gluten Free</span>
-            ) : null}
-            {p.is_palm_oil_free ? (
-              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">No palm oil</span>
-            ) : null}
-            {aiReasonLines.slice(0, 3).map((r) => (
-              <span key={r} className="rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)">{r}</span>
-            ))}
+            {renderChips(p, chipLabels, aiReasonLines, dietaryPrevalence)}
           </div>
           {variantCount > 1 ? (
             <button
