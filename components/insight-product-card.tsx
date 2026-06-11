@@ -19,11 +19,11 @@ export function InsightProductCard({
 }) {
   const accentBorder =
     accent === "warn"
-      ? "border-amber-500/30 bg-(--color-panel)"
+      ? "border-(--color-warn)/30 bg-(--color-panel)"
       : accent === "value"
-        ? "border-emerald-500/30 bg-(--color-panel)"
+        ? "border-(--color-good)/30 bg-(--color-panel)"
         : accent === "snack"
-          ? "border-violet-500/30 bg-(--color-panel)"
+          ? "border-(--color-accent)/30 bg-(--color-panel)"
           : "border-(--color-line) bg-(--color-panel)";
 
   return (
@@ -99,7 +99,7 @@ export function InsightFeaturedCard({
   return (
     <Link
       href={`/product/${product.slug}`}
-      className="group grid overflow-hidden rounded-2xl border border-amber-500/30 bg-(--color-panel) shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
+      className="group grid overflow-hidden rounded-2xl border border-(--color-warn)/30 bg-(--color-panel) shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
     >
       <div className="relative aspect-square bg-(--color-panel) md:aspect-auto md:min-h-[220px]">
         {product.image_urls[0] ? (
@@ -112,19 +112,19 @@ export function InsightFeaturedCard({
         ) : null}
       </div>
       <div className="flex flex-col justify-center p-6 md:p-8">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-amber-500">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-warn)">
           Marketing reality check
         </p>
         <h2 className="mt-2 font-display text-2xl leading-tight text-(--color-fg) group-hover:text-(--color-accent)">
           {product.name}
         </h2>
         <div className="mt-4 space-y-3">
-          <div className="rounded-lg bg-(--color-panel)/80 px-3 py-2 ring-1 ring-amber-100">
-            <p className="text-[13px] font-medium text-amber-900">Claim</p>
+          <div className="rounded-lg bg-(--color-accent-soft) px-3 py-2 ring-1 ring-(--color-line-strong)">
+            <p className="text-[13px] font-medium text-(--color-fg)">Claim</p>
             <p className="text-[15px] text-(--color-fg)">{callout.claim}</p>
           </div>
-          <div className="rounded-lg bg-(--color-panel)/80 px-3 py-2 ring-1 ring-amber-100">
-            <p className="text-[13px] font-medium text-amber-900">Reality</p>
+          <div className="rounded-lg bg-(--color-accent-soft) px-3 py-2 ring-1 ring-(--color-line-strong)">
+            <p className="text-[13px] font-medium text-(--color-fg)">Reality</p>
             <p className="text-[15px] leading-relaxed text-(--color-fg-muted)">
               {callout.reality}
             </p>

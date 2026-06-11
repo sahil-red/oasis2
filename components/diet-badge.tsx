@@ -3,10 +3,10 @@ import type { DietMode } from "@/lib/diet/types";
 import { cn } from "@/lib/utils";
 
 const STYLE: Record<DietBadge, string> = {
-  vegan: "bg-emerald-50/80 text-emerald-800 ring-emerald-200/80",
-  veg: "bg-lime-50/80 text-lime-800 ring-lime-200/80",
-  "veg-eggs": "bg-amber-50/80 text-amber-900 ring-amber-200/80",
-  "non-veg": "bg-rose-50/80 text-rose-800 ring-rose-200/80",
+  vegan: "bg-(--color-good)/10 text-(--color-good) ring-(--color-good)/25",
+  veg: "bg-(--color-good)/10 text-(--color-good) ring-(--color-good)/25",
+  "veg-eggs": "bg-(--color-warn)/10 text-(--color-warn) ring-(--color-warn)/25",
+  "non-veg": "bg-(--color-bad)/10 text-(--color-bad) ring-(--color-bad)/25",
 };
 
 export function DietBadgeRow({
@@ -30,7 +30,7 @@ export function DietBadgeRow({
         {dietBadgeLabel(badge)}
       </span>
       {incompatible ? (
-        <span className="text-[12px] text-rose-700">
+        <span className="text-[12px] text-(--color-bad)">
           Doesn’t match your diet preference
         </span>
       ) : null}

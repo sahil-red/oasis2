@@ -130,7 +130,7 @@ export const ProductCard = memo(function ProductCard({
         {/* verdict pill, top-left */}
         {verdict && vc ? (
           <span
-            className="absolute left-2.5 top-2.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
+            className="absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
             style={{
               backgroundColor: vc.bg,
               color: vc.fg,

@@ -189,9 +189,9 @@ export default function ProfilePage() {
           </div>
           <span className={`mt-1 flex-shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold ${
             isPlus
-              ? "border border-amber-500/40 bg-amber-500/10 text-amber-400"
+              ? "border border-(--color-warn)/40 bg-(--color-warn)/10 text-(--color-warn)"
               : isUnlimited
-              ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+              ? "border border-(--color-good)/40 bg-(--color-good)/10 text-(--color-good)"
               : "border border-(--color-line) bg-(--color-bg-soft) text-(--color-fg-dim)"
           }`}>
             {isPlus ? "Scout Plus" : isUnlimited ? "Team" : "Free"}
@@ -219,7 +219,7 @@ export default function ProfilePage() {
 
         {/* Upgrade CTA */}
         {!isPlus && !isUnlimited ? (
-          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
+          <div className="mt-4 rounded-xl border border-(--color-warn)/30 bg-(--color-warn)/8 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-semibold text-(--color-fg)">Upgrade to Scout Plus</p>
@@ -229,7 +229,7 @@ export default function ProfilePage() {
               </div>
               <Link
                 href="/pricing"
-                className="flex-shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-400"
+                className="flex-shrink-0 rounded-lg bg-(--color-accent) px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 ₹100/mo
               </Link>
@@ -257,7 +257,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               {hasGoogle ? (
-                <span className="text-[11px] font-medium text-emerald-500">Connected</span>
+                <span className="text-[11px] font-medium text-(--color-good)">Connected</span>
               ) : (
                 <button onClick={handleLinkGoogle} className="rounded-lg border border-(--color-line) px-3 py-1.5 text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)">
                   Connect
@@ -276,7 +276,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 {hasPhone ? (
-                  <span className="text-[11px] font-medium text-emerald-500">Connected</span>
+                <span className="text-[11px] font-medium text-(--color-good)">Connected</span>
                 ) : linkStep === "idle" ? (
                   <button
                     onClick={() => setLinkStep("phone")}
@@ -316,7 +316,7 @@ export default function ProfilePage() {
                   </button>
                 </form>
               ) : null}
-              {linkError ? <p className="mt-2 text-[11px] text-red-400">{linkError}</p> : null}
+              {linkError ? <p className="mt-2 text-[11px] text-(--color-bad)">{linkError}</p> : null}
             </div>
           </div>
         </div>
@@ -382,7 +382,7 @@ export default function ProfilePage() {
                     title={s.alert_enabled ? "Turn off alerts" : "Alert me when new matches appear"}
                     className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-50 ${
                       s.alert_enabled
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                        ? "border-(--color-warn)/40 bg-(--color-warn)/10 text-(--color-warn)"
                         : "border-(--color-line) text-(--color-fg-dim) hover:text-(--color-fg)"
                     }`}
                   >
@@ -392,7 +392,7 @@ export default function ProfilePage() {
                     type="button"
                     disabled={savedBusyId === s.id}
                     onClick={() => void removeSavedSearch(s.id)}
-                    className="flex-shrink-0 opacity-0 transition group-hover:opacity-60 hover:!opacity-100 text-(--color-fg-dim)"
+                    className="flex-shrink-0 opacity-0 transition group-hover:opacity-100 hover:!opacity-100 text-(--color-fg-dim)"
                     title="Remove"
                   >
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">

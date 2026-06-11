@@ -12,19 +12,19 @@ import type { IngredientRisk } from "@/lib/ingredients/parse";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 
 const RISK_DOT: Record<IngredientRisk, string> = {
-  "risk-free": "bg-[#22c55e]",
+  "risk-free": "bg-(--color-good)",
   unknown: "bg-(--color-fg-dim)/40",
-  limited: "bg-[#f59e0b]",
-  moderate: "bg-[#f59e0b]",
-  hazardous: "bg-[#ef4444]",
+  limited: "bg-(--color-warn)",
+  moderate: "bg-(--color-warn)",
+  hazardous: "bg-(--color-bad)",
 };
 
 const RISK_TEXT: Record<IngredientRisk, string> = {
-  "risk-free": "text-[#4ade80]",
+  "risk-free": "text-(--color-good)",
   unknown: "text-(--color-fg-dim)",
-  limited: "text-[#fbbf24]",
-  moderate: "text-[#fbbf24]",
-  hazardous: "text-[#f87171]",
+  limited: "text-(--color-warn)",
+  moderate: "text-(--color-warn)",
+  hazardous: "text-(--color-bad)",
 };
 
 const INITIAL_INGREDIENT_COUNT = 20;
@@ -62,7 +62,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
         <span
           className={cn(
             "mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full",
-            isProbiotic ? "bg-[#14b8a6]" : RISK_DOT[dotRisk],
+            isProbiotic ? "bg-(--color-good)" : RISK_DOT[dotRisk],
           )}
           aria-hidden
         />
@@ -78,7 +78,7 @@ function IngredientRow({ item }: { item: IngredientDisplayItem }) {
             <span
               className={cn(
                 "text-[10.5px] font-medium",
-                isProbiotic ? "text-[#2dd4bf]" : RISK_TEXT[dotRisk],
+                isProbiotic ? "text-(--color-good)" : RISK_TEXT[dotRisk],
               )}
             >
               {item.tierLabel}

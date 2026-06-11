@@ -124,7 +124,7 @@ export function PlanCards() {
           <div className="mt-8">
             <Link
               href="/search"
-              className="inline-flex w-full items-center justify-center rounded-xl border border-(--color-line) px-5 py-2.5 text-sm font-medium text-(--color-fg) transition hover:border-(--color-fg-muted)"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-(--color-line) px-5 py-2.5 text-sm font-medium text-(--color-fg) transition hover:border-(--color-fg-muted) hover:bg-(--color-bg-soft)"
             >
               Keep browsing free
             </Link>
@@ -136,7 +136,7 @@ export function PlanCards() {
           className="relative rounded-2xl border p-6"
           style={{
             borderColor: "color-mix(in srgb, var(--color-accent) 45%, var(--color-line))",
-            backgroundColor: "color-mix(in srgb, var(--color-accent) 4%, var(--color-panel))",
+            backgroundColor: "color-mix(in srgb, var(--color-accent) 7%, var(--color-panel))",
           }}
         >
           <span className="absolute -top-3 left-6 inline-flex items-center gap-1 rounded-full bg-(--color-fg) px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-(--color-bg)">

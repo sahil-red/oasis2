@@ -1092,7 +1092,7 @@ export function CatalogView({
               <button
                 type="button"
                 onClick={() => setRefineOpen((o) => !o)}
-                className="flex min-h-[34px] items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-(--color-fg) px-4 text-[12px] font-medium text-(--color-bg) transition hover:opacity-80"
+                className="flex min-h-[34px] items-center justify-center gap-1.5 rounded-xl border border-(--color-bg)/20 bg-(--color-fg) px-4 text-[12px] font-medium text-(--color-bg) transition hover:opacity-80"
               >
                 <SlidersHorizontal className="h-3 w-3 opacity-70" aria-hidden />
                 Refine
@@ -1315,10 +1315,10 @@ export function CatalogView({
                   skip: "Skip",
                 };
                 const colors: Record<string, { fg: string; bg: string; border: string; activeBg: string }> = {
-                  daily_staple: { fg: "#0f9e75", bg: "transparent", border: "#0f9e75", activeBg: "color-mix(in srgb, #0f9e75 14%, transparent)" },
-                  good_choice: { fg: "#7ab830", bg: "transparent", border: "#7ab830", activeBg: "color-mix(in srgb, #7ab830 14%, transparent)" },
-                  occasional_treat: { fg: "#e07030", bg: "transparent", border: "#e07030", activeBg: "color-mix(in srgb, #e07030 14%, transparent)" },
-                  skip: { fg: "#d43030", bg: "transparent", border: "#d43030", activeBg: "color-mix(in srgb, #d43030 14%, transparent)" },
+                  daily_staple: { fg: "var(--color-good)", bg: "transparent", border: "var(--color-good)", activeBg: "color-mix(in srgb, var(--color-good) 14%, transparent)" },
+                  good_choice: { fg: "var(--score-good)", bg: "transparent", border: "var(--score-good)", activeBg: "color-mix(in srgb, var(--score-good) 14%, transparent)" },
+                  occasional_treat: { fg: "var(--color-warn)", bg: "transparent", border: "var(--color-warn)", activeBg: "color-mix(in srgb, var(--color-warn) 14%, transparent)" },
+                  skip: { fg: "var(--color-bad)", bg: "transparent", border: "var(--color-bad)", activeBg: "color-mix(in srgb, var(--color-bad) 14%, transparent)" },
                 };
                 const c = colors[v]!;
                 const active = activeState.verdict === v;
@@ -1837,7 +1837,7 @@ function ScoutLanding({
                     <p className="text-[12px] font-semibold text-(--color-fg)">{cat.label}</p>
                     <div className="flex gap-2 text-[10px] text-(--color-fg-dim)">
                       <span>avg <strong className="text-(--color-fg)">{cat.avgScore}</strong></span>
-                      <span className="text-red-400">· {cat.skipPct}% skip</span>
+                      <span className="text-(--color-bad)">· {cat.skipPct}% skip</span>
                     </div>
                   </div>
                   <Link href={cat.href} className="text-[10px] text-(--color-fg-dim) hover:text-(--color-fg)">All →</Link>
@@ -1856,7 +1856,7 @@ function ScoutLanding({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[11px] font-medium text-(--color-fg) group-hover:text-(--color-accent)">{p.name}</p>
                         <div className="flex gap-1.5 text-[10px] text-(--color-fg-dim)">
-                          {p.grade && <span className="font-bold text-emerald-500">{p.grade}</span>}
+                          {p.grade && <span className="font-bold text-(--color-good)">{p.grade}</span>}
                           <span>{p.score}/100</span>
                           {p.protein != null && <span>· {Math.round(p.protein)}g P</span>}
                         </div>
@@ -1875,7 +1875,7 @@ function ScoutLanding({
         <section>
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-500">Scout warning</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-bad)">Scout warning</p>
               <h2 className="font-display mt-1 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[1.65rem]">The marketing&apos;s a lie.</h2>
             </div>
             <Link href="/search?verdict=skip&sort=score-asc" className="text-[11px] text-(--color-fg-dim) hover:text-(--color-fg)">Full skip list →</Link>
@@ -1886,7 +1886,7 @@ function ScoutLanding({
                 key={p.slug}
                 href={`/product/${p.slug}${hrefQuery}`}
                 onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
-                className="group rounded-xl border border-red-500/20 bg-(--color-panel) p-3 transition hover:border-red-500/40"
+                className="group rounded-xl border border-(--color-bad)/20 bg-(--color-panel) p-3 transition hover:border-(--color-bad)/40"
               >
                 <div className="flex items-start gap-2.5">
                   <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
@@ -1896,15 +1896,15 @@ function ScoutLanding({
                     {p.brand && <p className="truncate text-[9px] uppercase tracking-wide text-(--color-fg-dim)">{p.brand}</p>}
                     <p className="line-clamp-2 text-[12px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">{p.name}</p>
                   </div>
-                  <span className="flex-shrink-0 text-base font-bold tabular-nums text-red-500">{p.score}</span>
+                  <span className="flex-shrink-0 text-base font-bold tabular-nums text-(--color-bad)">{p.score}</span>
                 </div>
                 <div className="mt-2.5 space-y-1">
                   <div className="flex gap-1.5 text-[11px]">
-                    <span className="rounded bg-green-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-green-600">Claims</span>
+                    <span className="rounded bg-(--color-good)/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-(--color-good)">Claims</span>
                     <span className="text-(--color-fg-muted)">{p.claim}</span>
                   </div>
                   <div className="flex gap-1.5 text-[11px]">
-                    <span className="rounded bg-red-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-red-500">Reality</span>
+                    <span className="rounded bg-(--color-bad)/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-(--color-bad)">Reality</span>
                     <span className="text-(--color-fg-muted)">{p.reality}</span>
                   </div>
                 </div>
@@ -1918,7 +1918,7 @@ function ScoutLanding({
         <section>
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-600">Scout verified</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-good)">Scout verified</p>
               <h2 className="font-display mt-1 text-2xl font-semibold leading-snug text-(--color-fg) md:text-[1.65rem]">
                 The label checks out.
               </h2>
@@ -1936,7 +1936,7 @@ function ScoutLanding({
                 key={p.slug}
                 href={`/product/${p.slug}${hrefQuery}`}
                 onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
-                className="group rounded-xl border border-emerald-500/20 bg-(--color-panel) p-3 transition hover:border-emerald-500/40"
+                className="group rounded-xl border border-(--color-good)/20 bg-(--color-panel) p-3 transition hover:border-(--color-good)/40"
               >
                 <div className="flex items-start gap-2.5">
                   <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
@@ -1952,11 +1952,11 @@ function ScoutLanding({
                       {p.name}
                     </p>
                   </div>
-                  <span className="flex-shrink-0 text-base font-bold tabular-nums text-emerald-600">{p.score}</span>
+                  <span className="flex-shrink-0 text-base font-bold tabular-nums text-(--color-good)">{p.score}</span>
                 </div>
                 <div className="mt-2.5 space-y-1">
                   <div className="flex gap-1.5 text-[11px]">
-                    <span className="rounded bg-emerald-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-emerald-600">
+                    <span className="rounded bg-(--color-good)/10 px-1 py-0.5 text-[9px] font-semibold uppercase text-(--color-good)">
                       Panel
                     </span>
                     <span className="text-(--color-fg-muted)">{p.reason}</span>
@@ -1966,7 +1966,7 @@ function ScoutLanding({
                       <span className="rounded bg-(--color-bg-soft) px-1 py-0.5 text-[9px] font-semibold uppercase text-(--color-fg-dim)">
                         Grade
                       </span>
-                      <span className="font-semibold text-emerald-600">{p.grade}</span>
+                      <span className="font-semibold text-(--color-good)">{p.grade}</span>
                     </div>
                   ) : null}
                 </div>

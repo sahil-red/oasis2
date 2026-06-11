@@ -86,7 +86,7 @@ export function VerdictTakeCard({
           {items.length > 0 ? (
             <ul className="mt-3 space-y-1 text-[13px] leading-snug text-(--color-fg-muted)">
               {items.map((item) => {
-                const dotColor = item.tone === "good" ? "var(--score-excellent)" : "var(--score-poor)";
+                const dotColor = c.chipFg;
                 return (
                   <li key={`${item.tone}-${item.line}`} className="flex gap-2 rounded-lg px-1 py-0.5">
                     <span

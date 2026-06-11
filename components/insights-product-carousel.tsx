@@ -50,7 +50,7 @@ export function InsightsProductCarousel({
         disabled={!canPrev}
         onClick={() => scroll(-1)}
         className={cn(
-          "absolute left-0 top-[42%] z-10 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-amber-300 disabled:pointer-events-none disabled:opacity-30 sm:-translate-x-2",
+          "absolute left-0 top-[42%] z-10 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) disabled:pointer-events-none disabled:opacity-30 sm:-translate-x-2",
         )}
       >
         <ChevronLeft className="h-5 w-5" />
@@ -61,7 +61,7 @@ export function InsightsProductCarousel({
         disabled={!canNext}
         onClick={() => scroll(1)}
         className={cn(
-          "absolute right-0 top-[42%] z-10 grid h-10 w-10 translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-amber-300 disabled:pointer-events-none disabled:opacity-30 sm:translate-x-2",
+          "absolute right-0 top-[42%] z-10 grid h-10 w-10 translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) disabled:pointer-events-none disabled:opacity-30 sm:translate-x-2",
         )}
       >
         <ChevronRight className="h-5 w-5" />

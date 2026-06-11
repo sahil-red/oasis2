@@ -81,7 +81,7 @@ export default function LoginPage() {
           <button
             onClick={handleGoogle}
             disabled={loading}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-(--color-line-strong) bg-(--color-panel) px-4 py-3 text-sm font-medium text-(--color-fg) transition hover:bg-(--color-bg-soft) disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-(--color-line-strong) bg-(--color-panel) px-4 py-3 text-sm font-medium text-(--color-fg) shadow-sm transition hover:border-(--color-fg-muted) hover:shadow-md disabled:opacity-50"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M17.64 9.2c0-.637-.057-1.25-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
@@ -115,7 +115,7 @@ export default function LoginPage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="98765 43210"
-                    className="min-h-[46px] flex-1 bg-(--color-panel) px-3 text-sm text-(--color-fg) outline-none placeholder:text-(--color-fg-dim)"
+                    className="min-h-[46px] flex-1 bg-(--color-bg) px-3 text-sm text-(--color-fg) outline-none placeholder:text-(--color-fg-dim)"
                     required
                   />
                 </div>
@@ -141,7 +141,7 @@ export default function LoginPage() {
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                   placeholder="000000"
-                  className="min-h-[46px] w-full rounded-xl border border-(--color-line-strong) bg-(--color-panel) px-4 text-center text-lg tracking-[0.4em] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+                  className="min-h-[46px] w-full rounded-xl border border-(--color-line-strong) bg-(--color-panel) px-4 text-center text-lg tracking-[0.4em] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-accent)"
                   required
                 />
               </div>
@@ -163,7 +163,7 @@ export default function LoginPage() {
           )}
 
           {error ? (
-            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
+            <p className="rounded-lg border border-(--color-bad)/20 bg-(--color-bad)/10 px-3 py-2 text-[12px] text-(--color-bad)">
               {error}
             </p>
           ) : null}

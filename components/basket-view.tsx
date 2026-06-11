@@ -351,7 +351,7 @@ function CartLine({
                 type="button"
                 aria-label="Remove one"
                 onClick={() => decrementBasket(product.slug)}
-                className="grid h-7 w-7 place-items-center rounded-full text-(--color-fg-muted) hover:bg-(--color-panel) hover:text-(--color-fg)"
+                className="grid h-7 w-7 place-items-center rounded-full bg-(--color-panel) text-(--color-fg-muted) hover:bg-(--color-fg) hover:text-(--color-bg)"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -381,7 +381,7 @@ function CartLine({
 
       {swaps.length > 0 ? (
         <details className="group/swaps mt-3 border-t border-(--color-line) pt-3">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-(--color-fg-muted) marker:content-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 text-[12px] text-(--color-fg-muted) transition marker:content-none [&::-webkit-details-marker]:hidden group-open/swaps:bg-(--color-accent-soft) group-open/swaps:text-(--color-fg)">
             <ChevronDown className="h-3.5 w-3.5 transition group-open/swaps:rotate-180" />
             {swaps.length} better swap{swaps.length === 1 ? "" : "s"} in{" "}
             {product.subcategory ?? product.category ?? "this aisle"}

@@ -6,14 +6,14 @@ import type { LandingFact } from "@/lib/products/landing-insights";
 
 const TONE_STYLES = {
   bad: {
-    stat: "text-red-500 dark:text-red-400",
-    dot: "bg-red-500",
-    border: "border-red-500/20 hover:border-red-500/40",
+    stat: "text-(--color-bad)",
+    dot: "bg-(--color-bad)",
+    border: "border-(--color-bad)/20 hover:border-(--color-bad)/40",
   },
   good: {
-    stat: "text-emerald-500 dark:text-emerald-400",
-    dot: "bg-emerald-500",
-    border: "border-emerald-500/20 hover:border-emerald-500/40",
+    stat: "text-(--color-good)",
+    dot: "bg-(--color-good)",
+    border: "border-(--color-good)/20 hover:border-(--color-good)/40",
   },
   neutral: {
     stat: "text-(--color-fg)",
