@@ -1,7 +1,7 @@
 import type { ScoreExplanation } from "@/lib/products/score-explain";
 import type { VerdictId } from "@/lib/scoring/verdict";
 import { ScoreRing } from "@/components/verdict-chips";
-import { buildAutoSentence } from "@/components/verdict-chips";
+import { buildAutoSentence } from "@/lib/scoring/auto-sentence";
 import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
 import { VERDICT_COLORS } from "@/lib/scoring/verdict-display";
 import { takeLines, bucketTake, actionableWatchLine } from "@/components/product-take-panel";
