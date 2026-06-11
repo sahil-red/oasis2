@@ -45,7 +45,7 @@ export function InsightsBrandBoard({
 }) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-      <section className="rounded-2xl border border-emerald-500/30 bg-(--color-panel) p-5 sm:p-6">
+      <section className="rounded-2xl border border-(--color-good)/30 bg-(--color-panel) p-5 sm:p-6">
         <h2 className="font-display text-xl text-(--color-fg)">Cleanest brands</h2>
         <p className="mt-1 text-sm text-(--color-fg-muted)">
           Highest average scores · at least 3 products in our catalog.
@@ -62,7 +62,7 @@ export function InsightsBrandBoard({
           ))}
         </ol>
       </section>
-      <section className="rounded-2xl border border-red-500/30 bg-(--color-panel) p-5 sm:p-6">
+      <section className="rounded-2xl border border-(--color-bad)/30 bg-(--color-panel) p-5 sm:p-6">
         <h2 className="font-display text-xl text-(--color-fg)">Weakest averages</h2>
         <p className="mt-1 text-sm text-(--color-fg-muted)">
           Brands that consistently score low on labels we have.

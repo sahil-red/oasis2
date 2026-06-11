@@ -165,9 +165,9 @@ html.dark body {
 }
 
 .score-band-chip[data-band="good"] {
-  background: color-mix(in srgb, #84cc16 12%, var(--color-panel));
-  color: color-mix(in srgb, #65a30d 90%, var(--color-fg));
-  border-color: color-mix(in srgb, #84cc16 28%, var(--color-line));
+  background: color-mix(in srgb, var(--score-good) 12%, var(--color-panel));
+  color: color-mix(in srgb, var(--score-good) 85%, var(--color-fg));
+  border-color: color-mix(in srgb, var(--score-good) 28%, var(--color-line));
 }
 
 .score-band-chip[data-band="poor"] {
@@ -188,8 +188,8 @@ html.dark .score-band-chip[data-band="excellent"] {
 }
 
 html.dark .score-band-chip[data-band="good"] {
-  background: color-mix(in srgb, #a3e635 14%, var(--color-panel));
-  color: color-mix(in srgb, #bef264 75%, white);
+  background: color-mix(in srgb, var(--score-good) 18%, var(--color-panel));
+  color: color-mix(in srgb, var(--score-good) 70%, white);
 }
 
 html.dark .score-band-chip[data-band="poor"] {

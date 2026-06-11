@@ -124,7 +124,7 @@ export function SwapPanel({
                 </div>
                 <div
                   className={cn(
-                    "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-[#f7f3ea]",
+                    "relative shrink-0 overflow-hidden rounded-lg border border-(--color-line) bg-(--color-bg)",
                     grid
                       ? gridColumns === 4
                         ? "h-28 w-full xl:h-32"

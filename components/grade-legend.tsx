@@ -10,11 +10,11 @@ const GRADES: { grade: Grade; range: string; meaning: string }[] = [
 ];
 
 const COLORS: Record<Grade, string> = {
-  A: "#22c55e",
-  B: "#84cc16",
-  C: "#f59e0b",
-  D: "#fb923c",
-  F: "#ef4444",
+  A: "var(--score-excellent)",
+  B: "var(--score-good)",
+  C: "var(--score-poor)",
+  D: "var(--score-poor)",
+  F: "var(--score-bad)",
 };
 
 export function GradeLegend({

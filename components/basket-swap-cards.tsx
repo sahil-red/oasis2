@@ -27,10 +27,10 @@ export function BasketSwapCards({
   const aisle = current.subcategory ?? current.category ?? "this aisle";
 
   return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/90 via-white to-violet-50/40 p-3 dark:border-emerald-800/50 dark:from-emerald-950/30 dark:via-(--color-panel) dark:to-violet-950/25 sm:p-4">
+    <div className="mt-3 overflow-hidden rounded-xl border border-(--color-good)/30 bg-(--color-good)/[0.04] p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-800/90 dark:text-emerald-300/90">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-(--color-good)">
             <Sparkles className="h-3.5 w-3.5" />
             Better picks
           </p>
@@ -45,7 +45,7 @@ export function BasketSwapCards({
         {suggestions.map(({ product, goalFit, deltas }) => (
           <li
             key={product.id}
-            className="flex flex-col overflow-hidden rounded-xl border border-emerald-100 bg-(--color-panel) shadow-sm transition hover:border-emerald-300 hover:shadow-md dark:border-emerald-800/40 dark:hover:border-emerald-600/50"
+            className="flex flex-col overflow-hidden rounded-xl border border-(--color-good)/20 bg-(--color-panel) shadow-sm transition hover:border-(--color-good)/40 hover:shadow-md"
           >
             <Link
               href={`/product/${product.slug}`}

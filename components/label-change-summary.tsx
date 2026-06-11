@@ -39,16 +39,16 @@ export function LabelChangeSummary({
   const ingDetail = compare.ingredients_detail;
 
   return (
-    <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 px-4 py-3 text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200/60 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800/60">
+    <div className="rounded-xl border border-(--color-warn)/30 bg-(--color-warn)/[0.06] px-4 py-3 text-sm leading-relaxed text-(--color-fg) ring-1 ring-(--color-warn)/20">
       <p className="font-medium">Label pipeline vs Zepto CSV</p>
       <ul className="mt-2 list-inside list-disc space-y-1 text-[13px]">
         {nutChanged ? (
           <li>
             <span className="font-medium">Nutrition:</span>{" "}
             {statusLine(compare.nutrition, labelResolution?.nutrition_source ?? undefined)}
-            {differing.length > 0 ? (
-              <span className="block pl-5 text-amber-900/90 dark:text-amber-200/90">
-                Macros that differed:{" "}
+                        {differing.length > 0 ? (
+              <span className="block pl-5 text-(--color-fg-muted)">
+                Macros that differed: {" "}
                 {differing
                   .map((k) => NUTRITION_FIELD_LABELS[k] ?? k.replace(/_100g$/, ""))
                   .join(", ")}
@@ -62,7 +62,7 @@ export function LabelChangeSummary({
             <span className="font-medium">Ingredients:</span>{" "}
             {statusLine(compare.ingredients, labelResolution?.ingredients_source ?? undefined)}
             {ingDetail ? (
-              <span className="block pl-5 text-amber-900/90 dark:text-amber-200/90">
+              <span className="block pl-5 text-(--color-fg-muted)">
                 CSV list was {ingDetail.existing_len} chars; label read had{" "}
                 {ingDetail.ocr_ingredient_count} ingredient segments
                 {ingDetail.overlap_ratio != null

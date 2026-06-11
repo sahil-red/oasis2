@@ -24,28 +24,28 @@ export function gradeLetterTileSurface(grade: Grade): {
   switch (grade) {
     case "A":
       return {
-        backgroundColor: "color-mix(in srgb, #0f9e75 42%, #0c1f1a)",
-        borderColor: "#0f9e75",
-        letterColor: "#5eead4",
+        backgroundColor: "color-mix(in srgb, var(--score-excellent) 42%, var(--color-panel))",
+        borderColor: "var(--score-excellent)",
+        letterColor: "var(--score-excellent)",
       };
     case "B":
       return {
-        backgroundColor: "color-mix(in srgb, #22c55e 38%, #0f1f14)",
-        borderColor: "#22c55e",
-        letterColor: "#86efac",
+        backgroundColor: "color-mix(in srgb, var(--score-good) 38%, var(--color-panel))",
+        borderColor: "var(--score-good)",
+        letterColor: "var(--score-good)",
       };
     case "C":
     case "D":
       return {
-        backgroundColor: "color-mix(in srgb, #f59e0b 40%, #1f1608)",
-        borderColor: "#f59e0b",
-        letterColor: "#fcd34d",
+        backgroundColor: "color-mix(in srgb, var(--score-poor) 40%, var(--color-panel))",
+        borderColor: "var(--score-poor)",
+        letterColor: "var(--score-poor)",
       };
     case "F":
       return {
-        backgroundColor: "color-mix(in srgb, #ef4444 42%, #1f0c0c)",
-        borderColor: "#ef4444",
-        letterColor: "#fca5a5",
+        backgroundColor: "color-mix(in srgb, var(--score-bad) 42%, var(--color-panel))",
+        borderColor: "var(--score-bad)",
+        letterColor: "var(--score-bad)",
       };
     default:
       return {
