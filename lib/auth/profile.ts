@@ -54,10 +54,16 @@ export async function getProfileForUser(
 export async function consumeAiSearch(
   supabase: SupabaseClient,
   userId: string,
+  authEmail?: string | null,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const profile = await getProfileForUser(supabase, userId);
   if (!profile) return { ok: false, reason: "Profile not found" };
-  if (profile.ai_searches_limit >= 9999) return { ok: true }; // plus or whitelisted
+  
+  // Check both profile email and auth email against unlimited list
+  const isAdmin = UNLIMITED_EMAILS.has((profile.email ?? "").toLowerCase()) ||
+                  (authEmail ? UNLIMITED_EMAILS.has(authEmail.toLowerCase()) : false);
+  
+  if (profile.plan === "plus" || isAdmin) return { ok: true };
   if (profile.ai_searches_remaining <= 0) {
     return { ok: false, reason: "Daily AI search limit reached. Upgrade to Scout Plus." };
   }

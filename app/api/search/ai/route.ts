@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   if (client) {
     const { data: userData } = await client.auth.getUser();
     if (userData.user) {
-      const gate = await consumeAiSearch(client, userData.user.id);
+      const gate = await consumeAiSearch(client, userData.user.id, userData.user.email);
       if (!gate.ok) {
         return NextResponse.json(
           { error: gate.reason, code: "quota_exceeded" },
