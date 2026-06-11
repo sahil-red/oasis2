@@ -16,6 +16,7 @@ import {
 } from "@/lib/products/catalog-api";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { sublabelChipLabels, VERDICT_COLORS } from "@/lib/scoring/verdict-display";
+import { formatDeepseekChip } from "@/lib/ocr/deepseek-promote";
 import type { VerdictId } from "@/lib/scoring/verdict";
 import type { CatalogGridItem, ProductListItem } from "@/lib/products/queries";
 import type { DietaryPrevalenceMap } from "@/lib/search/v2/types";
@@ -54,7 +55,7 @@ function renderChips(
   const dietaryFlags: Array<{ key: string; label: string }> = [
     { key: "is_vegan", label: "Vegan" },
     { key: "is_gluten_free", label: "Gluten Free" },
-    { key: "is_palm_oil_free", label: "No palm oil" },
+    { key: "is_palm_oil_free", label: "No Palm Oil" },
     { key: "is_jain", label: "Jain" },
   ];
   for (const flag of dietaryFlags) {
@@ -141,7 +142,7 @@ export const ProductCard = memo(function ProductCard({
   const scoreChipLabels = sublabelChipLabels(sublabelIds);
   const deepseekChipLabels =
     "deepseek_chips" in product && Array.isArray(product.deepseek_chips)
-      ? product.deepseek_chips
+      ? product.deepseek_chips.map(formatDeepseekChip)
       : [];
   const chipLabels = deepseekChipLabels.length ? deepseekChipLabels : scoreChipLabels;
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
@@ -158,8 +159,6 @@ export const ProductCard = memo(function ProductCard({
     "ai_match_warning" in product && typeof product.ai_match_warning === "string"
       ? product.ai_match_warning
       : null;
-  const scoutVerified =
-    "scout_verified" in product && product.scout_verified === true;
   const variantCount =
     "canonical_variant_count" in product && typeof product.canonical_variant_count === "number"
       ? product.canonical_variant_count
@@ -263,11 +262,6 @@ export const ProductCard = memo(function ProductCard({
             ) : (
               <span className="block h-[13px]" aria-hidden />
             )}
-            {scoutVerified ? (
-              <span className="shrink-0 rounded-full border border-(--color-accent)/30 bg-(--color-accent-soft) px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-(--color-accent)">
-                Verified by Scout
-              </span>
-            ) : null}
           </div>
           <h3 className="line-clamp-2 mt-0.5 text-[13.5px] font-medium leading-snug text-(--color-fg) group-hover:underline group-hover:underline-offset-2">
             {displayName}

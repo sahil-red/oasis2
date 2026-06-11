@@ -79,12 +79,12 @@ export function VerdictTakeCard({
             </p>
           </div>
 
-          <p className="mt-2 text-[15px] font-semibold leading-snug text-(--color-fg)">
+          <h3 className="font-display mt-2 text-balance text-2xl leading-snug text-(--color-fg)">
             {autoSentence}
-          </p>
+          </h3>
 
           {items.length > 0 ? (
-            <ul className="mt-3 space-y-1 text-[13px] leading-snug text-(--color-fg-muted)">
+            <ul className="mt-2.5 space-y-1 text-[14px] leading-relaxed text-(--color-fg-muted)">
               {items.map((item) => {
                 const dotColor = c.chipFg;
                 return (
