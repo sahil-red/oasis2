@@ -20,6 +20,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Launch-day graceful degrade: billing env may land after the first deploy.
+  // Without this, authHeader() throws and the upgrade click 500s in the user's face.
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    return NextResponse.json(
+      { error: "Payments are opening shortly — check back soon." },
+      { status: 503 },
+    );
+  }
+
   const body = (await request.json().catch(() => ({}))) as { interval?: string };
   const interval: PlanInterval = body.interval === "yearly" ? "yearly" : "monthly";
   const plan = planForInterval(interval);
@@ -35,42 +44,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Already subscribed" }, { status: 400 });
   }
 
-  let customerId = profile?.razorpay_customer_id as string | null;
-  if (!customerId) {
-    customerId = await createRazorpayCustomer({
-      name: profile?.full_name ?? data.user.user_metadata?.full_name,
-      email: profile?.email ?? data.user.email,
-      contact: profile?.phone ?? data.user.phone,
+  try {
+    let customerId = profile?.razorpay_customer_id as string | null;
+    if (!customerId) {
+      customerId = await createRazorpayCustomer({
+        name: profile?.full_name ?? data.user.user_metadata?.full_name,
+        email: profile?.email ?? data.user.email,
+        contact: profile?.phone ?? data.user.phone,
+      });
+      await admin
+        .from("profiles")
+        .update({ razorpay_customer_id: customerId, updated_at: new Date().toISOString() })
+        .eq("id", data.user.id);
+    }
+
+    const planId = await ensureRazorpayPlan(interval);
+    const sub = await createRazorpaySubscription({
+      customerId,
+      planId,
+      // Razorpay total_count is the number of billing cycles to run.
+      totalCount: interval === "yearly" ? 10 : 120,
     });
-    await admin
-      .from("profiles")
-      .update({ razorpay_customer_id: customerId, updated_at: new Date().toISOString() })
-      .eq("id", data.user.id);
+
+    await admin.from("subscriptions").insert({
+      user_id: data.user.id,
+      razorpay_subscription_id: sub.id,
+      razorpay_plan_id: planId,
+      status: sub.status ?? "created",
+    });
+
+    return NextResponse.json({
+      subscription_id: sub.id,
+      checkout_url: sub.short_url ?? null,
+      key_id: process.env.RAZORPAY_KEY_ID,
+      plan: {
+        name: plan.name,
+        amount_display: formatInr(plan.amount_paise),
+        interval: plan.interval,
+      },
+    });
+  } catch (e) {
+    console.error("[billing/create-subscription]", e instanceof Error ? e.message : e);
+    return NextResponse.json(
+      { error: "Could not start checkout — please try again in a few minutes." },
+      { status: 502 },
+    );
   }
-
-  const planId = await ensureRazorpayPlan(interval);
-  const sub = await createRazorpaySubscription({
-    customerId,
-    planId,
-    // Razorpay total_count is the number of billing cycles to run.
-    totalCount: interval === "yearly" ? 10 : 120,
-  });
-
-  await admin.from("subscriptions").insert({
-    user_id: data.user.id,
-    razorpay_subscription_id: sub.id,
-    razorpay_plan_id: planId,
-    status: sub.status ?? "created",
-  });
-
-  return NextResponse.json({
-    subscription_id: sub.id,
-    checkout_url: sub.short_url ?? null,
-    key_id: process.env.RAZORPAY_KEY_ID,
-    plan: {
-      name: plan.name,
-      amount_display: formatInr(plan.amount_paise),
-      interval: plan.interval,
-    },
-  });
 }

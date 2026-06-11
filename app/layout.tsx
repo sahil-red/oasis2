@@ -34,6 +34,13 @@ export const metadata: Metadata = {
     description: "Honest grocery intel for India.",
     type: "website",
   },
+  // X needs an explicit card type to render the large link card on the launch post.
+  twitter: {
+    card: "summary_large_image",
+    title: "Scout — what's actually in your basket",
+    description:
+      "We read the back label so you don't have to. Honest grocery intel for India.",
+  },
 };
 
 export default function RootLayout({
