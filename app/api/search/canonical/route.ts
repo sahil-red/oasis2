@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { getCanonicalSiblings } from "@/lib/search/v2/canonical-variants";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
+import { normalizeProductImageUrls } from "@/lib/products/catalog-hero-image";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,15 @@ export async function GET(req: NextRequest) {
   if (ids.length) {
     const { data } = await adminClient()
       .from("products")
-      .select("id, image_urls, net_weight, mrp_inr")
+      .select("id, image_urls, net_weight, mrp_inr, ocr_image_url, ocr_payload")
       .in("id", ids);
     for (const row of data ?? []) {
+      const images = normalizeProductImageUrls(
+        (row.image_urls as string[]) ?? [],
+        { ocrImageUrl: (row.ocr_image_url as string | null) ?? null, ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null },
+      );
       display.set(String(row.id), {
-        image_urls: Array.isArray(row.image_urls) ? row.image_urls.slice(0, 1) : [],
+        image_urls: images.length ? images.slice(0, 1) : [],
         net_weight: (row.net_weight as string) ?? null,
         mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
       });
