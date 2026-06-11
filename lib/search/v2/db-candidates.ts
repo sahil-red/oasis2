@@ -84,7 +84,7 @@ async function fetchViaRest(
 export async function fetchCandidatePool(
   intent: SearchIntentV2,
   minQuality = DATA_QUALITY_MIN,
-  limit = 500,
+  limit = 200,
 ): Promise<ProductSearchIndexRow[]> {
   const { embedText } = await import("@/lib/search/v2/embeddings");
   const queryEmbed = await embedText(intent.raw_query, "query");

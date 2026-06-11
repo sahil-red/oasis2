@@ -86,6 +86,11 @@ function resolveEmbeddingEndpoint(): EmbeddingEndpoint | null {
 }
 
 let embedWarned = false;
+const embedCache = new Map<string, number[]>();
+
+export function clearEmbeddingCache(): void {
+  embedCache.clear();
+}
 
 export function isEmbeddingConfigured(): boolean {
   return resolveEmbeddingEndpoint() !== null;
@@ -170,8 +175,14 @@ export async function embedTexts(
 }
 
 export async function embedText(text: string, inputType: EmbeddingInputType = "document"): Promise<number[]> {
+  const key = `${text}\0${inputType}`;
+  const cached = embedCache.get(key);
+  if (cached) return cached;
+
   const [vec] = await embedTexts([text], inputType);
-  return vec ?? [];
+  const result = vec ?? [];
+  embedCache.set(key, result);
+  return result;
 }
 
 export async function embedTextBatch(
