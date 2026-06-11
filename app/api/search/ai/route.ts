@@ -77,10 +77,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await searchV2ToAiResult(
-      await runSearchV2(prompt, { limit, preferences }),
-      { limit, parseSource: parseForSearch.source },
-    );
+    const v2Result = await runSearchV2(prompt, { limit, preferences });
+    const result = await searchV2ToAiResult(v2Result, { limit, parseSource: parseForSearch.source });
     setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
 
     // Record search in history for logged-in users (fire-and-forget, non-blocking)
@@ -99,6 +97,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "AI search failed";
     console.error("[search/ai]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, items: [] }, { status: 200 });
   }
 }
