@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
@@ -40,6 +40,7 @@ import {
 import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
+import { SearchProgress } from "@/components/search-progress";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
 import { SignInGateCard } from "@/components/sign-in-gate-card";
 import { useTypewriter } from "@/components/use-typewriter";
@@ -976,16 +977,6 @@ export function CatalogView({
               placeholder={typedPrompt ? `e.g. ${typedPrompt}` : "e.g. paneer with low fat under ₹150"}
               className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
-            {aiMode && (
-              <button
-                type="button"
-                onClick={() => { setAiPrompt(""); clearAll(); }}
-                className="absolute right-[180px] top-1/2 -translate-y-1/2 rounded-full p-1 text-(--color-fg-dim) hover:text-(--color-fg)"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
             <div className="flex flex-col gap-1.5">
               <button
                 type="submit"
@@ -1012,25 +1003,7 @@ export function CatalogView({
           </form>
 
            {/* Narrate the wait with real products, not a spinner */}
-          {aiSearching ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {items.length > 0
-                ? items.slice(0, 8).map((item) => (
-                    <div key={item.id} className="animate-pulse rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
-                      <div className="aspect-square rounded-lg bg-(--color-bg-soft) mb-2" />
-                      <div className="h-3 w-3/4 rounded bg-(--color-bg-soft) mb-1" />
-                      <div className="h-3 w-1/2 rounded bg-(--color-bg-soft)" />
-                    </div>
-                  ))
-                : Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="animate-pulse rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
-                      <div className="aspect-square rounded-lg bg-(--color-bg-muted) mb-2" />
-                      <div className="h-3 w-3/4 rounded bg-(--color-bg-muted) mb-1" />
-                      <div className="h-3 w-1/2 rounded bg-(--color-bg-muted)" />
-                    </div>
-                  ))}
-            </div>
-          ) : null}
+          {aiSearching ? <SearchProgress /> : null}
 
           {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
 
