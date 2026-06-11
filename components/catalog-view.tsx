@@ -41,7 +41,10 @@ import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
 import { AiQuotaCard } from "@/components/ai-quota-card";
+import { SearchProgress } from "@/components/search-progress";
+import { SEARCH_PROMPTS } from "@/components/search-prompts";
 import { SignInGateCard } from "@/components/sign-in-gate-card";
+import { useTypewriter } from "@/components/use-typewriter";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import { SavedSearchActions } from "@/components/saved-search-actions";
 import { setLastSearchContext } from "@/lib/search/v2/search-session";
@@ -349,6 +352,7 @@ export function CatalogView({
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const typedPrompt = useTypewriter(SEARCH_PROMPTS);
   const examplePrompts = useRotatingPrompts();
   const { profile } = useAuth();
   const isPlus = profile?.plan === "plus";
@@ -956,7 +960,7 @@ export function CatalogView({
               type="search"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="e.g. paneer with low fat under ₹150"
+              placeholder={typedPrompt ? `e.g. ${typedPrompt}` : "e.g. paneer with low fat under ₹150"}
               className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
             <div className="flex flex-col gap-1.5">
@@ -983,6 +987,9 @@ export function CatalogView({
               </button>
             </div>
           </form>
+
+          {/* Narrate the wait — 2-6s of dead air reads as broken; narration reads as work */}
+          {aiSearching ? <SearchProgress /> : null}
 
           {quotaHit && !isPlus ? (
             <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />

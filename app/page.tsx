@@ -13,13 +13,8 @@ import { getHomeShelves } from "@/lib/products/queries";
 
 export const revalidate = 600;
 
-const PROMPTS = [
-  "biscuits with low sugar",
-  "high protein snacks under ₹200",
-  "paneer that's actually clean",
-  "breakfast cereals without hidden sugar",
-  "chips that aren't junk",
-];
+import { SEARCH_PROMPTS } from "@/components/search-prompts";
+import { TypewriterInput } from "@/components/typewriter-input";
 
 export default async function Home() {
   const shelves = await getHomeShelves();
@@ -34,9 +29,9 @@ export default async function Home() {
   const hourIndex = Math.floor(Date.now() / 3_600_000);
   const initialGoalIndex = hourIndex % Math.max(1, insights.goalBoards.length);
 
-  // Rotate the search placeholder each day
+  // Typewriter starts at a different phrase each day
   const dayIndex = Math.floor(Date.now() / 86_400_000);
-  const placeholder = PROMPTS[dayIndex % PROMPTS.length]!;
+  const promptStart = dayIndex % SEARCH_PROMPTS.length;
 
   return (
     <main className="min-h-screen">
@@ -63,10 +58,10 @@ export default async function Home() {
               action="/search"
               className="mt-8 flex max-w-2xl flex-col gap-3 rounded-2xl border border-(--color-line) bg-(--color-panel) p-3 sm:flex-row"
             >
-              <input
+              <TypewriterInput
                 name="prompt"
-                type="search"
-                placeholder={`Try: ${placeholder}`}
+                phrases={SEARCH_PROMPTS}
+                startIndex={promptStart}
                 className="min-h-12 flex-1 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 text-[15px] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
               />
               <button
