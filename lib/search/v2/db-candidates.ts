@@ -30,10 +30,10 @@ export async function fetchCandidatePool(
     p_primary_type: intent.primary_type ?? null,
   });
 
-  if (rpcErr || !Array.isArray(ids) || !ids.length) {
+  if (rpcErr || !Array.isArray(ids) || ids.length < 10) {
     if (rpcErr) console.warn("[db-candidates] RPC failed:", rpcErr.message);
-    // If type filter killed everything, retry without it
-    if (intent.primary_type) {
+    // If type filter returned too few results, retry without it
+    if (intent.primary_type && (!Array.isArray(ids) || ids.length < 10)) {
       const { data: ids2 } = await supabase.rpc("search_v2_ids", {
         p_query_embedding: vecStr, p_limit: limit,
         p_min_quality: minQuality, p_primary_type: null,
@@ -45,7 +45,6 @@ export async function fetchCandidatePool(
     return [];
   }
 
-  // Step 2: Fetch full rows for top results via REST
   const productIds = (ids as Array<{ product_id: string }>).map((r) => r.product_id);
   return fetchRows(supabase, productIds);
 }

@@ -186,7 +186,11 @@ export async function generateCandidates(
     pool = pool.filter((row) => (row.brand ?? "").toLowerCase().includes(brandQ));
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();
-    pool = pool.filter((row) => typeMatchTier(row, wanted, queryTypeEmbed) < 99);
+    const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, queryTypeEmbed) < 99);
+    // Only apply type filter if it leaves enough candidates; otherwise ignore the type
+    if (typeFiltered.length >= 5) {
+      pool = typeFiltered;
+    }
   }
 
   pool = pool.filter(
