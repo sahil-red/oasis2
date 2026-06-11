@@ -205,6 +205,9 @@ export async function runSearchV2(
     if (v.llm_calls > 0) {
       const keep = new Set(v.rows.map((r) => r.product_id));
       filteredReranked = filteredReranked.filter((r) => keep.has(r.product_id));
+      if (typeTiers) {
+        typeTiers = new Map([...typeTiers].filter(([id]) => keep.has(id)));
+      }
     }
   }
 
