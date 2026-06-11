@@ -46,6 +46,17 @@ export function SiteFooter() {
               Scout Plus
             </Link>
           </div>
+          <div className="space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-(--color-fg-dim)">
+              Info
+            </p>
+            <Link href="/privacy" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
+              Privacy
+            </Link>
+            <Link href="/terms" className="block text-(--color-fg-muted) hover:text-(--color-fg)">
+              Terms
+            </Link>
+          </div>
         </div>
       </div>
       <div className="hairline mx-auto max-w-6xl" />

@@ -2,7 +2,6 @@
  * §14 comparison queries — resolve reference product from DB.
  */
 import { adminClient } from "@/lib/supabase/admin";
-import { mapDbRow } from "@/lib/search/v2/index-queries";
 import type { ProductSearchIndexRow } from "@/lib/search/v2/types";
 
 export type ComparisonContext = {
@@ -13,7 +12,8 @@ export type ComparisonContext = {
   mode: "healthier_than" | "cheaper_than";
 };
 
-/** Resolve the reference SKU from the DB via name/brand search. */
+type RefRow = { product_id: string; name: string; scout_score?: number; price_inr?: number };
+
 export async function resolveComparisonReference(
   refPhrase: string,
 ): Promise<ComparisonContext | null> {
@@ -21,26 +21,38 @@ export async function resolveComparisonReference(
   if (!phrase) return null;
 
   const supabase = adminClient();
+
+  // Chain ilike — avoids PostgREST filter injection from commas/parens in LLM-extracted names
   const { data } = await supabase
     .from("product_search_index")
-    .select("*")
-    .or(`name.ilike.%${phrase}%,brand.ilike.%${phrase}%`)
+    .select("product_id, name, scout_score, price_inr")
+    .ilike("name", `%${phrase}%`)
     .gte("data_quality_score", 0.3)
     .limit(10);
 
-  if (!data?.length) return null;
-
-  const rows = (data as Record<string, unknown>[]).map(mapDbRow);
-  const exact = rows.find(r => r.name.toLowerCase().includes(phrase));
-  const best = exact ?? rows[0]!;
-
-  return {
-    reference_product_id: best.product_id,
-    reference_name: best.name,
-    reference_scout_score: best.scout_score ?? 50,
-    reference_price_inr: best.price_inr,
-    mode: "healthier_than",
+  const pick = (rows: RefRow[] | null): ComparisonContext | null => {
+    if (!rows?.length) return null;
+    const r = rows[0]!;
+    return {
+      reference_product_id: r.product_id,
+      reference_name: r.name,
+      reference_scout_score: r.scout_score ?? 50,
+      reference_price_inr: r.price_inr ?? null,
+      mode: "healthier_than",
+    };
   };
+
+  if (data?.length) return pick(data as RefRow[]);
+
+  // Fallback: brand match
+  const { data: brandData } = await supabase
+    .from("product_search_index")
+    .select("product_id, name, scout_score, price_inr")
+    .ilike("brand", `%${phrase}%`)
+    .gte("data_quality_score", 0.3)
+    .limit(10);
+
+  return pick(brandData as RefRow[]);
 }
 
 export function comparisonBeatScore(

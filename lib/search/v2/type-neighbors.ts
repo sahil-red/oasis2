@@ -5,7 +5,6 @@ import { adminClient } from "@/lib/supabase/admin";
 
 export async function nearestPrimaryTypes(
   primaryType: string,
-  _index: unknown, // unused, kept for backward compat
   limit = 5,
 ): Promise<string[]> {
   const wanted = primaryType.trim().toLowerCase();

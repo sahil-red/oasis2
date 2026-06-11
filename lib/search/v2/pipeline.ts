@@ -109,10 +109,6 @@ export async function runSearchV2(
     candidates = cands;
   }
 
-  const typeNeighbors = intent.primary_type
-    ? await nearestPrimaryTypes(intent.primary_type, snapshot.index)
-    : [];
-
   // Relax ONLY when truly empty — if even 1-2 products genuinely match (e.g. a niche
   // "coconut water" with 2 entries), show them rather than broadening to less-relevant
   // items. LLM broadening is capped to one call; deterministic relaxation is free.
@@ -126,6 +122,9 @@ export async function runSearchV2(
     } else if (!llmRelaxUsed && (process.env.DEEPSEEK_SEARCH_API_KEY || process.env.DEEPSEEK_API_KEY)?.trim()) {
       llmRelaxUsed = true;
       try {
+        const typeNeighbors = intent.primary_type
+          ? await nearestPrimaryTypes(intent.primary_type)
+          : [];
         const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
         llm_calls += relaxedResult.llm_calls;
         intent = relaxedResult.intent;

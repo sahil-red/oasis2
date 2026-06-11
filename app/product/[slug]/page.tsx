@@ -41,6 +41,7 @@ import type { Metadata } from "next";
 import type { SubScores } from "@/lib/supabase/types";
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 /** Share cards carry the verdict — the score IS the story. */
 export async function generateMetadata({
