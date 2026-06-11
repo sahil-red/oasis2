@@ -108,6 +108,27 @@ function dedupeReasons(labels: string[]): string[] {
   return out;
 }
 
+export function buildAutoSentence(
+  verdict: VerdictId,
+  sublabelIds?: string[] | null,
+  deepseekChips?: string[] | null,
+): string {
+  const topReasons = dedupeReasons([
+    ...sublabelChipLabels(sublabelIds),
+    ...(deepseekChips ?? []).map(formatDeepseekChip),
+  ]).slice(0, 3);
+  const verdictSuffix: Record<VerdictId, string> = {
+    daily_staple: "strong regular buy",
+    good_choice: "a good pick for this aisle",
+    occasional_treat: "fine occasionally, not daily",
+    skip: "not worth it",
+  };
+  const suffix = verdictSuffix[verdict];
+  return topReasons.length
+    ? `${topReasons.slice(0, 2).join(", ")} — ${suffix}.`
+    : `${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}.`;
+}
+
 /** Circular score gauge — the arc fills with score/100 in the verdict color. */
 export function ScoreRing({ score, color }: { score: number; color: string }) {
   const r = 26;
@@ -171,23 +192,7 @@ export function VerdictBlock({
   const c = VERDICT_COLORS[verdict];
   const showCohort =
     cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
-  // Sublabels and deepseek chips often describe the same signal with different
-  // casing ("High saturated fat" vs "High Saturated Fat") — dedupe before joining.
-  const topReasons = dedupeReasons([
-    ...sublabelChipLabels(sublabelIds),
-    ...(deepseekChips ?? []).map(formatDeepseekChip),
-  ]).slice(0, 3);
-  const verdictSuffix: Record<VerdictId, string> = {
-    daily_staple: "strong regular buy",
-    good_choice: "a good pick for this aisle",
-    occasional_treat: "fine occasionally, not daily",
-    skip: "not worth it",
-  };
-  const suffix = verdictSuffix[verdict];
-  // With no reasons available, don't echo the verdict title back as a reason.
-  const verdictSentence = topReasons.length
-    ? `${topReasons.slice(0, 2).join(", ")} — ${suffix}.`
-    : `${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}.`;
+  const verdictSentence = buildAutoSentence(verdict, sublabelIds, deepseekChips);
 
   return (
     <div

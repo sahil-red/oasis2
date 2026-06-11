@@ -350,7 +350,7 @@ export function CatalogView({
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const examplePrompts = useRotatingPrompts();
-  const { profile, ready: authReady } = useAuth();
+  const { profile, ready: authReady, session } = useAuth();
   const isPlus = profile?.plan === "plus";
 
   const aiModeRef = useRef(false);
@@ -461,6 +461,17 @@ export function CatalogView({
     setSavedPrefs(readAiSearchPreferences());
     setRecentSearches(readRecentSearches());
   }, []);
+
+  // Sync client-side quota limit from server profile when auth loads.
+  // The server is authoritative; localStorage defaults to limit=5 which may be wrong.
+  useEffect(() => {
+    if (!authReady || !profile || isPlus) return;
+    setAiUsage((prev) => {
+      const base = prev ?? readAiSearchUsage();
+      if (base.limit === profile.ai_searches_limit) return base;
+      return { ...base, limit: profile.ai_searches_limit };
+    });
+  }, [authReady, profile, isPlus]);
 
   useEffect(() => {
     const el = goalSentinelRef.current;
@@ -834,6 +845,7 @@ export function CatalogView({
         CATALOG_PAGE_SIZE,
         intent === "complex" ? "complex" : "structured",
         savedPrefs,
+        session?.access_token,
       );
       if (gen !== fetchGen.current) return;
       setItems(result.items);
@@ -1097,7 +1109,7 @@ export function CatalogView({
             <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
           ) : null}
 
-          {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
+          {signInGate && authReady && !isPlus ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
 
           {/* Inline failure note — a failed ask must never look like a quiet no-op */}
           {loadError && !signInGate && !quotaHit ? (

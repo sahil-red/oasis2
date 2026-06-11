@@ -2,7 +2,7 @@ import type { ScoreExplanation } from "@/lib/products/score-explain";
 import { cn } from "@/lib/utils";
 
 /** Merge DeepSeek label why + score reasons into a short subjective blurb. */
-function takeLines(
+export function takeLines(
   explanation: ScoreExplanation | null | undefined,
   deepseekWhy?: string | null,
 ): string[] {
@@ -27,7 +27,7 @@ function isPositiveTake(line: string): boolean {
   return /low sugar|no added|zero trans|good protein|decent fibre|decent fiber|clean ingredients|no flagged|works well|fine to keep/i.test(line);
 }
 
-function bucketTake(lines: string[]): { good: string[]; watch: string[] } {
+export function bucketTake(lines: string[]): { good: string[]; watch: string[] } {
   const good: string[] = [];
   const watch: string[] = [];
 
@@ -78,7 +78,7 @@ export function ProductTakePanel({
   );
 }
 
-function actionableWatchLine(line: string): string {
+export function actionableWatchLine(line: string): string {
   if (/occasion|daily|regular|swap|default|portion|look for|check/i.test(line)) return line;
   if (/sodium/i.test(line)) return `${line} — choose a lower-sodium swap for regular snacking.`;
   if (/saturated fat|fat/i.test(line)) return `${line} — fine occasionally, not daily.`;

@@ -8,9 +8,8 @@ import { reconcileNutrition } from "@/lib/nutrition/sanity";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
-import { ProductOpinionPanel } from "@/components/product-opinion-panel";
-import { ProductTakePanel } from "@/components/product-take-panel";
 import { ScoutVerdictCard } from "@/components/scout-verdict-card";
+import { VerdictTakeCard } from "@/components/verdict-take-card";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
@@ -22,7 +21,6 @@ import { explainLabelMismatch } from "@/lib/scoring/labels-score";
 import { LabelMismatchCallout } from "@/components/label-mismatch-callout";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
-import { VerdictBlock } from "@/components/verdict-chips";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
@@ -302,16 +300,18 @@ export default async function ProductPage({
               </div>
             ) : verdict ? (
               <div className="mt-5">
-                <VerdictBlock
+                <VerdictTakeCard
                   verdict={verdict}
                   score={score?.score}
                   sublabelIds={pdpSublabels}
+                  deepseekChips={deepseekDisplay?.chips}
+                  deepseekWhy={deepseekDisplay?.why}
+                  explanation={scoreWhy}
                   cohortSize={score?.cohort_size}
                   relativeScore={score?.relative_score}
                   cohortId={score?.cohort_id ?? null}
                   subcategory={product.subcategory}
                   productId={product.id}
-                  deepseekChips={deepseekDisplay?.chips}
                 />
               </div>
             ) : null}
@@ -333,14 +333,6 @@ export default async function ProductPage({
                   description="Similar products that look stronger on score, macros, or ingredients."
                 />
               </div>
-            ) : null}
-
-            {!score?.opinion && (scoreWhy || deepseekDisplay?.why) ? (
-              <ProductTakePanel
-                className="mt-5"
-                explanation={scoreWhy}
-                deepseekWhy={deepseekDisplay?.why}
-              />
             ) : null}
 
           </div>
