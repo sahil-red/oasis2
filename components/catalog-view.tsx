@@ -40,7 +40,6 @@ import {
 import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
-import { SearchProgress } from "@/components/search-progress";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
 import { SignInGateCard } from "@/components/sign-in-gate-card";
 import { useTypewriter } from "@/components/use-typewriter";
@@ -1012,8 +1011,26 @@ export function CatalogView({
             </div>
           </form>
 
-          {/* Narrate the wait — 2-6s of dead air reads as broken; narration reads as work */}
-          {aiSearching ? <SearchProgress /> : null}
+           {/* Narrate the wait with real products, not a spinner */}
+          {aiSearching ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {items.length > 0
+                ? items.slice(0, 8).map((item) => (
+                    <div key={item.id} className="animate-pulse rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
+                      <div className="aspect-square rounded-lg bg-(--color-bg-soft) mb-2" />
+                      <div className="h-3 w-3/4 rounded bg-(--color-bg-soft) mb-1" />
+                      <div className="h-3 w-1/2 rounded bg-(--color-bg-soft)" />
+                    </div>
+                  ))
+                : Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="animate-pulse rounded-xl border border-(--color-line) bg-(--color-bg-soft) p-3">
+                      <div className="aspect-square rounded-lg bg-(--color-bg-muted) mb-2" />
+                      <div className="h-3 w-3/4 rounded bg-(--color-bg-muted) mb-1" />
+                      <div className="h-3 w-1/2 rounded bg-(--color-bg-muted)" />
+                    </div>
+                  ))}
+            </div>
+          ) : null}
 
           {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
 
@@ -1364,9 +1381,9 @@ export function CatalogView({
               {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
               {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
               {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
-              <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
+              {!aiMode && <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
                 Clear all
-              </button>
+              </button>}
             </div>
           ) : null}
         </div>
