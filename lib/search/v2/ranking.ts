@@ -90,18 +90,38 @@ function normalizeNullable(values: Array<number | null>, invert = false): number
   });
 }
 
+/** For explicit sorts (highest_protein, cheapest, etc.), type-match tier takes
+ *  priority — "milk" products rank above whey that lexically-hallucinated "milk"
+ *  in ingredients. Within the same tier the original sort applies. */
+function tieredSort(a: RankedCandidate, b: RankedCandidate): number {
+  if (a.type_tier !== b.type_tier) return a.type_tier - b.type_tier;
+  return 0;
+}
+
 function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchIntentV2["sort"]): number {
   switch (sort) {
-    case "cheapest":
+    case "cheapest": {
+      const t = tieredSort(a, b);
+      if (t !== 0) return t;
       return (a.row.price_inr ?? 1e9) - (b.row.price_inr ?? 1e9);
-    case "healthiest":
+    }
+    case "healthiest": {
+      const t = tieredSort(a, b);
+      if (t !== 0) return t;
       return b.health_score - a.health_score;
-    case "highest_protein":
+    }
+    case "highest_protein": {
+      const t = tieredSort(a, b);
+      if (t !== 0) return t;
       // Absolute grams only. Tiers are within-cohort percentiles — comparing
       // them across types ranks a "high"-for-honey 2g above a "medium" 25g whey.
       return (validGrams(b.row.protein_g) ?? -1) - (validGrams(a.row.protein_g) ?? -1);
-    case "lowest_sugar":
+    }
+    case "lowest_sugar": {
+      const t = tieredSort(a, b);
+      if (t !== 0) return t;
       return (validGrams(a.row.sugar_g) ?? 1e9) - (validGrams(b.row.sugar_g) ?? 1e9);
+    }
     default:
       return b.final_score - a.final_score;
   }
@@ -115,6 +135,7 @@ export function rankCandidates(
   goalWeights: GoalTraitWeights | null,
   limit = 50,
   comparison: ComparisonContext | null = null,
+  typeTiers?: Map<string, number>,
 ): RankedCandidate[] {
   const hasGoalOrConstraints =
     Boolean(goalWeights && Object.keys(goalWeights).length) ||
@@ -196,6 +217,7 @@ export function rankCandidates(
       goal_fit,
       reasons: buildReasons(row, relevance_score, goalWeights),
       trait_reasons: [],
+      type_tier: typeTiers?.get(row.product_id) ?? 99,
     };
   });
 

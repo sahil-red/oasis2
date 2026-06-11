@@ -14,7 +14,7 @@ export const CANDIDATE_CAP = 500;
  *  Equivalents come from type_centroids (data-driven: "biscuit" ≡ "biscuits" ≡
  *  "cookie") — the old per-row type_embedding tier was dead code once the index
  *  stopped shipping vectors. */
-function typeMatchTier(
+export function typeMatchTier(
   row: ProductSearchIndexRow,
   wanted: string,
   equivalents: Set<string>,

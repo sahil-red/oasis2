@@ -2,7 +2,7 @@ import type { ProductSearchIndexRow } from "@/lib/search/v2/types";
 
 /** §9 degradation — lexical membership when vectors are unavailable */
 export function lexicalBlob(row: ProductSearchIndexRow): string {
-  return [row.search_doc, row.name, row.category, row.subcategory, row.l3_category]
+  return [row.primary_type ?? "", row.name, row.category, row.subcategory, row.l3_category]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();

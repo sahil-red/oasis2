@@ -185,6 +185,10 @@ export type RankedCandidate = {
   goal_fit: number | null;
   reasons: string[];
   trait_reasons: Array<{ trait: TraitId; label: string; contribution: number }>;
+  /** Type-match tier from candidate generation (0=exact, 1=centroid, 2=lexical, 99=none).
+   *  Used in sort comparator so explicit types (e.g. "milk") dominate lexical hallu-
+   *  cinated matches (e.g. whey mentioning "milk" in ingredients). */
+  type_tier: number;
 };
 
 export type RecommendationBucket = {

@@ -1,6 +1,6 @@
 import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
-import { generateCandidates } from "@/lib/search/v2/candidate-generation";
+import { generateCandidates, typeMatchTier } from "@/lib/search/v2/candidate-generation";
 import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
 import { buildGoalBuckets } from "@/lib/search/v2/buckets";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
@@ -13,6 +13,7 @@ import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
 import { relaxIntentDeterministic, relaxIntentWithLlm } from "@/lib/search/v2/relaxation";
 import { nearestPrimaryTypes } from "@/lib/search/v2/type-neighbors";
+import { semanticTypeMatches } from "@/lib/search/v2/type-centroids";
 import { isPrecisionAtRisk, verifyTopCandidates } from "@/lib/search/v2/verification";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
@@ -174,9 +175,26 @@ export async function runSearchV2(
     if (relaxation_steps.length >= 4) break;
   }
 
+  // Compute type-match tiers for explicit primary_type queries — used by the
+  // sort comparator so exact type matches (milk) dominate lexical hallucination
+  // matches (whey mentioning "milk" in ingredients scan_doc).
+  let typeTiers: Map<string, number> | undefined;
+  if (intent.primary_type) {
+    const equivalents = await semanticTypeMatches(intent.primary_type);
+    typeTiers = new Map(
+      candidates.map((r) => [r.product_id, typeMatchTier(r, intent.primary_type!, equivalents)]),
+    );
+  }
+
   const { rows: reranked, relevanceById } = await retrieveAndRerank(candidates, intent, {
     useDbLexical: snapshot.source === "db",
   });
+
+  // Filter type tiers to only the rows that survived retrieveAndRerank
+  if (typeTiers) {
+    const survivorIds = new Set(reranked.map((r) => r.product_id));
+    typeTiers = new Map([...typeTiers].filter(([id]) => survivorIds.has(id)));
+  }
 
   // Verify BEFORE ranking so that ranking scores are computed on the actual
   // display set, not on a superset later trimmed by verification.
@@ -197,6 +215,7 @@ export async function runSearchV2(
     goalWeights?.weights ?? null,
     Math.max(limit * 2, 20),
     comparison,
+    typeTiers,
   );
 
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
