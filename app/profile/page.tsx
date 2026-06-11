@@ -266,10 +266,10 @@ export default function ProfilePage() {
                 </p>
               </div>
               <Link
-                href="/subscribe"
+                href="/pricing"
                 className="flex-shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-400"
               >
-                ₹199/mo
+                ₹100/mo
               </Link>
             </div>
           </div>
