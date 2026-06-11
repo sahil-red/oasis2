@@ -59,9 +59,12 @@ export async function consumeAiSearch(
   const profile = await getProfileForUser(supabase, userId);
   if (!profile) return { ok: false, reason: "Profile not found" };
   
-  // Check both profile email and auth email against unlimited list
-  const isAdmin = UNLIMITED_EMAILS.has((profile.email ?? "").toLowerCase()) ||
-                  (authEmail ? UNLIMITED_EMAILS.has(authEmail.toLowerCase()) : false);
+  // Check unlimited at runtime (not module init) to ensure env var is fresh
+  const runtimeUnlimited = new Set(
+    (process.env.UNLIMITED_EMAILS ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
+  );
+  const isAdmin = runtimeUnlimited.has((profile.email ?? "").toLowerCase()) ||
+                  (authEmail ? runtimeUnlimited.has(authEmail.toLowerCase()) : false);
   
   if (profile.plan === "plus" || isAdmin) return { ok: true };
   if (profile.ai_searches_remaining <= 0) {
