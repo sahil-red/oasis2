@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(cached, { headers: CACHE_HEADERS });
   }
 
-  // Try auth from Bearer token (sent by frontend)
+  // Try auth from Bearer token OR Supabase auth cookie
   let userId: string | null = null;
-  const client = supabaseFromBearer(req.headers.get("authorization"));
+  const authHeader = req.headers.get("authorization");
+  const client = supabaseFromBearer(authHeader);
   if (client) {
     const { data: userData } = await client.auth.getUser();
     if (userData.user) {
@@ -68,6 +69,27 @@ export async function POST(req: NextRequest) {
           { error: gate.reason, code: "quota_exceeded" },
           { status: 402 },
         );
+      }
+    }
+  }
+  
+  // If Bearer token didn't work, try Supabase session cookie
+  if (!userId) {
+    const sbToken = req.cookies.get("sb-access-token")?.value || req.cookies.get("sb-refresh-token")?.value;
+    if (sbToken) {
+      const cookieClient = supabaseFromBearer(`Bearer ${sbToken}`);
+      if (cookieClient) {
+        const { data: userData } = await cookieClient.auth.getUser();
+        if (userData.user) {
+          userId = userData.user.id;
+          const gate = await consumeAiSearch(cookieClient, userData.user.id, userData.user.email);
+          if (!gate.ok) {
+            return NextResponse.json(
+              { error: gate.reason, code: "quota_exceeded" },
+              { status: 402 },
+            );
+          }
+        }
       }
     }
   }
