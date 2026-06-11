@@ -168,9 +168,12 @@ export async function resolveSearchIntent(
         ...llmIntent,
         constraints: {
           ...llmIntent.constraints,
+          // LLM should NOT set hard nutrition limits — it uses trait_weights for soft ranking.
+          // Only keep numeric constraints from explicit regex extraction (e.g. "under 5g sugar").
           max_price: llmIntent.constraints.max_price ?? numeric.max_price,
-          max_sugar_g: llmIntent.constraints.max_sugar_g ?? numeric.max_sugar_g,
-          max_fat_g: llmIntent.constraints.max_fat_g ?? numeric.max_fat_g,
+          max_sugar_g: numeric.max_sugar_g ?? undefined,
+          max_fat_g: numeric.max_fat_g ?? undefined,
+          min_protein_g: numeric.min_protein_g ?? undefined,
         },
       },
       opts.preferences,

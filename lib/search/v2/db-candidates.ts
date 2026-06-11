@@ -32,21 +32,11 @@ export async function fetchCandidatePool(
     p_query_embedding: vecStr,
     p_limit: limit,
     p_min_quality: minQuality,
-    p_primary_type: intent.primary_type ?? null,
+    p_primary_type: null, // Never pre-filter by type — let generateCandidates soft-filter
   });
 
-  if (rpcErr || !Array.isArray(ids) || ids.length < 10) {
+  if (rpcErr || !Array.isArray(ids) || !ids.length) {
     if (rpcErr) console.warn("[db-candidates] RPC failed:", rpcErr.message);
-    // If type filter returned too few results, retry without it
-    if (intent.primary_type && (!Array.isArray(ids) || ids.length < 10)) {
-      const { data: ids2 } = await supabase.rpc("search_v2_ids", {
-        p_query_embedding: vecStr, p_limit: limit,
-        p_min_quality: minQuality, p_primary_type: null,
-      });
-      if (Array.isArray(ids2) && ids2.length) {
-        return fetchRows(supabase, ids2 as KnnHit[]);
-      }
-    }
     return [];
   }
 
