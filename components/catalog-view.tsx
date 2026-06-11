@@ -40,7 +40,6 @@ import {
 import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
-import { AiQuotaCard } from "@/components/ai-quota-card";
 import { SearchProgress } from "@/components/search-progress";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
 import { SignInGateCard } from "@/components/sign-in-gate-card";
@@ -49,14 +48,10 @@ import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import { SavedSearchActions } from "@/components/saved-search-actions";
 import { setLastSearchContext } from "@/lib/search/v2/search-session";
 import {
-  canUseAiSearch,
   hasSavedPreferences,
   readAiSearchPreferences,
-  readAiSearchUsage,
-  recordAiSearch,
   writeAiSearchPreferences,
   type AiSearchPreferences,
-  type AiSearchUsage,
 } from "@/lib/search/ai-usage";
 import { classifyIntent } from "@/lib/search/intent-classify";
 import { readRecentSearches, recordRecentSearch } from "@/lib/search/recent-searches";
@@ -365,8 +360,6 @@ export function CatalogView({
     }));
   }, [aiVerdict, aiAllItems, aiMode]);
   const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
-  const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
-  const [quotaHit, setQuotaHit] = useState(false);
   // Anonymous visitor used up the free searches — show the sign-in invitation.
   const [signInGate, setSignInGate] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
@@ -479,7 +472,6 @@ export function CatalogView({
     setShowGoalHint(
       !localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"),
     );
-    setAiUsage(readAiSearchUsage());
     setSavedPrefs(readAiSearchPreferences());
     setRecentSearches(readRecentSearches());
   }, []);
@@ -764,14 +756,6 @@ export function CatalogView({
     });
     setAiIntentTier(intent);
 
-    // Plus members are unlimited; the client-side gate only applies to free use.
-    if (!isPlus && !canUseAiSearch()) {
-      setAiUsage(readAiSearchUsage());
-      setQuotaHit(true);
-      return;
-    }
-    setQuotaHit(false);
-
     const gen = ++fetchGen.current;
     setAiSearching(true);
     setRefreshing(items.length > 0);
@@ -803,7 +787,6 @@ export function CatalogView({
       setAiRelaxationExplanations(result.relaxation_explanations ?? []);
       setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
-      if (!isPlus) setAiUsage(recordAiSearch());
       setRecentSearches(recordRecentSearch(prompt));
       if (result.v2) {
         setLastSearchContext({
@@ -820,8 +803,7 @@ export function CatalogView({
         // The conversion moment for signed-out traffic — invite, don't error.
         setSignInGate(true);
       } else if (code === "quota_exceeded") {
-        setAiUsage(readAiSearchUsage());
-        setQuotaHit(true);
+        setLoadError("Daily search limit reached. Upgrade to Scout Plus for unlimited.");
       } else {
         setLoadError(
           err.name === "AbortError"
@@ -1033,27 +1015,12 @@ export function CatalogView({
           {/* Narrate the wait — 2-6s of dead air reads as broken; narration reads as work */}
           {aiSearching ? <SearchProgress /> : null}
 
-          {quotaHit && !isPlus ? (
-            <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
-          ) : null}
-
           {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
 
-          {/* Inline failure note — a failed ask must never look like a quiet no-op */}
-          {loadError && !signInGate && !quotaHit ? (
+          {/* Inline failure note */}
+          {loadError && !signInGate ? (
             <p className="mt-2 text-[12px] text-(--color-bad)" role="alert">
               {loadError}
-            </p>
-          ) : null}
-
-          {/* Gentle heads-up when the free allowance is nearly used */}
-          {!quotaHit && !isPlus && aiUsage && aiUsage.limit - aiUsage.count <= 3 && aiUsage.count > 0 ? (
-            <p className="mt-2 text-[11px] text-(--color-fg-dim)">
-              {Math.max(0, aiUsage.limit - aiUsage.count)} free AI search
-              {aiUsage.limit - aiUsage.count === 1 ? "" : "es"} left today ·{" "}
-              <Link href="/pricing" className="underline underline-offset-2 hover:text-(--color-fg)">
-                Plus is unlimited
-              </Link>
             </p>
           ) : null}
 
