@@ -23,13 +23,18 @@ export async function nearestPrimaryTypes(
 
     const r = row[0] as { category?: string; subcategory?: string };
     const { category, subcategory } = r;
-    const { data: neighbors } = await supabase
+    // Prefer the tighter subcategory neighborhood; sample wide (rows share types,
+    // so a small limit collapses to 1-2 distinct values). Single tiny column.
+    let query = supabase
       .from("product_search_index")
       .select("primary_type")
-      .eq("category", category ?? "")
       .neq("primary_type", wanted)
       .not("primary_type", "is", null)
-      .limit(limit * 2);
+      .limit(100);
+    query = subcategory
+      ? query.eq("subcategory", subcategory)
+      : query.eq("category", category ?? "");
+    const { data: neighbors } = await query;
 
     if (!neighbors?.length) return [];
 

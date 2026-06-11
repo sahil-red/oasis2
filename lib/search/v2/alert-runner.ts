@@ -26,39 +26,48 @@ export async function runAlertsForRecords(alerts: AlertRecord[]): Promise<AlertT
   const triggered: AlertTrigger[] = [];
 
   for (const alert of alerts) {
-    const prefs = (alert.preferences as Record<string, unknown>) ?? {};
-    const result = await runSearchV2(String(alert.query), {
-      limit: 12,
-      preferences: prefs as AiSearchPreferences,
-    });
-    const count = result.items.length;
-    const prev = Number(alert.last_match_count ?? 0);
-    const hasNew = count > prev;
-
-    const now = new Date().toISOString();
-    await supabase
-      .from("search_alerts")
-      .update({
-        last_match_count: count,
-        last_notified_at: hasNew ? now : alert.last_notified_at,
-      })
-      .eq("id", alert.id);
-
-    if (alert.saved_search_id) {
-      await supabase
-        .from("saved_searches")
-        .update({ last_run_at: now, updated_at: now })
-        .eq("id", alert.saved_search_id);
-    }
-
-    if (hasNew) {
-      triggered.push({
-        id: String(alert.id),
-        user_id: String(alert.user_id),
-        query: String(alert.query),
-        new_matches: count,
-        previous: prev,
+    // Per-alert isolation: one bad query/timeout must not abort the whole cron sweep.
+    try {
+      const prefs = (alert.preferences as Record<string, unknown>) ?? {};
+      const result = await runSearchV2(String(alert.query), {
+        limit: 12,
+        preferences: prefs as AiSearchPreferences,
       });
+      const count = result.items.length;
+      const prev = Number(alert.last_match_count ?? 0);
+      const hasNew = count > prev;
+
+      const now = new Date().toISOString();
+      await supabase
+        .from("search_alerts")
+        .update({
+          last_match_count: count,
+          last_notified_at: hasNew ? now : alert.last_notified_at,
+        })
+        .eq("id", alert.id);
+
+      if (alert.saved_search_id) {
+        await supabase
+          .from("saved_searches")
+          .update({ last_run_at: now, updated_at: now })
+          .eq("id", alert.saved_search_id);
+      }
+
+      if (hasNew) {
+        triggered.push({
+          id: String(alert.id),
+          user_id: String(alert.user_id),
+          query: String(alert.query),
+          new_matches: count,
+          previous: prev,
+        });
+      }
+    } catch (err) {
+      console.error(
+        "[alerts] alert failed, continuing:",
+        alert.id,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 

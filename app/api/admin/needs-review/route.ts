@@ -38,6 +38,12 @@ function needsReview(result: DeepseekExtractionResult): boolean {
 }
 
 export async function GET(req: Request) {
+  // Local QA tool — reads a JSONL from disk that never ships with the deploy.
+  // Hide it entirely in production rather than 404ing with internal details.
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const { searchParams } = new URL(req.url);
   const filterCode = searchParams.get("code") ?? "";
   const page = Math.max(0, Number(searchParams.get("page") ?? "0"));

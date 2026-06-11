@@ -61,6 +61,18 @@ Paste the same env vars when prompted, or add them in the Vercel dashboard → P
 - `.env.local` is gitignored; never commit keys.
 - Supabase RLS already allows **public read** on `products` and `core_scores`; writes stay blocked for anonymous users.
 
+## Billing (Razorpay) — required once Scout Plus is on
+
+1. Set all five env vars in Vercel: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_PLAN_ID`, `RAZORPAY_PLAN_ID_YEARLY`, `RAZORPAY_WEBHOOK_SECRET`.
+2. In the Razorpay dashboard → Webhooks, add `https://YOUR-APP.vercel.app/api/billing/webhook` with the same secret, subscribed to the `subscription.*` events.
+3. **Webhooks fail closed**: if `RAZORPAY_WEBHOOK_SECRET` is missing or mismatched, every webhook is rejected and paying users are never upgraded to Plus — verify with a test payment end-to-end.
+
+## Error monitoring (Sentry) — recommended before launch
+
+1. Create a free Sentry project (platform: Next.js).
+2. Set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` (same DSN) in Vercel and redeploy.
+3. Without the DSNs the integration is fully inert — no overhead, no errors reported.
+
 ## After deploy
 
 - Open `https://YOUR-APP.vercel.app/search`

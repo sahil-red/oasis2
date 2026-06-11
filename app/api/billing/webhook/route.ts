@@ -20,7 +20,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const body = JSON.parse(raw) as RazorpayWebhook;
+  let body: RazorpayWebhook;
+  try {
+    body = JSON.parse(raw) as RazorpayWebhook;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const event = body.event;
   const subEntity = body.payload?.subscription?.entity;
   const subId = subEntity?.id;

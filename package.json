@@ -64,6 +64,7 @@
     "mobile:start:lan": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:lan"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.57.0",
     "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",

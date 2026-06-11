@@ -216,10 +216,14 @@ export async function generateCandidates(
   const scored: ScoredCandidate[] = pool.map((row) => ({
     row,
     lex: lexicalScore(row, intent.raw_query),
+    // Prefer the in-DB KNN distance (pgvector rows ship without raw vectors);
+    // fall back to JS cosine only on the in-memory path.
     vec:
-      queryEmbed?.length && row.embedding?.length
-        ? cosineSimilarity(queryEmbed, row.embedding)
-        : 0,
+      row.knn_distance != null
+        ? 1 - row.knn_distance
+        : queryEmbed?.length && row.embedding?.length
+          ? cosineSimilarity(queryEmbed, row.embedding)
+          : 0,
     tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
   }));
 

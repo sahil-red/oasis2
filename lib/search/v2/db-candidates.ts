@@ -1,13 +1,18 @@
 /**
  * In-DB candidate retrieval (pgvector). Uses the lightweight search_v2_ids RPC
- * for ANN-based cosine ordering, then fetches full rows via REST for the result set.
- * Egress: 200 IDs × 50 bytes = 10 KB (RPC) + 200 full rows × 3 KB = 600 KB total.
+ * for ANN-based cosine ordering, then fetches SLIM rows via REST for the result set.
+ * The RPC's per-row cosine distance rides along as knn_distance, so the raw
+ * 1024-dim vectors never leave the database.
+ * Egress: 200 IDs × ~60 bytes (RPC) + 200 slim rows × ~3 KB ≈ 600 KB total
+ * (vs ~5 MB when rows carried embedding JSON).
  */
 import { adminClient } from "@/lib/supabase/admin";
 import { embedText } from "@/lib/search/v2/embeddings";
-import { mapDbRow } from "@/lib/search/v2/index-queries";
+import { INDEX_COLUMNS, mapDbRow } from "@/lib/search/v2/index-queries";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
+
+type KnnHit = { product_id: string; distance: number };
 
 export async function fetchCandidatePool(
   intent: SearchIntentV2,
@@ -39,24 +44,34 @@ export async function fetchCandidatePool(
         p_min_quality: minQuality, p_primary_type: null,
       });
       if (Array.isArray(ids2) && ids2.length) {
-        return fetchRows(supabase, (ids2 as Array<{ product_id: string }>).map(r => r.product_id));
+        return fetchRows(supabase, ids2 as KnnHit[]);
       }
     }
     return [];
   }
 
-  const productIds = (ids as Array<{ product_id: string }>).map((r) => r.product_id);
-  return fetchRows(supabase, productIds);
+  return fetchRows(supabase, ids as KnnHit[]);
 }
 
-async function fetchRows(supabase: ReturnType<typeof adminClient>, productIds: string[]): Promise<ProductSearchIndexRow[]> {
+async function fetchRows(
+  supabase: ReturnType<typeof adminClient>,
+  hits: KnnHit[],
+): Promise<ProductSearchIndexRow[]> {
+  const distanceById = new Map<string, number>();
+  for (const h of hits) {
+    if (h?.product_id != null && h.distance != null) {
+      distanceById.set(h.product_id, Number(h.distance));
+    }
+  }
+
+  const productIds = hits.map((h) => h.product_id);
   const results: ProductSearchIndexRow[] = [];
   const BATCH = 100;
   for (let i = 0; i < productIds.length; i += BATCH) {
     const batch = productIds.slice(i, i + BATCH);
     const { data, error } = await supabase
       .from("product_search_index")
-      .select("*")
+      .select(INDEX_COLUMNS)
       .in("product_id", batch);
 
     if (error) {
@@ -65,7 +80,9 @@ async function fetchRows(supabase: ReturnType<typeof adminClient>, productIds: s
     }
     if (data) {
       for (const row of data) {
-        results.push(mapDbRow(row as Record<string, unknown>));
+        const mapped = mapDbRow(row as Record<string, unknown>);
+        mapped.knn_distance = distanceById.get(mapped.product_id) ?? null;
+        results.push(mapped);
       }
     }
   }

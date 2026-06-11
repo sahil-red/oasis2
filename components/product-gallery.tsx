@@ -95,6 +95,8 @@ export function ProductGallery({
               key={`${url}-${i}`}
               type="button"
               onClick={() => setIndex(i)}
+              aria-label={`View image ${i + 1} of ${n}`}
+              aria-current={i === index}
               className={cn(
                 "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 bg-(--color-bg-soft) transition",
                 i === index

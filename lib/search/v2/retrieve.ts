@@ -45,16 +45,25 @@ export async function retrieveAndRerank(
     rank: i + 1,
   }));
 
-  const queryEmbed = await embedText(intent.raw_query, "query");
+  // pgvector rows carry the in-DB cosine distance (knn_distance) and no raw
+  // vectors — use it directly. Only the legacy in-memory path (eval harness)
+  // still embeds the query and computes cosine in JS.
+  const hasKnn = candidates.some((c) => c.knn_distance != null);
+  const queryEmbed = hasKnn ? [] : await embedText(intent.raw_query, "query");
   const vectorRanks = [...candidates]
     .map((row) => ({
       row,
-      sim: queryEmbed.length && row.embedding?.length ? cosineSimilarity(queryEmbed, row.embedding) : 0,
+      sim:
+        row.knn_distance != null
+          ? 1 - row.knn_distance
+          : queryEmbed.length && row.embedding?.length
+            ? cosineSimilarity(queryEmbed, row.embedding)
+            : 0,
     }))
     .sort((a, b) => b.sim - a.sim)
     .map((x, i) => ({ id: x.row.product_id, rank: i + 1 }));
 
-  const lists = queryEmbed.length ? [structuredRanks, vectorRanks] : [structuredRanks];
+  const lists = hasKnn || queryEmbed.length ? [structuredRanks, vectorRanks] : [structuredRanks];
 
   const fused = reciprocalRankFusion(lists);
 

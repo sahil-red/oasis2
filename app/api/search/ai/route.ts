@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  ANON_COOKIE_NAME,
+  ANON_FREE_SEARCHES,
+  ANON_WINDOW_MS,
+  anonCookieValue,
+  readAnonWindow,
+} from "@/lib/auth/anon-gate";
 import { consumeAiSearch } from "@/lib/auth/profile";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
 import { adminClient } from "@/lib/supabase/admin";
@@ -49,6 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   const client = supabaseFromBearer(req.headers.get("authorization"));
+  let anonCookie: string | null = null;
   if (client) {
     const { data: userData } = await client.auth.getUser();
     if (userData.user) {
@@ -61,22 +69,31 @@ export async function POST(req: NextRequest) {
       }
     }
   } else {
-    // Anonymous users: 3 free searches, then prompt sign-in
+    // Anonymous users: 3 free searches/hour, then prompt sign-in. The count
+    // lives in a signed cookie (survives cold starts & multiple instances);
+    // the per-instance IP map is a second signal for cookie-clearers.
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const anonKey = `anon:${ip}`;
     const now = Date.now();
-    const window = anonRateLimit.get(anonKey);
-    if (window && now - window.start < 3_600_000) {
-      if (window.count >= 3) {
-        return NextResponse.json(
-          { error: "Sign in for unlimited searches — it's free.", code: "sign_in_required" },
-          { status: 401 },
-        );
+    if (anonRateLimit.size > 1000) {
+      for (const [k, w] of anonRateLimit) {
+        if (now - w.start >= ANON_WINDOW_MS) anonRateLimit.delete(k);
       }
-      window.count++;
-    } else {
-      anonRateLimit.set(anonKey, { start: now, count: 1 });
     }
+    const cookieWindow = readAnonWindow(req.cookies.get(ANON_COOKIE_NAME)?.value, now);
+    let mapWindow = anonRateLimit.get(anonKey);
+    if (!mapWindow || now - mapWindow.start >= ANON_WINDOW_MS) {
+      mapWindow = { start: now, count: 0 };
+      anonRateLimit.set(anonKey, mapWindow);
+    }
+    if (Math.max(cookieWindow.count, mapWindow.count) >= ANON_FREE_SEARCHES) {
+      return NextResponse.json(
+        { error: "Sign in for unlimited searches — it's free.", code: "sign_in_required" },
+        { status: 401 },
+      );
+    }
+    mapWindow.count++;
+    anonCookie = anonCookieValue({ start: cookieWindow.start, count: cookieWindow.count + 1 });
   }
 
   let parsed = getCachedParse(prompt);
@@ -113,10 +130,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(result, { headers: CACHE_HEADERS });
+    const res = NextResponse.json(result, { headers: CACHE_HEADERS });
+    if (anonCookie) {
+      res.cookies.set(ANON_COOKIE_NAME, anonCookie, {
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: ANON_WINDOW_MS / 1000,
+        path: "/",
+      });
+    }
+    return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : "AI search failed";
     console.error("[search/ai]", message);
+    // Failed searches are not charged: no cookie write, so the visitor keeps the credit.
     return NextResponse.json({ error: message, items: [] }, { status: 200 });
   }
 }

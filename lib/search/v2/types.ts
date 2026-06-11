@@ -95,6 +95,9 @@ export type ProductSearchIndexRow = {
   search_doc: string | null;
   embedding: number[] | null;
   type_embedding: number[] | null;
+  /** Cosine distance to the query embedding, computed in-DB by the search_v2_ids RPC.
+   *  Present on pgvector-fetched rows (which omit raw vectors to keep egress ~3KB/row). */
+  knn_distance?: number | null;
   click_count: number;
   save_count: number;
   last_interaction_at: string | null;

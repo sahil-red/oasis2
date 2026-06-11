@@ -22,25 +22,34 @@ export async function resolveComparisonReference(
 
   const supabase = adminClient();
 
-  // Chain ilike — avoids PostgREST filter injection from commas/parens in LLM-extracted names
-  const { data } = await supabase
-    .from("product_search_index")
-    .select("product_id, name, scout_score, price_inr")
-    .ilike("name", `%${phrase}%`)
-    .gte("data_quality_score", 0.3)
-    .limit(10);
+  // Tokenize → "%maggi%masala%" matches "Maggi 2-Minute, Masala Noodles" despite
+  // punctuation the user never typed. Alnum-only tokens also keep the value safe
+  // for PostgREST filter syntax (no commas/parens can reach it).
+  const tokens = phrase.split(/[^a-z0-9]+/i).filter((t) => t.length >= 2);
+  if (!tokens.length) return null;
+  const pattern = `%${tokens.join("%")}%`;
 
   const pick = (rows: RefRow[] | null): ComparisonContext | null => {
     if (!rows?.length) return null;
-    const r = rows[0]!;
+    // Shortest matching name ≈ the canonical SKU ("Maggi Masala Noodles" beats
+    // "Maggi Masala Noodles Saver Pack of 12"); rows arrive quality-sorted.
+    const best = [...rows].sort((a, b) => a.name.length - b.name.length)[0]!;
     return {
-      reference_product_id: r.product_id,
-      reference_name: r.name,
-      reference_scout_score: r.scout_score ?? 50,
-      reference_price_inr: r.price_inr ?? null,
+      reference_product_id: best.product_id,
+      reference_name: best.name,
+      reference_scout_score: best.scout_score ?? 50,
+      reference_price_inr: best.price_inr ?? null,
       mode: "healthier_than",
     };
   };
+
+  const { data } = await supabase
+    .from("product_search_index")
+    .select("product_id, name, scout_score, price_inr")
+    .ilike("name", pattern)
+    .gte("data_quality_score", 0.3)
+    .order("data_quality_score", { ascending: false })
+    .limit(10);
 
   if (data?.length) return pick(data as RefRow[]);
 
@@ -48,8 +57,9 @@ export async function resolveComparisonReference(
   const { data: brandData } = await supabase
     .from("product_search_index")
     .select("product_id, name, scout_score, price_inr")
-    .ilike("brand", `%${phrase}%`)
+    .ilike("brand", pattern)
     .gte("data_quality_score", 0.3)
+    .order("data_quality_score", { ascending: false })
     .limit(10);
 
   return pick(brandData as RefRow[]);
