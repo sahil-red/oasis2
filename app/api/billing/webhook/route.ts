@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const event = body.event;
+  const admin = adminClient();
   const subEntity = body.payload?.subscription?.entity;
   const subId = subEntity?.id;
   if (!subId) {
@@ -46,7 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const admin = adminClient();
   const { data: row } = await admin
     .from("subscriptions")
     .select("user_id")

@@ -3,7 +3,6 @@ import { adminClient } from "@/lib/supabase/admin";
 import { formatInr, planForInterval, type PlanInterval } from "@/lib/billing/plans";
 import {
   createRazorpayCustomer,
-  createRazorpaySubscription,
   ensureRazorpayPlan,
 } from "@/lib/billing/razorpay";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
@@ -60,9 +59,11 @@ export async function POST(request: Request) {
 
     const planId = await ensureRazorpayPlan(interval);
 
-    // Create a one-time order for Standard Checkout (works immediately, no hosted page config needed)
-    const order = await razorpayFetch<{ id: string; amount: number; currency: string }>("/orders", {
+    // Create a one-time order for Standard Checkout
+    const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64");
+    const orderRes = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
+      headers: { authorization: `Basic ${auth}`, "content-type": "application/json" },
       body: JSON.stringify({
         amount: plan.amount_paise,
         currency: plan.currency,
@@ -70,6 +71,8 @@ export async function POST(request: Request) {
         notes: { user_id: data.user.id, plan: plan.id, interval },
       }),
     });
+    const order = await orderRes.json() as { id?: string; amount?: number; currency?: string; error?: any };
+    if (!order.id) throw new Error(order.error?.description ?? "Order creation failed");
 
     // Store pending subscription
     await admin.from("subscriptions").insert({
