@@ -1,4 +1,4 @@
-export const FREE_AI_SEARCH_DAILY_LIMIT = 10;
+export const FREE_AI_SEARCH_DAILY_LIMIT = 5;
 
 const USAGE_KEY = "scout-ai-search-usage-v1";
 const PREFS_KEY = "scout-ai-preferences-v1";

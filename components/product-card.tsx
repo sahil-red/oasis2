@@ -43,7 +43,7 @@ export const ProductCard = memo(function ProductCard({
   const verdict: VerdictId | null = core
     ? resolveProductVerdict({
         verdict: core.verdict,
-        score: core.score,
+        score: core.absolute_score ?? core.score,
         name: product.name,
         category: product.category,
         subcategory: product.subcategory,
@@ -202,9 +202,6 @@ export const ProductCard = memo(function ProductCard({
             {aiReasonLines.slice(0, 3).map((r) => (
               <span key={r} className="rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)">{r}</span>
             ))}
-            {core?.score != null ? (
-              <span className="rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)">{core.score}/100</span>
-            ) : null}
           </div>
           {variantCount > 1 ? (
             <button

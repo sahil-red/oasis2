@@ -350,7 +350,7 @@ export function CatalogView({
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const examplePrompts = useRotatingPrompts();
-  const { profile } = useAuth();
+  const { profile, ready: authReady } = useAuth();
   const isPlus = profile?.plan === "plus";
 
   const aiModeRef = useRef(false);
@@ -818,7 +818,7 @@ export function CatalogView({
     setAiIntentTier(intent);
 
     // Plus members are unlimited; the client-side gate only applies to free use.
-    if (!isPlus && !canUseAiSearch()) {
+    if (authReady && !isPlus && !canUseAiSearch()) {
       setAiUsage(readAiSearchUsage());
       setQuotaHit(true);
       return;
@@ -853,7 +853,7 @@ export function CatalogView({
       setAiRelaxationExplanations(result.relaxation_explanations ?? []);
       setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
-      if (!isPlus) setAiUsage(recordAiSearch());
+      if (authReady && !isPlus) setAiUsage(recordAiSearch());
       setRecentSearches(recordRecentSearch(prompt));
       if (result.v2) {
         setLastSearchContext({
@@ -1022,7 +1022,7 @@ export function CatalogView({
       <div className="relative space-y-3">
         <div ref={goalSentinelRef} className="h-px w-full shrink-0" aria-hidden />
 
-        <section className={aiMode ? "pb-0" : "pb-1"}>
+        <section className="pb-0">
           <p className="font-display mb-3 text-2xl font-bold leading-tight tracking-tight text-(--color-fg) md:text-3xl">
             Ask Scout
           </p>
@@ -1093,7 +1093,7 @@ export function CatalogView({
             </div>
           </form>
 
-          {quotaHit && !isPlus ? (
+          {quotaHit && authReady && !isPlus ? (
             <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
           ) : null}
 
@@ -1101,14 +1101,14 @@ export function CatalogView({
 
           {/* Inline failure note — a failed ask must never look like a quiet no-op */}
           {loadError && !signInGate && !quotaHit ? (
-            <p className="mt-2 text-[12px] text-(--color-bad)" role="alert">
+            <p className="mt-1.5 text-[12px] text-(--color-bad)" role="alert">
               {loadError}
             </p>
           ) : null}
 
           {/* Gentle heads-up when the free allowance is nearly used */}
-          {!quotaHit && !isPlus && aiUsage && aiUsage.limit - aiUsage.count <= 3 && aiUsage.count > 0 ? (
-            <p className="mt-2 text-[11px] text-(--color-fg-dim)">
+          {!quotaHit && authReady && !isPlus && aiUsage && aiUsage.limit - aiUsage.count <= 3 && aiUsage.count > 0 ? (
+            <p className="mt-1.5 text-[11px] text-(--color-fg-dim)">
               {Math.max(0, aiUsage.limit - aiUsage.count)} free AI search
               {aiUsage.limit - aiUsage.count === 1 ? "" : "es"} left today ·{" "}
               <Link href="/pricing" className="underline underline-offset-2 hover:text-(--color-fg)">
@@ -1164,7 +1164,7 @@ export function CatalogView({
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
-            <div className="mt-2">
+            <div className="mt-1">
               {/* Summary + save preferences in one tight row */}
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[13px] leading-snug text-(--color-fg-muted)">

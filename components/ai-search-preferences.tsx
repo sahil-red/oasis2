@@ -32,7 +32,7 @@ export function AiSavedPreferencesHint({ prefs, onChange }: Props) {
   const phrases = savedPreferencePhrases(prefs);
 
   return (
-    <div className="mt-1.5 text-[11px] leading-relaxed text-(--color-fg-dim)">
+    <div className="mt-1 text-[11px] leading-relaxed text-(--color-fg-dim)">
       <span>AI search also uses saved preferences: </span>
       {phrases.map((phrase, i) => (
         <span key={phrase}>

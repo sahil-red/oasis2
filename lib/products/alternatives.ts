@@ -431,15 +431,14 @@ export function findSimilarProducts(
       score: similarityScore(current, p),
       goalFit: computeGoalFit(goal, goalFitInputs(p)).fit,
     }))
-    .filter(({ score }) => score >= 26)
+    .filter(({ score }) => score >= 18)
     .sort((a, b) => b.score - a.score);
 
   const picked: SimilarProductSuggestion[] = [];
   const brandCounts = new Map<string, number>();
   for (const { p, goalFit } of candidates) {
     const brand = brandKey(p);
-    if ((brandCounts.get(brand) ?? 0) >= 2) continue;
-    if (picked.some((x) => nameOverlap(x.product.name, p.name) > 0.72)) continue;
+    if ((brandCounts.get(brand) ?? 0) >= 4) continue;
     picked.push({
       product: p,
       goalFit,

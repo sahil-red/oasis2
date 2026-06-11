@@ -184,7 +184,7 @@ function slimListItemForCatalog(row: ProductListItem): ProductListItem {
 
 /** Lighter join for grids — omits heavy subscores/concerns JSON. */
 const LIST_SCORE_FIELDS =
-  "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size";
+  "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size, absolute_score";
 
 /** PDP join — includes V9 verdict + cohort fields for chips and percentile line. */
 const DETAIL_SCORE_FIELDS = `${LIST_SCORE_FIELDS}, absolute_score, role_cohort, serving_g_effective, cohort_id, opinion`;
@@ -219,6 +219,7 @@ export type ProductListItem = Pick<
     | "subscores"
     | "concerns"
     | "computed_at"
+    | "absolute_score"
   > | null;
   /** Present when catalog filters need label-resolution metadata. */
   ocr_payload?: Record<string, unknown> | null;
@@ -268,6 +269,7 @@ export type CatalogGridItem = Pick<
     | "verdict_sublabels"
     | "relative_score"
     | "cohort_size"
+    | "absolute_score"
   > | null;
   deepseek_chips?: string[];
   deepseek_why?: string | null;

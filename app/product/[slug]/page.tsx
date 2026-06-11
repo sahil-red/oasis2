@@ -10,6 +10,7 @@ import { ProductGoalFitList } from "@/components/product-goal-fit-list";
 import { ProductGoalToolbar } from "@/components/product-goal-toolbar";
 import { ProductOpinionPanel } from "@/components/product-opinion-panel";
 import { ProductTakePanel } from "@/components/product-take-panel";
+import { ScoutVerdictCard } from "@/components/scout-verdict-card";
 import { SwapPanel } from "@/components/swap-panel";
 import { buildOverallGoalSummary, buildProductGoalRows } from "@/lib/goals/build-goal-rows";
 import { goalFromParam } from "@/lib/goals/types";
@@ -286,7 +287,20 @@ export default async function ProductPage({
               zeptoBuyUrl={zeptoBuyUrl}
             />
 
-            {verdict ? (
+            {verdict && score?.opinion ? (
+              <div className="mt-5">
+                <ScoutVerdictCard
+                  verdict={verdict}
+                  score={score?.score}
+                  opinion={score.opinion}
+                  relativeScore={score?.relative_score}
+                  cohortSize={score?.cohort_size}
+                  cohortId={score?.cohort_id ?? null}
+                  subcategory={product.subcategory}
+                  productId={product.id}
+                />
+              </div>
+            ) : verdict ? (
               <div className="mt-5">
                 <VerdictBlock
                   verdict={verdict}
@@ -321,11 +335,7 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            {score?.opinion ? (
-              <div className="mt-5">
-                <ProductOpinionPanel opinion={score.opinion} />
-              </div>
-            ) : scoreWhy || deepseekDisplay?.why ? (
+            {!score?.opinion && (scoreWhy || deepseekDisplay?.why) ? (
               <ProductTakePanel
                 className="mt-5"
                 explanation={scoreWhy}

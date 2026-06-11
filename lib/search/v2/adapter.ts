@@ -111,6 +111,7 @@ function rankedToAiItem(
           verdict_sublabels: [],
           relative_score: null,
           cohort_size: null,
+          absolute_score: null,
         }
       : null,
     ai_match_score: Math.round(c.final_score * 100),
