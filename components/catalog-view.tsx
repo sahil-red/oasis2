@@ -344,6 +344,26 @@ export function CatalogView({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
   const [aiRelaxationExplanations, setAiRelaxationExplanations] = useState<string[]>([]);
+  const [aiVerdict, setAiVerdict] = useState<string | null>(null);
+  const [aiAllItems, setAiAllItems] = useState<CatalogGridItem[]>([]);
+
+  // Apply AI verdict filter client-side
+  useEffect(() => {
+    if (!aiMode) return;
+    if (!aiVerdict) { setItems(aiAllItems); return; }
+    const verdictScores: Record<string, [number, number]> = {
+      daily_staple: [71, 100],
+      good_choice: [51, 70],
+      occasional_treat: [31, 50],
+      skip: [0, 30],
+    };
+    const range = verdictScores[aiVerdict];
+    if (!range) return;
+    setItems(aiAllItems.filter(item => {
+      const s = item.core_scores?.score;
+      return s != null && s >= range[0] && s <= range[1];
+    }));
+  }, [aiVerdict, aiAllItems, aiMode]);
   const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
   const [quotaHit, setQuotaHit] = useState(false);
@@ -705,6 +725,9 @@ export function CatalogView({
   }, []);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
+    // In AI mode, don't exit — filter/sort happens client-side on current results
+    if (aiMode) return;
+    
     setAiMode(false);
     setAiSummary(null);
     setAiWarning(null);
@@ -761,7 +784,9 @@ export function CatalogView({
         session?.access_token,
       );
       if (gen !== fetchGen.current) return;
+      setAiAllItems(result.items);
       setItems(result.items);
+      setAiVerdict(null); // reset verdict filter on new search
       setGoalFits({});
       setTotal(result.items.length);
       setPage(1);
@@ -1213,7 +1238,14 @@ export function CatalogView({
                   <button
                     key={v}
                     type="button"
-                    onClick={() => patch({ verdict: active ? "" : v })}
+                    onClick={() => {
+                      if (aiMode) {
+                        // Client-side filter of AI results by verdict
+                        setAiVerdict(active ? null : v);
+                        return;
+                      }
+                      patch({ verdict: active ? "" : v });
+                    }}
                     className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
                     style={{
                       borderColor: c.border,
@@ -1227,7 +1259,7 @@ export function CatalogView({
               })}
               <button
                 type="button"
-                onClick={() => patch({ verdict: "" })}
+                onClick={() => aiMode ? setAiVerdict(null) : patch({ verdict: "" })}
                 className={`rounded-full px-3 py-1.5 text-[13px] transition ${
                   !activeState.verdict
                     ? "font-medium text-(--color-fg)"
