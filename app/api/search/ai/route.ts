@@ -61,16 +61,16 @@ export async function POST(req: NextRequest) {
       }
     }
   } else {
-    // Rate-limit anonymous requests: 30 per minute per IP
+    // Anonymous users: 3 free searches, then prompt sign-in
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const anonKey = `anon:${ip}`;
     const now = Date.now();
     const window = anonRateLimit.get(anonKey);
-    if (window && now - window.start < 60_000) {
-      if (window.count >= 30) {
+    if (window && now - window.start < 3_600_000) {
+      if (window.count >= 3) {
         return NextResponse.json(
-          { error: "Rate limit exceeded. Sign in for more searches.", code: "rate_limited" },
-          { status: 429 },
+          { error: "Sign in for unlimited searches — it's free.", code: "sign_in_required" },
+          { status: 401 },
         );
       }
       window.count++;
