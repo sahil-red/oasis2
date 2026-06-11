@@ -3,7 +3,7 @@ import { SCOUT_PLUS_PLAN } from "@/lib/billing/plans";
 
 /** Admin emails with unlimited AI searches — set via UNLIMITED_EMAILS env var (comma-separated). */
 const UNLIMITED_EMAILS = new Set(
-  (process.env.UNLIMITED_EMAILS ?? "").split(",").map(e => e.trim()).filter(Boolean)
+  (process.env.UNLIMITED_EMAILS ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
 );
 
 export type UserProfile = {
@@ -36,7 +36,7 @@ export async function getProfileForUser(
   if (data.ai_searches_day !== day) used = 0;
 
   const plan = (data.plan === "plus" ? "plus" : "free") as "free" | "plus";
-  const isUnlimited = plan === "plus" || UNLIMITED_EMAILS.has(data.email ?? "");
+  const isUnlimited = plan === "plus" || UNLIMITED_EMAILS.has((data.email ?? "").toLowerCase());
   const limit = isUnlimited ? 9999 : SCOUT_PLUS_PLAN.free_daily_ai_searches;
   const remaining = isUnlimited ? 9999 : Math.max(0, limit - used);
 
