@@ -3,7 +3,7 @@ import Link from "next/link";
 export function SiteFooter() {
   return (
     <footer className="mt-24 border-t border-(--color-line)">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-14 md:flex-row md:items-start md:justify-between">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 py-14 md:flex-row md:items-start md:justify-between">
         <div className="max-w-md">
           <Link href="/" className="font-display text-2xl text-(--color-fg)">
             Scout
@@ -59,8 +59,8 @@ export function SiteFooter() {
           </div>
         </div>
       </div>
-      <div className="hairline mx-auto max-w-6xl" />
-      <p className="mx-auto max-w-6xl px-6 py-6 text-xs text-(--color-fg-dim)">
+      <div className="hairline mx-auto max-w-7xl" />
+      <p className="mx-auto max-w-7xl px-6 py-6 text-xs text-(--color-fg-dim)">
         © {new Date().getFullYear()} Scout · Independent. Opinionated. Built in India.
       </p>
     </footer>

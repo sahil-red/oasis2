@@ -107,7 +107,7 @@ export const ProductCard = memo(function ProductCard({
       {/* image — verdict label as floating chip on top-left, score on top-right */}
       <Link
         href={href}
-        className="relative block aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
+        className="relative block aspect-[4/3] overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
         onClick={() => {
           saveCatalogReturnUrl(`/search${hrefQuery}`);
           trackSearchInteraction(product.id, "click");

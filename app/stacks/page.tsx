@@ -44,7 +44,7 @@ export default async function StacksPage() {
     <main className="min-h-screen">
       <SiteNav />
 
-      <div className="mx-auto max-w-6xl px-6 pb-20 pt-10">
+      <div className="mx-auto max-w-7xl px-6 pb-20 pt-10">
         <header className="max-w-2xl">
           <h1 className="font-display text-4xl leading-tight">Suggested stacks</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-(--color-fg-muted)">

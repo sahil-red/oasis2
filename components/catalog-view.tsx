@@ -1476,7 +1476,7 @@ export function CatalogView({
       {aiSearching ? (
         <div className="space-y-4 py-8">
           <AiSearchProgress />
-          <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+          <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="animate-pulse space-y-2">
                 <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
@@ -1492,7 +1492,7 @@ export function CatalogView({
           onFactAction={(fact) => void handleFactAction(fact)}
         />
       ) : loading && items.length === 0 ? (
-        <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
+        <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="animate-pulse space-y-2">
               <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
@@ -1592,7 +1592,7 @@ export function CatalogView({
                   <section key={bucket.id}>
                     <h3 className="font-display text-lg text-(--color-fg)">{bucket.label}</h3>
                     <div
-                      className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+                      className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
                         refreshing ? "opacity-80" : "opacity-100"
                       } transition-opacity duration-100`}
                     >
@@ -1612,7 +1612,7 @@ export function CatalogView({
             </div>
           ) : (
             <div
-              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
                 refreshing ? "opacity-80" : "opacity-100"
               } transition-opacity duration-100`}
             >

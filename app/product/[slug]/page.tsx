@@ -234,10 +234,10 @@ export default async function ProductPage({
       />
       <SiteNav />
 
-      <div className="mx-auto max-w-6xl px-6 pb-24 pt-6">
+      <div className="mx-auto max-w-7xl px-6 pb-24 pt-6">
         <CatalogBackLink params={sp} />
 
-        <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-start">
+        <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:items-start">
           {/* Left: images + goals at a glance */}
           <div className="space-y-5">
             <ProductGallery images={product.image_urls} alt={product.name} />
@@ -338,7 +338,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-10 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
+        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">

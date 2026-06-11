@@ -12,7 +12,7 @@ export function Section({
   return (
     <section
       id={id}
-      className={cn("mx-auto w-full max-w-6xl px-6 py-24 md:py-32", className)}
+      className={cn("mx-auto w-full max-w-7xl px-6 py-24 md:py-32", className)}
     >
       {children}
     </section>

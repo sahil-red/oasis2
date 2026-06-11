@@ -39,7 +39,7 @@ export default async function Home() {
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="border-b border-(--color-line)">
-        <div className="mx-auto max-w-6xl px-6 pt-14 pb-12 md:pt-20">
+        <div className="mx-auto max-w-7xl px-6 pt-14 pb-12 md:pt-20">
           <div className="max-w-3xl">
             <p className="text-[10px] md:text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
               Honest grocery intel · India
@@ -100,7 +100,7 @@ export default async function Home() {
         </div>
 
         {/* Stats strip */}
-        <div className="mx-auto max-w-6xl px-6 pb-8">
+        <div className="mx-auto max-w-7xl px-6 pb-8">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
             <p className="text-[12px] leading-relaxed text-(--color-fg-muted)">
               <span className="font-semibold tabular-nums text-(--color-fg)">
@@ -168,7 +168,7 @@ function Rail({
   if (!items.length) return null;
   return (
     <section className="border-b border-(--color-line)">
-      <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
+      <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
@@ -194,7 +194,7 @@ function Rail({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {items.map((p) => (
             <HomeRailCard key={p.id} product={p} />
           ))}

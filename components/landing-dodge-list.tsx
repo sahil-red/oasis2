@@ -69,7 +69,7 @@ export function LandingDodgeList({ products }: { products: DodgeProduct[] }) {
 
   return (
     <section className="border-b border-(--color-line) bg-(--color-bg-soft)">
-      <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
+      <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
         <div className="mb-10 flex items-end justify-between">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-bad)">Scout warning</p>

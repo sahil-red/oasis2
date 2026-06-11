@@ -10,7 +10,7 @@ export function LandingPickOfDay({ data }: { data: LandingPickOfDay }) {
 
   return (
     <section className="border-b border-(--color-line)">
-      <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
+      <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
         <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
           Pick of the day
         </p>

@@ -49,7 +49,7 @@ export function BasketSwapCards({
           >
             <Link
               href={`/product/${product.slug}`}
-              className="group relative aspect-[5/4] bg-(--color-bg-soft)"
+              className="group relative aspect-[4/3] bg-(--color-bg-soft)"
             >
               {product.image_urls[0] ? (
                 <Image

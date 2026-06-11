@@ -34,7 +34,7 @@ export function InsightProductCard({
         accentBorder,
       )}
     >
-      <div className="relative aspect-[5/4] bg-(--color-bg-soft)">
+      <div className="relative aspect-[4/3] bg-(--color-bg-soft)">
         {product.image_urls[0] ? (
           <Image
             src={product.image_urls[0]}

@@ -60,7 +60,7 @@ export default async function InsightsPage() {
       <SiteNav />
 
       <div className="border-b border-(--color-line)">
-        <div className="mx-auto max-w-6xl px-5 py-12 md:px-6 md:py-16">
+        <div className="mx-auto max-w-7xl px-5 py-12 md:px-6 md:py-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
             {stats.totalScored.toLocaleString()} products analysed
           </p>
@@ -82,7 +82,7 @@ export default async function InsightsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-16 px-5 pb-24 pt-12 md:px-6">
+      <div className="mx-auto max-w-7xl space-y-16 px-5 pb-24 pt-12 md:px-6">
         <Section
           icon={<Leaf className="h-5 w-5" />}
           tone="good"

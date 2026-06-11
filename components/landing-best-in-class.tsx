@@ -53,7 +53,7 @@ export function LandingBestInClass({ categories }: { categories: BestInClassCate
 
   return (
     <section className="border-b border-(--color-line)">
-      <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
+      <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
         <div className="mb-10">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">Best in class</p>
           <h2 className="font-display mt-3 text-3xl leading-tight md:text-[2.5rem]">
