@@ -4,8 +4,9 @@ export function isPgvectorMode(): boolean {
   return v === "1" || v === "true";
 }
 
-/** Search V2 feature flag — server and client (NEXT_PUBLIC_ mirror optional). */
+/** Search V2 feature flag — enabled when pgvector mode is on or explicitly set. */
 export function isSearchV2Enabled(): boolean {
+  if (isPgvectorMode()) return true;
   if (process.env.SEARCH_V2_ENABLED === "1" || process.env.SEARCH_V2_ENABLED === "true") {
     return true;
   }
