@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
@@ -985,10 +985,26 @@ export function CatalogView({
             <input
               type="search"
               value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
+              onChange={(e) => {
+                setAiPrompt(e.target.value);
+                if (e.target.value === "" && aiMode) {
+                  clearAll();
+                  setAiPrompt("");
+                }
+              }}
               placeholder={typedPrompt ? `e.g. ${typedPrompt}` : "e.g. paneer with low fat under ₹150"}
               className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
+            {aiMode && (
+              <button
+                type="button"
+                onClick={() => { setAiPrompt(""); clearAll(); }}
+                className="absolute right-[180px] top-1/2 -translate-y-1/2 rounded-full p-1 text-(--color-fg-dim) hover:text-(--color-fg)"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
             <div className="flex flex-col gap-1.5">
               <button
                 type="submit"

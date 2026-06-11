@@ -55,11 +55,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(cached, { headers: CACHE_HEADERS });
   }
 
+  // Try auth from Bearer token (sent by frontend)
+  let userId: string | null = null;
   const client = supabaseFromBearer(req.headers.get("authorization"));
-  let anonCookie: string | null = null;
   if (client) {
     const { data: userData } = await client.auth.getUser();
     if (userData.user) {
+      userId = userData.user.id;
       const gate = await consumeAiSearch(client, userData.user.id, userData.user.email);
       if (!gate.ok) {
         return NextResponse.json(
@@ -68,7 +70,10 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-  } else {
+  }
+  
+  let anonCookie: string | null = null;
+  if (!userId) {
     // Anonymous users: 3 free searches/hour, then prompt sign-in. The count
     // lives in a signed cookie (survives cold starts & multiple instances);
     // the per-instance IP map is a second signal for cookie-clearers.
@@ -106,12 +111,6 @@ export async function POST(req: NextRequest) {
     ...parsed,
     parsed: mergeSavedPreferences(parsed.parsed, preferences),
   };
-
-  let userId: string | null = null;
-  if (client) {
-    const { data: ud } = await client.auth.getUser();
-    if (ud.user) userId = ud.user.id;
-  }
 
   try {
     const v2Result = await runSearchV2(prompt, { limit, preferences });
