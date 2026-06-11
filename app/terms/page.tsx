@@ -11,7 +11,7 @@ export default function TermsPage() {
         <p>Scout provides nutrition information and product recommendations. Scores are algorithmic estimates based on ingredient labels and nutrition data — not medical advice.</p>
 
         <h2 className="font-semibold text-(--color-fg)">AI search</h2>
-        <p>Free users get 3 AI searches. Scout Plus subscribers get unlimited AI searches. We reserve the right to adjust limits.</p>
+        <p>Signed-in free accounts get a daily allowance of AI searches; anonymous visitors get a small free taste before sign-in. Scout Plus subscribers get unlimited AI searches. We reserve the right to adjust limits.</p>
 
         <h2 className="font-semibold text-(--color-fg)">Subscriptions</h2>
         <p>Scout Plus is billed monthly at ₹100 or yearly at ₹1,000 via Razorpay. Cancel anytime from your profile. No refunds for partial months.</p>

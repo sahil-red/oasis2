@@ -51,7 +51,7 @@ export default async function StacksPage() {
             Auto-generated shortlists from today&apos;s catalog — high protein under budget,
             cleaner office snacks, lower-sugar staples. Add any item to{" "}
             <Link href="/basket" className="text-(--color-accent) hover:underline">
-              cart analysis
+              basket analysis
             </Link>
             .
           </p>

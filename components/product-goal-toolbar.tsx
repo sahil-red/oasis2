@@ -23,7 +23,7 @@ export function ProductGoalToolbar({
       {zeptoBuyUrl ? <ZeptoBuyButton href={zeptoBuyUrl} /> : null}
       <CompareButton slug={slug} name={name} image={image ?? null} size="labelled" />
       <Link href="/basket" className="text-[15px] text-(--color-accent) hover:underline">
-        View cart analysis
+        View basket analysis
       </Link>
     </div>
   );

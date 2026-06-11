@@ -29,6 +29,7 @@ import {
 } from "@/lib/catalog/search-session";
 import {
   fetchCatalogMeta,
+  AiSearchError,
   fetchAiCatalogSearch,
   fetchCatalogSearch,
   fetchLandingInsights,
@@ -40,6 +41,7 @@ import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
 import { AiQuotaCard } from "@/components/ai-quota-card";
+import { SignInGateCard } from "@/components/sign-in-gate-card";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import { SavedSearchActions } from "@/components/saved-search-actions";
 import { setLastSearchContext } from "@/lib/search/v2/search-session";
@@ -342,6 +344,8 @@ export function CatalogView({
   const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
   const [quotaHit, setQuotaHit] = useState(false);
+  // Anonymous visitor used up the free searches — show the sign-in invitation.
+  const [signInGate, setSignInGate] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -725,6 +729,7 @@ export function CatalogView({
     const prompt = (promptOverride ?? aiPrompt).trim();
     if (!prompt) return;
     setLoadError(null);
+    setSignInGate(false);
 
     const intent = classifyIntent(prompt, {
       brands: meta?.filters.brands,
@@ -780,11 +785,20 @@ export function CatalogView({
     } catch (e) {
       if (gen !== fetchGen.current) return;
       const err = e as Error;
-      setLoadError(
-        err.name === "AbortError"
-          ? "Search took too long — try again in a moment."
-          : err.message,
-      );
+      const code = e instanceof AiSearchError ? e.code : null;
+      if (code === "sign_in_required") {
+        // The conversion moment for signed-out traffic — invite, don't error.
+        setSignInGate(true);
+      } else if (code === "quota_exceeded") {
+        setAiUsage(readAiSearchUsage());
+        setQuotaHit(true);
+      } else {
+        setLoadError(
+          err.name === "AbortError"
+            ? "Search took too long — try again in a moment."
+            : err.message,
+        );
+      }
     } finally {
       if (gen === fetchGen.current) {
         setAiSearching(false);
@@ -972,6 +986,15 @@ export function CatalogView({
 
           {quotaHit && !isPlus ? (
             <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
+          ) : null}
+
+          {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
+
+          {/* Inline failure note — a failed ask must never look like a quiet no-op */}
+          {loadError && !signInGate && !quotaHit ? (
+            <p className="mt-2 text-[12px] text-(--color-bad)" role="alert">
+              {loadError}
+            </p>
           ) : null}
 
           {/* Gentle heads-up when the free allowance is nearly used */}

@@ -14,7 +14,7 @@ import {
 const FREE_FEATURES = [
   "Full catalog with scores and verdicts",
   `${SCOUT_PLUS_PLAN.free_daily_ai_searches} Ask Scout AI searches a day`,
-  "Cart analysis with swap suggestions",
+  "Basket analysis with swap suggestions",
   "Compare up to 4 products",
 ];
 

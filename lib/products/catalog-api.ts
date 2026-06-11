@@ -78,6 +78,17 @@ export function prefetchCatalogSearch(
 
 const AI_SEARCH_FETCH_MS = 55_000;
 
+/** Carries the API's machine-readable code (sign_in_required, quota_exceeded)
+ *  so the UI can render the right gate instead of a generic failure. */
+export class AiSearchError extends Error {
+  code: string | null;
+  constructor(message: string, code: string | null = null) {
+    super(message);
+    this.name = "AiSearchError";
+    this.code = code;
+  }
+}
+
 export async function fetchAiCatalogSearch(
   prompt: string,
   limit = 24,
@@ -94,8 +105,8 @@ export async function fetchAiCatalogSearch(
     cache: "no-store",
   }).finally(() => clearTimeout(timer));
   if (!res.ok) {
-    const body = await res.json().catch(() => null) as { error?: string } | null;
-    throw new Error(body?.error ?? `HTTP ${res.status}`);
+    const body = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+    throw new AiSearchError(body?.error ?? `HTTP ${res.status}`, body?.code ?? null);
   }
   return (await res.json()) as AiSearchResult;
 }

@@ -64,7 +64,7 @@ export function AddToBasketButton({
         ) : null}
         <button
           type="button"
-          aria-label={qty > 0 ? "Add another" : "Add to cart"}
+          aria-label={qty > 0 ? "Add another" : "Add to basket"}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -92,7 +92,7 @@ export function AddToBasketButton({
       }
     >
       <Plus className="h-4 w-4" />
-      {qty > 0 ? `In cart (${qty})` : "Add to cart"}
+      {qty > 0 ? `In basket (${qty})` : "Add to basket"}
     </button>
   );
 }

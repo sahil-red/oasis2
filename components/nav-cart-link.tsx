@@ -20,7 +20,7 @@ export function NavCartLink({ className }: { className?: string }) {
 
   return (
     <Link href="/basket" className={className}>
-      Cart
+      Basket
       {count > 0 ? (
         <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-(--color-accent) px-1.5 text-[11px] font-semibold text-white tabular-nums">
           {count > 99 ? "99+" : count}
