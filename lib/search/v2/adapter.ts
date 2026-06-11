@@ -4,8 +4,7 @@ import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
 import { getDisplayChips } from "@/lib/search/v2/display-chips";
-import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
-import type { DietaryPrevalenceMap, RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
+import type { DietaryPrevalenceMap, ProductSearchIndexRow, RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
 import type { Grade, ScoreBand } from "@/lib/supabase/types";
 
 function dataQualityWarning(score: number): string | null {
@@ -68,7 +67,7 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
 function rankedToAiItem(
   c: RankedCandidate,
   display: Map<string, DisplayEnrichment>,
-  snapshotIndex: Awaited<ReturnType<typeof getSearchIndexSnapshot>>["index"],
+  snapshotIndex: ProductSearchIndexRow[],
   dietaryPrevalence: DietaryPrevalenceMap,
 ): AiSearchItem {
   const row = c.row;
@@ -151,15 +150,13 @@ export async function searchV2ToAiResult(
 ): Promise<AiSearchResult> {
   const limit = opts.limit ?? v2.items.length;
   const ids = v2.items.map((i) => i.row.product_id);
-  const [display, snapshot] = await Promise.all([
-    enrichDisplayFields(ids),
-    getSearchIndexSnapshot(),
-  ]);
+  const display = await enrichDisplayFields(ids);
 
-  const dietaryPrevalence = snapshot.dietary_prevalence;
+  const dietaryPrevalence = v2.dietary_prevalence;
+  const snapshotIndex = v2.snapshotIndex;
 
   const items: AiSearchItem[] = v2.items.map((c) =>
-    rankedToAiItem(c, display, snapshot.index, dietaryPrevalence),
+    rankedToAiItem(c, display, snapshotIndex, dietaryPrevalence),
   );
 
   const buckets: AiSearchBucket[] | null = v2.buckets?.length
@@ -167,7 +164,7 @@ export async function searchV2ToAiResult(
         id: b.id,
         label: b.label,
         trait_focus: String(b.trait_focus),
-        items: b.items.map((c) => rankedToAiItem(c, display, snapshot.index, dietaryPrevalence)),
+        items: b.items.map((c) => rankedToAiItem(c, display, snapshotIndex, dietaryPrevalence)),
       }))
     : null;
 

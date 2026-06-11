@@ -153,7 +153,7 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     sort: raw.sort ?? "best_match",
     comparison_ref: raw.comparison_ref?.trim() || null,
     comparison_mode: raw.comparison_mode ?? null,
-    confidence: Math.max(0, Math.min(1, raw.intent_confidence ?? 0.7)),
+    confidence: Math.max(0, Math.min(1, raw.intent_confidence ?? 0.4)),
     intent_source: "llm-deepseek",
     raw_query: query,
     trait_weights: validateTraitWeights(raw.trait_weights ?? {}),

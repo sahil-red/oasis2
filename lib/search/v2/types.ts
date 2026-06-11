@@ -206,6 +206,9 @@ export type SearchV2Result = {
   llm_calls: number;
   latency_ms: number;
   explored: boolean;
+  /** Passed through from pipeline to adapter — avoids re-fetching the snapshot */
+  snapshotIndex: ProductSearchIndexRow[];
+  dietary_prevalence: DietaryPrevalenceMap;
 };
 
 /** §5 default gate — tuned by eval */

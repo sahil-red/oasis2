@@ -110,7 +110,11 @@ function goalOnlyRetrievalScore(p: ProductListItem, parsed: ParsedProductQuery):
   const scout = p.core_scores?.score ?? 0;
   const minP = parsed.hard_constraints.min_protein_g_100g;
   if (minP != null && protein < minP) return 0;
-  return protein * 6 + scout * 0.45;
+  const isProteinQuery = minP != null || parsed.sort_intent === "highest_protein";
+  if (isProteinQuery) {
+    return protein * 6 + scout * 0.45;
+  }
+  return scout * 0.45;
 }
 
 /** Pull a bounded candidate set using product-type relevance + hard constraints. */
@@ -133,7 +137,8 @@ export function retrieveCandidates(
     .sort((a, b) => b.score - a.score);
 
   const strict = scored.filter(({ p }) => passesHardConstraints(p, parsed));
-  const pool = strict.length >= 12 ? strict : scored;
+  const strictThreshold = Math.max(Math.round(maxCandidates * 0.1), 3);
+  const pool = strict.length >= strictThreshold ? strict : scored;
 
   return pool.slice(0, maxCandidates).map(({ p }) => p);
 }

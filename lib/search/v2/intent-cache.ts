@@ -47,6 +47,16 @@ export async function getCachedIntent(
   const ek = exactKey(query, pk);
   const exact = exactMap.get(ek);
   if (exact && now - exact.at < CACHE_TTL_MS) {
+    if (process.env.SEARCH_TELEMETRY) {
+      console.log(JSON.stringify({
+        type: "intent_cache_telemetry",
+        query,
+        tier: "exact",
+        hit: true,
+        best_similarity: 1,
+        threshold: INTENT_CACHE_THRESHOLD,
+      }));
+    }
     return { ...exact.intent, intent_source: "cache", raw_query: query };
   }
 
@@ -65,7 +75,29 @@ export async function getCachedIntent(
       bestSim = sim;
     }
   }
-  if (!best) return null;
+  if (!best) {
+    if (process.env.SEARCH_TELEMETRY) {
+      console.log(JSON.stringify({
+        type: "intent_cache_telemetry",
+        query,
+        tier: "semantic",
+        hit: false,
+        best_similarity: bestSim,
+        threshold: INTENT_CACHE_THRESHOLD,
+      }));
+    }
+    return null;
+  }
+  if (process.env.SEARCH_TELEMETRY) {
+    console.log(JSON.stringify({
+      type: "intent_cache_telemetry",
+      query,
+      tier: "semantic",
+      hit: true,
+      best_similarity: bestSim,
+      threshold: INTENT_CACHE_THRESHOLD,
+    }));
+  }
   return { ...best.intent, intent_source: "cache", raw_query: query };
 }
 

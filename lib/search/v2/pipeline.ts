@@ -167,7 +167,7 @@ export async function runSearchV2(
     intent,
     relevanceById,
     goalWeights?.weights ?? null,
-    Math.max(limit, 50),
+    Math.max(limit * 2, 20),
     comparison,
   );
 
@@ -208,6 +208,22 @@ export async function runSearchV2(
       ? ` Compared against ${comparison.reference_name}.`
       : "";
 
+  if (process.env.SEARCH_TELEMETRY) {
+    console.log(JSON.stringify({
+      type: "search_telemetry",
+      query: rawQuery,
+      intent_source: intent.intent_source,
+      llm_confidence: intent.confidence,
+      candidates_before_rank: candidates.length,
+      rank_limit: limit,
+      ranked_count: items.length,
+      relaxed,
+      relaxation_steps: relaxation_steps.length,
+      rank_source: intent.kind === "goal" ? "v2_goal" : "v2_structured",
+      latency_ms: Date.now() - started,
+    }));
+  }
+
   return {
     intent: { ...intent, goal_phrase: intent.goal_phrase ?? goalLabel ?? null },
     candidates_total: candidates.length,
@@ -220,5 +236,7 @@ export async function runSearchV2(
     llm_calls,
     latency_ms: Date.now() - started,
     explored,
+    snapshotIndex: snapshot.index,
+    dietary_prevalence: snapshot.dietary_prevalence,
   };
 }
