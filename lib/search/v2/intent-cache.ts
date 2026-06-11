@@ -36,10 +36,16 @@ function exactKey(query: string, pk: string): string {
   return `${pk}\0${normaliseQuery(query)}`;
 }
 
+export type CachedIntentResult = {
+  intent: SearchIntentV2 | null;
+  /** The query embedding — reused by setCachedIntent to avoid a second embed call */
+  embedding: number[];
+};
+
 export async function getCachedIntent(
   query: string,
   prefs?: AiSearchPreferences | null,
-): Promise<SearchIntentV2 | null> {
+): Promise<CachedIntentResult> {
   const pk = prefsKey(prefs);
   const now = Date.now();
 
@@ -57,12 +63,12 @@ export async function getCachedIntent(
         threshold: INTENT_CACHE_THRESHOLD,
       }));
     }
-    return { ...exact.intent, intent_source: "cache", raw_query: query };
+    return { intent: { ...exact.intent, intent_source: "cache", raw_query: query }, embedding: exact.embedding };
   }
 
   // Tier 2: semantic cosine match — requires Voyage embedding
   const qEmbed = await embedText(query, "query");
-  if (!qEmbed.length) return null;
+  if (!qEmbed.length) return { intent: null, embedding: [] };
 
   let best: CacheEntry | null = null;
   let bestSim = 0;
@@ -86,7 +92,7 @@ export async function getCachedIntent(
         threshold: INTENT_CACHE_THRESHOLD,
       }));
     }
-    return null;
+    return { intent: null, embedding: qEmbed };
   }
   if (process.env.SEARCH_TELEMETRY) {
     console.log(JSON.stringify({
@@ -98,15 +104,18 @@ export async function getCachedIntent(
       threshold: INTENT_CACHE_THRESHOLD,
     }));
   }
-  return { ...best.intent, intent_source: "cache", raw_query: query };
+  return { intent: { ...best.intent, intent_source: "cache", raw_query: query }, embedding: best.embedding };
 }
 
 export async function setCachedIntent(
   query: string,
   intent: SearchIntentV2,
   prefs?: AiSearchPreferences | null,
+  embedding?: number[],
 ): Promise<void> {
-  const embedding = await embedText(query, "query");
+  if (!embedding) {
+    embedding = await embedText(query, "query");
+  }
   if (!embedding.length) return;
   const pk = prefsKey(prefs);
   const entry: CacheEntry = {

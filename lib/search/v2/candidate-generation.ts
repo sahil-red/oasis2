@@ -164,6 +164,7 @@ export async function generateCandidates(
   profiles: CategoryTraitProfileRow[],
   goalWeights: GoalTraitWeights | null,
   minDataQuality = DATA_QUALITY_MIN,
+  limit?: number,
 ): Promise<ProductSearchIndexRow[]> {
   let pool = index.filter((row) => passesDataQuality(row, minDataQuality));
 
@@ -178,8 +179,9 @@ export async function generateCandidates(
         if (keys.has(key)) return true;
         return [...keys].some((k) => k === cat || k.startsWith(`${cat}::`));
       });
-      // Only apply category filter if it leaves enough candidates
-      if (catFiltered.length >= 10) {
+      // Proportional threshold (was hardcoded 10 — the same cliff-edge pattern as the
+      // old strict>=12 bug). Use limit if available, otherwise default to 10.
+      if (catFiltered.length >= (limit != null ? Math.max(limit * 0.75, 3) : 10)) {
         pool = catFiltered;
       }
     }

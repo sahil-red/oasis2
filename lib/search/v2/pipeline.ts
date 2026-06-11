@@ -18,6 +18,8 @@ import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
 
 const MIN_RESULTS = 3;
+/** Restore V1 hard sugar cap (5g/100g) for diabetic/pcos queries — lost in V2 migration */
+const DIABETIC_RE = /diabet(?:ic|es)|pcos/i;
 
 function buildSummary(intent: SearchIntentV2, count: number, relaxed: boolean, steps: string[]): string {
   if (count === 0) return "No products matched your filters — try broadening the request.";
@@ -55,7 +57,7 @@ export async function runSearchV2(
       snapshot.source === "pgvector"
         ? await fetchCandidatePool(intentArg, minQ)
         : snapshot.index;
-    return generateCandidates(pool, intentArg, snapshot.profiles, gw, minQ);
+    return generateCandidates(pool, intentArg, snapshot.profiles, gw, minQ, limit);
   };
 
   let llm_calls = 0;
@@ -65,6 +67,20 @@ export async function runSearchV2(
   });
   let intent = resolved.intent;
   llm_calls += resolved.llm_calls;
+
+  // §6b Restore 5g sugar hard-cap for diabetic/pcos — the V2 LLM uses trait ranking
+  // (diabetic_friendly) which is a SORT, not a GATE. Products above 5g/100g sugar
+  // must be excluded, not just ranked lower.
+  if (DIABETIC_RE.test(rawQuery)) {
+    const existing = intent.constraints.max_sugar_g;
+    intent = {
+      ...intent,
+      constraints: {
+        ...intent.constraints,
+        max_sugar_g: existing != null ? Math.min(existing, 5) : 5,
+      },
+    };
+  }
 
   let relaxation_steps: string[] = [];
   let relaxed = false;
@@ -162,26 +178,26 @@ export async function runSearchV2(
     useDbLexical: snapshot.source === "db",
   });
 
+  // Verify BEFORE ranking so that ranking scores are computed on the actual
+  // display set, not on a superset later trimmed by verification.
+  let filteredReranked = reranked;
+  if (isPrecisionAtRisk(intent)) {
+    const v = await verifyTopCandidates(filteredReranked, intent);
+    llm_calls += v.llm_calls;
+    if (v.llm_calls > 0) {
+      const keep = new Set(v.rows.map((r) => r.product_id));
+      filteredReranked = filteredReranked.filter((r) => keep.has(r.product_id));
+    }
+  }
+
   let ranked = rankCandidates(
-    reranked,
+    filteredReranked,
     intent,
     relevanceById,
     goalWeights?.weights ?? null,
     Math.max(limit * 2, 20),
     comparison,
   );
-
-  if (isPrecisionAtRisk(intent)) {
-    const v = await verifyTopCandidates(
-      ranked.map((r) => r.row),
-      intent,
-    );
-    llm_calls += v.llm_calls;
-    if (v.llm_calls > 0) {
-      const keep = new Set(v.rows.map((r) => r.product_id));
-      ranked = ranked.filter((r) => keep.has(r.row.product_id));
-    }
-  }
 
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 

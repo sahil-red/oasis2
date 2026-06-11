@@ -7,7 +7,7 @@
  */
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { mergeSavedPreferences } from "@/lib/search/merge-preferences";
-import { getCachedIntent, setCachedIntent } from "@/lib/search/v2/intent-cache";
+import { getCachedIntent, setCachedIntent, type CachedIntentResult } from "@/lib/search/v2/intent-cache";
 import { parseIntentWithLlm } from "@/lib/search/v2/llm-intent";
 import {
   countActiveConstraints,
@@ -170,13 +170,12 @@ export async function resolveSearchIntent(
 ): Promise<ResolveIntentResult> {
   const query = rawQuery.trim();
   const cached = await getCachedIntent(query, opts.preferences);
-  if (cached) return { intent: applyPreferencesToIntent(cached, opts.preferences), llm_calls: 0 };
+  if (cached.intent) return { intent: applyPreferencesToIntent(cached.intent, opts.preferences), llm_calls: 0 };
 
   const numeric = extractNumericConstraints(query);
   const fast = buildFastPathIntent(query, opts.catalogMeta, numeric);
   if (fast && countActiveConstraints(numeric) <= 2) {
     const intent = applyPreferencesToIntent(fast, opts.preferences);
-    void setCachedIntent(query, intent, opts.preferences);
     return { intent, llm_calls: 0 };
   }
 
@@ -189,17 +188,18 @@ export async function resolveSearchIntent(
         ...llmIntent,
         constraints: {
           ...llmIntent.constraints,
-          // LLM should NOT set hard nutrition limits — it uses trait_weights for soft ranking.
-          // Only keep numeric constraints from explicit regex extraction (e.g. "under 5g sugar").
+          // Merge LLM constraints with regex-extracted constraints: regex fills gaps
+          // that the LLM may have missed (e.g. "under 5g sugar"), but LLM constraints
+          // (e.g. "less than 10g carbs" — not in regex patterns) are PRESERVED.
           max_price: llmIntent.constraints.max_price ?? numeric.max_price,
-          max_sugar_g: numeric.max_sugar_g ?? undefined,
-          max_fat_g: numeric.max_fat_g ?? undefined,
-          min_protein_g: numeric.min_protein_g ?? undefined,
+          max_sugar_g: llmIntent.constraints.max_sugar_g ?? numeric.max_sugar_g,
+          max_fat_g: llmIntent.constraints.max_fat_g ?? numeric.max_fat_g,
+          min_protein_g: llmIntent.constraints.min_protein_g ?? numeric.min_protein_g,
         },
       },
       opts.preferences,
     );
-    void setCachedIntent(query, intent, opts.preferences);
+    void setCachedIntent(query, intent, opts.preferences, cached.embedding);
     return { intent, llm_calls };
   } catch {
     const residual = numeric.residual_text.toLowerCase().trim();

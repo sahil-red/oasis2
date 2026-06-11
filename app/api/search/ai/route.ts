@@ -11,12 +11,8 @@ import { supabaseFromBearer } from "@/lib/auth/supabase-user";
 import { adminClient } from "@/lib/supabase/admin";
 import {
   getCachedAiResult,
-  getCachedParse,
   setCachedAiResult,
-  setCachedParse,
 } from "@/lib/search/search-cache";
-import { mergeSavedPreferences } from "@/lib/search/merge-preferences";
-import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { runSearchV2 } from "@/lib/search/v2/pipeline";
 import { searchV2ToAiResult } from "@/lib/search/v2/adapter";
@@ -102,20 +98,9 @@ export async function POST(req: NextRequest) {
     anonCookie = anonCookieValue({ start: cookieWindow.start, count: cookieWindow.count + 1 });
   }
 
-  let parsed = getCachedParse(prompt);
-  if (!parsed) {
-    parsed = { parsed: heuristicParseProductQuery(prompt), source: "heuristic" as const };
-    setCachedParse(prompt, parsed);
-  }
-
-  const parseForSearch = {
-    ...parsed,
-    parsed: mergeSavedPreferences(parsed.parsed, preferences),
-  };
-
   try {
     const v2Result = await runSearchV2(prompt, { limit, preferences });
-    const result = await searchV2ToAiResult(v2Result, { limit, parseSource: parseForSearch.source });
+    const result = await searchV2ToAiResult(v2Result, { limit, parseSource: "heuristic" });
     setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
 
     // Record search in history for logged-in users (fire-and-forget, non-blocking)
