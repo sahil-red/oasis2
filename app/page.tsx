@@ -194,7 +194,7 @@ function Rail({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
           {items.map((p) => (
             <HomeRailCard key={p.id} product={p} />
           ))}
