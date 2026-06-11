@@ -229,4 +229,42 @@ export function applyProductTermHeuristics(parsed: ParsedProductQuery, lower: st
         : ["masala powder"],
     );
   }
+
+  if (/\bsmoothie\b/i.test(lower)) {
+    if (!parsed.product_terms.includes("smoothie")) parsed.product_terms.unshift("smoothie");
+    parsed.search_keywords = [
+      ...new Set([
+        ...parsed.search_keywords,
+        "smoothie",
+        "milkshake",
+        "shake",
+        "protein shake",
+        "health drink",
+        "yogurt drink",
+        "probiotic drink",
+      ]),
+    ];
+    mergeExcludes(parsed, ["soap", "shampoo", "detergent", "masala", "spice", "cooking oil"]);
+    if (/high protein|protein rich|protein/i.test(lower)) {
+      parsed.sort_intent = "highest_protein";
+    }
+  }
+
+  if (/\bmilkshake\b/i.test(lower) && !/\bsmoothie\b/i.test(lower)) {
+    if (!parsed.product_terms.includes("milkshake")) parsed.product_terms.unshift("milkshake");
+    parsed.search_keywords = [
+      ...new Set([
+        ...parsed.search_keywords,
+        "milkshake",
+        "shake",
+        "smoothie",
+        "protein shake",
+        "health drink",
+      ]),
+    ];
+    mergeExcludes(parsed, ["soap", "shampoo", "detergent", "masala", "spice"]);
+    if (/high protein|protein rich/i.test(lower)) {
+      parsed.sort_intent = "highest_protein";
+    }
+  }
 }

@@ -20,8 +20,16 @@ const PROTEIN_CEILING: Array<{ test: (name: string, cat: string) => boolean; max
     max: 55,
   },
   {
+    test: (n, c) => /\b(honey|shahad)\b/i.test(n),
+    max: 2,
+  },
+  {
+    test: (n, c) => /\b(mouth freshener|mukhwas|supari|paan masala|chewing gum|breath freshener|mint balls?|candy|toffee|lollipop|khatta meetha)\b/i.test(n),
+    max: 5,
+  },
+  {
     test: (n, c) =>
-      /\b(masala|spice|seasoning|hing|turmeric|chilli powder|tea|coffee)\b/i.test(n) ||
+      /\b(masala|spice|seasoning|hing|turmeric|chilli powder|tea|coffee|matcha|herbal|green tea|black tea|chai|espresso|latte|cappuccino)\b/i.test(n) ||
       /\bmasala|spice/i.test(c),
     max: 12,
   },

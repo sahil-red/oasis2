@@ -112,6 +112,38 @@ export const L3_INTENT_BY_TERM: Record<string, L3IntentRule> = {
       /kitchen king/i,
     ],
   },
+  smoothie: {
+    allow: [
+      /smoothie/i,
+      /milkshake/i,
+      /shake/i,
+      /protein shake/i,
+      /yogurt drink/i,
+      /probiotic drink/i,
+      /oat milk/i,
+      /meal replacement/i,
+      /lassi/i,
+      /health drink/i,
+      /fruit drink/i,
+      /beverage/i,
+      /drink mix/i,
+    ],
+    block: [/soap/i, /shampoo/i, /detergent/i, /masala/i, /spice/i, /cooking oil/i],
+  },
+  milkshake: {
+    allow: [
+      /milkshake/i,
+      /shake/i,
+      /smoothie/i,
+      /protein shake/i,
+      /yogurt drink/i,
+      /probiotic drink/i,
+      /lassi/i,
+      /health drink/i,
+      /beverage/i,
+    ],
+    block: [/soap/i, /shampoo/i, /detergent/i, /masala/i, /spice/i],
+  },
 };
 
 export function l3IntentForProductTerm(term: string): L3IntentRule | null {

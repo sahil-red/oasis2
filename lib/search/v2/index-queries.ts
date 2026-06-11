@@ -20,13 +20,14 @@ async function loadFacets(): Promise<IndexCatalogMeta> {
   try {
     const supabase = adminClient();
     const { data } = await supabase.rpc("search_v2_facets");
-    const obj = (data ?? {}) as { brands?: string[]; primary_types?: string[] };
+    const obj = (data ?? {}) as { brands?: string[]; primary_types?: string[]; flavours?: string[] };
     return {
       brands: new Set((obj.brands ?? []).map((b) => b.toLowerCase())),
       primaryTypes: new Set((obj.primary_types ?? []).map((t) => t.toLowerCase())),
+      flavours: new Set((obj.flavours ?? []).map((f) => f.toLowerCase())),
     };
   } catch {
-    return { brands: new Set(), primaryTypes: new Set() };
+    return { brands: new Set(), primaryTypes: new Set(), flavours: new Set() };
   }
 }
 

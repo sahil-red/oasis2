@@ -11,7 +11,9 @@ export type NutritionAnomalyCode =
   | "kcal_protein_swap"
   | "energy_high_low_protein"
   | "energy_per_serve_misread"
-  | "protein_carbs_swap";
+  | "protein_carbs_swap"
+  | "individual_macro_exceeds_100g"
+  | "per_pack_not_per_100g";
 
 export type NutritionAnomaly = {
   code: NutritionAnomalyCode;
@@ -117,6 +119,20 @@ export function detectNutritionAnomalies(
       severity: "critical",
       message: `Protein + carbs + fat (${sum.toFixed(1)}g) exceeds 100g per 100g`,
     });
+  }
+
+  // Individual macro ceiling — any single macro >100g/100g is physically impossible
+  // and almost always means the value is per-pack, not per-100g.
+  for (const key of MACRO_KEYS) {
+    const v = nutrition[key];
+    if (typeof v === "number" && v > 100) {
+      out.push({
+        code: "individual_macro_exceeds_100g",
+        severity: "critical",
+        message: `${key.replace("_g_100g", "")} (${v}g) exceeds 100g per 100g — likely per-pack value`,
+        field: key,
+      });
+    }
   }
 
   const mismatch = kcalMismatchRatio(nutrition);
@@ -302,6 +318,29 @@ export function detectNutritionAnomalies(
         field: key,
       });
       break;
+    }
+  }
+
+  // Per-pack misread: macro values that exceed the category ceiling but look like
+  // per-pack totals (e.g., 21g protein in a 30g serving × 7 servings = 147g total).
+  // Detect when ALL three macros scale by roughly the same factor from plausible per-100g.
+  if (typeof protein === "number" && typeof carbs === "number" && typeof nutrition.fat_g_100g === "number") {
+    // Category-specific protein ceilings (mirrors lib/nutrition/sanity.ts PROTEIN_CEILING)
+    let ceiling = 40;
+    if (isTeaOrCoffee(ctx)) ceiling = 12;
+    else if (isMouthFreshenerOrCandy(ctx)) ceiling = 5;
+    else if (isHighProteinCategory(ctx)) ceiling = 90;
+
+    if (protein > ceiling && protein <= ceiling * 30 && !out.some((a) => a.code === "individual_macro_exceeds_100g")) {
+      const fat = nutrition.fat_g_100g;
+      if (carbs > 40 || fat > 40) {
+        out.push({
+          code: "per_pack_not_per_100g",
+          severity: "critical",
+          message: `Macros (P${protein}/C${carbs}/F${fat}g) look like per-pack values, not per-100g`,
+          field: "protein_g_100g",
+        });
+      }
     }
   }
 

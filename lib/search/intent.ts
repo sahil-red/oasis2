@@ -85,6 +85,7 @@ function buildFastPathIntent(
 
   let brand: string | null = null;
   let primary_type: string | null = null;
+  const required_flavours: string[] = [];
   let kind: SearchIntentV2["kind"] = "directed";
 
   if (tokens.length === 1) {
@@ -95,13 +96,33 @@ function buildFastPathIntent(
       primary_type = tokens[0]!;
     }
   } else {
-    const [a, b] = tokens;
-    if (meta.brands.has(a!) && meta.primaryTypes.has(b!)) {
-      brand = a!;
-      primary_type = b!;
+    // Multi-token: find the primary_type and brand, collect remaining as flavours
+    let brandIdx = -1;
+    let typeIdx = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i]!;
+      if (meta.primaryTypes.has(t) && typeIdx === -1) typeIdx = i;
+      else if (meta.brands.has(t) && brandIdx === -1) brandIdx = i;
+    }
+
+    if (typeIdx >= 0 && brandIdx >= 0) {
+      brand = tokens[brandIdx]!;
+      primary_type = tokens[typeIdx]!;
+    } else if (typeIdx >= 0) {
+      primary_type = tokens[typeIdx]!;
+      // Remaining tokens that are known flavours → preserve as required_flavours
+      for (let i = 0; i < tokens.length; i++) {
+        if (i === typeIdx) continue;
+        if (meta.flavours.has(tokens[i]!)) required_flavours.push(tokens[i]!);
+      }
+    } else if (brandIdx >= 0) {
+      brand = tokens[brandIdx]!;
     } else {
-      brand = b!;
-      primary_type = a!;
+      // No type or brand found — use first as type, rest as flavours
+      primary_type = tokens[0]!;
+      for (let i = 1; i < tokens.length; i++) {
+        if (meta.flavours.has(tokens[i]!)) required_flavours.push(tokens[i]!);
+      }
     }
   }
 
@@ -117,7 +138,7 @@ function buildFastPathIntent(
     brand,
     primary_type,
     use_case: null,
-    required_flavours: [],
+    required_flavours,
     modifiers,
     constraints: {
       max_price: numeric.max_price,
