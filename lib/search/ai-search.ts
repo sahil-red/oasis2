@@ -28,6 +28,16 @@ export type AiSearchItem = CatalogGridItem & {
   scout_verified?: boolean;
   /** §8 canonical cluster sibling count (expand on click) */
   canonical_variant_count?: number;
+  /** Rich nutrition + trait data for search cards */
+  primary_type?: string | null;
+  sugar_g?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
+  fiber_g?: number | null;
+  is_vegan?: boolean | null;
+  is_gluten_free?: boolean | null;
+  is_palm_oil_free?: boolean | null;
+  has_added_sugar?: boolean | null;
 };
 
 export type AiSearchBucket = {

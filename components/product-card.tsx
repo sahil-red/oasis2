@@ -83,6 +83,7 @@ export const ProductCard = memo(function ProductCard({
   const [variants, setVariants] = useState<CanonicalVariantItem[]>([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const aiReasonLines = aiReasons.filter((r) => !/^Scout(\s+score)?\s*\d/i.test(r)).slice(0, 3);
+  const p = product as Record<string, unknown>;
 
   async function toggleVariants() {
     if (variantsOpen) {
@@ -187,42 +188,16 @@ export const ProductCard = memo(function ProductCard({
             {displayName}
           </h3>
 
-          {/* chips — subtle, monochrome, no verdict color */}
-          {aiReasonLines.length > 0 ? (
-            <>
-              <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
-                {aiReasonLines.join(" · ")}
-              </p>
-              {/* Health trait pills from AI reasons */}
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {aiReasonLines.slice(0, 4).map((reason) => (
-                  <span
-                    key={reason}
-                    className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      /low|no added|clean|whole|high protein|good|best/i.test(reason)
-                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                        : /high sugar|refined|processed|ultra|artificial/i.test(reason)
-                          ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                    }`}
-                  >
-                    {/low|no added|clean|whole|high protein|good|best/i.test(reason) ? "✓" : ""}
-                    {reason}
-                  </span>
-                ))}
-                {core?.score != null && (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                    {core.score}/100
-                  </span>
-                )}
-              </div>
-            </>
-          ) : chipLabels.length > 0 ? (
-            <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">
-              {chipLabels.slice(0, 2).join(" · ")}
-              {chipLabels.length > 2 ? ` · +${chipLabels.length - 2}` : ""}
-            </p>
-          ) : null}
+          {/* Chips — dietary badges + nutrition highlights + score */}
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {p.is_vegan ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Vegan</span> : null}
+            {p.is_gluten_free ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">GF</span> : null}
+            {p.is_palm_oil_free ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">No palm oil</span> : null}
+            {aiReasonLines.slice(0, 3).map((r) => (
+              <span key={r} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">{r}</span>
+            ))}
+            {core?.score != null ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">{core.score}/100</span> : null}
+          </div>
           {variantCount > 1 ? (
             <button
               type="button"

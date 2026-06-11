@@ -62,6 +62,7 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
   return out;
 }
 
+/** Build a rich AiSearchItem from a ranked candidate, carrying nutrition + trait data through. */
 function rankedToAiItem(
   c: RankedCandidate,
   display: Map<string, DisplayEnrichment>,
@@ -70,6 +71,25 @@ function rankedToAiItem(
   const row = c.row;
   const extra = display.get(row.product_id);
   const scout = row.scout_score ?? Math.round(c.final_score * 100);
+
+  // Build enriched reasons with actual values
+  const enrichedReasons: string[] = [];
+  for (const r of c.reasons) {
+    if (/low sugar/i.test(r) && row.sugar_g != null) {
+      enrichedReasons.push(`Sugar: ${row.sugar_g}g/100g ✓`);
+    } else if (/high protein/i.test(r) && row.protein_g != null) {
+      enrichedReasons.push(`Protein: ${row.protein_g}g/100g ✓`);
+    } else if (/no added sugar/i.test(r)) {
+      enrichedReasons.push("No added sugar ✓");
+    } else if (/low fat/i.test(r) && row.fat_g != null) {
+      enrichedReasons.push(`Fat: ${row.fat_g}g/100g ✓`);
+    } else if (/high fiber/i.test(r) && row.fiber_g != null) {
+      enrichedReasons.push(`Fiber: ${row.fiber_g}g/100g ✓`);
+    } else {
+      enrichedReasons.push(r);
+    }
+  }
+
   return {
     id: row.product_id,
     slug: row.slug,
@@ -77,6 +97,7 @@ function rankedToAiItem(
     brand: row.brand,
     category: row.category,
     subcategory: row.subcategory,
+    primary_type: row.primary_type,
     net_weight: extra?.net_weight ?? null,
     price_inr: row.price_inr,
     mrp_inr: extra?.mrp_inr ?? null,
@@ -94,13 +115,21 @@ function rankedToAiItem(
       : null,
     ai_match_score: Math.round(c.final_score * 100),
     ai_health_score: row.scout_score ?? undefined,
-    ai_match_reasons: c.reasons,
+    ai_match_reasons: enrichedReasons,
     ai_match_warning: dataQualityWarning(row.data_quality_score),
     scout_verified: row.data_quality_score >= 0.75,
     canonical_variant_count: countCanonicalSiblings(
       snapshotIndex,
       row.canonical_product_id ?? row.product_id,
     ),
+    sugar_g: row.sugar_g,
+    protein_g: row.protein_g,
+    fat_g: row.fat_g,
+    fiber_g: row.fiber_g,
+    is_vegan: row.is_vegan,
+    is_gluten_free: row.is_gluten_free,
+    is_palm_oil_free: row.is_palm_oil_free,
+    has_added_sugar: row.has_added_sugar,
   };
 }
 

@@ -40,18 +40,20 @@ import {
 import { pickRotatingSlice } from "@/lib/catalog/landing-rotation";
 import { useLandingRotationSlot } from "@/lib/catalog/use-landing-rotation-slot";
 import type { LandingFact, LandingInsights } from "@/lib/products/landing-insights";
-import { SearchProgress } from "@/components/search-progress";
-import { SEARCH_PROMPTS } from "@/components/search-prompts";
+import { AiQuotaCard } from "@/components/ai-quota-card";
 import { SignInGateCard } from "@/components/sign-in-gate-card";
-import { useTypewriter } from "@/components/use-typewriter";
 import { AiSavedPreferencesHint } from "@/components/ai-search-preferences";
 import { SavedSearchActions } from "@/components/saved-search-actions";
 import { setLastSearchContext } from "@/lib/search/v2/search-session";
 import {
+  canUseAiSearch,
   hasSavedPreferences,
   readAiSearchPreferences,
+  readAiSearchUsage,
+  recordAiSearch,
   writeAiSearchPreferences,
   type AiSearchPreferences,
+  type AiSearchUsage,
 } from "@/lib/search/ai-usage";
 import { classifyIntent } from "@/lib/search/intent-classify";
 import { readRecentSearches, recordRecentSearch } from "@/lib/search/recent-searches";
@@ -339,35 +341,16 @@ export function CatalogView({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
   const [aiRelaxationExplanations, setAiRelaxationExplanations] = useState<string[]>([]);
-  const [aiVerdict, setAiVerdict] = useState<string | null>(null);
-  const [aiAllItems, setAiAllItems] = useState<CatalogGridItem[]>([]);
-
-  // Apply AI verdict filter client-side
-  useEffect(() => {
-    if (!aiMode) return;
-    if (!aiVerdict) { setItems(aiAllItems); return; }
-    const verdictScores: Record<string, [number, number]> = {
-      daily_staple: [71, 100],
-      good_choice: [51, 70],
-      occasional_treat: [31, 50],
-      skip: [0, 30],
-    };
-    const range = verdictScores[aiVerdict];
-    if (!range) return;
-    setItems(aiAllItems.filter(item => {
-      const s = item.core_scores?.score;
-      return s != null && s >= range[0] && s <= range[1];
-    }));
-  }, [aiVerdict, aiAllItems, aiMode]);
   const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
+  const [quotaHit, setQuotaHit] = useState(false);
   // Anonymous visitor used up the free searches — show the sign-in invitation.
   const [signInGate, setSignInGate] = useState(false);
   const [aiParsed, setAiParsed] = useState<ParsedProductQuery | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<AiSearchPreferences | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const typedPrompt = useTypewriter(SEARCH_PROMPTS);
   const examplePrompts = useRotatingPrompts();
-  const { profile, session } = useAuth();
+  const { profile } = useAuth();
   const isPlus = profile?.plan === "plus";
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
@@ -472,6 +455,7 @@ export function CatalogView({
     setShowGoalHint(
       !localStorage.getItem("scout-goal-v1") && !localStorage.getItem("oasis-goal-v1"),
     );
+    setAiUsage(readAiSearchUsage());
     setSavedPrefs(readAiSearchPreferences());
     setRecentSearches(readRecentSearches());
   }, []);
@@ -699,8 +683,8 @@ export function CatalogView({
     saveCatalogReturnUrl(catalogHref);
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== catalogHref) {
-      // replaceState so typing doesn't flood browser history
-      window.history.replaceState(null, "", catalogHref);
+      // pushState so browser back button can restore this exact filter state via bfcache
+      window.history.pushState(null, "", catalogHref);
     }
     prevUrlRef.current = catalogHref;
   }, [catalogHref, sessionReady]);
@@ -717,9 +701,6 @@ export function CatalogView({
   }, []);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
-    // In AI mode, don't exit — filter/sort happens client-side on current results
-    if (aiMode) return;
-    
     setAiMode(false);
     setAiSummary(null);
     setAiWarning(null);
@@ -756,6 +737,14 @@ export function CatalogView({
     });
     setAiIntentTier(intent);
 
+    // Plus members are unlimited; the client-side gate only applies to free use.
+    if (!isPlus && !canUseAiSearch()) {
+      setAiUsage(readAiSearchUsage());
+      setQuotaHit(true);
+      return;
+    }
+    setQuotaHit(false);
+
     const gen = ++fetchGen.current;
     setAiSearching(true);
     setRefreshing(items.length > 0);
@@ -765,12 +754,9 @@ export function CatalogView({
         CATALOG_PAGE_SIZE,
         intent === "complex" ? "complex" : "structured",
         savedPrefs,
-        session?.access_token,
       );
       if (gen !== fetchGen.current) return;
-      setAiAllItems(result.items);
       setItems(result.items);
-      setAiVerdict(null); // reset verdict filter on new search
       setGoalFits({});
       setTotal(result.items.length);
       setPage(1);
@@ -787,6 +773,7 @@ export function CatalogView({
       setAiRelaxationExplanations(result.relaxation_explanations ?? []);
       setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
+      if (!isPlus) setAiUsage(recordAiSearch());
       setRecentSearches(recordRecentSearch(prompt));
       if (result.v2) {
         setLastSearchContext({
@@ -803,7 +790,8 @@ export function CatalogView({
         // The conversion moment for signed-out traffic — invite, don't error.
         setSignInGate(true);
       } else if (code === "quota_exceeded") {
-        setLoadError("Daily search limit reached. Upgrade to Scout Plus for unlimited.");
+        setAiUsage(readAiSearchUsage());
+        setQuotaHit(true);
       } else {
         setLoadError(
           err.name === "AbortError"
@@ -967,14 +955,8 @@ export function CatalogView({
             <input
               type="search"
               value={aiPrompt}
-              onChange={(e) => {
-                setAiPrompt(e.target.value);
-                if (e.target.value === "" && aiMode) {
-                  clearAll();
-                  setAiPrompt("");
-                }
-              }}
-              placeholder={typedPrompt ? `e.g. ${typedPrompt}` : "e.g. paneer with low fat under ₹150"}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="e.g. paneer with low fat under ₹150"
               className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
             />
             <div className="flex flex-col gap-1.5">
@@ -1002,15 +984,27 @@ export function CatalogView({
             </div>
           </form>
 
-           {/* Narrate the wait with real products, not a spinner */}
-          {aiSearching ? <SearchProgress /> : null}
+          {quotaHit && !isPlus ? (
+            <AiQuotaCard usage={aiUsage} onDismiss={() => setQuotaHit(false)} />
+          ) : null}
 
           {signInGate ? <SignInGateCard onDismiss={() => setSignInGate(false)} /> : null}
 
-          {/* Inline failure note */}
-          {loadError && !signInGate ? (
+          {/* Inline failure note — a failed ask must never look like a quiet no-op */}
+          {loadError && !signInGate && !quotaHit ? (
             <p className="mt-2 text-[12px] text-(--color-bad)" role="alert">
               {loadError}
+            </p>
+          ) : null}
+
+          {/* Gentle heads-up when the free allowance is nearly used */}
+          {!quotaHit && !isPlus && aiUsage && aiUsage.limit - aiUsage.count <= 3 && aiUsage.count > 0 ? (
+            <p className="mt-2 text-[11px] text-(--color-fg-dim)">
+              {Math.max(0, aiUsage.limit - aiUsage.count)} free AI search
+              {aiUsage.limit - aiUsage.count === 1 ? "" : "es"} left today ·{" "}
+              <Link href="/pricing" className="underline underline-offset-2 hover:text-(--color-fg)">
+                Plus is unlimited
+              </Link>
             </p>
           ) : null}
 
@@ -1211,14 +1205,7 @@ export function CatalogView({
                   <button
                     key={v}
                     type="button"
-                    onClick={() => {
-                      if (aiMode) {
-                        // Client-side filter of AI results by verdict
-                        setAiVerdict(active ? null : v);
-                        return;
-                      }
-                      patch({ verdict: active ? "" : v });
-                    }}
+                    onClick={() => patch({ verdict: active ? "" : v })}
                     className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
                     style={{
                       borderColor: c.border,
@@ -1232,7 +1219,7 @@ export function CatalogView({
               })}
               <button
                 type="button"
-                onClick={() => aiMode ? setAiVerdict(null) : patch({ verdict: "" })}
+                onClick={() => patch({ verdict: "" })}
                 className={`rounded-full px-3 py-1.5 text-[13px] transition ${
                   !activeState.verdict
                     ? "font-medium text-(--color-fg)"
@@ -1354,9 +1341,9 @@ export function CatalogView({
               {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
               {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
               {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
-              {!aiMode && <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
+              <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
                 Clear all
-              </button>}
+              </button>
             </div>
           ) : null}
         </div>
