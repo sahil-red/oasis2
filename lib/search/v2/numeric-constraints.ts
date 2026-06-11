@@ -51,8 +51,9 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     ) ?? firstNumber(text, /(\d{2,5})\s*(?:rs|rupees|inr|₹)/);
   if (maxPrice) {
     out.max_price = maxPrice;
-    text = text.replace(/(?:under|below|less than|<|₹|rs\.?|inr)\s*\d{2,5}/g, " ");
-    text = text.replace(/\d{2,5}\s*(?:rs|rupees|inr|₹)/g, " ");
+    // Only strip price-related patterns, not nutrient quantities
+    text = text.replace(/\b\d{2,5}\s*(?:rs|rupees|inr|₹)\b/gi, " ");
+    text = text.replace(/(?:rs\.?|inr|₹)\s*\d{2,5}\b/gi, " ");
   }
 
   const sugarLimit =
@@ -69,10 +70,14 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     // No hard limit — let trait-based ranking handle "low sugar" queries softly
   }
 
-  const fatLimit = firstNumber(text, /(?:fat)\D{0,12}(\d{1,3})\s*g/);
+  const fatLimit = firstNumber(text, /(?:fat)\D{0,12}(\d{1,3})\s*g/) ??
+    firstNumber(text, /(\d{1,3})\s*g\s*fat/) ??
+    firstNumber(text, /(?:less than|under|below)\s*(\d{1,3})\s*g\s*fat/);
   if (fatLimit) out.max_fat_g = fatLimit;
 
-  const proteinMin = firstNumber(text, /(?:protein)\D{0,12}(\d{1,3})\s*g/);
+  const proteinMin = firstNumber(text, /(?:protein)\D{0,12}(\d{1,3})\s*g/) ??
+    firstNumber(text, /(?:more than|at least|min)\s*(\d{1,3})\s*g\s*protein/) ??
+    firstNumber(text, /(\d{1,3})\s*g\s*protein/);
   if (proteinMin) out.min_protein_g = proteinMin;
 
   // Explicit calorie ceiling ("under 100 calories", "150 kcal"). Vague "low calorie"
