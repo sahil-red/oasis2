@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { consumeAiSearch } from "@/lib/auth/profile";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
 import { adminClient } from "@/lib/supabase/admin";
-import { runAiProductSearch } from "@/lib/search/ai-search";
 import {
   getCachedAiResult,
   getCachedParse,
@@ -12,7 +11,6 @@ import {
 import { mergeSavedPreferences } from "@/lib/search/merge-preferences";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
-import { isSearchV2Enabled } from "@/lib/search/v2/index-queries";
 import { runSearchV2 } from "@/lib/search/v2/pipeline";
 import { searchV2ToAiResult } from "@/lib/search/v2/adapter";
 
@@ -79,12 +77,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = isSearchV2Enabled()
-      ? await searchV2ToAiResult(
-          await runSearchV2(prompt, { limit, preferences }),
-          { limit, parseSource: parseForSearch.source },
-        )
-      : await runAiProductSearch(parseForSearch, { limit, prompt, tier });
+    const result = await searchV2ToAiResult(
+      await runSearchV2(prompt, { limit, preferences }),
+      { limit, parseSource: parseForSearch.source },
+    );
     setCachedAiResult(prompt, limit ?? 24, tier, result, preferences);
 
     // Record search in history for logged-in users (fire-and-forget, non-blocking)
