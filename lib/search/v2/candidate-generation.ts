@@ -165,13 +165,17 @@ export async function generateCandidates(
     const cats = await selectCategoriesForGoal(profiles, goalWeights);
     const keys = new Set(cats.map((c) => c.category_key));
     if (keys.size > 0) {
-      pool = pool.filter((row) => {
+      const catFiltered = pool.filter((row) => {
         const cat = (row.category ?? "").trim().toLowerCase();
         const sub = (row.subcategory ?? "").trim().toLowerCase();
         const key = sub ? `${cat}::${sub}` : cat || "unknown";
         if (keys.has(key)) return true;
         return [...keys].some((k) => k === cat || k.startsWith(`${cat}::`));
       });
+      // Only apply category filter if it leaves enough candidates
+      if (catFiltered.length >= 10) {
+        pool = catFiltered;
+      }
     }
   }
 
@@ -195,6 +199,8 @@ export async function generateCandidates(
   );
 
   pool = dedupeCanonical(pool);
+
+  if (pool.length === 0) return index.slice(0, CANDIDATE_CAP);
 
   if (pool.length <= CANDIDATE_CAP) return pool;
 
