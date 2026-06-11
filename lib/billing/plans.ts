@@ -19,7 +19,7 @@ export const SCOUT_PLUS_PLAN: ScoutPlan & { free_daily_ai_searches: number } = {
   currency: "INR",
   interval: "monthly",
   /** Free tier AI searches per calendar day */
-  free_daily_ai_searches: 10,
+  free_daily_ai_searches: 5,
 };
 
 export const SCOUT_PLUS_YEARLY: ScoutPlan = {
