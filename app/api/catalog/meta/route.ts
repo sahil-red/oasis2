@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCachedCatalogMeta } from "@/lib/products/catalog-cache";
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
   try {

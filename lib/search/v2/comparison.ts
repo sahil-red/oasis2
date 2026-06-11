@@ -1,8 +1,8 @@
 /**
- * §14 comparison queries — resolve reference product, rank relative to it.
+ * §14 comparison queries — resolve reference product from DB.
  */
-import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
-import { lexicalBlob } from "@/lib/search/v2/lexical-fallback";
+import { adminClient } from "@/lib/supabase/admin";
+import { mapDbRow } from "@/lib/search/v2/index-queries";
 import type { ProductSearchIndexRow } from "@/lib/search/v2/types";
 
 export type ComparisonContext = {
@@ -13,34 +13,26 @@ export type ComparisonContext = {
   mode: "healthier_than" | "cheaper_than";
 };
 
-/** Resolve the reference SKU from the index via embedding + lexical match (no synonym table). */
+/** Resolve the reference SKU from the DB via name/brand search. */
 export async function resolveComparisonReference(
   refPhrase: string,
-  index: ProductSearchIndexRow[],
 ): Promise<ComparisonContext | null> {
   const phrase = refPhrase.trim().toLowerCase();
   if (!phrase) return null;
 
-  const refEmbed = await embedText(phrase, "query");
-  let best: ProductSearchIndexRow | null = null;
-  let bestScore = 0;
+  const supabase = adminClient();
+  const { data } = await supabase
+    .from("product_search_index")
+    .select("*")
+    .or(`name.ilike.%${phrase}%,brand.ilike.%${phrase}%`)
+    .gte("data_quality_score", 0.3)
+    .limit(10);
 
-  for (const row of index) {
-    const blob = lexicalBlob(row);
-    let score = 0;
-    if (blob.includes(phrase)) score += 2;
-    if (row.brand?.toLowerCase().includes(phrase)) score += 1.5;
-    if (row.name.toLowerCase().includes(phrase)) score += 1;
-    if (refEmbed.length && row.embedding?.length) {
-      score += cosineSimilarity(refEmbed, row.embedding) * 2;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      best = row;
-    }
-  }
+  if (!data?.length) return null;
 
-  if (!best || bestScore < 0.5) return null;
+  const rows = (data as Record<string, unknown>[]).map(mapDbRow);
+  const exact = rows.find(r => r.name.toLowerCase().includes(phrase));
+  const best = exact ?? rows[0]!;
 
   return {
     reference_product_id: best.product_id,

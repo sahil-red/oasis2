@@ -21,7 +21,7 @@ const CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
 };
 
-// In-memory rate limiter for anonymous requests (30/min/IP)
+// In-memory rate limiter for anonymous requests (3 free per hour, per IP)
 const anonRateLimit = new Map<string, { start: number; count: number }>();
 
 export async function POST(req: NextRequest) {

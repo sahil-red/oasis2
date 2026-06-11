@@ -72,7 +72,7 @@ export async function runSearchV2(
 
   let comparison: ComparisonContext | null = null;
   if (intent.comparison_ref && intent.comparison_mode) {
-    const resolved = await resolveComparisonReference(intent.comparison_ref, snapshot.index);
+    const resolved = await resolveComparisonReference(intent.comparison_ref);
     if (resolved) {
       comparison = { ...resolved, mode: intent.comparison_mode };
     }

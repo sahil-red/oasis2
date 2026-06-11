@@ -1,37 +1,46 @@
 /**
- * §11 relaxation hints — embedding-nearest primary_types from the enriched index (not a hierarchy table).
+ * §11 relaxation hints — primary_type neighbors from the DB (faceted search).
  */
-import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
-import type { ProductSearchIndexRow } from "@/lib/search/v2/types";
+import { adminClient } from "@/lib/supabase/admin";
 
 export async function nearestPrimaryTypes(
   primaryType: string,
-  index: ProductSearchIndexRow[],
+  _index: unknown, // unused, kept for backward compat
   limit = 5,
 ): Promise<string[]> {
   const wanted = primaryType.trim().toLowerCase();
   if (!wanted) return [];
 
-  const queryEmbed = await embedText(wanted, "query");
-  const byType = new Map<string, number[]>();
+  try {
+    const supabase = adminClient();
+    // Get popular primary_types from the same category as the wanted type
+    const { data: row } = await supabase
+      .from("product_search_index")
+      .select("category, subcategory")
+      .eq("primary_type", wanted)
+      .limit(1);
 
-  for (const row of index) {
-    const t = row.primary_type?.toLowerCase();
-    if (!t || t === wanted) continue;
-    const embed = row.type_embedding;
-    if (!embed?.length) continue;
-    if (!byType.has(t)) byType.set(t, embed);
+    if (!row?.length) return [];
+
+    const { cat, sub } = row[0] as { category?: string; subcategory?: string };
+    const { data: neighbors } = await supabase
+      .from("product_search_index")
+      .select("primary_type")
+      .eq("category", cat ?? "")
+      .neq("primary_type", wanted)
+      .not("primary_type", "is", null)
+      .limit(limit * 2);
+
+    if (!neighbors?.length) return [];
+
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const n of neighbors) {
+      const t = (n as { primary_type?: string }).primary_type?.toLowerCase();
+      if (t && !seen.has(t)) { seen.add(t); result.push(t); }
+    }
+    return result.slice(0, limit);
+  } catch {
+    return [];
   }
-
-  const scored: Array<{ type: string; sim: number }> = [];
-  for (const [type, embed] of byType) {
-    const sim = queryEmbed.length ? cosineSimilarity(queryEmbed, embed) : 0;
-    scored.push({ type, sim });
-  }
-
-  return scored
-    .sort((a, b) => b.sim - a.sim)
-    .slice(0, limit)
-    .filter((x) => x.sim >= 0.7)
-    .map((x) => x.type);
 }
