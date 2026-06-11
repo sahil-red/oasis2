@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "scout-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "cwd": "/Users/sahilyadav/Downloads/oasis2",
+      "port": 3000
+    }
+  ]
+}
