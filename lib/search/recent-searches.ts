@@ -1,5 +1,5 @@
 const KEY = "scout-recent-searches-v1";
-const MAX = 5;
+const MAX = 4;
 
 export function readRecentSearches(): string[] {
   if (typeof window === "undefined") return [];

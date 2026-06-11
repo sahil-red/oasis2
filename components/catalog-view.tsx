@@ -354,7 +354,7 @@ export function CatalogView({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const typedPrompt = useTypewriter(SEARCH_PROMPTS);
   const examplePrompts = useRotatingPrompts();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const isPlus = profile?.plan === "plus";
 
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
@@ -687,8 +687,8 @@ export function CatalogView({
     saveCatalogReturnUrl(catalogHref);
     const current = `${window.location.pathname}${window.location.search}`;
     if (current !== catalogHref) {
-      // pushState so browser back button can restore this exact filter state via bfcache
-      window.history.pushState(null, "", catalogHref);
+      // replaceState so typing doesn't flood browser history
+      window.history.replaceState(null, "", catalogHref);
     }
     prevUrlRef.current = catalogHref;
   }, [catalogHref, sessionReady]);
@@ -758,6 +758,7 @@ export function CatalogView({
         CATALOG_PAGE_SIZE,
         intent === "complex" ? "complex" : "structured",
         savedPrefs,
+        session?.access_token,
       );
       if (gen !== fetchGen.current) return;
       setItems(result.items);

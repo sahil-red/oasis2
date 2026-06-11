@@ -94,12 +94,15 @@ export async function fetchAiCatalogSearch(
   limit = 24,
   tier?: "structured" | "complex",
   preferences?: import("@/lib/search/ai-usage").AiSearchPreferences | null,
+  accessToken?: string | null,
 ): Promise<AiSearchResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_SEARCH_FETCH_MS);
+  const headers: Record<string, string> = { "content-type": "application/json", "cache-control": "no-store" };
+  if (accessToken) headers["authorization"] = `Bearer ${accessToken}`;
   const res = await fetch("/api/search/ai", {
     method: "POST",
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
+    headers,
     body: JSON.stringify({ prompt, limit, tier, preferences: preferences ?? undefined }),
     signal: controller.signal,
     cache: "no-store",
