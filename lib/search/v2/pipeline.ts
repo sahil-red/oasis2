@@ -125,8 +125,10 @@ export async function runSearchV2(
         const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
         llm_calls += relaxedResult.llm_calls;
         intent = relaxedResult.intent;
-        relaxation_steps.push(relaxedResult.explanation);
-        relaxed = true;
+        if (!/no relaxation/i.test(relaxedResult.explanation)) {
+          relaxation_steps.push(relaxedResult.explanation);
+          relaxed = true;
+        }
       } catch {
         break;
       }

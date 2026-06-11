@@ -131,46 +131,7 @@ Rules:
 - Keep explanation under 22 words.
 `;
 
-const NON_PRODUCT_TERMS = new Set([
-  "fat",
-  "sugar",
-  "sugars",
-  "protein",
-  "carb",
-  "carbs",
-  "calorie",
-  "calories",
-  "kcal",
-  "sodium",
-  "salt",
-  "healthy",
-  "healthiest",
-  "budget",
-  "food",
-  "foods",
-  "bulking",
-  "bulk",
-  "gain",
-  "weight",
-  "fitness",
-  "diet",
-  "snack",
-  "snacks",
-  "meal",
-  "meals",
-  "for",
-  "the",
-  "and",
-  "parents",
-  "parent",
-  "elderly",
-  "senior",
-  "seniors",
-  "mom",
-  "dad",
-  "mother",
-  "father",
-]);
+const NON_PRODUCT_TERMS = new Set<string>([]);
 
 function emptyParsed(prompt: string): ParsedProductQuery {
   const terms = prompt
