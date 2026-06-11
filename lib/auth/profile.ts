@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SCOUT_PLUS_PLAN } from "@/lib/billing/plans";
 
-/** Emails that always get unlimited AI searches regardless of plan. */
-const UNLIMITED_EMAILS = new Set([
-  "sahil27gunwal@gmail.com",
-]);
+/** Admin emails with unlimited AI searches — set via UNLIMITED_EMAILS env var (comma-separated). */
+const UNLIMITED_EMAILS = new Set(
+  (process.env.UNLIMITED_EMAILS ?? "").split(",").map(e => e.trim()).filter(Boolean)
+);
 
 export type UserProfile = {
   id: string;

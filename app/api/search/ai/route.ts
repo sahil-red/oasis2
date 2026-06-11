@@ -21,6 +21,9 @@ const CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
 };
 
+// In-memory rate limiter for anonymous requests (30/min/IP)
+const anonRateLimit = new Map<string, { start: number; count: number }>();
+
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     prompt?: unknown;
@@ -56,6 +59,23 @@ export async function POST(req: NextRequest) {
           { status: 402 },
         );
       }
+    }
+  } else {
+    // Rate-limit anonymous requests: 30 per minute per IP
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const anonKey = `anon:${ip}`;
+    const now = Date.now();
+    const window = anonRateLimit.get(anonKey);
+    if (window && now - window.start < 60_000) {
+      if (window.count >= 30) {
+        return NextResponse.json(
+          { error: "Rate limit exceeded. Sign in for more searches.", code: "rate_limited" },
+          { status: 429 },
+        );
+      }
+      window.count++;
+    } else {
+      anonRateLimit.set(anonKey, { start: now, count: 1 });
     }
   }
 
