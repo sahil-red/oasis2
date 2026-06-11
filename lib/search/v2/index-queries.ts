@@ -188,7 +188,7 @@ async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase
           .from("product_search_index")
-          .select("*")
+          .select("product_id,canonical_product_id,slug,name,brand,category,subcategory,l3_category,primary_type,base_name,form,flavours,variants,is_veg,is_vegan,is_gluten_free,is_jain,is_palm_oil_free,has_added_sugar,allergens,claims,sugar_g,protein_g,fat_g,saturated_fat_g,sodium_mg,energy_kcal,calcium_mg,iron_mg,fiber_g,carbs_g,price_inr,sugar_tier,protein_tier,fat_tier,traits,trait_source,trait_confidence,trait_reasons,scout_score,nova_group,data_quality_score,data_completeness,facet_confidence,brand_tier,pack_size_value,pack_size_unit,use_cases,search_doc,click_count,save_count,last_interaction_at,built_at,source_hash")
           .order("product_id", { ascending: true })
           .range(p * PAGE, p * PAGE + PAGE - 1);
         if (!error) return (data ?? []) as Record<string, unknown>[];

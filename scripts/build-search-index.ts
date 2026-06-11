@@ -117,7 +117,6 @@ async function main() {
       .from("products")
       .select("id,slug,name,brand,super_category,category,subcategory,l3_category,net_weight,price_inr,mrp_inr,nutrition,ingredients_raw,attributes")
       .eq("platform", "zepto")
-      .or("attributes->>DeepSeek Label Extracted.not.is.null,attributes->>DeepSeek Overall Confidence.not.is.null")
       .range(page * 1000, (page + 1) * 1000 - 1);
 
     if (args.category) query = query.eq("category", args.category);
@@ -195,7 +194,11 @@ async function main() {
         const { error } = await st.from("product_search_index").upsert(
           slice.map((row) => ({
             product_id: row.product_id,
+            slug: row.slug,
+            name: row.name,
             canonical_product_id: row.canonical_product_id,
+            data_quality_score: row.data_quality_score,
+            data_completeness: row.data_completeness,
             updated_at: new Date().toISOString(),
           })),
           { onConflict: "product_id" },
