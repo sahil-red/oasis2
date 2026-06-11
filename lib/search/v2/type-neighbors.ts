@@ -22,11 +22,12 @@ export async function nearestPrimaryTypes(
 
     if (!row?.length) return [];
 
-    const { cat, sub } = row[0] as { category?: string; subcategory?: string };
+    const r = row[0] as { category?: string; subcategory?: string };
+    const { category, subcategory } = r;
     const { data: neighbors } = await supabase
       .from("product_search_index")
       .select("primary_type")
-      .eq("category", cat ?? "")
+      .eq("category", category ?? "")
       .neq("primary_type", wanted)
       .not("primary_type", "is", null)
       .limit(limit * 2);
