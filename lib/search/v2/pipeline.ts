@@ -40,7 +40,7 @@ export async function runSearchV2(
   opts: { limit?: number; preferences?: AiSearchPreferences | null } = {},
 ): Promise<SearchV2Result> {
   const started = Date.now();
-  const limit = Math.min(40, Math.max(4, opts.limit ?? 24));
+  const limit = Math.min(100, Math.max(8, opts.limit ?? 48));
   const snapshot = await getSearchIndexSnapshot();
   const catalogMeta = snapshot.catalogMeta;
 
@@ -174,11 +174,9 @@ export async function runSearchV2(
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 
   const { items, explored } = applyExplorationSlot(ranked, intent.raw_query, limit);
-  // Build recommendation buckets whenever a goal/health intent resolved trait weights —
-  // not only pure kind="goal". "diabetic bread" / "kids tiffin" parse as directed+goal_phrase
-  // but still deserve Best-For buckets.
+  // Build recommendation buckets ONLY for explicit goal queries — not every query with trait weights
   const buckets =
-    goalWeights?.weights && Object.keys(goalWeights.weights).length
+    intent.kind === "goal" && goalWeights?.weights && Object.keys(goalWeights.weights).length
       ? buildGoalBuckets(ranked, goalWeights.weights)
       : null;
 
