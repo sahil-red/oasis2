@@ -10,7 +10,7 @@ export function repairIngredientListText(raw: string): string {
     .replace(/\{\s*/g, "(")
     .replace(/\s*\}/g, ")")
     .replace(/\(\s*\(/g, "(")
-    .replace(/\)\s*\)+/g, ")")
+    .replace(/\)\s*\){3,}/g, ")")
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -86,7 +86,6 @@ export function isGenericIngredientCategory(name: string): boolean {
   for (const prefix of GENERIC_PREFIXES) {
     if (n.startsWith(prefix)) return true;
   }
-  if (/\b(flavouring|flavoring)\s+substances?\b/.test(n)) return true;
   if (/\b(contains|permitted)\b/.test(n) && /\b(colour|color|flavour|flavor)\b/.test(n)) {
     return true;
   }
