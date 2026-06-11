@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
     return [{ source: "/blog", destination: "/", permanent: true }];
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       { protocol: "https", hostname: "**.zeptonow.com" },
       { protocol: "https", hostname: "ik.imagekit.io" },
