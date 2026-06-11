@@ -4,9 +4,9 @@ import { getCachedCatalogSearch } from "@/lib/products/catalog-cache";
 export const revalidate = 300;
 
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-
-  const result = await getCachedCatalogSearch({
+  try {
+    const sp = req.nextUrl.searchParams;
+    const result = await getCachedCatalogSearch({
     q: sp.get("q") ?? undefined,
     category: sp.get("category") ?? undefined,
     subcategory: sp.get("subcategory") ?? undefined,
@@ -27,9 +27,12 @@ export async function GET(req: NextRequest) {
     verdict: sp.get("verdict") ?? undefined,
   });
 
-  return NextResponse.json(result, {
-    headers: {
-      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
-    },
-  });
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+      },
+    });
+  } catch (e) {
+    return NextResponse.json({ items: [], total: 0, page: 1, limit: 96 });
+  }
 }
