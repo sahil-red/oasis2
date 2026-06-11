@@ -132,7 +132,7 @@ const INSIGHTS_LIST_FIELDS =
 /** Max rows loaded for landing + insights aggregation (avoids build-time DB timeouts). */
 export const INSIGHTS_CATALOG_SAMPLE_LIMIT = 6_000;
 
-const LABEL_FILTER_EXTRA = ", ocr_payload";
+const LABEL_FILTER_EXTRA = "";
 
 /** Drop multi-KB attribute blobs from catalog JSON (Vercel cache limit is 2MB). */
 const CATALOG_ATTR_KEYS = [
@@ -387,9 +387,7 @@ function catalogListFields(
 /** PostgREST filter: LM pipeline updated nutrition and/or ingredients. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyLabelResolvedDbFilter(q: any): any {
-  return q.or(
-    "ocr_payload->label_resolution->compare->>nutrition.eq.different,ocr_payload->label_resolution->compare->>ingredients.eq.different",
-  );
+  return q; // ocr_payload column dropped — label comparison now in-memory only
 }
 
 type CatalogFilterRpc = {
@@ -1370,7 +1368,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       id, zepto_sku, slug, name, brand, super_category, category, subcategory,
       net_weight, price_inr, mrp_inr, image_urls, product_url, barcode,
       ingredients_raw, nutrition, attributes, raw_payload, scraped_at, updated_at,
-      platform, ocr_status, ocr_payload, ocr_image_url,
+      platform, ocr_status, ocr_image_url,
       core_scores (product_id, score, grade, band, subscores, concerns, breakdown, rule_version, computed_at, ${DETAIL_SCORE_FIELDS})
     `,
     )
