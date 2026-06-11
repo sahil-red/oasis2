@@ -52,18 +52,28 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
       .select("id, image_urls, net_weight, mrp_inr, ocr_image_url, ocr_payload")
       .in("id", productIds.slice(0, 50));
     for (const row of data ?? []) {
-      const images = normalizeProductImageUrls(
-        (row.image_urls as string[]) ?? [],
-        { ocrImageUrl: (row.ocr_image_url as string | null) ?? null, ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null },
-      );
-      out.set(String(row.id), {
-        image_urls: images.length ? images.slice(0, 1) : [],
-        net_weight: (row.net_weight as string) ?? null,
-        mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
-      });
+      try {
+        const rawUrls: string[] = Array.isArray(row.image_urls) ? row.image_urls : [];
+        const images = normalizeProductImageUrls(
+          rawUrls,
+          { ocrImageUrl: (row.ocr_image_url as string | null) ?? null, ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null },
+        );
+        out.set(String(row.id), {
+          image_urls: images.length ? images.slice(0, 1) : [],
+          net_weight: (row.net_weight as string) ?? null,
+          mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
+        });
+      } catch (e) {
+        console.error("[enrichDisplayFields] row error", row.id, e);
+        out.set(String(row.id), {
+          image_urls: Array.isArray(row.image_urls) ? row.image_urls.slice(0, 1) : [],
+          net_weight: (row.net_weight as string) ?? null,
+          mrp_inr: row.mrp_inr != null ? Number(row.mrp_inr) : null,
+        });
+      }
     }
-  } catch {
-    // non-fatal
+  } catch (e) {
+    console.error("[enrichDisplayFields] query error", e);
   }
   return out;
 }
