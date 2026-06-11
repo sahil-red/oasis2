@@ -84,7 +84,11 @@ export async function runSearchV2(
   let goalWeights = null as Awaited<ReturnType<typeof resolveGoalWeights>> | null;
   let candidates: Awaited<ReturnType<typeof generateCandidates>>;
 
-  if (intent.kind === "goal" && intent.goal_phrase) {
+  // LLM provides trait_weights directly → skip separate goal decomposition call
+  if (intent.trait_weights && Object.keys(intent.trait_weights).length > 0) {
+    goalWeights = { weights: intent.trait_weights, goal_id: intent.goal_id, llm_calls: 0 };
+    candidates = await getCandidates(intent, goalWeights.weights, minDataQuality);
+  } else if (intent.kind === "goal" && intent.goal_phrase) {
     // Goal route: weights drive candidate category-selection → must resolve first.
     goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
     intent = { ...intent, goal_id: goalWeights.goal_id };

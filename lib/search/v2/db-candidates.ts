@@ -32,13 +32,25 @@ export async function fetchCandidatePool(
 
   if (rpcErr || !Array.isArray(ids) || !ids.length) {
     if (rpcErr) console.warn("[db-candidates] RPC failed:", rpcErr.message);
+    // If type filter killed everything, retry without it
+    if (intent.primary_type) {
+      const { data: ids2 } = await supabase.rpc("search_v2_ids", {
+        p_query_embedding: vecStr, p_limit: limit,
+        p_min_quality: minQuality, p_primary_type: null,
+      });
+      if (Array.isArray(ids2) && ids2.length) {
+        return fetchRows(supabase, (ids2 as Array<{ product_id: string }>).map(r => r.product_id));
+      }
+    }
     return [];
   }
 
   // Step 2: Fetch full rows for top results via REST
   const productIds = (ids as Array<{ product_id: string }>).map((r) => r.product_id);
+  return fetchRows(supabase, productIds);
+}
 
-  // Batched fetch — PostgREST URL length limits for IN clause
+async function fetchRows(supabase: ReturnType<typeof adminClient>, productIds: string[]): Promise<ProductSearchIndexRow[]> {
   const results: ProductSearchIndexRow[] = [];
   const BATCH = 100;
   for (let i = 0; i < productIds.length; i += BATCH) {
@@ -58,6 +70,5 @@ export async function fetchCandidatePool(
       }
     }
   }
-
   return results;
 }

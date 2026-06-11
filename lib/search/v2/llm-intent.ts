@@ -39,7 +39,8 @@ Schema:
   "comparison_ref": string|null,
   "comparison_mode": "healthier_than"|"cheaper_than"|null,
   "intent_confidence": number,
-  "explanation": string
+  "explanation": string,
+  "trait_weights": {string: number}
 }
 
 Rules:
@@ -64,6 +65,7 @@ Rules:
 - Populate avoid_ingredients/allergens from negation in the query.
 - "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
 - "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".
+- ALWAYS output trait_weights — a map of trait IDs to 0-1 weights that capture the HEALTH/NUTRITION intent of the query. Use only these trait IDs: ${TRAIT_IDS.join(", ")}. Even for brand/directed queries, output trait_weights based on any health context (e.g. "healthy chips" → {whole_food:0.3,clean_label:0.3,low_fat:0.2,low_sodium:0.2}). For purely neutral queries ("milk", "amul butter"), output empty {}. Trait weights should sum to 1.0.
 `;
 
 type LlmIntentJson = {
@@ -80,6 +82,8 @@ type LlmIntentJson = {
   comparison_ref?: string | null;
   comparison_mode?: SearchIntentV2["comparison_mode"];
   intent_confidence?: number;
+  explanation?: string;
+  trait_weights?: Record<string, number>;
 };
 
 function mergeNumericIntoIntent(
@@ -152,6 +156,7 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     confidence: Math.max(0, Math.min(1, raw.intent_confidence ?? 0.7)),
     intent_source: "llm-deepseek",
     raw_query: query,
+    trait_weights: validateTraitWeights(raw.trait_weights ?? {}),
   };
 }
 

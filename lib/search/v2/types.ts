@@ -161,6 +161,8 @@ export type SearchIntentV2 = {
   confidence: number;
   intent_source: "fast-path" | "llm-groq" | "llm-deepseek" | "cache" | "degraded";
   raw_query: string;
+  /** LLM-computed trait weights (28 traits → 0-1) — bypasses separate goal decomposition call */
+  trait_weights?: Partial<Record<TraitId, number>>;
 };
 
 export type RankedCandidate = {
