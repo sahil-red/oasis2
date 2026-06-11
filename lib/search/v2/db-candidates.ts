@@ -4,6 +4,7 @@
  * Egress: 200 IDs × 50 bytes = 10 KB (RPC) + 200 full rows × 3 KB = 600 KB total.
  */
 import { adminClient } from "@/lib/supabase/admin";
+import { embedText } from "@/lib/search/v2/embeddings";
 import { mapDbRow } from "@/lib/search/v2/index-queries";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
@@ -16,7 +17,6 @@ export async function fetchCandidatePool(
   const supabase = adminClient();
 
   // Generate query embedding once
-  const { embedText } = await import("@/lib/search/v2/embeddings");
   const queryEmbed = await embedText(intent.raw_query, "query");
 
   // Step 1: Lightweight RPC — returns only product_ids + distances
