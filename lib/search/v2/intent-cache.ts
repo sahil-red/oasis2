@@ -1,5 +1,7 @@
 /**
- * Semantic intent cache — embed query, cosine ≥ 0.97 reuse (§6).
+ * Intent cache — two-tier lookup for minimal latency:
+ *   1. Exact-match string key (zero-cost, instant)
+ *   2. Semantic cosine ≥ 0.97 (requires Voyage embedding, ~200ms)
  */
 import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
@@ -18,11 +20,20 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 500;
 const cache: CacheEntry[] = [];
 
+// Tier 1: instant exact-match map (key = normalised query + prefs)
+const exactMap = new Map<string, CacheEntry>();
+
 function prefsKey(prefs: AiSearchPreferences | null | undefined): string {
   if (!prefs) return "";
-  // Stable (key-sorted) stringify — otherwise key-insertion order changes the key
-  // and silently misses the cache for semantically identical preferences.
   return JSON.stringify(prefs, Object.keys(prefs as object).sort());
+}
+
+function normaliseQuery(q: string): string {
+  return q.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function exactKey(query: string, pk: string): string {
+  return `${pk}\0${normaliseQuery(query)}`;
 }
 
 export async function getCachedIntent(
@@ -31,6 +42,15 @@ export async function getCachedIntent(
 ): Promise<SearchIntentV2 | null> {
   const pk = prefsKey(prefs);
   const now = Date.now();
+
+  // Tier 1: instant exact match — skips Voyage embedding entirely
+  const ek = exactKey(query, pk);
+  const exact = exactMap.get(ek);
+  if (exact && now - exact.at < CACHE_TTL_MS) {
+    return { ...exact.intent, intent_source: "cache", raw_query: query };
+  }
+
+  // Tier 2: semantic cosine match — requires Voyage embedding
   const qEmbed = await embedText(query, "query");
   if (!qEmbed.length) return null;
 
@@ -56,12 +76,18 @@ export async function setCachedIntent(
 ): Promise<void> {
   const embedding = await embedText(query, "query");
   if (!embedding.length) return;
-  cache.push({
+  const pk = prefsKey(prefs);
+  const entry: CacheEntry = {
     query,
-    prefsKey: prefsKey(prefs),
+    prefsKey: pk,
     embedding,
     intent,
     at: Date.now(),
-  });
-  while (cache.length > MAX_ENTRIES) cache.shift();
+  };
+  cache.push(entry);
+  exactMap.set(exactKey(query, pk), entry);
+  while (cache.length > MAX_ENTRIES) {
+    const removed = cache.shift()!;
+    exactMap.delete(exactKey(removed.query, removed.prefsKey));
+  }
 }

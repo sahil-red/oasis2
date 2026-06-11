@@ -67,7 +67,14 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   if (c.max_fat_g != null && row.fat_g != null && row.fat_g > c.max_fat_g) return false;
   if (c.max_calories != null && row.energy_kcal != null && row.energy_kcal > c.max_calories) return false;
   if (c.min_protein_g != null && row.protein_g != null && row.protein_g < c.min_protein_g) return false;
-  if (intent.modifiers.includes("high_protein_tier") && row.protein_tier === "low") return false;
+  // For sort-intent queries (highest_protein), the sort handles ranking — don't filter
+  // by tier since "low" tier can still have high absolute protein (24g tofu in a paneer cohort).
+  if (
+    intent.modifiers.includes("high_protein_tier") &&
+    row.protein_tier === "low" &&
+    intent.sort !== "highest_protein"
+  )
+    return false;
   if (intent.modifiers.includes("low_sugar") && row.sugar_tier === "high") return false;
   if (intent.modifiers.includes("no_added_sugar") && row.has_added_sugar === true) return false;
   return true;
@@ -187,8 +194,11 @@ export async function generateCandidates(
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();
     const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, queryTypeEmbed) < 99);
-    // Only apply type filter if it leaves enough candidates; otherwise ignore the type
     if (typeFiltered.length >= 5) {
+      pool = typeFiltered;
+    } else if (typeFiltered.length > 0) {
+      // Keep the type filter even if < 5 — user explicitly asked for this type.
+      // Only fall back if truly 0 matches (ANN didn't return any).
       pool = typeFiltered;
     }
   }

@@ -32,7 +32,7 @@ export async function fetchCandidatePool(
     p_query_embedding: vecStr,
     p_limit: limit,
     p_min_quality: minQuality,
-    p_primary_type: null, // Never pre-filter by type — let generateCandidates soft-filter
+    p_primary_type: intent.primary_type ?? null,
   });
 
   if (rpcErr || !Array.isArray(ids) || !ids.length) {
