@@ -21,9 +21,9 @@ const PROTEIN_CEILING: Array<{ test: (name: string, cat: string) => boolean; max
   },
   {
     test: (n, c) =>
-      /\b(masala|spice|seasoning|hing|turmeric|chilli powder|tea)\b/i.test(n) ||
+      /\b(masala|spice|seasoning|hing|turmeric|chilli powder|tea|coffee)\b/i.test(n) ||
       /\bmasala|spice/i.test(c),
-    max: 25,
+    max: 12,
   },
   { test: () => true, max: 40 },
 ];

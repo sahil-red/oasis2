@@ -187,14 +187,14 @@ export function detectNutritionAnomalies(
   }
 
   if (typeof protein === "number" && isTeaOrCoffee(ctx)) {
-    if (protein > 25) {
+    if (protein > 12) {
       out.push({
         code: "category_protein_critical",
         severity: "critical",
         message: `Tea/coffee with ${protein}g protein per 100g is implausible`,
         field: "protein_g_100g",
       });
-    } else if (protein > 10) {
+    } else if (protein > 5) {
       out.push({
         code: "category_protein_high",
         severity: "warning",
