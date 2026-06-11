@@ -161,7 +161,7 @@ export const ProductCard = memo(function ProductCard({
       </Link>
 
       {/* content */}
-      <div className="mt-3 flex flex-1 flex-col gap-1.5 px-0.5">
+      <div className="mt-3 flex flex-1 flex-col gap-1.5 px-1">
         <Link
           href={href}
           className="block flex-1"
@@ -179,7 +179,7 @@ export const ProductCard = memo(function ProductCard({
               <span className="block h-[13px]" aria-hidden />
             )}
             {scoutVerified ? (
-              <span className="shrink-0 rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.07] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-(--color-good)">
+              <span className="shrink-0 rounded-full border border-(--color-accent)/30 bg-(--color-accent-soft) px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-(--color-accent)">
                 Verified by Scout
               </span>
             ) : null}

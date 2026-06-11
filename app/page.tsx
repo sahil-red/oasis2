@@ -41,7 +41,7 @@ export default async function Home() {
       <section className="border-b border-(--color-line)">
         <div className="mx-auto max-w-6xl px-6 pt-14 pb-12 md:pt-20">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
+            <p className="text-[10px] md:text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
               Honest grocery intel · India
             </p>
             <h1 className="font-display mt-5 text-balance text-5xl leading-[0.95] md:text-7xl">
@@ -62,11 +62,11 @@ export default async function Home() {
                 name="prompt"
                 phrases={SEARCH_PROMPTS}
                 startIndex={promptStart}
-                className="min-h-12 flex-1 rounded-xl border border-(--color-line) bg-(--color-bg-soft) px-4 text-[15px] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
+                className="min-h-12 flex-1 rounded-2xl border border-(--color-line) bg-(--color-bg-soft) px-4 text-[15px] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
               />
               <button
                 type="submit"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition hover:opacity-90"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition hover:opacity-90"
               >
                 Ask Scout
                 <ArrowRight className="h-4 w-4" />

@@ -153,7 +153,7 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
     <button
       type="button"
       onClick={onClear}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-(--color-line) bg-(--color-bg) px-3 py-1 text-[12px] text-(--color-fg) transition hover:border-(--color-line-strong)"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-(--color-line) bg-(--color-bg) px-3 py-1 text-[12px] text-(--color-fg) transition hover:border-(--color-line-strong) hover:bg-(--color-bg-soft)"
       title="Remove filter"
     >
       <span className="truncate">{label}</span>
@@ -1359,7 +1359,7 @@ export function CatalogView({
                   className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
                     !activeState.category
                       ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                      : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                      : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
                   }`}
                 >
                   All aisles
@@ -1372,7 +1372,7 @@ export function CatalogView({
                 className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
                   activeState.category === c
                     ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                    : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+                    : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
                 }`}
               >
                 {c}
@@ -1685,21 +1685,21 @@ function SubcategoryChipRow({
         onClick={() => onSelect(null)}
         className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
           !active
-            ? "bg-(--color-fg) text-(--color-bg)"
-            : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-        }`}
-      >
-        All ({allCount})
-      </button>
-      {chips.map((c) => (
-        <button
-          key={c.label}
-          type="button"
-          onClick={() => onSelect(active === c.label ? null : c.label)}
-          className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
-            active === c.label
               ? "bg-(--color-fg) text-(--color-bg)"
-              : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+              : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
+          }`}
+        >
+          All ({allCount})
+        </button>
+        {chips.map((c) => (
+          <button
+            key={c.label}
+            type="button"
+            onClick={() => onSelect(active === c.label ? null : c.label)}
+            className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+              active === c.label
+                ? "bg-(--color-fg) text-(--color-bg)"
+                : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
           }`}
         >
           {c.label} ({c.count})
@@ -1741,7 +1741,7 @@ function AiSearchProgress() {
   return (
     <div className="flex items-center justify-center gap-2.5 text-sm text-(--color-fg-muted)">
       <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
       </span>
       <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
