@@ -213,8 +213,26 @@ export default async function ProductPage({
     displayNutrition ?? product.nutrition,
   );
 
+  // Product rich-result schema for Google (no fake ratings — name/brand/price only).
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ?? "";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    ...(product.image_urls?.length ? { image: product.image_urls.slice(0, 3) } : {}),
+    ...(product.brand ? { brand: { "@type": "Brand", name: product.brand } } : {}),
+    ...(siteUrl ? { url: `${siteUrl}/product/${product.slug}` } : {}),
+    ...(price != null
+      ? { offers: { "@type": "Offer", priceCurrency: "INR", price: String(price) } }
+      : {}),
+  };
+
   return (
     <main className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <SiteNav />
 
       <div className="mx-auto max-w-6xl px-6 pb-24 pt-6">
