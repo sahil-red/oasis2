@@ -189,9 +189,34 @@ export const ProductCard = memo(function ProductCard({
 
           {/* chips — subtle, monochrome, no verdict color */}
           {aiReasonLines.length > 0 ? (
-            <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
-              {aiReasonLines.join(" · ")}
-            </p>
+            <>
+              <p className="mt-1.5 line-clamp-2 text-[11.5px] font-medium leading-snug text-(--color-fg)">
+                {aiReasonLines.join(" · ")}
+              </p>
+              {/* Health trait pills from AI reasons */}
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {aiReasonLines.slice(0, 4).map((reason) => (
+                  <span
+                    key={reason}
+                    className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      /low|no added|clean|whole|high protein|good|best/i.test(reason)
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                        : /high sugar|refined|processed|ultra|artificial/i.test(reason)
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                    }`}
+                  >
+                    {/low|no added|clean|whole|high protein|good|best/i.test(reason) ? "✓" : ""}
+                    {reason}
+                  </span>
+                ))}
+                {core?.score != null && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                    {core.score}/100
+                  </span>
+                )}
+              </div>
+            </>
           ) : chipLabels.length > 0 ? (
             <p className="mt-1.5 truncate text-[11px] text-(--color-fg-muted)">
               {chipLabels.slice(0, 2).join(" · ")}
