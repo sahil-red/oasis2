@@ -60,6 +60,25 @@ export type InsightLists = {
 const HEALTHY_MARKETING =
   /\b(healthy|protein|zero|diet|lite|light|natural|nutri|wellness|immunity|digestive|sugar free|no added sugar)\b/i;
 
+/** Sublabels that contradict health marketing — a product flagged with these
+ *  while making a health claim is genuinely misleading. */
+const CONTRADICTING_SUBLABELS = new Set<SublabelId>([
+  "hidden_sweetener",
+  "high_in_sugar",
+  "very_high_in_sugar",
+  "ultra_processed",
+  "mostly_nova_4",
+  "artificial_flavors",
+  "high_saturated_fat",
+  "excessive_sodium",
+  "hazardous_additive",
+  "label_mismatch",
+  "trans_fat_present",
+  "refined_carbs_inside",
+  "calorie_dense",
+  "empty_calories",
+]);
+
 function sugar(p: ProductListItem): number | null {
   const n = p.nutrition;
   if (!n) return null;
@@ -120,16 +139,42 @@ export function buildInsights(products: ProductListItem[]): InsightLists {
     .sort((a, b) => b.avgScore - a.avgScore);
 
   // ── Misleading ──
+  // Products making health claims whose nutrition/ingredients tell a different story.
+  // Uses sublabels + name claims instead of naive "high sugar = misleading" logic.
   const misleadingPool = products.filter((p) => {
     const score = p.core_scores?.score;
     if (score == null) return false;
-    if (!HEALTHY_MARKETING.test(marketingText(p))) return false;
-    const s = sugar(p);
-    return score < 50 || (s != null && s >= 10);
+    const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+    const marketing = marketingText(p);
+    const hasClaim = HEALTHY_MARKETING.test(marketing);
+
+    // A product is misleading when it makes a health claim but has contradicting sublabels.
+    if (hasClaim && sublabels.some((s) => CONTRADICTING_SUBLABELS.has(s as SublabelId))) {
+      return true;
+    }
+
+    // Products marketed to kids but flagged high_in_sugar or ultra_processed.
+    const kidsCategories = /snack|dairy|bread|cereal|biscuit|chocolate|fruit|milk/i;
+    if (kidsCategories.test(p.category ?? "") && (
+      sublabels.includes("high_in_sugar") || sublabels.includes("very_high_in_sugar") || sublabels.includes("ultra_processed")
+    )) {
+      return true;
+    }
+
+    // Strong health claim but score is terrible — marketing runs far ahead of reality.
+    if (hasClaim && score < 35) return true;
+
+    return false;
   });
   const misleading = rankProducts(
     misleadingPool,
-    (p) => 100 - (p.core_scores?.score ?? 100) + (sugar(p) ?? 0) * 2 + 10,
+    (p) => {
+      const score = p.core_scores?.score ?? 100;
+      const s = sugar(p);
+      const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+      const contradictions = sublabels.filter((sl) => CONTRADICTING_SUBLABELS.has(sl as SublabelId)).length;
+      return (100 - score) + (contradictions * 15) + (s != null ? Math.min(s, 20) : 0) * 2;
+    },
     24,
   );
 

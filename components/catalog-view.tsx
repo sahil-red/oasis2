@@ -353,6 +353,9 @@ export function CatalogView({
   const { profile } = useAuth();
   const isPlus = profile?.plan === "plus";
 
+  const aiModeRef = useRef(false);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
+
   const debouncedQ = useDebouncedValue(state.q, SEARCH_DEBOUNCE_MS);
 
   const applySessionSnapshot = useCallback((snap: CatalogSearchSnapshot) => {
@@ -426,12 +429,11 @@ export function CatalogView({
       setAiSummary(null);
       setAiWarning(null);
       setAiRefinements([]);
-    setAiRelaxationExplanations([]);
-    setAiBuckets(null);
       setAiRelaxationExplanations([]);
       setAiBuckets(null);
       setAiParsed(null);
       setFactBrowse(null);
+      setSelectedSubcategory(null);
       skipInitialSearch.current = false;
     };
     const onPageShow = (e: PageTransitionEvent) => {
@@ -484,6 +486,61 @@ export function CatalogView({
     }
     return catalogContextQuery(activeState, goal, { diet });
   }, [aiMode, aiPrompt, activeState, goal, diet]);
+
+  // Keep aiModeRef in sync for closure-bound callbacks (patch, etc.)
+  useEffect(() => { aiModeRef.current = aiMode; }, [aiMode]);
+
+  // Client-side filtering when Refine panel is used during AI search results
+  const displayedItems = useMemo(() => {
+    if (!aiMode) return items;
+    let filtered = items;
+    if (selectedSubcategory) {
+      filtered = filtered.filter((it) => it.subcategory === selectedSubcategory);
+    }
+    if (activeState.category) {
+      filtered = filtered.filter((it) => it.category === activeState.category);
+    }
+    if (activeState.subcategory) {
+      filtered = filtered.filter((it) => it.subcategory === activeState.subcategory);
+    }
+    if (activeState.brand) {
+      filtered = filtered.filter((it) => it.brand === activeState.brand);
+    }
+    if (activeState.minScore > 0) {
+      filtered = filtered.filter((it) => (it.core_scores?.score ?? 0) >= activeState.minScore);
+    }
+    if (activeState.maxPrice > 0) {
+      filtered = filtered.filter((it) => (it.price_inr ?? Infinity) <= activeState.maxPrice);
+    }
+    if (activeState.grade) {
+      filtered = filtered.filter((it) => it.core_scores?.grade === activeState.grade);
+    }
+    if (activeState.verdict) {
+      filtered = filtered.filter((it) => {
+        const v = it.core_scores?.verdict;
+        return v === activeState.verdict;
+      });
+    }
+    if (activeState.onlyScored) {
+      filtered = filtered.filter((it) => it.core_scores != null);
+    }
+    return filtered;
+  }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored]);
+
+  // Subcategory distribution from current items — for subcategory chip nav
+  const subcategoryChips = useMemo(() => {
+    if (!aiMode || items.length === 0) return null;
+    const counts = new Map<string, number>();
+    for (const it of items) {
+      const sc = it.subcategory;
+      if (sc) counts.set(sc, (counts.get(sc) ?? 0) + 1);
+    }
+    if (counts.size <= 1) return null;
+    const chips = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({ label, count }));
+    return chips;
+  }, [aiMode, items]);
 
   const searchKey = useMemo(
     () =>
@@ -701,6 +758,29 @@ export function CatalogView({
   }, []);
 
   const patch = useCallback((partial: Partial<CatalogFilterState>) => {
+    // Reset subcategory chip selection when filters change
+    setSelectedSubcategory(null);
+
+    if (aiModeRef.current) {
+      // AI mode: client-side only — update state for filtering, don't destroy AI results
+      setState((prev) => {
+        const next = { ...prev, ...partial };
+        if (partial.category !== undefined && partial.category !== prev.category) {
+          next.subcategory = "";
+          next.usecase = "";
+          next.brand = "";
+        }
+        if (
+          partial.subcategory !== undefined &&
+          partial.subcategory !== prev.subcategory
+        ) {
+          next.usecase = "";
+        }
+        return next;
+      });
+      return;
+    }
+    // Catalog mode: reset AI state and apply filters for catalog search
     setAiMode(false);
     setAiSummary(null);
     setAiWarning(null);
@@ -891,6 +971,7 @@ export function CatalogView({
     setAiBuckets(null);
     setAiParsed(null);
     setFactBrowse(null);
+    setSelectedSubcategory(null);
     setItems([]);
     setTotal(0);
     setHasMore(false);
@@ -952,13 +1033,42 @@ export function CatalogView({
               void runAiSearch();
             }}
           >
-            <input
-              type="search"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="e.g. paneer with low fat under ₹150"
-              className="min-h-[48px] flex-1 rounded-2xl border border-(--color-line-strong) bg-(--color-bg) px-5 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
-            />
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => {
+                  setAiPrompt(e.target.value);
+                  if (!e.target.value.trim() && aiMode) {
+                    setAiPrompt("");
+                    clearAll();
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setAiPrompt("");
+                    clearAll();
+                  }
+                }}
+                placeholder="e.g. paneer with low fat under ₹150"
+                className="w-full min-h-[48px] rounded-2xl border border-(--color-line-strong) bg-(--color-bg) pl-5 pr-10 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
+              />
+              {aiPrompt.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiPrompt("");
+                    clearAll();
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-(--color-fg-dim) hover:text-(--color-fg)"
+                  aria-label="Clear search"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              ) : null}
+            </div>
             <div className="flex flex-col gap-1.5">
               <button
                 type="submit"
@@ -974,8 +1084,7 @@ export function CatalogView({
               >
                 <SlidersHorizontal className="h-3 w-3 opacity-70" aria-hidden />
                 Refine
-                {/* Don't show filter badge in AI mode — filters don't affect AI results */}
-                {activeFilterCount > 0 && !aiMode ? (
+                {activeFilterCount > 0 ? (
                   <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-bg) px-1 text-[9px] font-bold text-(--color-fg)">
                     {activeFilterCount}
                   </span>
@@ -1055,7 +1164,7 @@ export function CatalogView({
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
           {aiMode && aiSummary ? (
-            <div className="mt-3">
+            <div className="mt-2">
               {/* Summary + save preferences in one tight row */}
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[13px] leading-snug text-(--color-fg-muted)">
@@ -1091,7 +1200,7 @@ export function CatalogView({
                   </button>
                 ) : null}
               </div>
-              <div className="mt-2">
+              <div className="mt-1.5">
                 <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
               </div>
               {aiRelaxed ? (
@@ -1120,7 +1229,7 @@ export function CatalogView({
               {/* Conversational refinement — server suggestions + standing quick modifiers.
                   Sort-type chips re-rank the CURRENT results instantly (no LLM round-trip);
                   constraint chips compose with the ask and re-run the search. */}
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <span className="text-[11px] text-(--color-fg-dim)">Refine:</span>
                 {aiRefinements.map((refinement) => (
                   <RefineChip
@@ -1379,15 +1488,17 @@ export function CatalogView({
             </div>
           ))}
         </div>
-      ) : total === 0 ? (
+      ) : (aiMode ? displayedItems.length : total) === 0 ? (
         <div className="mx-auto max-w-lg py-14 text-center">
           <p className="font-display text-2xl text-(--color-fg)">No products match</p>
           <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-(--color-fg-muted)">
             {aiMode
-              ? "Nothing in the catalog satisfies every part of that ask. Drop one constraint — the price cap, a brand, or a nutrition limit — and try again."
+              ? activeFilterCount > 0
+                ? "Your filters narrowed the results to zero. Remove one to widen the net:"
+                : "Nothing in the catalog satisfies every part of that ask. Drop one constraint — the price cap, a brand, or a nutrition limit — and try again."
               : "These filters rule out the whole catalog. Remove one to widen the net:"}
           </p>
-          {!aiMode && hasFilters ? (
+          {(aiMode ? activeFilterCount > 0 : hasFilters) ? (
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               {activeState.category ? <FilterChip label={activeState.category} onClear={() => patch({ category: "" })} /> : null}
               {activeState.subcategory ? <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} /> : null}
@@ -1438,28 +1549,54 @@ export function CatalogView({
               </button>
             </div>
           ) : null}
+          {aiMode && subcategoryChips ? (
+            <SubcategoryChipRow
+              chips={subcategoryChips}
+              active={selectedSubcategory}
+              onSelect={(label) => {
+                setSelectedSubcategory(label);
+                setState((prev) => ({ ...prev, subcategory: "" }));
+              }}
+            />
+          ) : null}
           {aiBuckets && aiBuckets.length > 0 ? (
             <div className="space-y-8">
-              {aiBuckets.map((bucket) => (
-                <section key={bucket.id}>
-                  <h3 className="font-display text-lg text-(--color-fg)">{bucket.label}</h3>
-                  <div
-                    className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
-                      refreshing ? "opacity-80" : "opacity-100"
-                    } transition-opacity duration-100`}
-                  >
-                    {bucket.items.map((p) => (
-                      <ProductCard
-                        key={`${bucket.id}-${p.id}`}
-                        product={p}
-                        hrefQuery={productQuery}
-                        goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                        onSublabelClick={handleSublabelClick}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {aiBuckets.map((bucket) => {
+                const filteredBucketItems = bucket.items.filter((p) => {
+                  const it = p as CatalogGridItem;
+                  if (selectedSubcategory && it.subcategory !== selectedSubcategory) return false;
+                  if (activeState.category && it.category !== activeState.category) return false;
+                  if (activeState.subcategory && it.subcategory !== activeState.subcategory) return false;
+                  if (activeState.brand && it.brand !== activeState.brand) return false;
+                  if (activeState.minScore > 0 && (it.core_scores?.score ?? 0) < activeState.minScore) return false;
+                  if (activeState.maxPrice > 0 && (it.price_inr ?? Infinity) > activeState.maxPrice) return false;
+                  if (activeState.grade && it.core_scores?.grade !== activeState.grade) return false;
+                  if (activeState.verdict && it.core_scores?.verdict !== activeState.verdict) return false;
+                  if (activeState.onlyScored && !it.core_scores) return false;
+                  return true;
+                });
+                if (filteredBucketItems.length === 0) return null;
+                return (
+                  <section key={bucket.id}>
+                    <h3 className="font-display text-lg text-(--color-fg)">{bucket.label}</h3>
+                    <div
+                      className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
+                        refreshing ? "opacity-80" : "opacity-100"
+                      } transition-opacity duration-100`}
+                    >
+                      {filteredBucketItems.map((p) => (
+                        <ProductCard
+                          key={`${bucket.id}-${p.id}`}
+                          product={p}
+                          hrefQuery={productQuery}
+                          goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                          onSublabelClick={handleSublabelClick}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div
@@ -1467,7 +1604,7 @@ export function CatalogView({
                 refreshing ? "opacity-80" : "opacity-100"
               } transition-opacity duration-100`}
             >
-              {items.map((p) => (
+              {(aiMode ? displayedItems : items).map((p) => (
                 <ProductCard
                   key={p.id}
                   product={p}
@@ -1481,7 +1618,7 @@ export function CatalogView({
         </div>
       )}
 
-      {hasMore ? (
+      {aiMode ? null : hasMore ? (
         <div className="flex justify-center pt-2">
           <button
             type="button"
@@ -1492,7 +1629,7 @@ export function CatalogView({
             {loadingMore ? "Loading…" : `Show more (${Math.max(0, total - items.length).toLocaleString()} left)`}
           </button>
         </div>
-      ) : items.length > 0 && (aiMode || hasFilters || factBrowse) ? (
+      ) : !aiMode && items.length > 0 && hasFilters ? (
         <p className="pt-2 text-center text-[12px] text-(--color-fg-dim)">
           All {total.toLocaleString()} result{total === 1 ? "" : "s"} shown
         </p>
@@ -1517,6 +1654,48 @@ const QUICK_REFINEMENTS: { label: string; phrase: string; clientSort?: "price" }
   { label: "No palm oil", phrase: "without palm oil" },
   { label: "Cleaner ingredients", phrase: "with cleaner ingredients" },
 ];
+
+function SubcategoryChipRow({
+  chips,
+  active,
+  onSelect,
+}: {
+  chips: { label: string; count: number }[];
+  active: string | null;
+  onSelect: (label: string | null) => void;
+}) {
+  const allCount = chips.reduce((s, c) => s + c.count, 0);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-(--color-fg-dim)">Best matches</span>
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+          !active
+            ? "bg-(--color-fg) text-(--color-bg)"
+            : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+        }`}
+      >
+        All ({allCount})
+      </button>
+      {chips.map((c) => (
+        <button
+          key={c.label}
+          type="button"
+          onClick={() => onSelect(active === c.label ? null : c.label)}
+          className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+            active === c.label
+              ? "bg-(--color-fg) text-(--color-bg)"
+              : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg)"
+          }`}
+        >
+          {c.label} ({c.count})
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function RefineChip({ label, onClick }: { label: string; onClick: () => void }) {
   return (

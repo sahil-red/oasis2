@@ -15,14 +15,6 @@ import {
   type SavedSearchRow,
 } from "@/lib/search/v2/saved-searches-client";
 
-type HistoryEntry = {
-  id: string;
-  query: string;
-  intent_tier: string | null;
-  result_count: number | null;
-  created_at: string;
-};
-
 type Identity = {
   provider: string;
   identity_data?: { email?: string; phone?: string };
@@ -31,9 +23,6 @@ type Identity = {
 export default function ProfilePage() {
   const { ready, session, profile, signInWithGoogle, signOut, refreshProfile } = useAuth();
   const router = useRouter();
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [clearingHistory, setClearingHistory] = useState(false);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [linkingPhone, setLinkingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
@@ -49,21 +38,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (ready && !session) router.replace("/login");
   }, [ready, session, router]);
-
-  const loadHistory = useCallback(async () => {
-    if (!session) return;
-    setHistoryLoading(true);
-    try {
-      const res = await fetch("/api/history", {
-        headers: { authorization: `Bearer ${session.access_token}` },
-      });
-      const data = await res.json() as { history: HistoryEntry[] };
-      setHistory(data.history ?? []);
-    } catch { /* ignore */ }
-    finally { setHistoryLoading(false); }
-  }, [session]);
-
-  useEffect(() => { void loadHistory(); }, [loadHistory]);
 
   const loadSavedSearches = useCallback(async () => {
     if (!session) return;
@@ -164,18 +138,6 @@ export default function ProfilePage() {
       await refreshProfile();
     } catch (e) { setLinkError((e as Error).message); }
     finally { setLinkLoading(false); }
-  };
-
-  const deleteHistory = async (id?: string) => {
-    if (!session) return;
-    if (!id) setClearingHistory(true);
-    try {
-      await fetch(`/api/history${id ? `?id=${id}` : ""}`, {
-        method: "DELETE",
-        headers: { authorization: `Bearer ${session.access_token}` },
-      });
-      setHistory(prev => id ? prev.filter(h => h.id !== id) : []);
-    } finally { setClearingHistory(false); }
   };
 
   if (!ready || !session) {
@@ -433,58 +395,6 @@ export default function ProfilePage() {
                     className="flex-shrink-0 opacity-0 transition group-hover:opacity-60 hover:!opacity-100 text-(--color-fg-dim)"
                     title="Remove"
                   >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M1 1l10 10M11 1 1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Search History */}
-        <div className="mt-10">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl text-(--color-fg)">Search history</h2>
-            {history.length > 0 ? (
-              <button onClick={() => void deleteHistory()} disabled={clearingHistory}
-                className="text-[12px] text-(--color-fg-dim) underline underline-offset-2 hover:text-(--color-fg)">
-                {clearingHistory ? "Clearing…" : "Clear all"}
-              </button>
-            ) : null}
-          </div>
-          {historyLoading ? (
-            <div className="mt-4 space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-12 animate-pulse rounded-xl bg-(--color-bg-soft)" />
-              ))}
-            </div>
-          ) : history.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-(--color-line) bg-(--color-panel) py-10 text-center">
-              <p className="text-sm text-(--color-fg-muted)">No searches yet.</p>
-              <Link href="/search" className="mt-2 inline-block text-[13px] font-medium text-(--color-accent) hover:underline">
-                Start searching →
-              </Link>
-            </div>
-          ) : (
-            <div className="mt-4 divide-y divide-(--color-line) overflow-hidden rounded-xl border border-(--color-line) bg-(--color-panel)">
-              {history.map(h => (
-                <div key={h.id} className="group flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/search?prompt=${encodeURIComponent(h.query)}`}
-                      className="block truncate text-[14px] text-(--color-fg) hover:text-(--color-accent)">
-                      {h.query}
-                    </Link>
-                    <p className="mt-0.5 text-[11px] text-(--color-fg-dim)">
-                      {formatDate(h.created_at)}
-                      {h.result_count != null ? ` · ${h.result_count} results` : ""}
-                      {h.intent_tier ? ` · ${h.intent_tier}` : ""}
-                    </p>
-                  </div>
-                  <button onClick={() => void deleteHistory(h.id)}
-                    className="flex-shrink-0 opacity-0 transition group-hover:opacity-60 hover:!opacity-100 text-(--color-fg-dim)"
-                    title="Remove">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                       <path d="M1 1l10 10M11 1 1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                     </svg>

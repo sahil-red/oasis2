@@ -76,15 +76,15 @@ function rankedToAiItem(
   const enrichedReasons: string[] = [];
   for (const r of c.reasons) {
     if (/low sugar/i.test(r) && row.sugar_g != null) {
-      enrichedReasons.push(`Sugar: ${row.sugar_g}g/100g ✓`);
+      enrichedReasons.push(`Sugar: ${row.sugar_g}g/100g`);
     } else if (/high protein/i.test(r) && row.protein_g != null) {
-      enrichedReasons.push(`Protein: ${row.protein_g}g/100g ✓`);
+      enrichedReasons.push(`Protein: ${row.protein_g}g/100g`);
     } else if (/no added sugar/i.test(r)) {
-      enrichedReasons.push("No added sugar ✓");
+      enrichedReasons.push("No added sugar");
     } else if (/low fat/i.test(r) && row.fat_g != null) {
-      enrichedReasons.push(`Fat: ${row.fat_g}g/100g ✓`);
+      enrichedReasons.push(`Fat: ${row.fat_g}g/100g`);
     } else if (/high fiber/i.test(r) && row.fiber_g != null) {
-      enrichedReasons.push(`Fiber: ${row.fiber_g}g/100g ✓`);
+      enrichedReasons.push(`Fiber: ${row.fiber_g}g/100g`);
     } else {
       enrichedReasons.push(r);
     }

@@ -17,6 +17,32 @@ export function marketingCallout(p: ProductListItem): MarketingCallout {
   const protein = p.nutrition?.protein_g_100g ?? 0;
   const sugar = p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g ?? null;
   const name = p.name;
+  const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+
+  // ── High-precision sublabel-based signals ──
+
+  const hasHiddenSweetener = sublabels.includes("hidden_sweetener");
+  const hasHighSugar = sublabels.includes("high_in_sugar") || sublabels.includes("very_high_in_sugar");
+  const isUltraProcessed = sublabels.includes("ultra_processed") || sublabels.includes("mostly_nova_4");
+  const hasArtificial = sublabels.includes("artificial_flavors");
+
+  // "No added sugar" claim + hidden artificial sweeteners — classic bait-and-switch
+  if (/no added sugar|sugar free|zero sugar/i.test(name) && hasHiddenSweetener) {
+    return {
+      claim: "No added sugar claim",
+      reality: `Contains artificial sweeteners (acesulfame, sucralose, etc.) — a common swap, not a reduction.`,
+      tone: "warn",
+    };
+  }
+
+  // High protein claim + low actual protein AND ultra-processed
+  if (/protein/i.test(name) && protein < 12 && isUltraProcessed) {
+    return {
+      claim: "Marketed as high protein",
+      reality: `Only ${protein}g protein per 100g — and mostly ultra-processed ingredients.`,
+      tone: "warn",
+    };
+  }
 
   if (/protein/i.test(name) && protein < 12) {
     return {
@@ -25,6 +51,43 @@ export function marketingCallout(p: ProductListItem): MarketingCallout {
       tone: "warn",
     };
   }
+
+  // Multigrain/atta claim + mainly refined flour (ultra-processed or low score)
+  if (/multigrain|multi grain|atta/i.test(name) && (isUltraProcessed || score < 45)) {
+    return {
+      claim: "Sounds wholesome (multigrain / atta claim)",
+      reality: isUltraProcessed
+        ? `Actually a NOVA 4 ultra-processed product — multigrain is marketing, not nutrition.`
+        : `Core score ${score} — often still mostly refined flour and additives on the ingredient list.`,
+      tone: "warn",
+    };
+  }
+
+  // "Healthy" / "natural" branding + ultra-processed reality
+  if (/healthy|natural|wellness|nutri/i.test(name) && isUltraProcessed && score < 50) {
+    const flags = [];
+    if (hasHiddenSweetener) flags.push("hidden sweeteners");
+    if (hasHighSugar) flags.push("high sugar");
+    if (hasArtificial) flags.push("artificial flavours");
+    const flagText = flags.length ? ` with ${flags.join(", ")}` : "";
+    return {
+      claim: "Healthy / natural branding",
+      reality: `Scores ${score}/100 — ultra-processed${flagText}.`,
+      tone: "warn",
+    };
+  }
+
+  // Kids-aisle product + high sugar — dangerous combo
+  const kidsAisle = /snack|dairy|bread|cereal|biscuit|chocolate|fruit|milk/i.test(p.category ?? "");
+  if (kidsAisle && hasHighSugar) {
+    return {
+      claim: "Marketed for kids",
+      reality: `High in sugar${sugar != null ? ` (${sugar}g per 100g)` : ""} — marketed directly to children despite the sugar load.`,
+      tone: "warn",
+    };
+  }
+
+  // Zero sugar claim but still has significant sugar
   if (/zero sugar|no added sugar|sugar free/i.test(name) && sugar != null && sugar > 8) {
     return {
       claim: "Zero / no added sugar claim",
@@ -32,13 +95,8 @@ export function marketingCallout(p: ProductListItem): MarketingCallout {
       tone: "warn",
     };
   }
-  if (/multigrain|multi grain|atta/i.test(name) && score < 45) {
-    return {
-      claim: "Sounds wholesome",
-      reality: `Core score ${score} — often still mostly refined flour and additives on the ingredient list.`,
-      tone: "warn",
-    };
-  }
+
+  // Healthy branding + low score (broader catch)
   if (/healthy|wellness|nutri/i.test(name) && score < 40) {
     return {
       claim: "Healthy branding",
@@ -46,6 +104,7 @@ export function marketingCallout(p: ProductListItem): MarketingCallout {
       tone: "warn",
     };
   }
+
   return {
     claim: "Health halo on pack",
     reality: `Scores ${score}/100${sugar != null ? ` with ${sugar}g sugar per 100g` : ""} — worth comparing swaps.`,

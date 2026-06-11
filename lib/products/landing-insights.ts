@@ -456,11 +456,28 @@ function buildWorthItList(products: ProductListItem[]): LandingWorthItProduct[] 
 
 function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
   const scored = products.filter((p) => p.core_scores);
-  const dodgers = scored.filter(
-    (p) =>
-      HEALTH_CLAIMS_RE.test(p.name) &&
-      (p.core_scores?.score ?? 100) < 50,
-  );
+
+  const CONTRADICTING_LABELS = ["hidden_sweetener", "high_in_sugar", "very_high_in_sugar", "ultra_processed", "mostly_nova_4", "artificial_flavors", "high_saturated_fat", "excessive_sodium", "hazardous_additive", "label_mismatch"];
+
+  const dodgers = scored.filter((p) => {
+    const score = p.core_scores?.score ?? 100;
+    const sublabels = (p.core_scores?.verdict_sublabels as string[] | undefined) ?? [];
+    const hasClaim = HEALTH_CLAIMS_RE.test(p.name);
+
+    // Health claim + contradicting sublabels = genuine dodge
+    if (hasClaim && sublabels.some((s) => CONTRADICTING_LABELS.includes(s))) return true;
+
+    // Kids-aisle products with high sugar or ultra-processed
+    const kidsAisle = /snack|dairy|bread|cereal|biscuit|chocolate|fruit|milk/i;
+    if (kidsAisle.test(p.category ?? "") && (
+      sublabels.includes("high_in_sugar") || sublabels.includes("very_high_in_sugar") || sublabels.includes("ultra_processed")
+    )) return true;
+
+    // Strong health claim + terrible score
+    if (hasClaim && score < 35) return true;
+
+    return false;
+  });
   return dodgers
     .sort((a, b) => (a.core_scores?.score ?? 0) - (b.core_scores?.score ?? 0))
     .map((p) => {
@@ -477,8 +494,9 @@ function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
       const realities: string[] = [];
       if (sublabels.includes("hidden_sweetener")) realities.push("hidden sweeteners");
       if (sublabels.includes("ultra_processed")) realities.push("ultra-processed (NOVA 4)");
-      if (sublabels.includes("high_sugar")) realities.push("high in sugar");
-      if (sublabels.includes("artificial_colors")) realities.push("artificial colours");
+      if (sublabels.includes("high_in_sugar") || sublabels.includes("very_high_in_sugar")) realities.push("high in sugar");
+      if (sublabels.includes("artificial_flavors")) realities.push("artificial flavours");
+      if (sublabels.includes("high_saturated_fat")) realities.push("high saturated fat");
       if (!realities.length) realities.push(`score just ${score}/100`);
       return {
         slug: p.slug,

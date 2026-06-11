@@ -179,7 +179,7 @@ export const ProductCard = memo(function ProductCard({
               <span className="block h-[13px]" aria-hidden />
             )}
             {scoutVerified ? (
-              <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700">
+              <span className="shrink-0 rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.07] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-(--color-good)">
                 Verified by Scout
               </span>
             ) : null}
@@ -190,13 +190,21 @@ export const ProductCard = memo(function ProductCard({
 
           {/* Chips — dietary badges + nutrition highlights + score */}
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {p.is_vegan ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Vegan</span> : null}
-            {p.is_gluten_free ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">GF</span> : null}
-            {p.is_palm_oil_free ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">No palm oil</span> : null}
+            {p.is_vegan ? (
+              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">Vegan</span>
+            ) : null}
+            {p.is_gluten_free ? (
+              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">Gluten Free</span>
+            ) : null}
+            {p.is_palm_oil_free ? (
+              <span className="rounded-full border border-(--color-good)/30 bg-(--color-good)/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-good)">No palm oil</span>
+            ) : null}
             {aiReasonLines.slice(0, 3).map((r) => (
-              <span key={r} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">{r}</span>
+              <span key={r} className="rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)">{r}</span>
             ))}
-            {core?.score != null ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">{core.score}/100</span> : null}
+            {core?.score != null ? (
+              <span className="rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)">{core.score}/100</span>
+            ) : null}
           </div>
           {variantCount > 1 ? (
             <button
