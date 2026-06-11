@@ -1360,9 +1360,8 @@ export function CatalogView({
             </div>
           ) : null}
         </div>
-            </div>
-            </>
-          )}
+          </div>
+        )}
       </div>
 
       {/* ── Data-rich landing or product grid ────────────────────────── */}
@@ -1476,28 +1475,7 @@ export function CatalogView({
               ))}
             </div>
           ) : (
-            <>
-              {/* Type grouping chips — group results by product type */}
-              {aiMode && items.length > 0 ? (
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {(() => {
-                    const types = new Map<string, number>();
-                    for (const item of items) {
-                      const t = (item as any).primary_type || item.category || "Other";
-                      types.set(t, (types.get(t) || 0) + 1);
-                    }
-                    return [...types.entries()]
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 6)
-                      .map(([type, count]) => (
-                        <span key={type} className="rounded-full border border-(--color-line) px-2.5 py-0.5 text-[11px] text-(--color-fg-muted)">
-                          {type} ({count})
-                        </span>
-                      ));
-                  })()}
-                </div>
-              ) : null}
-              <div
+            <div
               className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5 ${
                 refreshing ? "opacity-80" : "opacity-100"
               } transition-opacity duration-100`}
