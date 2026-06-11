@@ -2,7 +2,6 @@ import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates, typeMatchTier } from "@/lib/search/v2/candidate-generation";
 import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
-import { buildGoalBuckets } from "@/lib/search/v2/buckets";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
@@ -230,12 +229,6 @@ export async function runSearchV2(
     intent.sort === "best_match" || intent.sort == null
       ? applyExplorationSlot(ranked, intent.raw_query, limit)
       : { items: ranked.slice(0, limit), explored: false };
-  // Build recommendation buckets ONLY for explicit goal queries — not every query with trait weights
-  const buckets =
-    intent.kind === "goal" && goalWeights?.weights && Object.keys(goalWeights.weights).length
-      ? buildGoalBuckets(ranked, goalWeights.weights)
-      : null;
-
   const goalLabel =
     intent.goal_id != null
       ? goalDisplayName(intent.goal_id, snapshot.goalMap)
@@ -266,7 +259,6 @@ export async function runSearchV2(
     intent: { ...intent, goal_phrase: intent.goal_phrase ?? goalLabel ?? null },
     candidates_total: candidates.length,
     items,
-    buckets,
     relaxed,
     relaxation_steps,
     rank_source: intent.kind === "goal" ? "v2_goal" : "v2_structured",

@@ -191,18 +191,10 @@ export type RankedCandidate = {
   type_tier: number;
 };
 
-export type RecommendationBucket = {
-  id: string;
-  label: string;
-  trait_focus: TraitId | "overall" | "budget";
-  items: RankedCandidate[];
-};
-
 export type SearchV2Result = {
   intent: SearchIntentV2;
   candidates_total: number;
   items: RankedCandidate[];
-  buckets: RecommendationBucket[] | null;
   relaxed: boolean;
   relaxation_steps: string[];
   rank_source: "v2_structured" | "v2_goal";

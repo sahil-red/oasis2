@@ -26,7 +26,6 @@ type EvalCase = {
   must_exclude_patterns: string[];
   kind?: string;
   min_results?: number;
-  expected_bucket_ids?: string[];
   expected_top1_patterns?: string[];
 };
 
@@ -163,20 +162,6 @@ async function main() {
       if (matchesAny(blob, c.expected_top1_patterns)) top1Hits++;
       else {
         console.warn(`[top1] ${c.id} — top result missed expected pattern`);
-      }
-    }
-
-    if (
-      c.expected_bucket_ids?.length &&
-      result.buckets &&
-      (c.kind == null || result.intent.kind === c.kind)
-    ) {
-      const ids = new Set(result.buckets.map((b) => b.id));
-      for (const expected of c.expected_bucket_ids) {
-        if (!ids.has(expected)) {
-          console.error(`[BUCKET] ${c.id} missing bucket "${expected}"`);
-          caseOk = false;
-        }
       }
     }
 

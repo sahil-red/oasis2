@@ -342,7 +342,6 @@ export function CatalogView({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [aiRefinements, setAiRefinements] = useState<string[]>([]);
   const [aiRelaxationExplanations, setAiRelaxationExplanations] = useState<string[]>([]);
-  const [aiBuckets, setAiBuckets] = useState<import("@/lib/search/ai-search").AiSearchBucket[] | null>(null);
   const [aiUsage, setAiUsage] = useState<AiSearchUsage | null>(null);
   const [quotaHit, setQuotaHit] = useState(false);
   // Anonymous visitor used up the free searches — show the sign-in invitation.
@@ -379,7 +378,6 @@ export function CatalogView({
     setAiWarning(snap.aiWarning);
     setAiRefinements(snap.aiRefinements);
     setAiRelaxationExplanations(snap.aiRelaxationExplanations ?? []);
-    setAiBuckets(snap.aiBuckets ?? null);
     setAiParsed(snap.aiParsed);
     setFactBrowse(snap.factBrowse);
     setLoading(false);
@@ -432,7 +430,6 @@ export function CatalogView({
       setAiWarning(null);
       setAiRefinements([]);
       setAiRelaxationExplanations([]);
-      setAiBuckets(null);
       setAiParsed(null);
       setFactBrowse(null);
       setSelectedSubcategory(null);
@@ -711,7 +708,6 @@ export function CatalogView({
       aiWarning,
       aiRefinements,
       aiRelaxationExplanations,
-      aiBuckets,
       aiParsed,
       factBrowse,
     };
@@ -742,7 +738,6 @@ export function CatalogView({
     aiWarning,
     aiRefinements,
     aiRelaxationExplanations,
-    aiBuckets,
     aiParsed,
     factBrowse,
   ]);
@@ -799,7 +794,6 @@ export function CatalogView({
     setAiWarning(null);
     setAiRefinements([]);
     setAiRelaxationExplanations([]);
-    setAiBuckets(null);
     setAiParsed(null);
     setState((prev) => {
       const next = { ...prev, ...partial };
@@ -866,7 +860,6 @@ export function CatalogView({
       setAiWarning(result.parse_warning ?? null);
       setAiRefinements(result.refinements);
       setAiRelaxationExplanations(result.relaxation_explanations ?? []);
-      setAiBuckets(result.buckets ?? null);
       setAiParsed(result.parsed);
       if (authReady && !isPlus) setAiUsage(recordAiSearch());
       setRecentSearches(recordRecentSearch(prompt));
@@ -983,7 +976,6 @@ export function CatalogView({
     setAiWarning(null);
     setAiRefinements([]);
     setAiRelaxationExplanations([]);
-    setAiBuckets(null);
     setAiParsed(null);
     setFactBrowse(null);
     setSelectedSubcategory(null);
@@ -1277,7 +1269,6 @@ export function CatalogView({
                               (b.price_inr ?? Number.MAX_SAFE_INTEGER),
                           ),
                         );
-                        setAiBuckets(null);
                         setAiSummary((s) =>
                           s && !/by price/i.test(s) ? `${s} · by price` : (s ?? "by price"),
                         );
@@ -1574,64 +1565,22 @@ export function CatalogView({
               }}
             />
           ) : null}
-          {aiBuckets && aiBuckets.length > 0 ? (
-            <div className="space-y-8">
-              {aiBuckets.map((bucket) => {
-                const filteredBucketItems = bucket.items.filter((p) => {
-                  const it = p as CatalogGridItem;
-                  if (selectedSubcategory && it.subcategory !== selectedSubcategory) return false;
-                  if (activeState.category && it.category !== activeState.category) return false;
-                  if (activeState.subcategory && it.subcategory !== activeState.subcategory) return false;
-                  if (activeState.brand && it.brand !== activeState.brand) return false;
-                  if (activeState.minScore > 0 && (it.core_scores?.score ?? 0) < activeState.minScore) return false;
-                  if (activeState.maxPrice > 0 && (it.price_inr ?? Infinity) > activeState.maxPrice) return false;
-                  if (activeState.grade && it.core_scores?.grade !== activeState.grade) return false;
-                  if (activeState.verdict && it.core_scores?.verdict !== activeState.verdict) return false;
-                  if (activeState.onlyScored && !it.core_scores) return false;
-                  return true;
-                });
-                if (filteredBucketItems.length === 0) return null;
-                return (
-                  <section key={bucket.id}>
-                    <h3 className="font-display text-lg text-(--color-fg)">{bucket.label}</h3>
-                    <div
-                      className={`relative mt-3 grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
-                        refreshing ? "opacity-80" : "opacity-100"
-                      } transition-opacity duration-100`}
-                    >
-                      {filteredBucketItems.map((p) => (
-                        <ProductCard
-                          key={`${bucket.id}-${p.id}`}
-                          product={p}
-                          hrefQuery={productQuery}
-                          goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                          onSublabelClick={handleSublabelClick}
-                          dietaryPrevalence={dietaryPrevalence}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
-            </div>
-          ) : (
-            <div
-              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
-                refreshing ? "opacity-80" : "opacity-100"
-              } transition-opacity duration-100`}
-            >
-              {(aiMode ? displayedItems : items).map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  hrefQuery={productQuery}
-                  goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                  onSublabelClick={handleSublabelClick}
-                  dietaryPrevalence={dietaryPrevalence}
-                />
-              ))}
-            </div>
-          )}
+          <div
+            className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
+              refreshing ? "opacity-80" : "opacity-100"
+            } transition-opacity duration-100`}
+          >
+            {(aiMode ? displayedItems : items).map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                hrefQuery={productQuery}
+                goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                onSublabelClick={handleSublabelClick}
+                dietaryPrevalence={dietaryPrevalence}
+              />
+            ))}
+          </div>
         </div>
       )}
 

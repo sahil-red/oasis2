@@ -25,8 +25,6 @@ export type AiSearchItem = CatalogGridItem & {
   ai_health_score?: number;
   ai_match_reasons: string[];
   ai_match_warning?: string | null;
-  /** §5 data quality tier for Scout badges */
-  scout_verified?: boolean;
   /** §8 canonical cluster sibling count (expand on click) */
   canonical_variant_count?: number;
   /** §14 smart display chips — computed by getDisplayChips() in the V2 adapter */
@@ -43,13 +41,6 @@ export type AiSearchItem = CatalogGridItem & {
   has_added_sugar?: boolean | null;
 };
 
-export type AiSearchBucket = {
-  id: string;
-  label: string;
-  trait_focus: string;
-  items: AiSearchItem[];
-};
-
 export type AiSearchResult = {
   parsed: ParsedProductQuery;
   parse_source: QueryParseResult["source"];
@@ -59,8 +50,6 @@ export type AiSearchResult = {
   rank_warning?: string;
   summary: string;
   items: AiSearchItem[];
-  /** §7c goal-query bucket sections (Search V2) */
-  buckets?: AiSearchBucket[] | null;
   reasons_by_product_id: Record<string, string[]>;
   /** V1-style clickable query suggestions — not V2 relaxation text */
   refinements: string[];

@@ -28,7 +28,6 @@ export type CatalogProduct = {
   ai_health_score?: number;
   ai_match_reasons?: string[];
   ai_match_warning?: string | null;
-  scout_verified?: boolean;
   canonical_variant_count?: number;
 };
 
@@ -134,17 +133,9 @@ export type ProductDetail = CatalogProduct & {
   } | null;
 };
 
-export type AiSearchBucket = {
-  id: string;
-  label: string;
-  trait_focus: string;
-  items: CatalogProduct[];
-};
-
 export type AiSearchResult = {
   summary: string;
   items: CatalogProduct[];
-  buckets?: AiSearchBucket[] | null;
   parsed: unknown;
   parse_source: string;
   rank_source: string;

@@ -167,9 +167,6 @@ export function ProductCard({
         {product.brand ? (
           <Text style={styles.brand} numberOfLines={1}>{product.brand.toUpperCase()}</Text>
         ) : null}
-        {product.scout_verified ? (
-          <Text style={styles.verified}>Verified by Scout</Text>
-        ) : null}
       </View>
       <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
 
@@ -286,13 +283,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: colors.fgDim,
     flexShrink: 1,
-  },
-  verified: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 9,
-    letterSpacing: 0.4,
-    color: colors.good,
-    textTransform: "uppercase",
   },
   name: {
     fontFamily: fonts.sansSemiBold,

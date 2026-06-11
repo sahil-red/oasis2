@@ -184,9 +184,7 @@ export default function SearchScreen() {
     </>
   );
 
-  const flatItems = result?.buckets?.length
-    ? result.buckets.flatMap((b) => b.items)
-    : (result?.items ?? []);
+  const flatItems = result?.items ?? [];
 
   return (
     <Screen>
@@ -198,11 +196,6 @@ export default function SearchScreen() {
           ListHeaderComponent={
             <>
               {ListHeader}
-              {result.buckets?.map((bucket) => (
-                <View key={bucket.id} style={styles.bucketHeader}>
-                  <Text style={styles.bucketTitle}>{bucket.label}</Text>
-                </View>
-              ))}
             </>
           }
           contentContainerStyle={styles.grid}
@@ -287,6 +280,4 @@ const styles = StyleSheet.create({
   },
   refineText: { fontFamily: fonts.sansMedium, color: colors.fg, fontSize: 13 },
   grid: { padding: spacing.sm, paddingBottom: spacing.xl },
-  bucketHeader: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  bucketTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.fg },
 });

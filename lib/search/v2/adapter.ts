@@ -1,5 +1,5 @@
 import { adminClient } from "@/lib/supabase/admin";
-import type { AiSearchBucket, AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
+import type { AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
@@ -127,7 +127,6 @@ function rankedToAiItem(
     ai_health_score: row.scout_score ?? undefined,
     ai_match_reasons: enrichedReasons,
     ai_match_warning: dataQualityWarning(row.data_quality_score),
-    scout_verified: row.data_quality_score >= 0.75,
     canonical_variant_count: countCanonicalSiblings(
       snapshotIndex,
       row.canonical_product_id ?? row.product_id,
@@ -159,15 +158,6 @@ export async function searchV2ToAiResult(
     rankedToAiItem(c, display, snapshotIndex, dietaryPrevalence),
   );
 
-  const buckets: AiSearchBucket[] | null = v2.buckets?.length
-    ? v2.buckets.map((b) => ({
-        id: b.id,
-        label: b.label,
-        trait_focus: String(b.trait_focus),
-        items: b.items.map((c) => rankedToAiItem(c, display, snapshotIndex, dietaryPrevalence)),
-      }))
-    : null;
-
   const parsed = heuristicParseProductQuery(v2.intent.raw_query);
   const parse_warning =
     v2.intent.intent_source === "degraded"
@@ -182,7 +172,6 @@ export async function searchV2ToAiResult(
     parse_warning,
     summary: v2.summary,
     items,
-    buckets,
     reasons_by_product_id: Object.fromEntries(
       v2.items.map((c) => [c.row.product_id, c.reasons]),
     ),
