@@ -111,19 +111,10 @@ export function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
 async function loadGoalMapFromDb(): Promise<Map<string, GoalTraitMapRow>> {
   const map = new Map<string, GoalTraitMapRow>();
 
-  // Parallel — these run on the cold-snapshot request path; serial awaits would
-  // stack seed-count × embedding latency (with retries) onto every cold query.
-  const seedEmbeds = await Promise.all(
-    SEED_GOAL_TRAIT_MAP.map((seed) => embedText(seed.goal_phrase, "document")),
-  );
-  SEED_GOAL_TRAIT_MAP.forEach((seed, i) => {
-    const embed = seedEmbeds[i] ?? [];
-    map.set(seed.goal_id, {
-      ...seed,
-      goal_embedding: embed.length ? embed : null,
-    });
-  });
-
+  // DB FIRST — rows carry persisted goal embeddings (seeded at build time).
+  // The old order embedded every seed via Voyage on each cold instance and then
+  // immediately overwrote them with these DB rows: ~16 wasted network calls on
+  // the cold path. A populated table now costs ZERO embedding calls.
   try {
     const supabase = adminClient();
     const { data } = await supabase.from("goal_trait_map").select("*");
@@ -141,6 +132,23 @@ async function loadGoalMapFromDb(): Promise<Map<string, GoalTraitMapRow>> {
     }
   } catch {
     // table may not exist
+  }
+
+  // Embed only the gaps (fresh env / seed missing or stored without embedding).
+  const missing = SEED_GOAL_TRAIT_MAP.filter(
+    (seed) => !map.get(seed.goal_id)?.goal_embedding?.length,
+  );
+  if (missing.length) {
+    const embeds = await Promise.all(
+      missing.map((seed) => embedText(seed.goal_phrase, "document")),
+    );
+    missing.forEach((seed, i) => {
+      const embed = embeds[i] ?? [];
+      map.set(seed.goal_id, {
+        ...seed,
+        goal_embedding: embed.length ? embed : null,
+      });
+    });
   }
   return map;
 }

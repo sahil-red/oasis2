@@ -54,6 +54,7 @@
     "search:seed-eval": "tsx scripts/seed-eval-from-history.ts",
     "search:ship-check": "tsx scripts/search-ship-check.ts",
     "search:v2-regression": "tsx scripts/search-v2-regression.ts",
+    "search:probes": "tsx scripts/search-probes.ts",
     "search:regression": "tsx scripts/search-regression.ts",
     "search:audit": "tsx scripts/search-blindspot-audit.ts",
     "scoring:artificial-flavor": "tsx scripts/scoring-artificial-flavor.ts",

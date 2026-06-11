@@ -14,8 +14,10 @@ export const NUMERIC_CASES: Array<{
     check: (n) => n.high_protein_tier && n.sort === "highest_protein",
   },
   {
+    // Soft ask ⇒ ranking modifier ONLY. A hard cutoff here was the old
+    // mislabeling bug class — this case now guards against its return.
     query: "low sugar biscuits",
-    check: (n) => n.low_sugar_tier && n.max_sugar_g === 10,
+    check: (n) => n.low_sugar_tier && n.max_sugar_g == null,
   },
   {
     query: "zero sugar drinks",

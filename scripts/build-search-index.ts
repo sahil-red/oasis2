@@ -212,6 +212,34 @@ async function main() {
     }
   }
 
+  // Refresh type centroids (avg embedding per primary_type) — powers semantic
+  // type equivalents/neighbors at query time. ~18s in-DB; needs the direct
+  // connection (PostgREST statement timeout is too short for this).
+  if (!args.dryRun) {
+    if (process.env.SUPABASE_DB_URL) {
+      try {
+        const { default: postgres } = await import("postgres");
+        const sqlc = postgres(process.env.SUPABASE_DB_URL, { max: 1 });
+        try {
+          await sqlc.unsafe("SET statement_timeout = '120s'");
+          const r = await sqlc.unsafe("SELECT refresh_type_centroids(2) AS n");
+          console.log(`[search:build-index] type centroids refreshed (${r[0]?.n} types)`);
+        } finally {
+          await sqlc.end({ timeout: 5 });
+        }
+      } catch (e) {
+        console.warn(
+          "[search:build-index] centroid refresh failed — run `SELECT refresh_type_centroids(2)` manually:",
+          (e as Error).message,
+        );
+      }
+    } else {
+      console.warn(
+        "[search:build-index] SUPABASE_DB_URL unset — run `SELECT refresh_type_centroids(2)` in SQL editor after this build",
+      );
+    }
+  }
+
   const profiles = capped.length ? await buildCategoryTraitProfiles(capped) : [];
 
   console.log(
