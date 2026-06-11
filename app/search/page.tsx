@@ -41,8 +41,8 @@ export default async function CatalogPage({
 }) {
   const params = await searchParams;
   const [meta, initialSearch] = await Promise.all([
-    getCachedCatalogMeta(params.category).catch(() => null),
-    getCachedCatalogSearch({ ...params, page: 1, limit: 96 }).catch(() => null),
+    getCachedCatalogMeta(params.category).catch(() => undefined),
+    getCachedCatalogSearch({ ...params, page: 1, limit: 96 }).catch(() => undefined),
   ]);
 
   return (
