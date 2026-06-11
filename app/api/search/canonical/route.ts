@@ -21,14 +21,15 @@ export async function GET(req: NextRequest) {
   if (ids.length) {
     const { data } = await adminClient()
       .from("products")
-      .select("id, image_urls, net_weight, mrp_inr, ocr_image_url, ocr_payload")
+      // ocr_payload was dropped from `products`; selecting it throws and blanks images.
+      .select("id, image_urls, net_weight, mrp_inr, ocr_image_url")
       .in("id", ids);
     for (const row of data ?? []) {
       try {
         const rawUrls: string[] = Array.isArray(row.image_urls) ? row.image_urls : [];
         const images = normalizeProductImageUrls(
           rawUrls,
-          { ocrImageUrl: (row.ocr_image_url as string | null) ?? null, ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null },
+          { ocrImageUrl: (row.ocr_image_url as string | null) ?? null },
         );
         display.set(String(row.id), {
           image_urls: images.length ? images.slice(0, 1) : [],

@@ -49,14 +49,17 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
     const supabase = adminClient();
     const { data } = await supabase
       .from("products")
-      .select("id, image_urls, net_weight, mrp_inr, ocr_image_url, ocr_payload")
+      // NOTE: ocr_payload was dropped from `products` — selecting it throws
+      // "column does not exist", which the outer catch swallowed, blanking ALL
+      // search images. ocr_image_url (the label-frame URL) is the signal we need.
+      .select("id, image_urls, net_weight, mrp_inr, ocr_image_url")
       .in("id", productIds.slice(0, 50));
     for (const row of data ?? []) {
       try {
         const rawUrls: string[] = Array.isArray(row.image_urls) ? row.image_urls : [];
         const images = normalizeProductImageUrls(
           rawUrls,
-          { ocrImageUrl: (row.ocr_image_url as string | null) ?? null, ocrPayload: (row.ocr_payload as Record<string, unknown> | null) ?? null },
+          { ocrImageUrl: (row.ocr_image_url as string | null) ?? null },
         );
         out.set(String(row.id), {
           image_urls: images.length ? images.slice(0, 1) : [],
