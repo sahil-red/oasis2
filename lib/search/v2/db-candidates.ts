@@ -86,37 +86,19 @@ export async function fetchCandidatePool(
   minQuality = DATA_QUALITY_MIN,
   limit = 500,
 ): Promise<ProductSearchIndexRow[]> {
-  // Try RPC first (requires ivfflat index on embedding column)
-  // Uses a dummy query embedding — real embedding computed in retrieve.ts
-  // The RPC provides ANN-ordered results with cosine distance.
-  // Fall back to simple REST query if RPC returns nothing.
-
-  const fallback = () => fetchViaRest(intent, limit);
-
-  // If no embeddings exist (column missing), skip RPC
-  const supabase = adminClient();
-  const { data: check } = await supabase
-    .from("product_search_index")
-    .select("embedding")
-    .not("embedding", "is", null)
-    .limit(1);
-
-  if (!check?.length) {
-    return fallback();
-  }
-
-  // RPC requires a query embedding — we compute one here
-  // (import inline to avoid circular dependency)
   const { embedText } = await import("@/lib/search/v2/embeddings");
   const queryEmbed = await embedText(intent.raw_query, "query");
   const typeEmbed = intent.primary_type
     ? await embedText(intent.primary_type, "query")
     : [];
 
+  // Try RPC first (requires ivfflat index)
   const rpcResults = await fetchViaRpc(intent, queryEmbed, typeEmbed, limit);
   if (rpcResults.length >= 3) return rpcResults;
 
-  // RPC returned too few — fall back to REST
-  console.warn("[db-candidates] RPC returned", rpcResults.length, "results, falling back to REST");
-  return fallback();
+  // RPC failed or returned too few — fall back to simple REST query
+  if (rpcResults.length > 0) {
+    console.warn("[db-candidates] RPC returned only", rpcResults.length, "results, falling back to REST");
+  }
+  return fetchViaRest(intent, limit);
 }
