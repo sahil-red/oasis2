@@ -3,30 +3,26 @@ import { cosineSimilarity, embedText, isEmbeddingConfigured } from "@/lib/search
 import { selectCategoriesForGoal } from "@/lib/search/v2/category-profiles";
 import { lexicalTypeMatch } from "@/lib/search/v2/lexical-fallback";
 import { reciprocalRankFusion } from "@/lib/search/v2/rrf";
+import { semanticTypeMatches } from "@/lib/search/v2/type-centroids";
 import type { CategoryTraitProfileRow, ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
-import { DATA_QUALITY_MIN, TYPE_EMBEDDING_THRESHOLD } from "@/lib/search/v2/types";
+import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
 import type { GoalTraitWeights } from "@/lib/search/v2/types";
 
 export const CANDIDATE_CAP = 500;
 
-/** 0 = exact type, 1 = embedding, 2 = lexical fallback, 99 = no match */
+/** 0 = exact type, 1 = centroid-equivalent type, 2 = lexical fallback, 99 = no match.
+ *  Equivalents come from type_centroids (data-driven: "biscuit" ≡ "biscuits" ≡
+ *  "cookie") — the old per-row type_embedding tier was dead code once the index
+ *  stopped shipping vectors. */
 function typeMatchTier(
   row: ProductSearchIndexRow,
   wanted: string,
-  queryTypeEmbed: number[] | null,
+  equivalents: Set<string>,
 ): number {
-  if (row.primary_type?.toLowerCase() === wanted) return 0;
-
-  if (queryTypeEmbed?.length && row.type_embedding?.length) {
-    const sim = cosineSimilarity(queryTypeEmbed, row.type_embedding);
-    if (sim >= TYPE_EMBEDDING_THRESHOLD) return 1;
-  }
-
-  if (!isEmbeddingConfigured() || !row.type_embedding?.length) {
-    return lexicalTypeMatch(row, wanted) ? 2 : 99;
-  }
-
-  return 99;
+  const rowType = row.primary_type?.toLowerCase();
+  if (rowType === wanted) return 0;
+  if (rowType && equivalents.has(rowType)) return 1;
+  return lexicalTypeMatch(row, wanted) ? 2 : 99;
 }
 
 function rowMatchesFlavours(row: ProductSearchIndexRow, required: string[]): boolean {
@@ -47,9 +43,17 @@ function passesDietary(row: ProductSearchIndexRow, intent: SearchIntentV2): bool
 
 function passesAllergens(row: ProductSearchIndexRow, excluded: string[]): boolean {
   if (!excluded.length) return true;
+  // Labels under-report: a bag of roasted peanuts often has NO allergen
+  // declaration. Screen the declared allergens AND the product's own name +
+  // ingredient doc, so "peanut free" cannot serve literal peanuts.
   const allergens = row.allergens.join(" ").toLowerCase();
+  const name = row.name.toLowerCase();
+  const doc = row.search_doc ?? "";
   for (const a of excluded) {
-    if (allergens.includes(a.toLowerCase())) return false;
+    const needle = a.toLowerCase();
+    if (allergens.includes(needle)) return false;
+    if (name.includes(needle)) return false;
+    if (ingredientPresent(doc, needle)) return false;
   }
   return true;
 }
@@ -67,15 +71,10 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   if (c.max_fat_g != null && row.fat_g != null && row.fat_g > c.max_fat_g) return false;
   if (c.max_calories != null && row.energy_kcal != null && row.energy_kcal > c.max_calories) return false;
   if (c.min_protein_g != null && row.protein_g != null && row.protein_g < c.min_protein_g) return false;
-  // For sort-intent queries (highest_protein), the sort handles ranking — don't filter
-  // by tier since "low" tier can still have high absolute protein (24g tofu in a paneer cohort).
-  if (
-    intent.modifiers.includes("high_protein_tier") &&
-    row.protein_tier === "low" &&
-    intent.sort !== "highest_protein"
-  )
-    return false;
-  if (intent.modifiers.includes("low_sugar") && row.sugar_tier === "high") return false;
+  // Relative asks ("high protein", "low sugar") are RANKING signals, never gates.
+  // Tiers are within-cohort percentiles — "low" tier can be 24g protein (tofu in
+  // a paneer cohort) and "low" sugar can be 22g (within chocolate). Hard-gating
+  // on them mislabels by construction; ranking.ts boosts by absolute grams instead.
   if (intent.modifiers.includes("no_added_sugar") && row.has_added_sugar === true) return false;
   return true;
 }
@@ -186,19 +185,21 @@ export async function generateCandidates(
     }
   }
 
-  const queryTypeEmbed = intent.primary_type ? await embedText(intent.primary_type, "query") : null;
+  // Data-driven type equivalents (cached centroid lookup) — replaces the dead
+  // per-row type-embedding comparison and its wasted per-search Voyage call.
+  const typeEquivalents = intent.primary_type
+    ? await semanticTypeMatches(intent.primary_type)
+    : new Set<string>();
 
   if (intent.kind === "brand" && intent.brand) {
     const brandQ = intent.brand.toLowerCase();
     pool = pool.filter((row) => (row.brand ?? "").toLowerCase().includes(brandQ));
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();
-    const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, queryTypeEmbed) < 99);
-    if (typeFiltered.length >= 5) {
-      pool = typeFiltered;
-    } else if (typeFiltered.length > 0) {
-      // Keep the type filter even if < 5 — user explicitly asked for this type.
-      // Only fall back if truly 0 matches (ANN didn't return any).
+    const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, typeEquivalents) < 99);
+    // User explicitly asked for this type — keep the filter whenever it matches
+    // anything at all; the typed retrieval leg guarantees real coverage.
+    if (typeFiltered.length > 0) {
       pool = typeFiltered;
     }
   }
@@ -214,7 +215,11 @@ export async function generateCandidates(
 
   pool = dedupeCanonical(pool);
 
-  if (pool.length === 0) return index.slice(0, CANDIDATE_CAP);
+  // A fully-filtered-out pool must return EMPTY — never the raw ANN head, which
+  // would silently bypass allergen/dietary/flavour filters and serve confident
+  // garbage ("kiwi yogurt" → random yogurts). The relaxation ladder owns recovery
+  // and tells the user what was loosened.
+  if (pool.length === 0) return [];
 
   if (pool.length <= CANDIDATE_CAP) return pool;
 
@@ -234,7 +239,7 @@ export async function generateCandidates(
         : queryEmbed?.length && row.embedding?.length
           ? cosineSimilarity(queryEmbed, row.embedding)
           : 0,
-    tier: wanted ? typeMatchTier(row, wanted, queryTypeEmbed) : 0,
+    tier: wanted ? typeMatchTier(row, wanted, typeEquivalents) : 0,
   }));
 
   return truncateWithRrf(scored, CANDIDATE_CAP);

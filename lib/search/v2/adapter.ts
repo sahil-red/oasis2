@@ -1,6 +1,7 @@
 import { adminClient } from "@/lib/supabase/admin";
 import type { AiSearchBucket, AiSearchItem, AiSearchResult } from "@/lib/search/ai-search";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
+import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { countCanonicalSiblings } from "@/lib/search/v2/canonical-cluster";
 import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
 import type { RankedCandidate, SearchV2Result } from "@/lib/search/v2/types";
@@ -107,11 +108,18 @@ function rankedToAiItem(
           score: scout,
           grade: scoreToGrade(scout),
           band: scoreToBand(scout),
-          verdict: null,
+          // Same resolver the PDP uses — verdict badges and verdict filters now
+          // work on AI results instead of silently matching nothing.
+          verdict: resolveProductVerdict({
+            score: scout,
+            name: row.name,
+            category: row.category,
+            subcategory: row.subcategory,
+          }),
           verdict_sublabels: [],
           relative_score: null,
           cohort_size: null,
-          absolute_score: null,
+          absolute_score: row.scout_score ?? null,
         }
       : null,
     ai_match_score: Math.round(c.final_score * 100),

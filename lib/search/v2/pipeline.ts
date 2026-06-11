@@ -127,8 +127,21 @@ export async function runSearchV2(
           : [];
         const relaxedResult = await relaxIntentWithLlm(intent, { type_neighbors: typeNeighbors });
         llm_calls += relaxedResult.llm_calls;
-        intent = relaxedResult.intent;
         if (!/no relaxation/i.test(relaxedResult.explanation)) {
+          // Safety constraints are pinned — an LLM relaxation may not drop
+          // allergen/dietary exclusions even if it tries.
+          intent = {
+            ...relaxedResult.intent,
+            constraints: {
+              ...relaxedResult.intent.constraints,
+              vegan: intent.constraints.vegan,
+              vegetarian: intent.constraints.vegetarian,
+              gluten_free: intent.constraints.gluten_free,
+              palm_oil_free: intent.constraints.palm_oil_free,
+              avoid_ingredients: intent.constraints.avoid_ingredients,
+              allergens_excluded: intent.constraints.allergens_excluded,
+            },
+          };
           relaxation_steps.push(relaxedResult.explanation);
           relaxed = true;
         }
@@ -172,7 +185,13 @@ export async function runSearchV2(
 
   ranked = attachExplainability(ranked, goalWeights?.weights ?? null);
 
-  const { items, explored } = applyExplorationSlot(ranked, intent.raw_query, limit);
+  // Exploration only makes sense under relevance ranking — under an explicit
+  // sort (cheapest / highest protein) a promoted item visibly breaks the order
+  // the user asked for.
+  const { items, explored } =
+    intent.sort === "best_match" || intent.sort == null
+      ? applyExplorationSlot(ranked, intent.raw_query, limit)
+      : { items: ranked.slice(0, limit), explored: false };
   // Build recommendation buckets ONLY for explicit goal queries — not every query with trait weights
   const buckets =
     intent.kind === "goal" && goalWeights?.weights && Object.keys(goalWeights.weights).length

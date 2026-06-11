@@ -66,15 +66,28 @@ function constraintSatisfaction(row: ProductSearchIndexRow, intent: SearchIntent
     total++;
     if (row.sugar_g == null || row.sugar_g <= c.max_sugar_g) met++;
   }
-  if (intent.modifiers.includes("high_protein_tier")) {
-    total++;
-    if (row.protein_tier === "high" || row.protein_tier === "medium") met++;
-  }
-  if (intent.modifiers.includes("low_sugar")) {
-    total++;
-    if (row.sugar_tier === "low" || row.sugar_tier === "medium") met++;
-  }
   return total > 0 ? met / total : 0.5;
+}
+
+/** Physics validity for per-100g macros — a percentage cannot exceed 100.
+ *  Invalid extraction artifacts (e.g. "500g protein") must not win sorts. */
+function validGrams(v: number | null | undefined): number | null {
+  return v != null && Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
+}
+
+/** Min-max normalize values that may be null — nulls land mid-scale so unknown
+ *  data neither wins nor loses the dimension. invert=true → lower raw is better. */
+function normalizeNullable(values: Array<number | null>, invert = false): number[] {
+  const known = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!known.length) return values.map(() => 0.5);
+  const min = Math.min(...known);
+  const max = Math.max(...known);
+  if (max === min) return values.map(() => 0.5);
+  return values.map((v) => {
+    if (v == null || !Number.isFinite(v)) return 0.5;
+    const n = (v - min) / (max - min);
+    return invert ? 1 - n : n;
+  });
 }
 
 function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchIntentV2["sort"]): number {
@@ -84,14 +97,11 @@ function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchInte
     case "healthiest":
       return b.health_score - a.health_score;
     case "highest_protein":
-      if (a.row.protein_tier && b.row.protein_tier) {
-        const tierRank = (t: string | null) =>
-          t === "high" ? 3 : t === "medium" ? 2 : t === "low" ? 1 : 0;
-        return tierRank(b.row.protein_tier) - tierRank(a.row.protein_tier);
-      }
-      return (b.row.protein_g ?? 0) - (a.row.protein_g ?? 0);
+      // Absolute grams only. Tiers are within-cohort percentiles — comparing
+      // them across types ranks a "high"-for-honey 2g above a "medium" 25g whey.
+      return (validGrams(b.row.protein_g) ?? -1) - (validGrams(a.row.protein_g) ?? -1);
     case "lowest_sugar":
-      return (a.row.sugar_g ?? 1e9) - (b.row.sugar_g ?? 1e9);
+      return (validGrams(a.row.sugar_g) ?? 1e9) - (validGrams(b.row.sugar_g) ?? 1e9);
     default:
       return b.final_score - a.final_score;
   }
@@ -115,13 +125,26 @@ export function rankCandidates(
   const relevances = candidates.map((r) => relevanceById.get(r.product_id) ?? 0);
   const healths = candidates.map(healthScore);
   const pops = candidates.map(computePopularitySignal);
-  const rawTraitMatches = candidates.map((row) => {
+
+  // Relative asks ("high protein", "low sugar") score by ABSOLUTE nutrition,
+  // normalized within this candidate set — the only cohort that matches the
+  // user's actual comparison context. Build-time tiers never gate or rank here.
+  const proteinNorm = intent.modifiers.includes("high_protein_tier")
+    ? normalizeNullable(candidates.map((r) => validGrams(r.protein_g)))
+    : null;
+  const sugarNorm = intent.modifiers.includes("low_sugar")
+    ? normalizeNullable(candidates.map((r) => validGrams(r.sugar_g)), true)
+    : null;
+
+  const rawTraitMatches = candidates.map((row, i) => {
     let base: number;
     if (goalWeights && Object.keys(goalWeights).length) {
       base = computeGoalFit(row, goalWeights).score;
     } else {
       base = constraintSatisfaction(row, intent);
     }
+    if (proteinNorm) base = clamp01(base * 0.4 + proteinNorm[i]! * 0.6);
+    if (sugarNorm) base = clamp01(base * 0.4 + sugarNorm[i]! * 0.6);
     if (intent.use_case) {
       base = clamp01(base * 0.65 + useCaseMatchScore(row, intent.use_case) * 0.35);
     }

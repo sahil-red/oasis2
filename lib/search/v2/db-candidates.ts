@@ -1,18 +1,39 @@
 /**
- * In-DB candidate retrieval (pgvector). Uses the lightweight search_v2_ids RPC
- * for ANN-based cosine ordering, then fetches SLIM rows via REST for the result set.
- * The RPC's per-row cosine distance rides along as knn_distance, so the raw
- * 1024-dim vectors never leave the database.
- * Egress: 200 IDs × ~60 bytes (RPC) + 200 slim rows × ~3 KB ≈ 600 KB total
- * (vs ~5 MB when rows carried embedding JSON).
+ * In-DB candidate retrieval (pgvector) — two parallel legs, unioned:
+ *
+ *  (a) ANN leg: search_v2_rows — cosine KNN over the whole index, slim jsonb
+ *      rows + distance in ONE round-trip. Deliberately untyped: a selective
+ *      WHERE on top of an ivfflat probe starves recall (the probed lists may
+ *      contain zero rows of a rare type — 19 tofu products existed, ANN+filter
+ *      returned 0).
+ *  (b) typed leg: search_v2_typed_rows — exact primary_type fetch (B-tree, no
+ *      ANN) for the asked type AND its centroid-equivalent types ("biscuit" ≡
+ *      "biscuits" ≡ "cookie"). Guarantees every product of the asked type is
+ *      in the pool regardless of ANN probe luck.
+ *
+ * Egress: ~3KB/row slim jsonb; vectors never leave the database.
  */
 import { adminClient } from "@/lib/supabase/admin";
 import { embedText } from "@/lib/search/v2/embeddings";
-import { INDEX_COLUMNS, mapDbRow } from "@/lib/search/v2/index-queries";
+import { mapDbRow } from "@/lib/search/v2/index-queries";
+import { semanticTypeMatches } from "@/lib/search/v2/type-centroids";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
 
-type KnnHit = { product_id: string; distance: number };
+type RpcRow = { row_json: Record<string, unknown>; distance: number | null };
+const MAX_TYPED_TYPES = 4;
+
+function mapRpcRows(data: unknown): ProductSearchIndexRow[] {
+  if (!Array.isArray(data)) return [];
+  const out: ProductSearchIndexRow[] = [];
+  for (const r of data as RpcRow[]) {
+    if (!r?.row_json) continue;
+    const mapped = mapDbRow(r.row_json);
+    mapped.knn_distance = r.distance != null ? Number(r.distance) : null;
+    out.push(mapped);
+  }
+  return out;
+}
 
 export async function fetchCandidatePool(
   intent: SearchIntentV2,
@@ -21,60 +42,50 @@ export async function fetchCandidatePool(
 ): Promise<ProductSearchIndexRow[]> {
   const supabase = adminClient();
 
-  // Generate query embedding once
   const queryEmbed = await embedText(intent.raw_query, "query");
-
-  // Step 1: Lightweight RPC — returns only product_ids + distances
   const vecStr = queryEmbed.length ? `[${queryEmbed.join(",")}]` : null;
-  if (!vecStr) return [];
 
-  const { data: ids, error: rpcErr } = await supabase.rpc("search_v2_ids", {
-    p_query_embedding: vecStr,
-    p_limit: limit,
-    p_min_quality: minQuality,
-    p_primary_type: intent.primary_type ?? null,
-  });
+  // Typed leg covers the asked type + its semantic equivalents (cached lookup).
+  const wanted = intent.primary_type?.trim().toLowerCase() ?? null;
+  const typedTypes = wanted
+    ? [...(await semanticTypeMatches(wanted))].slice(0, MAX_TYPED_TYPES)
+    : [];
 
-  if (rpcErr || !Array.isArray(ids) || !ids.length) {
-    if (rpcErr) console.warn("[db-candidates] RPC failed:", rpcErr.message);
-    return [];
+  const annPromise = vecStr
+    ? supabase.rpc("search_v2_rows", {
+        p_query_embedding: vecStr,
+        p_limit: limit,
+        p_min_quality: minQuality,
+      })
+    : Promise.resolve({ data: null, error: null });
+
+  const typedPromises = typedTypes.map((t) =>
+    supabase.rpc("search_v2_typed_rows", {
+      p_primary_type: t,
+      p_query_embedding: vecStr,
+      p_limit: limit,
+      p_min_quality: minQuality,
+    }),
+  );
+
+  const [ann, ...typed] = await Promise.all([annPromise, ...typedPromises]);
+
+  if (ann.error) console.warn("[db-candidates] ANN RPC failed:", ann.error.message);
+  for (const t of typed) {
+    if (t.error) console.warn("[db-candidates] typed RPC failed:", t.error.message);
   }
 
-  return fetchRows(supabase, ids as KnnHit[]);
-}
-
-async function fetchRows(
-  supabase: ReturnType<typeof adminClient>,
-  hits: KnnHit[],
-): Promise<ProductSearchIndexRow[]> {
-  const distanceById = new Map<string, number>();
-  for (const h of hits) {
-    if (h?.product_id != null && h.distance != null) {
-      distanceById.set(h.product_id, Number(h.distance));
-    }
+  // Union, typed-first so exact-type rows always survive the dedupe.
+  const byId = new Map<string, ProductSearchIndexRow>();
+  for (const t of typed) {
+    for (const row of mapRpcRows(t.data)) byId.set(row.product_id, row);
+  }
+  for (const row of mapRpcRows(ann.data)) {
+    if (!byId.has(row.product_id)) byId.set(row.product_id, row);
   }
 
-  const productIds = hits.map((h) => h.product_id);
-  const results: ProductSearchIndexRow[] = [];
-  const BATCH = 100;
-  for (let i = 0; i < productIds.length; i += BATCH) {
-    const batch = productIds.slice(i, i + BATCH);
-    const { data, error } = await supabase
-      .from("product_search_index")
-      .select(INDEX_COLUMNS)
-      .in("product_id", batch);
-
-    if (error) {
-      console.warn("[db-candidates] REST fetch failed:", error.message);
-      continue;
-    }
-    if (data) {
-      for (const row of data) {
-        const mapped = mapDbRow(row as Record<string, unknown>);
-        mapped.knn_distance = distanceById.get(mapped.product_id) ?? null;
-        results.push(mapped);
-      }
-    }
-  }
-  return results;
+  // Distance-ordered pool (nulls last) — downstream RRF uses knn_distance.
+  return [...byId.values()].sort(
+    (a, b) => (a.knn_distance ?? Infinity) - (b.knn_distance ?? Infinity),
+  );
 }

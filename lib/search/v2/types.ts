@@ -204,7 +204,6 @@ export type SearchV2Result = {
 /** §5 default gate — tuned by eval */
 export const DATA_QUALITY_MIN = 0.5;
 
-export const TYPE_EMBEDDING_THRESHOLD = 0.85;
 export const GOAL_EMBEDDING_THRESHOLD = 0.85;
 export const INTENT_CACHE_THRESHOLD = 0.97;
 export const CATEGORY_CENTROID_THRESHOLD = 0.5;

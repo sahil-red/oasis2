@@ -7,10 +7,10 @@ import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/type
 export const VERIFICATION_CAP = 50;
 
 export function isPrecisionAtRisk(intent: SearchIntentV2): boolean {
-  // Verify when there's genuine mismatch/safety risk. Skip when an explicit
-  // primary_type already constrains results (the type filter handles precision).
-  if (intent.constraints.avoid_ingredients.length > 0) return true;
-  if (intent.constraints.allergens_excluded.length > 0) return true;
+  // The verification prompt checks TYPE/FORM plausibility only — allergen and
+  // avoid-ingredient safety is already enforced by deterministic filters, so
+  // triggering a 2.5s LLM call for those buys nothing. Verify only when the
+  // type/form match itself is uncertain.
   if (intent.confidence < 0.5) return true;
   // Flavour qualifiers — only verify if there's no type filter to narrow results
   if (intent.required_flavours.length > 0 && !intent.primary_type) return true;
@@ -63,10 +63,12 @@ recall); reject only obvious category mismatches.`,
     });
     const parsed = extractJsonObject(content) as { keep_ids?: string[] };
     const keep = new Set((parsed.keep_ids ?? []).map(String));
-    if (!keep.size) return { rows: [], llm_calls: 1 };
+    // An empty keep-set from a favour-recall prompt is almost certainly an LLM
+    // misfire — keep the originals rather than wiping the user's results.
+    if (!keep.size) return { rows, llm_calls: 1 };
 
     const verified = slice.filter((r) => keep.has(r.product_id));
-    return { rows: verified, llm_calls: 1 };
+    return { rows: verified.length ? verified : rows, llm_calls: 1 };
   } catch {
     return { rows, llm_calls: 0 };
   }
