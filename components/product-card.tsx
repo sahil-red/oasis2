@@ -38,7 +38,7 @@ function renderChips(
   aiReasons: string[],
   dietaryPrevalence?: DietaryPrevalenceMap | null,
 ): ReactNode[] {
-  const chipClass = "rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-2 py-0.5 text-[11px] font-medium text-(--color-fg-muted)";
+  const chipClass = "rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-1.5 py-0.5 text-[8.5px] font-medium text-(--color-fg-muted)";
   const itemType = obj.primary_type as string | undefined;
 
   // Pre-computed display_chips from backend — use directly

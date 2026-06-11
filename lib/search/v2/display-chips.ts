@@ -54,6 +54,19 @@ const SUPPRESSED_TRAITS: Partial<Record<string, TraitId[]>> = {
   honey: ["low_sugar", "whole_food"],
 };
 
+function isChippableClaim(claim: string, primaryType: string | null): boolean {
+  const s = claim.trim();
+  if (!s || s.length > 45) return false;
+  const letters = s.replace(/[^A-Za-z]/g, "").length;
+  if (letters > 0) {
+    const upper = s.replace(/[^A-Z]/g, "").length;
+    if (upper / letters > 0.6) return false;
+  }
+  if (/flavou?r|delicious|tast[ey]|premium|bursting|crunch|crispy|yummy|perfect/i.test(s)) return false;
+  if (primaryType && s.toLowerCase() === primaryType) return false;
+  return true;
+}
+
 const MAX_CHIPS = 4;
 const PRODUCT_SLOTS = 3;
 
@@ -101,8 +114,9 @@ export function getDisplayChips(
     });
   }
 
-  // 2. Verified claims (score 0.7 base)
+  // 2. Verified claims (score 0.7 base) — filter out marketing fluff
   for (const claim of row.claims ?? []) {
+    if (!isChippableClaim(claim, row.primary_type)) continue;
     product.push({ label: claim, priority: 70, group: "product" });
   }
 

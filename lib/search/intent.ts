@@ -78,10 +78,12 @@ function buildFastPathIntent(
   meta: IndexCatalogMeta,
   numeric: ReturnType<typeof extractNumericConstraints>,
 ): SearchIntentV2 | null {
+  const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
   const residual = numeric.residual_text.toLowerCase().trim();
   if (!residual || !fastPathEligible(residual, meta)) return null;
 
   const tokens = residual.split(/\s+/).filter(Boolean);
+  const normTokens = tokens.map((t) => norm(t));
 
   let brand: string | null = null;
   let primary_type: string | null = null;
@@ -89,7 +91,7 @@ function buildFastPathIntent(
   let kind: SearchIntentV2["kind"] = "directed";
 
   if (tokens.length === 1) {
-    if (meta.brands.has(tokens[0]!)) {
+    if (meta.brands.has(normTokens[0]!)) {
       brand = tokens[0]!;
       kind = "brand";
     } else {
@@ -100,9 +102,8 @@ function buildFastPathIntent(
     let brandIdx = -1;
     let typeIdx = -1;
     for (let i = 0; i < tokens.length; i++) {
-      const t = tokens[i]!;
-      if (meta.primaryTypes.has(t) && typeIdx === -1) typeIdx = i;
-      else if (meta.brands.has(t) && brandIdx === -1) brandIdx = i;
+      if (meta.primaryTypes.has(normTokens[i]!) && typeIdx === -1) typeIdx = i;
+      else if (meta.brands.has(normTokens[i]!) && brandIdx === -1) brandIdx = i;
     }
 
     if (typeIdx >= 0 && brandIdx >= 0) {
@@ -113,7 +114,7 @@ function buildFastPathIntent(
       // Remaining tokens that are known flavours → preserve as required_flavours
       for (let i = 0; i < tokens.length; i++) {
         if (i === typeIdx) continue;
-        if (meta.flavours.has(tokens[i]!)) required_flavours.push(tokens[i]!);
+        if (meta.flavours.has(normTokens[i]!)) required_flavours.push(tokens[i]!);
       }
     } else if (brandIdx >= 0) {
       brand = tokens[brandIdx]!;
@@ -121,7 +122,7 @@ function buildFastPathIntent(
       // No type or brand found — use first as type, rest as flavours
       primary_type = tokens[0]!;
       for (let i = 1; i < tokens.length; i++) {
-        if (meta.flavours.has(tokens[i]!)) required_flavours.push(tokens[i]!);
+        if (meta.flavours.has(normTokens[i]!)) required_flavours.push(tokens[i]!);
       }
     }
   }
@@ -202,12 +203,14 @@ export async function resolveSearchIntent(
     void setCachedIntent(query, intent, opts.preferences, cached.embedding);
     return { intent, llm_calls };
   } catch {
+    const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
     const residual = numeric.residual_text.toLowerCase().trim();
+    const normResidual = norm(residual);
     let primary_type: string | null = null;
     let brand: string | null = null;
-    if (opts.catalogMeta.primaryTypes.has(residual)) {
+    if (opts.catalogMeta.primaryTypes.has(normResidual)) {
       primary_type = residual;
-    } else if (opts.catalogMeta.brands.has(residual)) {
+    } else if (opts.catalogMeta.brands.has(normResidual)) {
       brand = residual;
     }
 

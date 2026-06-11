@@ -12,13 +12,13 @@ export function buildIndexCatalogMeta(index: ProductSearchIndexRow[]): IndexCata
   const primaryTypes = new Set<string>();
   const flavours = new Set<string>();
   for (const row of index) {
-    const b = row.brand?.toLowerCase().trim();
+    const b = row.brand?.toLowerCase().replace(/['']/g, "").trim();
     if (b && b.length >= 2) brands.add(b);
-    const t = row.primary_type?.toLowerCase().trim();
+    const t = row.primary_type?.toLowerCase().replace(/['']/g, "").trim();
     if (t && t.length >= 2) primaryTypes.add(t);
     if (Array.isArray(row.flavours)) {
       for (const f of row.flavours) {
-        const fl = f?.toLowerCase().trim();
+        const fl = f?.toLowerCase().replace(/['']/g, "").trim();
         if (fl && fl.length >= 2) flavours.add(fl);
       }
     }

@@ -144,9 +144,8 @@ export function countActiveConstraints(n: NumericExtraction): number {
 
 /** Fast-path eligible when every residual token is a known brand or primary_type (§6). */
 export function fastPathEligible(residual: string, meta: IndexCatalogMeta): boolean {
-  const tokens = residual
-    .toLowerCase()
-    .trim()
+  const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
+  const tokens = norm(residual)
     .split(/\s+/)
     .filter((t) => t.length >= 2);
   if (!tokens.length || tokens.length > 2) return false;
