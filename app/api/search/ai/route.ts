@@ -13,6 +13,8 @@ import { mergeSavedPreferences } from "@/lib/search/merge-preferences";
 import { heuristicParseProductQuery } from "@/lib/search/query-parse";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { isSearchV2Enabled } from "@/lib/search/v2/index-queries";
+
+export const maxDuration = 30; // Vercel hobby plan max 60s, search needs ~10-15s
 import { runSearchV2 } from "@/lib/search/v2/pipeline";
 import { searchV2ToAiResult } from "@/lib/search/v2/adapter";
 
