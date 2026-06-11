@@ -59,23 +59,30 @@ export async function POST(request: Request) {
     }
 
     const planId = await ensureRazorpayPlan(interval);
-    const sub = await createRazorpaySubscription({
-      customerId,
-      planId,
-      // Razorpay total_count is the number of billing cycles to run.
-      totalCount: interval === "yearly" ? 10 : 120,
+
+    // Create a one-time order for Standard Checkout (works immediately, no hosted page config needed)
+    const order = await razorpayFetch<{ id: string; amount: number; currency: string }>("/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: plan.amount_paise,
+        currency: plan.currency,
+        receipt: `sub_${data.user.id.slice(0, 8)}_${Date.now()}`,
+        notes: { user_id: data.user.id, plan: plan.id, interval },
+      }),
     });
 
+    // Store pending subscription
     await admin.from("subscriptions").insert({
       user_id: data.user.id,
-      razorpay_subscription_id: sub.id,
+      razorpay_subscription_id: order.id,
       razorpay_plan_id: planId,
-      status: sub.status ?? "created",
+      status: "pending",
     });
 
     return NextResponse.json({
-      subscription_id: sub.id,
-      checkout_url: sub.short_url ?? null,
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency,
       key_id: process.env.RAZORPAY_KEY_ID,
       plan: {
         name: plan.name,

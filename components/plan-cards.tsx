@@ -11,6 +11,23 @@ import {
   type PlanInterval,
 } from "@/lib/billing/plans";
 
+declare global { interface Window { Razorpay: any } }
+
+function openRazorpayCheckout(data: { order_id: string; amount: number; key_id: string }) {
+  const rzp = new window.Razorpay({
+    key: data.key_id,
+    amount: data.amount,
+    currency: "INR",
+    name: "Scout",
+    description: "Scout Plus",
+    order_id: data.order_id,
+    handler: () => window.location.reload(),
+    prefill: {},
+    theme: { color: "#111" },
+  });
+  rzp.open();
+}
+
 const FREE_FEATURES = [
   "Full catalog with scores and verdicts",
   `${SCOUT_PLUS_PLAN.free_daily_ai_searches} Ask Scout AI searches a day`,
@@ -50,12 +67,12 @@ export function PlanCards() {
         },
         body: JSON.stringify({ interval }),
       });
-      const data = (await res.json()) as { checkout_url?: string | null; error?: string };
+      const data = (await res.json()) as { order_id?: string; amount?: number; key_id?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
+      if (data.order_id && data.key_id) {
+        openRazorpayCheckout(data);
       } else {
-        throw new Error("Checkout link unavailable — try again in a moment.");
+        throw new Error("Checkout unavailable — try again.");
       }
     } catch (e) {
       setError((e as Error).message);
@@ -65,7 +82,9 @@ export function PlanCards() {
   };
 
   return (
-    <div>
+    <>
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      <div>
       {/* Interval toggle */}
       <div className="mx-auto flex w-fit items-center rounded-full border border-(--color-line) bg-(--color-panel) p-1">
         {(["monthly", "yearly"] as const).map((i) => (
@@ -175,5 +194,6 @@ export function PlanCards() {
         </div>
       </div>
     </div>
+    </>
   );
 }

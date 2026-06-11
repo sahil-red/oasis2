@@ -9,7 +9,8 @@ type RazorpayWebhook = {
   event: string;
   payload?: {
     subscription?: { entity?: { id?: string; status?: string; current_end?: number } };
-    payment?: { entity?: { id?: string } };
+    payment?: { entity?: { id?: string; order_id?: string; status?: string } };
+    order?: { entity?: { id?: string; notes?: Record<string, string>; amount?: number } };
   };
 };
 
@@ -30,6 +31,18 @@ export async function POST(request: Request) {
   const subEntity = body.payload?.subscription?.entity;
   const subId = subEntity?.id;
   if (!subId) {
+    // Standard Checkout: order.paid event
+    if (event === "order.paid" || event === "payment.captured") {
+      const orderId = body.payload?.order?.entity?.id ?? body.payload?.payment?.entity?.order_id;
+      const userId = body.payload?.order?.entity?.notes?.user_id;
+      if (orderId && userId) {
+        await setUserPlanPlus(admin, userId, orderId, null);
+        await admin.from("subscriptions").update({
+          status: "active",
+          updated_at: new Date().toISOString(),
+        }).eq("razorpay_subscription_id", orderId);
+      }
+    }
     return NextResponse.json({ ok: true });
   }
 
