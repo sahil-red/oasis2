@@ -52,7 +52,9 @@ export async function getCachedLandingInsights() {
         totalScored: stats.totalScored || products.filter((p) => p.core_scores).length,
       });
     },
-    ["catalog-landing-insights-v3"],
+    // v4: category hrefs no longer gate on verdict=daily_staple (was silently
+    // empty for treat/skip-heavy aisles) + diversified staples.
+    ["catalog-landing-insights-v4"],
     { revalidate: 3600 },
   )();
 }

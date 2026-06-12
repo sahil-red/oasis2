@@ -111,7 +111,9 @@ export function buildBestInClass(
       const skipPct = Math.round((skipCount / inCat.length) * 100);
       return {
         label: cat,
-        href: `/search?category=${encodeURIComponent(cat)}&verdict=daily_staple`,
+        // Best-first within the category — daily_staple gating returned empty for
+        // treat/skip-heavy aisles (silent fail).
+        href: `/search?category=${encodeURIComponent(cat)}&sort=score-desc&scored=1`,
         products: top,
         avgScore,
         skipPct,
