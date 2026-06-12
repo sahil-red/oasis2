@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAllActiveAlerts } from "@/lib/search/v2/alert-runner";
-import { isSearchV2Enabled } from "@/lib/search/v2/index-queries";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -20,10 +19,6 @@ function authorizeCron(req: NextRequest): boolean {
 export async function GET(req: NextRequest) {
   if (!authorizeCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isSearchV2Enabled()) {
-    return NextResponse.json({ error: "SEARCH_V2_ENABLED required" }, { status: 503 });
   }
 
   const limitParam = req.nextUrl.searchParams.get("limit");

@@ -62,6 +62,7 @@ import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
   CATALOG_SORT_OPTIONS,
+  sortCatalogItems,
   type CatalogSort,
 } from "@/lib/products/catalog-sort";
 import type { CatalogFilters, CatalogSearchResult, ProductListItem } from "@/lib/products/queries";
@@ -534,8 +535,17 @@ export function CatalogView({
     if (activeState.onlyScored) {
       filtered = filtered.filter((it) => it.core_scores != null);
     }
+    if (activeState.sublabel) {
+      filtered = filtered.filter((it) => {
+        const subs = it.core_scores?.verdict_sublabels;
+        return Array.isArray(subs) && subs.includes(activeState.sublabel);
+      });
+    }
+    if (activeState.sort !== "score-desc") {
+      filtered = sortCatalogItems(filtered, activeState.sort);
+    }
     return filtered;
-  }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored]);
+  }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored, activeState.sublabel, activeState.sort]);
 
   // Subcategory distribution from current items — for subcategory chip nav
   const subcategoryChips = useMemo(() => {

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { supabaseFromBearer } from "@/lib/auth/supabase-user";
 import { runAlertsForRecords, type AlertRecord } from "@/lib/search/v2/alert-runner";
-import { isSearchV2Enabled } from "@/lib/search/v2/index-queries";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -38,10 +37,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await requireUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  if (!isSearchV2Enabled()) {
-    return NextResponse.json({ error: "SEARCH_V2_ENABLED required for alerts" }, { status: 503 });
-  }
 
   const supabase = adminClient();
   const { data: alerts } = await supabase

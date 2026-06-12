@@ -73,15 +73,6 @@ function resolveEmbeddingEndpoint(): EmbeddingEndpoint | null {
     };
   }
 
-  const lmBase = process.env.EMBEDDING_BASE_URL?.trim() || process.env.LM_STUDIO_BASE_URL?.trim();
-  if (lmBase && (process.env.EMBEDDING_BASE_URL || process.env.EMBEDDING_USE_LM_STUDIO === "true")) {
-    return {
-      apiKey: process.env.EMBEDDING_API_KEY?.trim() || process.env.LM_STUDIO_API_KEY?.trim() || "lm-studio",
-      baseUrl: lmBase.replace(/\/+$/, ""),
-      model: process.env.EMBEDDING_MODEL ?? process.env.LM_STUDIO_MODEL ?? "text-embedding-nomic-embed-text-v1.5",
-      provider: "generic",
-    };
-  }
   return null;
 }
 

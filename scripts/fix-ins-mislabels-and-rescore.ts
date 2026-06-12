@@ -1,12 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 /**
  * Fix LLM "Insulin XXX" misreads for INS/E food additives, correct 4700BC nutrition,
- * and rescore affected products (requires SCORING_ENGINE=v9 for verdict fields).
- *
- *   SCORING_ENGINE=v9 pnpm exec tsx scripts/fix-ins-mislabels-and-rescore.ts
+ * and rescore affected products.
  */
-process.env.SCORING_ENGINE = process.env.SCORING_ENGINE ?? "v9";
-process.env.SCORING_RULE_VERSION = process.env.SCORING_RULE_VERSION ?? "9";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 

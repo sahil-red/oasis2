@@ -326,4 +326,4 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
   return snap;
 }
 
-export { isSearchV2Enabled } from "@/lib/search/v2/config";
+

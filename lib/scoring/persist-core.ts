@@ -10,11 +10,15 @@ import {
 } from "@/lib/scoring/v9-batch";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
-export const SCORING_ENGINE = (process.env.SCORING_ENGINE ?? "v9").toLowerCase();
+export function getScoringEngine(): string {
+  return (process.env.SCORING_ENGINE ?? "v9").toLowerCase();
+}
 
-export const SCORING_RULE_VERSION = Number(
-  process.env.SCORING_RULE_VERSION ?? (SCORING_ENGINE === "v9" ? 10 : 8),
-);
+export function getScoringRuleVersion(): number {
+  return Number(
+    process.env.SCORING_RULE_VERSION ?? (getScoringEngine() === "v9" ? 10 : 8),
+  );
+}
 
 export type ScoreableProduct = {
   id: string;
@@ -59,7 +63,7 @@ function v9ToUpsert(row: ScoreableProduct, result: CoreScoreV9Result): CoreScore
     },
     concerns: result.concerns,
     breakdown: result.breakdown,
-    rule_version: SCORING_RULE_VERSION,
+    rule_version: getScoringRuleVersion(),
     computed_at: new Date().toISOString(),
     absolute_score: result.absolute_score,
     relative_score: result.relative_score,
@@ -85,7 +89,7 @@ export function buildCoreScoreUpsert(
   row: ScoreableProduct,
   v9?: { preload: V9Preload },
 ): CoreScoreUpsert | null {
-  if (SCORING_ENGINE === "v9" && v9?.preload) {
+  if (getScoringEngine() === "v9" && v9?.preload) {
     if (!hasScoreableNutrition(row.nutrition)) return null;
     if (
       row.nutrition &&
@@ -130,7 +134,7 @@ export function buildCoreScoreUpsert(
     subscores: result.subscores,
     concerns: result.concerns,
     breakdown: result.breakdown,
-    rule_version: SCORING_RULE_VERSION,
+    rule_version: getScoringRuleVersion(),
     computed_at: new Date().toISOString(),
   };
 }
@@ -158,7 +162,7 @@ export async function persistCoreScoresBatch(
   });
 
   let v9Preload: V9Preload | undefined;
-  if (SCORING_ENGINE === "v9" && scoreable.length) {
+  if (getScoringEngine() === "v9" && scoreable.length) {
     v9Preload = await preloadV9ForProducts(supabase, scoreable);
   }
 
@@ -196,7 +200,7 @@ export async function purgeCoreScoreForProduct(
 
 export async function purgeOutdatedCoreScores(
   supabase: SupabaseClient,
-  ruleVersion = SCORING_RULE_VERSION,
+  ruleVersion = getScoringRuleVersion(),
 ): Promise<number> {
   const { data, error } = await supabase
     .from("core_scores")
@@ -249,7 +253,7 @@ export async function persistCoreScore(
       .select("product_id, rule_version")
       .eq("product_id", row.id)
       .maybeSingle();
-    if (existing && existing.rule_version === SCORING_RULE_VERSION) {
+    if (existing && existing.rule_version === getScoringRuleVersion()) {
       return "skipped";
     }
   }

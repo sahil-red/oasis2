@@ -18,7 +18,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local" });
 
 import { adminClient } from "@/lib/supabase/admin";
-import { SCORING_RULE_VERSION } from "@/lib/scoring/persist-core";
+import { getScoringRuleVersion } from "@/lib/scoring/persist-core";
 import {
   generateOpinionBatch,
   type OpinionInput,
@@ -140,12 +140,12 @@ async function main() {
   const all = await loadRows(args);
   let work = all.filter((r) => r.core_scores);
   if (args.resume) {
-    work = work.filter((r) => r.core_scores!.opinion?.rule_version !== SCORING_RULE_VERSION);
+    work = work.filter((r) => r.core_scores!.opinion?.rule_version !== getScoringRuleVersion());
   }
   if (args.limit > 0) work = work.slice(0, args.limit);
 
   console.log(
-    `[opinions] scored=${all.length} todo=${work.length} rule_version=${SCORING_RULE_VERSION} batch=${BATCH_SIZE} concurrency=${args.concurrency} dry_run=${args.dryRun}`,
+    `[opinions] scored=${all.length} todo=${work.length} rule_version=${getScoringRuleVersion()} batch=${BATCH_SIZE} concurrency=${args.concurrency} dry_run=${args.dryRun}`,
   );
   if (!work.length) return;
 
@@ -169,7 +169,7 @@ async function main() {
         const opinion: ProductOpinion = {
           ...o,
           model,
-          rule_version: SCORING_RULE_VERSION,
+          rule_version: getScoringRuleVersion(),
           generated_at: new Date().toISOString(),
         };
         log({ kind: "ok", id, ...opinion });

@@ -20,8 +20,8 @@ import {
 import {
   persistCoreScoresBatch,
   purgeOutdatedCoreScores,
-  SCORING_ENGINE,
-  SCORING_RULE_VERSION,
+  getScoringEngine,
+  getScoringRuleVersion,
   type ScoreableProduct,
 } from "@/lib/scoring/persist-core";
 import type { ProductNutrition } from "@/lib/supabase/types";
@@ -53,7 +53,7 @@ async function main() {
   const supabase = adminClient();
   const started = Date.now();
   console.log(
-    `[05-compute-scores] engine=${SCORING_ENGINE} rule_version=${SCORING_RULE_VERSION}`,
+    `[05-compute-scores] engine=${getScoringEngine()} rule_version=${getScoringRuleVersion()}`,
   );
 
   if (args.force && !args.dryRun) {
@@ -165,7 +165,7 @@ async function main() {
       if (
         args.onlyUnscored &&
         !args.force &&
-        existing?.rule_version === SCORING_RULE_VERSION
+        existing?.rule_version === getScoringRuleVersion()
       ) {
         skipped++;
         continue;
@@ -202,7 +202,7 @@ async function main() {
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(
-    `[05-compute-scores] done. fetched=${totalFetched} scored=${scored} skipped=${skipped} no_nutrition=${noNutrition} engine=${SCORING_ENGINE} rule_version=${SCORING_RULE_VERSION} (${elapsed}s)`,
+    `[05-compute-scores] done. fetched=${totalFetched} scored=${scored} skipped=${skipped} no_nutrition=${noNutrition} engine=${getScoringEngine()} rule_version=${getScoringRuleVersion()} (${elapsed}s)`,
   );
 }
 
