@@ -60,14 +60,11 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{1,3})\s*g\s*sugar/) ??
     firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(?:under|below|less than)\s*(\d{1,3})\s*g\s*sugar/);
-  if (/zero sugar|no sugar|no added sugar/.test(text)) {
-    out.max_sugar_g = 1;
-    out.no_added_sugar = true;
-  } else if (sugarLimit) {
-    out.max_sugar_g = sugarLimit;
-  } else if (/low sugar|less sugar/.test(text)) {
+  if (/zero sugar/.test(text)) out.max_sugar_g = 1;
+  if (/no sugar|no added sugar/.test(text)) out.no_added_sugar = true;
+  if (out.max_sugar_g == null && sugarLimit) out.max_sugar_g = sugarLimit;
+  if (out.max_sugar_g == null && /low sugar|less sugar/.test(text)) {
     out.low_sugar_tier = true;
-    // No hard limit — let trait-based ranking handle "low sugar" queries softly
   }
 
   const fatLimit = firstNumber(text, /(?:fat)\D{0,12}(\d{1,3})\s*g/) ??

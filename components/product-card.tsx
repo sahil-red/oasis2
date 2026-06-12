@@ -7,7 +7,7 @@ import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { CompareButton } from "@/components/compare-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import { SearchScoreStack } from "@/components/search-score-tabs";
-import { GoalFitBadge, ScoreBadge } from "@/components/score-display";
+import { ScoreBadge } from "@/components/score-display";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
 import {
   fetchCanonicalVariants,
@@ -235,7 +235,7 @@ export const ProductCard = memo(function ProductCard({
           />
         ) : goalFit != null ? (
           <div className="absolute right-2 top-2">
-            <GoalFitBadge fit={goalFit} />
+            <ScoreBadge score={goalFit} grade={"B" as const} verdict={null} />
           </div>
         ) : core ? (
           <div className="absolute right-2 top-2">
