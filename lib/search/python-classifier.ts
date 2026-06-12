@@ -88,7 +88,13 @@ export async function classifyIntentWithPython(
       }
 
       const raw = (await res.json()) as PythonIntentRaw;
-      return normalizePythonIntent(raw, query);
+      const intent = normalizePythonIntent(raw, query);
+
+      // Degrade to LLM when confidence is below threshold.
+      // "ambiguous" (0.40) and "modifiers-only" (0.60) stay with LLM.
+      if (intent.confidence < 0.70) return null;
+
+      return intent;
     } catch {
       if (attempt >= tries) return null;
     }
