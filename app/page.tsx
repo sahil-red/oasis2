@@ -50,7 +50,8 @@ export default async function Home() {
       {/* min-h fills the first fold so the next section's tint never peeks up
           into the hero on tall screens; content sits optically centered. */}
       <section className="relative flex min-h-[88vh] items-center overflow-hidden border-b border-(--color-line)">
-        <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-6 pb-20 pt-12 text-center md:pb-24 md:pt-16">
+        <HeroBackdrop />
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 pb-20 pt-12 text-center md:pb-24 md:pt-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-(--color-fg-dim)">
             Honest grocery intel · India
           </p>
@@ -205,5 +206,58 @@ function Rail({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Hero backdrop — fills the wide side-gutters (especially in dark mode) with the
+ * score-ring motif that recurs across cards/PDP, plus a soft warm glow. Anchored
+ * mostly off-screen, very low opacity, hidden on mobile (no gutters there). Pure
+ * decoration: aria-hidden, pointer-events-none — calm, never distracting.
+ */
+function HeroBackdrop() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* warm centre glow — depth behind the headline */}
+      <div
+        className="absolute left-1/2 top-[42%] h-[52vh] w-[52vh] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background:
+            "radial-gradient(closest-side, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent)",
+        }}
+      />
+      {/* left gutter ring */}
+      <svg
+        className="absolute -left-40 top-[18%] hidden h-[360px] w-[360px] text-(--color-line-strong) opacity-70 lg:block"
+        viewBox="0 0 100 100"
+        fill="none"
+      >
+        <circle cx="50" cy="50" r="47" stroke="currentColor" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="33" stroke="currentColor" strokeWidth="0.4" />
+        <path
+          d="M50 3 a47 47 0 0 1 41 24"
+          stroke="var(--color-accent)"
+          strokeWidth="1"
+          strokeLinecap="round"
+          opacity="0.3"
+        />
+      </svg>
+      {/* right gutter ring, larger + lower */}
+      <svg
+        className="absolute -right-48 bottom-[12%] hidden h-[460px] w-[460px] text-(--color-line-strong) opacity-70 lg:block"
+        viewBox="0 0 100 100"
+        fill="none"
+      >
+        <circle cx="50" cy="50" r="47" stroke="currentColor" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="33" stroke="currentColor" strokeWidth="0.4" />
+        <path
+          d="M50 97 a47 47 0 0 1 -41 -24"
+          stroke="var(--color-accent)"
+          strokeWidth="1"
+          strokeLinecap="round"
+          opacity="0.25"
+        />
+      </svg>
+    </div>
   );
 }
