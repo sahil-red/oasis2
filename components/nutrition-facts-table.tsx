@@ -3,57 +3,13 @@ import {
   resolveNutritionDisplay,
   type ResolvedNutritionRow,
 } from "@/lib/nutrition/nutrition-display";
+import {
+  judgeNutrientRow as nutritionTone,
+  NUTRIENT_VERDICT_COLOR as TONE_COLOR,
+  type NutrientVerdict as NutritionTone,
+} from "@/lib/nutrition/nutrient-judgment";
 import type { ProductNutrition } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
-
-type NutritionTone = {
-  kind: "positive" | "limit";
-  label: string;
-  title: string;
-};
-
-const TONE_COLOR: Record<NutritionTone["kind"], string> = {
-  positive: "var(--score-excellent)",
-  limit: "var(--score-bad)",
-};
-
-function nutritionTone(row: ResolvedNutritionRow): NutritionTone | null {
-  const v = row.per100;
-  if (v == null) return null;
-
-  switch (row.id) {
-    case "energy_kcal_100g":
-      if (v >= 450) return { kind: "limit", label: "high", title: "High calorie density per 100g." };
-      return null;
-    case "sugar_g_100g":
-      if (v >= 10) return { kind: "limit", label: "high", title: "High sugar: 10g+ per 100g." };
-      if (v <= 5) return { kind: "positive", label: "good", title: "Low sugar: 5g or less per 100g." };
-      return null;
-    case "added_sugar_g_100g":
-      if (v >= 10) return { kind: "limit", label: "high", title: "High added sugar per 100g." };
-      return null;
-    case "saturated_fat_g_100g":
-      if (v >= 5) return { kind: "limit", label: "high", title: "High saturated fat: 5g+ per 100g." };
-      return null;
-    case "trans_fat_g_100g":
-      if (v > 0.2) return { kind: "limit", label: "high", title: "Trans fat is present." };
-      return null;
-    case "sodium_mg_100g":
-      if (v >= 400) return { kind: "limit", label: "high", title: "High sodium: 400mg+ per 100g." };
-      return null;
-    case "fat_g_100g":
-      if (v >= 17.5) return { kind: "limit", label: "high", title: "High total fat per 100g." };
-      return null;
-    case "protein_g_100g":
-      if (v >= 12) return { kind: "positive", label: "good", title: "Meaningful protein per 100g." };
-      return null;
-    case "fiber_g_100g":
-      if (v >= 3) return { kind: "positive", label: "good", title: "Source of fibre per 100g." };
-      return null;
-    default:
-      return null;
-  }
-}
 
 function ValueCell({
   value,

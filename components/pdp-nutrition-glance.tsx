@@ -1,7 +1,32 @@
 import { NutritionFactsTable } from "@/components/nutrition-facts-table";
 import { detectNutritionAnomalies, type NutritionContext } from "@/lib/nutrition/anomaly";
-import { resolveNutritionDisplay } from "@/lib/nutrition/nutrition-display";
+import { formatNutrientValue, resolveNutritionDisplay } from "@/lib/nutrition/nutrition-display";
+import {
+  judgeNutrition,
+  NUTRIENT_VERDICT_COLOR,
+  type JudgedNutrient,
+} from "@/lib/nutrition/nutrient-judgment";
 import type { ProductNutrition } from "@/lib/supabase/types";
+
+function JudgedRow({ n }: { n: JudgedNutrient }) {
+  const color = NUTRIENT_VERDICT_COLOR[n.verdict.kind];
+  return (
+    <div className="flex items-center gap-3 py-2" title={n.verdict.title}>
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
+      <span className="flex-1 text-[13.5px] text-(--color-fg)">{n.label}</span>
+      <span className="text-[12px] tabular-nums text-(--color-fg-muted)">
+        {formatNutrientValue(n.per100)}
+        {n.unit}/100g
+      </span>
+      <span
+        className="w-16 shrink-0 text-right text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color }}
+      >
+        {n.verdict.label}
+      </span>
+    </div>
+  );
+}
 
 export function PdpNutritionGlance({
   nutrition,
@@ -21,6 +46,9 @@ export function PdpNutritionGlance({
   const { rows, hasServe, serveG, packLabel } = resolveNutritionDisplay(nutrition, netWeight);
   if (!rows.length) return null;
 
+  const { watch, good, headline } = judgeNutrition(rows);
+  const judged = [...watch, ...good];
+
   const ctx: NutritionContext | null = name ? { name, category, subcategory } : null;
   const anomalies = ctx ? detectNutritionAnomalies(nutrition, ctx) : [];
   const critical = anomalies.filter((a) => a.severity === "critical");
@@ -33,10 +61,10 @@ export function PdpNutritionGlance({
   ].filter(Boolean);
 
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-4">
+    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5">
       <div>
         <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-          Nutrition information
+          Nutrition
         </p>
         {metaParts.length > 0 ? (
           <p className="mt-1 text-[12px] text-(--color-fg-muted)">{metaParts.join(" · ")}</p>
@@ -58,15 +86,34 @@ export function PdpNutritionGlance({
         </div>
       ) : null}
 
+      {/* Judged summary — the read-at-a-glance verdict, concerns first */}
+      <p className="mt-4 text-[15px] font-medium leading-snug text-(--color-fg)">{headline}</p>
+      {judged.length > 0 ? (
+        <div className="mt-2 divide-y divide-(--color-line)/60">
+          {judged.map((n) => (
+            <JudgedRow key={n.id} n={n} />
+          ))}
+        </div>
+      ) : null}
+
       {typeof nutrition.extra?.nutrition_gap_fill === "string" ? (
         <p className="mt-3 text-[11px] leading-snug text-(--color-fg-muted)">
-          Some values missing on the pack label — gaps filled from a paneer reference table.
+          Some values missing on the pack label — gaps filled from a reference table.
         </p>
       ) : null}
 
-      <div className="mt-3">
-        <NutritionFactsTable nutrition={nutrition} netWeight={netWeight} />
-      </div>
+      {/* Full numbers, one tap away — detail without the density up front */}
+      <details className="group mt-4">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)">
+          <span className="transition-transform group-open:rotate-90" aria-hidden>
+            ›
+          </span>
+          Full nutrition label
+        </summary>
+        <div className="mt-3">
+          <NutritionFactsTable nutrition={nutrition} netWeight={netWeight} />
+        </div>
+      </details>
     </div>
   );
 }
