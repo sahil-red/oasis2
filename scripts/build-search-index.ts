@@ -292,7 +292,7 @@ async function main() {
   try {
     const { data: facets } = await st.rpc("search_v2_facets");
     const f = facets as { brands?: string[]; primary_types?: string[] };
-    if (f?.brands?.length) {
+      if (f?.brands?.length) {
       await st.from("catalog_facets").upsert(
         {
           id: 1,
@@ -302,7 +302,18 @@ async function main() {
         },
         { onConflict: "id" },
       );
-      console.log("[search:build-index] catalog_facets cached");
+      // Also write static JSON (0ms runtime import, no DB call)
+      const { writeFileSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      writeFileSync(
+        join(process.cwd(), "data/catalog-facets.json"),
+        JSON.stringify({
+          brands: (f.brands ?? []).map((b: string) => b.toLowerCase()),
+          primary_types: (f.primary_types ?? []).map((t: string) => t.toLowerCase()),
+          built_at: new Date().toISOString(),
+        }),
+      );
+      console.log("[search:build-index] catalog_facets cached + static JSON written");
     }
   } catch (e) {
     console.warn("[search:build-index] catalog_facets cache failed:", (e as Error).message);

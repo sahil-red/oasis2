@@ -22,9 +22,25 @@ export type SearchIndexSnapshot = {
 };
 
 async function loadFacets(): Promise<IndexCatalogMeta> {
+  // Prefer static JSON (0ms, built during index rebuild).
+  // Falls back to Supabase summary table → RPC → empty.
+  try {
+    const { brands, primary_types } = await import("@/data/catalog-facets.json") as {
+      brands: string[];
+      primary_types: string[];
+    };
+    if (brands?.length) {
+      return {
+        brands: new Set(brands.map((b) => b.toLowerCase())),
+        primaryTypes: new Set((primary_types ?? []).map((t) => t.toLowerCase())),
+        flavours: new Set(),
+      };
+    }
+  } catch { /* file missing — fall through to Supabase */ }
+
   try {
     const supabase = adminClient();
-    // Try the cached summary table first (~50ms vs 1-2s RPC)
+    // Try the cached summary table (~50ms vs 1-2s RPC)
     const { data: cached } = await supabase
       .from("catalog_facets")
       .select("brands, primary_types")
@@ -38,7 +54,7 @@ async function loadFacets(): Promise<IndexCatalogMeta> {
         flavours: new Set(),
       };
     }
-    // Fallback to RPC (first run after migration, or table not created yet)
+    // Last resort: slow RPC
     const { data } = await supabase.rpc("search_v2_facets");
     const obj = (data ?? {}) as { brands?: string[]; primary_types?: string[]; flavours?: string[] };
     return {
