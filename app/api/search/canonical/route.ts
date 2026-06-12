@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal" }, { status: 500 });
   }
 
-  let siblings: Array<{ product_id: string; slug: string; name: string; brand: string | null; category: string; subcategory: string; price_inr: number | null; scout_score: number | null; data_quality_score: number | null; canonical_product_id: string | null }>;
+  let siblings: Array<{ product_id: string; slug: string; name: string; brand: string | null; category: string | null; subcategory: string | null; price_inr: number | null; scout_score: number | null; data_quality_score: number | null; canonical_product_id: string | null }>;
   try {
     siblings = getCanonicalSiblings(snapshot.index, productId);
   } catch (e) {
