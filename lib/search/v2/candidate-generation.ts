@@ -194,8 +194,13 @@ export async function generateCandidates(
     : new Set<string>();
 
   if (intent.kind === "brand" && intent.brand) {
-    const brandQ = intent.brand.toLowerCase();
-    pool = pool.filter((row) => (row.brand ?? "").toLowerCase().includes(brandQ));
+    // Compare on alnum-only so apostrophes/spaces don't block matches:
+    // "lay's" → "lays" includes into "Lays" → "lays". (Plain includes failed.)
+    const brandQ = intent.brand.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const brandFiltered = pool.filter((row) =>
+      (row.brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(brandQ),
+    );
+    if (brandFiltered.length > 0) pool = brandFiltered;
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();
     const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, typeEquivalents) < 99);

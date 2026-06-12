@@ -90,7 +90,10 @@ function rankedToAiItem(
 ): AiSearchItem {
   const row = c.row;
   const extra = display.get(row.product_id);
-  const scout = row.scout_score ?? Math.round(c.final_score * 100);
+  // The displayed health score is the REAL Scout score — never the rank score.
+  // Falling back to final_score*100 made cards read 65/"good" while the PDP
+  // showed 15/"skip" (rank ≠ health). If there's genuinely no score, show none.
+  const scout = row.scout_score ?? null;
 
   // Build enriched reasons with actual values
   const enrichedReasons: string[] = [];
@@ -122,7 +125,7 @@ function rankedToAiItem(
     price_inr: row.price_inr,
     mrp_inr: extra?.mrp_inr ?? null,
     image_urls: extra?.image_urls ?? [],
-    core_scores: scout
+    core_scores: scout != null
       ? {
           score: scout,
           grade: scoreToGrade(scout),

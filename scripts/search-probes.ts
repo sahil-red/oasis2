@@ -90,6 +90,33 @@ const PROBES: Probe[] = [
       return null;
     },
   },
+  {
+    // Bare brand queries must return that brand (ANN alone returned 0 for
+    // lays/kurkure/haldiram; needs the direct brand-retrieval leg).
+    query: "lays",
+    assert: (r) => {
+      if (r.items.length < 3) return `only ${r.items.length} — brand retrieval leg broken?`;
+      const onBrand = r.items.filter((i) =>
+        (i.row.brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").includes("lay"),
+      ).length;
+      if (onBrand < 2) return `top results aren't Lays (${onBrand} on-brand)`;
+      return null;
+    },
+  },
+  {
+    // Search-card score must be the real Scout score, never the rank score
+    // (the 65/"good" card → 15/"skip" PDP bug). Top items carry a real score.
+    query: "lays chips",
+    assert: (r) => {
+      const scored = r.items.filter((i) => i.row.scout_score != null);
+      if (!scored.length) return `no item carries a real scout_score`;
+      const fake = r.items.filter(
+        (i) => i.core_scores != null && i.core_scores.score !== (i.row.scout_score ?? -999),
+      );
+      if (fake.length) return `${fake.length} cards show a score ≠ scout_score (rank leaking in)`;
+      return null;
+    },
+  },
 ];
 
 async function main() {

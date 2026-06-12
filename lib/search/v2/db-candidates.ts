@@ -15,7 +15,7 @@
  */
 import { adminClient } from "@/lib/supabase/admin";
 import { embedText } from "@/lib/search/v2/embeddings";
-import { mapDbRow } from "@/lib/search/v2/index-queries";
+import { INDEX_COLUMNS, mapDbRow } from "@/lib/search/v2/index-queries";
 import { semanticTypeMatches } from "@/lib/search/v2/type-centroids";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
@@ -70,17 +70,41 @@ export async function fetchCandidatePool(
     }),
   );
 
-  const [ann, ...typed] = await Promise.all([annPromise, ...typedPromises]);
+  // Brand leg — a bare brand query ("lays") is semantically weak, so its products
+  // may never surface in the ANN top-K (lays/kurkure/haldiram returned 0). Fetch
+  // the brand's products directly. "%" between alnum runs tolerates apostrophes &
+  // spaces ("lay's" → %lay%s% matches "Lays" AND "Lay's") and is injection-safe.
+  const brandPattern =
+    intent.kind === "brand" && intent.brand
+      ? `%${intent.brand.toLowerCase().replace(/[^a-z0-9]+/g, "%")}%`
+      : null;
+  const brandPromise = brandPattern
+    ? supabase
+        .from("product_search_index")
+        .select(INDEX_COLUMNS)
+        .ilike("brand", brandPattern)
+        .gte("data_quality_score", minQuality)
+        .limit(limit)
+    : Promise.resolve({ data: null, error: null });
+
+  const [ann, brand, ...typed] = await Promise.all([annPromise, brandPromise, ...typedPromises]);
 
   if (ann.error) console.warn("[db-candidates] ANN RPC failed:", ann.error.message);
+  if (brand.error) console.warn("[db-candidates] brand fetch failed:", brand.error.message);
   for (const t of typed) {
     if (t.error) console.warn("[db-candidates] typed RPC failed:", t.error.message);
   }
 
-  // Union, typed-first so exact-type rows always survive the dedupe.
+  // Union, exact (brand/typed) first so they always survive the dedupe vs ANN.
   const byId = new Map<string, ProductSearchIndexRow>();
+  if (Array.isArray(brand.data)) {
+    for (const raw of brand.data as Record<string, unknown>[]) {
+      const row = mapDbRow(raw);
+      byId.set(row.product_id, row);
+    }
+  }
   for (const t of typed) {
-    for (const row of mapRpcRows(t.data)) byId.set(row.product_id, row);
+    for (const row of mapRpcRows(t.data)) if (!byId.has(row.product_id)) byId.set(row.product_id, row);
   }
   for (const row of mapRpcRows(ann.data)) {
     if (!byId.has(row.product_id)) byId.set(row.product_id, row);
