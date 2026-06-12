@@ -2,6 +2,8 @@ import { BasketView } from "@/components/basket-view";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 
+export const revalidate = 120;
+
 export default function BasketPage() {
   return (
     <main className="min-h-screen">

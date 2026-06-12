@@ -3,6 +3,8 @@ import { CompareView } from "@/components/compare-view";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 
+export const revalidate = 86400;
+
 export const metadata: Metadata = {
   title: "Compare products · Scout",
   description: "Side-by-side label comparison — scores, nutrition, and signals.",

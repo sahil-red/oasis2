@@ -47,13 +47,13 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const goal = goalFromParam(request.nextUrl.searchParams.get("goal") ?? undefined);
   const product = await getProductBySlug(slug);
   if (!product) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const score = product.core_scores;
+  const goal = goalFromParam(request.nextUrl.searchParams.get("goal") ?? undefined);
   const verdict = score
     ? resolveProductVerdict({
         verdict: score.verdict,
@@ -67,17 +67,22 @@ export async function GET(
       })
     : null;
 
-  const displayNutrition = await reconcileNutritionWithLlm(
-    {
-      nutrition: product.nutrition,
-      attributes: product.attributes,
-      name: product.name,
-      category: product.category,
-      subcategory: product.subcategory,
-      net_weight: product.net_weight,
-    },
-    `nutrition:${product.id}`, // LLM result cache key
-  );
+  let displayNutrition: Awaited<ReturnType<typeof reconcileNutritionWithLlm>> | null = null;
+  try {
+    displayNutrition = await reconcileNutritionWithLlm(
+      {
+        nutrition: product.nutrition,
+        attributes: product.attributes,
+        name: product.name,
+        category: product.category,
+        subcategory: product.subcategory,
+        net_weight: product.net_weight,
+      },
+      `nutrition:${product.id}`,
+    );
+  } catch (e) {
+    console.warn("[pdp] nutrition LLM failed, serving raw:", e);
+  }
 
   const nutritionCtx = displayNutrition
     ? {
@@ -119,28 +124,39 @@ export async function GET(
     productName: product.name,
   });
 
-  const intelligenceRows = await loadIngredientIntelligenceForDisplay(displayIngredients);
-  const ingredientItems = parseIngredientsForDisplayWithIntelligence(
-    displayIngredients,
-    intelligenceRows,
-  ).map((item) => ({
-    display: item.display,
-    risk: item.risk,
-    tier_label: item.tierLabel,
-    why: item.why ?? null,
-    e_number: item.eNumber ?? null,
-    percent: item.percent ?? null,
-    flagged: item.flagged,
-    source: item.source,
-  }));
+  let ingredientItems: Array<Record<string, unknown>> = [];
+  try {
+    const intelligenceRows = await loadIngredientIntelligenceForDisplay(displayIngredients);
+    ingredientItems = parseIngredientsForDisplayWithIntelligence(
+      displayIngredients,
+      intelligenceRows,
+    ).map((item) => ({
+      display: item.display,
+      risk: item.risk,
+      tier_label: item.tierLabel,
+      why: item.why ?? null,
+      e_number: item.eNumber ?? null,
+      percent: item.percent ?? null,
+      flagged: item.flagged,
+      source: item.source,
+    }));
+  } catch (e) {
+    console.warn("[pdp] ingredient intelligence failed:", e);
+  }
 
   const deepseek = deepseekDisplayFromPayload(product.ocr_payload);
 
-  const swapPool = await getProductsForSwaps(product, 180);
-  const swaps = findAlternatives(product, swapPool, goal, 3, {}).map(mapSwap);
-  const similar = findSimilarProducts(product, swapPool, goal, 8, {
-    excludeIds: new Set(swaps.map((s) => s.slug)),
-  }).map(mapSwap);
+  let swaps: ReturnType<typeof mapSwap>[] = [];
+  let similar: ReturnType<typeof mapSwap>[] = [];
+  try {
+    const swapPool = await getProductsForSwaps(product, 180);
+    swaps = findAlternatives(product, swapPool, goal, 3, {}).map(mapSwap);
+    similar = findSimilarProducts(product, swapPool, goal, 8, {
+      excludeIds: new Set(swaps.map((s) => s.slug)),
+    }).map(mapSwap);
+  } catch (e) {
+    console.warn("[pdp] swap/similar search failed:", e);
+  }
 
   const zepto_buy_url = resolveZeptoBuyUrl(product);
 

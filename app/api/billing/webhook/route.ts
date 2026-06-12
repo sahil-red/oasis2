@@ -37,21 +37,33 @@ export async function POST(request: Request) {
       const orderId = body.payload?.order?.entity?.id ?? body.payload?.payment?.entity?.order_id;
       const userId = body.payload?.order?.entity?.notes?.user_id;
       if (orderId && userId) {
-        await setUserPlanPlus(admin, userId, orderId, null);
-        await admin.from("subscriptions").update({
-          status: "active",
-          updated_at: new Date().toISOString(),
-        }).eq("razorpay_subscription_id", orderId);
+        try {
+          await setUserPlanPlus(admin, userId, orderId, null);
+          await admin.from("subscriptions").update({
+            status: "active",
+            updated_at: new Date().toISOString(),
+          }).eq("razorpay_subscription_id", orderId);
+        } catch (e) {
+          console.error("[webhook] order.paid db failed:", e);
+          return NextResponse.json({ error: "Internal" }, { status: 500 });
+        }
       }
     }
     return NextResponse.json({ ok: true });
   }
 
-  const { data: row } = await admin
-    .from("subscriptions")
-    .select("user_id")
-    .eq("razorpay_subscription_id", subId)
-    .maybeSingle();
+  let row: { user_id: string } | undefined;
+  try {
+    const result = await admin
+      .from("subscriptions")
+      .select("user_id")
+      .eq("razorpay_subscription_id", subId)
+      .maybeSingle();
+    row = result.data ?? undefined;
+  } catch (e) {
+    console.error("[webhook] subscription lookup failed:", e);
+    return NextResponse.json({ error: "Internal" }, { status: 500 });
+  }
 
   if (!row?.user_id) {
     return NextResponse.json({ ok: true });
@@ -68,31 +80,36 @@ export async function POST(request: Request) {
     "subscription.completed",
   ]);
 
-  if (activeEvents.has(event)) {
-    const periodEnd = subEntity?.current_end
-      ? new Date(subEntity.current_end * 1000).toISOString()
-      : null;
-    await setUserPlanPlus(admin, row.user_id, subId, periodEnd);
-    await admin
-      .from("subscriptions")
-      .update({
-        status: subEntity?.status ?? "active",
-        current_period_end: periodEnd,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("razorpay_subscription_id", subId);
-  } else if (cancelEvents.has(event)) {
-    await admin
-      .from("profiles")
-      .update({ plan: "free", updated_at: new Date().toISOString() })
-      .eq("id", row.user_id);
-    await admin
-      .from("subscriptions")
-      .update({
-        status: subEntity?.status ?? "cancelled",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("razorpay_subscription_id", subId);
+  try {
+    if (activeEvents.has(event)) {
+      const periodEnd = subEntity?.current_end
+        ? new Date(subEntity.current_end * 1000).toISOString()
+        : null;
+      await setUserPlanPlus(admin, row.user_id, subId, periodEnd);
+      await admin
+        .from("subscriptions")
+        .update({
+          status: subEntity?.status ?? "active",
+          current_period_end: periodEnd,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("razorpay_subscription_id", subId);
+    } else if (cancelEvents.has(event)) {
+      await admin
+        .from("profiles")
+        .update({ plan: "free", updated_at: new Date().toISOString() })
+        .eq("id", row.user_id);
+      await admin
+        .from("subscriptions")
+        .update({
+          status: subEntity?.status ?? "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("razorpay_subscription_id", subId);
+    }
+  } catch (e) {
+    console.error("[webhook] db update failed:", e);
+    return NextResponse.json({ error: "Internal" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

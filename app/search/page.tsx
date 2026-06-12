@@ -7,6 +7,8 @@ import {
   getCachedCatalogSearch,
 } from "@/lib/products/catalog-cache";
 
+export const revalidate = 120;
+
 export const metadata: Metadata = {
   title: "Ask Scout — search the catalog · Scout",
   description:
@@ -50,7 +52,7 @@ export default async function CatalogPage({
     <main className="min-h-screen">
       <SiteNav />
 
-      <div className="mx-auto max-w-7xl px-5 pb-20 pt-3 md:px-6 md:pt-4">
+      <div className="mx-auto max-w-full px-5 pb-20 pt-3 md:px-6 md:pt-4">
         <CatalogLoader initialParams={params} initialMeta={meta} initialSearch={initialSearch} />
       </div>
 

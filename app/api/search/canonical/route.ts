@@ -12,8 +12,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "product_id required" }, { status: 400 });
   }
 
-  const snapshot = await getSearchIndexSnapshot();
-  const siblings = getCanonicalSiblings(snapshot.index, productId);
+  let snapshot: { index: Array<Record<string, unknown>> };
+  try {
+    snapshot = await getSearchIndexSnapshot();
+  } catch (e) {
+    console.error("[canonical] index snapshot failed:", e);
+    return NextResponse.json({ error: "Internal" }, { status: 500 });
+  }
+
+  let siblings: Array<{ product_id: string; slug: string; name: string; brand: string | null; category: string; subcategory: string; price_inr: number | null; scout_score: number | null; data_quality_score: number | null; canonical_product_id: string | null }>;
+  try {
+    siblings = getCanonicalSiblings(snapshot.index, productId);
+  } catch (e) {
+    console.error("[canonical] sibling resolution failed:", e);
+    return NextResponse.json({ error: "Internal" }, { status: 500 });
+  }
 
   const ids = siblings.map((s) => s.product_id);
   const display = new Map<string, { image_urls: string[]; net_weight: string | null; mrp_inr: number | null }>();

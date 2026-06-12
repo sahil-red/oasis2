@@ -49,3 +49,6 @@ scripts/.session/
 
 # OS
 Thumbs.db
+
+# Claude config (may contain secrets)
+.claude/

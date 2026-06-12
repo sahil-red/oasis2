@@ -129,6 +129,6 @@ export async function POST(req: NextRequest) {
     const message = e instanceof Error ? e.message : "AI search failed";
     console.error("[search/ai]", message);
     // Failed searches are not charged: no cookie write, so the visitor keeps the credit.
-    return NextResponse.json({ error: message, items: [] }, { status: 200 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

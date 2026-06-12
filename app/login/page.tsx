@@ -171,8 +171,8 @@ export default function LoginPage() {
 
         <p className="mt-8 text-center text-[11px] text-(--color-fg-dim)">
           By continuing you agree to Scout's{" "}
-          <span className="underline underline-offset-2">terms</span> and{" "}
-          <span className="underline underline-offset-2">privacy policy</span>.
+          <Link href="/terms" className="underline underline-offset-2 hover:text-(--color-fg)">terms</Link> and{" "}
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-(--color-fg)">privacy policy</Link>.
         </p>
       </div>
     </main>

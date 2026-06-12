@@ -108,7 +108,9 @@ export default async function Home() {
               <span className="font-medium text-(--color-fg-muted) tabular-nums">
                 {shelves.totalScored.toLocaleString()}
               </span>{" "}
-              products scored across India&apos;s quick-commerce shelves
+              <Link href="/search" className="underline-offset-4 transition hover:text-(--color-fg) hover:underline">
+                products scored across India&apos;s quick-commerce shelves
+              </Link>
             </p>
           )}
         </div>

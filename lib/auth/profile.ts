@@ -35,7 +35,25 @@ export async function getProfileForUser(
   let used = data.ai_searches_today ?? 0;
   if (data.ai_searches_day !== day) used = 0;
 
-  const plan = (data.plan === "plus" ? "plus" : "free") as "free" | "plus";
+  // Check subscription expiry: if plan is "plus" but period has lapsed, downgrade
+  let plan = (data.plan === "plus" ? "plus" : "free") as "free" | "plus";
+  if (plan === "plus" && !UNLIMITED_EMAILS.has((data.email ?? "").toLowerCase())) {
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("current_period_end, status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (sub?.current_period_end && new Date(sub.current_period_end) < new Date()) {
+      plan = "free";
+      // Silently fix stale profile
+      await supabase
+        .from("profiles")
+        .update({ plan: "free", updated_at: new Date().toISOString() })
+        .eq("id", userId);
+    }
+  }
+
   const isUnlimited = plan === "plus" || UNLIMITED_EMAILS.has((data.email ?? "").toLowerCase());
   const limit = isUnlimited ? 9999 : SCOUT_PLUS_PLAN.free_daily_ai_searches;
   const remaining = isUnlimited ? 9999 : Math.max(0, limit - used);

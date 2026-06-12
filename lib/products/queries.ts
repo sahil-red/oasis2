@@ -1365,9 +1365,7 @@ export async function getProductsBySlugs(slugs: string[]): Promise<ProductListIt
     .select(`${LIST_FIELDS}, core_scores (${LIST_SCORE_FIELDS})`)
     .in("slug", slugs);
   if (error) throw new Error(error.message);
-  return (data ?? [])
-    .map((row) => mapListRow(row as Record<string, unknown>))
-    .filter(isCatalogVisible);
+  return (data ?? []).map((row) => mapListRow(row as Record<string, unknown>));
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {

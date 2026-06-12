@@ -34,10 +34,10 @@ function rowMatchesFlavours(row: ProductSearchIndexRow, required: string[]): boo
 
 function passesDietary(row: ProductSearchIndexRow, intent: SearchIntentV2): boolean {
   const c = intent.constraints;
-  if (c.vegan && row.is_vegan === false) return false;
-  if (c.vegetarian && row.is_veg === false) return false;
-  if (c.gluten_free && row.is_gluten_free === false) return false;
-  if (c.palm_oil_free && row.is_palm_oil_free === false) return false;
+  if (c.vegan && row.is_vegan !== true) return false;
+  if (c.vegetarian && row.is_veg !== true) return false;
+  if (c.gluten_free && row.is_gluten_free !== true) return false;
+  if (c.palm_oil_free && row.is_palm_oil_free !== true) return false;
   return true;
 }
 

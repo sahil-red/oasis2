@@ -3,6 +3,8 @@ import { PlanCards } from "@/components/plan-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 
+export const revalidate = 86400;
+
 export const metadata: Metadata = {
   title: "Pricing · Scout",
   description:

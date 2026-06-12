@@ -18,16 +18,29 @@ export async function GET(request: Request) {
   const diet = dietFromParam(params.get("diet"));
 
   if (!slugs.length) {
-    return NextResponse.json({ goal, swaps: {} as Record<string, SwapSuggestion[]> });
+    return NextResponse.json(
+      { goal, swaps: {} as Record<string, SwapSuggestion[]> },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
+    );
   }
 
   const products = await getProductsBySlugs(slugs);
   const swaps: Record<string, SwapSuggestion[]> = {};
 
+  // Group products by aisle to avoid N+1: one DB query per unique category combo.
+  const groups = new Map<string, typeof products>();
+  for (const p of products) {
+    const key = p.l3_category ?? `${p.category ?? ""}::${p.subcategory ?? ""}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+
   await Promise.all(
-    products.map(async (current) => {
-      const pool = await getProductsForSwaps(current, 200);
-      swaps[current.slug] = findAlternatives(current, pool, goal, 3, { diet });
+    [...groups.values()].map(async (group) => {
+      const pool = await getProductsForSwaps(group[0], 200);
+      for (const current of group) {
+        swaps[current.slug] = findAlternatives(current, pool, goal, 3, { diet });
+      }
     }),
   );
 
@@ -35,5 +48,8 @@ export async function GET(request: Request) {
     if (!swaps[slug]) swaps[slug] = [];
   }
 
-  return NextResponse.json({ goal, swaps });
+  return NextResponse.json(
+    { goal, swaps },
+    { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
+  );
 }
