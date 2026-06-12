@@ -50,8 +50,12 @@ Rules:
   required_flavours (it narrows the variant), and leave brand null unless an actual maker is named.
 - kind:"brand" ONLY when the query is purely a brand name with no product type. If a product
   type is present, kind:"directed" and brand is just an optional filter (often null).
+  Multi-word brand names that contain words that COULD be product types ("bakery", "tea",
+  "dairy") are still brands when the name refers to a manufacturer.
   e.g. "cow ghee" → kind:"directed", primary_type:"ghee", required_flavours:["cow"], brand:null.
   "olive oil" → primary_type:"olive oil" (keep multi-word types together), brand:null.
+  "karachi bakery" → kind:"brand", brand:"Karachi Bakery".
+  "taj mahal tea" → kind:"brand", brand:"Taj Mahal Tea".
 - Understand Hindi/Hinglish natively (doodh, bina cheeni, nahi).
 - "chocolate milk" → primary_type:"milk", required_flavours:["chocolate"]. "milk chocolate" →
   primary_type:"chocolate", required_flavours:["milk"]. Decide the head noun by product meaning;

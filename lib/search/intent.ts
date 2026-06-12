@@ -90,6 +90,21 @@ function buildFastPathIntent(
   const required_flavours: string[] = [];
   let kind: SearchIntentV2["kind"] = "directed";
 
+  // Multi-token: check if the full residual is a known brand or type before
+  // tokenizing. Handles multi-word brands like "karachi bakery" where individual
+  // tokens don't match the stored brand name.
+  const fullNorm = norm(residual);
+  if (tokens.length >= 2) {
+    if (meta.brands.has(fullNorm)) {
+      brand = residual;
+      kind = "brand";
+    } else if (meta.primaryTypes.has(fullNorm)) {
+      primary_type = residual;
+      kind = "directed";
+    }
+  }
+
+  if (!brand && !primary_type) {
   if (tokens.length === 1) {
     if (meta.brands.has(normTokens[0]!)) {
       brand = tokens[0]!;
@@ -125,6 +140,7 @@ function buildFastPathIntent(
         if (meta.flavours.has(normTokens[i]!)) required_flavours.push(tokens[i]!);
       }
     }
+  }
   }
 
   const modifiers: string[] = [];

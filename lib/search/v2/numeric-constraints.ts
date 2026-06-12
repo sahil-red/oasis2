@@ -142,7 +142,13 @@ export function countActiveConstraints(n: NumericExtraction): number {
 /** Fast-path eligible when every residual token is a known brand or primary_type (§6). */
 export function fastPathEligible(residual: string, meta: IndexCatalogMeta): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
-  const tokens = norm(residual)
+  const fullNorm = norm(residual);
+
+  // Check the full residual string first — handles multi-word brands like
+  // "karachi bakery" where individual tokens won't match the stored brand name.
+  if (meta.brands.has(fullNorm) || meta.primaryTypes.has(fullNorm)) return true;
+
+  const tokens = fullNorm
     .split(/\s+/)
     .filter((t) => t.length >= 2);
   if (!tokens.length || tokens.length > 2) return false;

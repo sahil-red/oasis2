@@ -16,6 +16,7 @@
     "pw:install": "playwright install chromium",
     "catalog:sync": "tsx scripts/sync-catalog-from-csv.ts",
     "catalog:fix-images": "tsx scripts/fix-product-image-order.ts",
+    "catalog:fix-images-vision": "tsx scripts/fix-image-order-vision.ts",
     "catalog:hero-image:test": "tsx scripts/catalog-hero-image-selftest.ts",
     "catalog:backfill-visible": "tsx scripts/backfill-catalog-visible.ts",
     "catalog:migrate": "tsx scripts/apply-catalog-migration.ts",
