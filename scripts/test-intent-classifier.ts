@@ -1,17 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 /**
- * Test the Python intent classifier against the ground-truth test database.
- *
- * For each query, calls the Python service and compares output vs expected intent.
- * Reports pass/fail/degraded status, accuracy by category, and failures.
+ * Test the local intent classifier against the ground-truth test database.
+ * Pure TypeScript — no HTTP, no Python service needed.
  *
  *   pnpm intent:test
  *   pnpm intent:test -- --verbose
- *   pnpm intent:test -- --service http://localhost:8000
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { classifyIntent } from "@/lib/search/intent-classifier";
+import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 
 type TestQuery = {
   query: string;
@@ -44,45 +43,17 @@ type TestResult = {
 
 function parseArgs() {
   const argv = process.argv.slice(2);
-  let service: string | null = null;
-  for (const a of argv) {
-    if (a.startsWith("--service=")) service = a.split("=")[1]!;
-  }
   return {
-    service: service ?? "http://localhost:8000",
     verbose: argv.includes("--verbose"),
   };
 }
 
 async function main() {
-  const { service, verbose } = parseArgs();
+  const { verbose } = parseArgs();
   const repoRoot = join(import.meta.dirname ?? ".", "..");
   const testFile = join(repoRoot, "data", "search-test-queries.json");
   const queries: TestQuery[] = JSON.parse(readFileSync(testFile, "utf8"));
 
-  // Check if Python service is reachable
-  let healthOk = false;
-  try {
-    const h = await fetch(`${service}/health`, { signal: AbortSignal.timeout(2000) });
-    healthOk = h.ok;
-    if (verbose) {
-      const hb = (await h.json()) as { backend?: string };
-      console.log(`[test] Service healthy (${hb.backend ?? "unknown"})\n`);
-    }
-  } catch {
-    console.error(`[test] ERROR: Python service not reachable at ${service}/health`);
-    console.error("  Start it with: cd python-intent && python3 main.py");
-    process.exit(1);
-  }
-
-  if (!healthOk) {
-    console.error(`[test] ERROR: Service returned unhealthy at ${service}/health`);
-    process.exit(1);
-  }
-
-  // Use an empty brand/type set — the classifier should handle this gracefully.
-  // In production, Vercel sends real catalogMeta. For testing, we use representative
-  // sets that match the expected queries.
   const brands = [
     "amul", "nestle", "carbamide", "patanjali", "karachi bakery",
     "haldiram", "taj mahal tea", "dabur", "britannia", "epigamia",
@@ -100,7 +71,13 @@ async function main() {
     "ready to eat", "rose water",
   ];
 
-  console.log(`[test] Running ${queries.length} test queries against ${service}/intent\n`);
+  const meta: IndexCatalogMeta = {
+    brands: new Set(brands),
+    primaryTypes: new Set(primaryTypes),
+    flavours: new Set(),
+  };
+
+  console.log(`[test] Running ${queries.length} test queries locally (0ms, no HTTP)\n`);
 
   const results: TestResult[] = [];
 
@@ -113,57 +90,33 @@ async function main() {
     };
 
     try {
-      const res = await fetch(`${service}/intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q.query, brands, primary_types: primaryTypes }),
-        signal: AbortSignal.timeout(3000),
-      });
+      const raw = classifyIntent(q.query, meta);
 
-      if (!res.ok) {
-        results.push({
-          query: q.query,
-          status: "error",
-          expected,
-          actual: {},
-          notes: q.notes,
-          errors: [`HTTP ${res.status}`],
-        });
-        continue;
-      }
-
-      const raw = (await res.json()) as {
-        kind?: string;
-        brand?: string | null;
-        primary_type?: string | null;
-        goal_phrase?: string | null;
-        confidence?: number;
-        modifiers?: string[];
-        sort?: string;
-      };
-
-      const actual = {
-        kind: raw.kind ?? "?",
-        brand: raw.brand ?? null,
-        type: raw.primary_type ?? null,
-        goal: raw.goal_phrase ?? null,
-        confidence: raw.confidence,
-      };
-
-      const confidence = raw.confidence ?? 0;
-
-      // Check if it would degrade (confidence < 0.70)
-      if (confidence < 0.70) {
+      if (!raw || raw.confidence < 0.70) {
         results.push({
           query: q.query,
           status: "degraded",
           expected,
-          actual,
+          actual: {
+            kind: raw?.kind ?? "null",
+            brand: raw?.brand ?? null,
+            type: raw?.primary_type ?? null,
+            goal: raw?.goal_phrase ?? null,
+            confidence: raw?.confidence ?? 0,
+          },
           notes: q.notes,
           errors: [],
         });
         continue;
       }
+
+      const actual = {
+        kind: raw.kind,
+        brand: raw.brand ?? null,
+        type: raw.primary_type ?? null,
+        goal: raw.goal_phrase ?? null,
+        confidence: raw.confidence,
+      };
 
       // Compare expected vs actual
       const errors: string[] = [];
@@ -172,21 +125,18 @@ async function main() {
         errors.push(`kind: expected "${expected.kind}", got "${actual.kind}"`);
       }
 
-      // Brand check — only fail if expected_brand is set and doesn't match
       const expBrand = expected.brand?.toLowerCase() ?? null;
       const actBrand = actual.brand?.toLowerCase().trim() ?? null;
       if (expBrand && actBrand !== expBrand) {
         errors.push(`brand: expected "${expBrand}", got "${actBrand}"`);
       }
 
-      // Type check — only fail if expected_type is set and actual doesn't contain it
       const expType = expected.type?.toLowerCase() ?? null;
       const actType = actual.type?.toLowerCase() ?? null;
       if (expType && (!actType || !actType.includes(expType))) {
         errors.push(`type: expected "${expType}", got "${actType}"`);
       }
 
-      // Goal check — only fail if expected_goal is set and actual doesn't contain it
       const expGoal = expected.goal?.toLowerCase() ?? null;
       const actGoal = actual.goal?.toLowerCase() ?? null;
       if (expGoal && (!actGoal || !actGoal.includes(expGoal))) {
@@ -235,7 +185,6 @@ async function main() {
   console.log(`  ⚠ Errors:           ${errors.length}`);
   console.log("");
 
-  // Failures
   if (failed.length) {
     console.log("── FAILURES ──");
     for (const r of failed) {
@@ -248,7 +197,6 @@ async function main() {
     }
   }
 
-  // Degraded (expected to degrade)
   if (degraded.length && verbose) {
     console.log("── DEGRADED TO LLM ──");
     for (const r of degraded) {
@@ -258,7 +206,6 @@ async function main() {
     console.log("");
   }
 
-  // Category breakdown
   console.log("── BY EXPECTED KIND ──");
   for (const kind of ["brand", "directed", "goal", "ambiguous"]) {
     const cat = results.filter((r) => r.expected.kind === kind);
@@ -267,7 +214,6 @@ async function main() {
     console.log(`  ${kind.padEnd(12)} ${catPass}/${cat.length} pass  (${catDegrade} degraded)`);
   }
 
-  // Exit code
   if (failed.length > 0 || errors.length > 0) {
     console.log(`\n❌ ${failed.length + errors.length} failures/errors`);
     process.exit(1);

@@ -14,7 +14,7 @@ import {
   extractNumericConstraints,
   fastPathEligible,
 } from "@/lib/search/v2/numeric-constraints";
-import { classifyIntentWithPython } from "@/lib/search/python-classifier";
+import { classifyIntent as classifyIntentLocally } from "@/lib/search/intent-classifier";
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
 
@@ -197,11 +197,11 @@ export async function resolveSearchIntent(
     return { intent, llm_calls: 0 };
   }
 
-  // Try Python intent classifier before expensive LLM call (5-50ms vs 2-5s).
-  // Falls through silently on failure → LLM handles it as before.
+  // Try local intent classifier before expensive LLM call (0-1ms vs 2-5s).
+  // Falls through silently on low confidence → LLM handles it as before.
   try {
-    const pyIntent = await classifyIntentWithPython(query, opts.catalogMeta);
-    if (pyIntent) {
+    const pyIntent = classifyIntentLocally(query, opts.catalogMeta);
+    if (pyIntent && pyIntent.confidence >= 0.70) {
       const merged = {
         ...pyIntent,
         constraints: {
