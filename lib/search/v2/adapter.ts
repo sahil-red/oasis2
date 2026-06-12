@@ -53,7 +53,7 @@ async function enrichDisplayFields(productIds: string[]): Promise<Map<string, Di
       // "column does not exist", which the outer catch swallowed, blanking ALL
       // search images. ocr_image_url (the label-frame URL) is the signal we need.
       .select("id, image_urls, net_weight, mrp_inr, ocr_image_url")
-      .in("id", productIds.slice(0, 50));
+      .in("id", productIds.slice(0, 200));
     for (const row of data ?? []) {
       try {
         const rawUrls: string[] = Array.isArray(row.image_urls) ? row.image_urls : [];

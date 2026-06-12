@@ -4,7 +4,7 @@
 import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
-export const VERIFICATION_CAP = 50;
+export const VERIFICATION_CAP = 200;
 
 export function isPrecisionAtRisk(intent: SearchIntentV2): boolean {
   // The verification prompt checks TYPE/FORM plausibility only — allergen and

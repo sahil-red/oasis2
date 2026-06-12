@@ -6,7 +6,7 @@ import { fetchLexicalScoresFromDb } from "@/lib/search/v2/db-lexical";
 import { reciprocalRankFusion } from "@/lib/search/v2/rrf";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 
-export const RERANK_CAP = 50;
+export const RERANK_CAP = 200;
 
 function lexicalScore(row: ProductSearchIndexRow, query: string): number {
   const q = query.toLowerCase();
