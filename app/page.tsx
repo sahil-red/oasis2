@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { HomeRailCard } from "@/components/home-rail-card";
 import { HomeReckoning, HomeCategoryGrid } from "@/components/home-editorial";
+import { RingGlyph } from "@/components/ring-motif";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
@@ -115,8 +116,10 @@ export default async function Home() {
 
       {/* ── One proof, told with confidence ──────────────────────────────── */}
       {proof && (
-        <section className="border-b border-(--color-line) bg-(--color-bg-soft)">
-          <div className="mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center md:py-28">
+        <section className="relative overflow-hidden border-b border-(--color-line) bg-(--color-bg-soft)">
+          {/* score-ring motif behind the big stat — a ring around a number */}
+          <RingGlyph className="absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-[58%] opacity-60 md:h-[440px] md:w-[440px]" />
+          <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center md:py-28">
             <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-(--color-fg-dim)">
               What we found
             </p>
