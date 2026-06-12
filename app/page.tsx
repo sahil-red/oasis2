@@ -47,8 +47,10 @@ export default async function Home() {
       <SiteNav />
 
       {/* ── Hero — one headline, one action, room to breathe ─────────────── */}
-      <section className="relative overflow-hidden border-b border-(--color-line)">
-        <div className="mx-auto flex max-w-3xl flex-col items-center px-6 pb-20 pt-20 text-center md:pb-28 md:pt-32">
+      {/* min-h fills the first fold so the next section's tint never peeks up
+          into the hero on tall screens; content sits optically centered. */}
+      <section className="relative flex min-h-[88vh] items-center overflow-hidden border-b border-(--color-line)">
+        <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-6 pb-20 pt-12 text-center md:pb-24 md:pt-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-(--color-fg-dim)">
             Honest grocery intel · India
           </p>
