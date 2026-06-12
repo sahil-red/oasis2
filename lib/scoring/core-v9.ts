@@ -53,8 +53,13 @@ export type CoreScoreV9Result = {
 };
 
 export function blendFinalScore(absolute: number, relative: number): number {
-  const raw =
-    V9_BLEND_ABSOLUTE * absolute + V9_BLEND_RELATIVE * relative;
+  // Cap relative divergence: let the relative boost reach at most ~15 pts for
+  // low-scored products (absolute ≤ 40), then expand smoothly by 1 pt per ~3.3
+  // pts of absolute above 40.  This prevents cohort advantage (e.g. treat v.
+  // staple) from inflating the blend while leaving top-tier products untouched.
+  const maxBoost = 15 + Math.max(0, (absolute - 40) * 0.3);
+  const capped = Math.min(relative, absolute + maxBoost);
+  const raw = V9_BLEND_ABSOLUTE * absolute + V9_BLEND_RELATIVE * capped;
   return Math.max(0, Math.min(100, Math.round(raw)));
 }
 

@@ -115,7 +115,7 @@ async function main() {
   for (let page = 0; page < 50; page++) {
     let query = st
       .from("products")
-      .select("id,slug,name,brand,super_category,category,subcategory,l3_category,net_weight,price_inr,mrp_inr,nutrition,ingredients_raw,attributes")
+      .select("id,slug,name,brand,super_category,category,subcategory,l3_category,net_weight,price_inr,mrp_inr,nutrition,ingredients_raw,attributes,core_scores(score)")
       .eq("platform", "zepto")
       .range(page * 1000, (page + 1) * 1000 - 1);
 
@@ -127,6 +127,12 @@ async function main() {
     if (!data?.length) break;
 
     for (const p of data) {
+      const rawScore = p.core_scores as
+        | { score: number }
+        | { score: number }[]
+        | null
+        | undefined;
+      const scoreRow = Array.isArray(rawScore) ? rawScore[0] : rawScore;
       const source = {
         id: p.id as string,
         slug: p.slug as string,
@@ -142,7 +148,7 @@ async function main() {
         nutrition: p.nutrition as Record<string, unknown> | null,
         ingredients_raw: p.ingredients_raw as string | null,
         attributes: p.attributes as Record<string, string> | null,
-        core_scores: null,
+        core_scores: scoreRow ?? null,
       };
       const hash = computeProductSourceHash({
         name: source.name,

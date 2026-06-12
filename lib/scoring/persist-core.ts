@@ -10,10 +10,10 @@ import {
 } from "@/lib/scoring/v9-batch";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
-export const SCORING_ENGINE = (process.env.SCORING_ENGINE ?? "v8").toLowerCase();
+export const SCORING_ENGINE = (process.env.SCORING_ENGINE ?? "v9").toLowerCase();
 
 export const SCORING_RULE_VERSION = Number(
-  process.env.SCORING_RULE_VERSION ?? (SCORING_ENGINE === "v9" ? 9 : 8),
+  process.env.SCORING_RULE_VERSION ?? (SCORING_ENGINE === "v9" ? 10 : 8),
 );
 
 export type ScoreableProduct = {
