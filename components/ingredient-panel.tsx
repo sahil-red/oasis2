@@ -27,8 +27,6 @@ const RISK_TEXT: Record<IngredientRisk, string> = {
   hazardous: "text-(--color-bad)",
 };
 
-const INITIAL_INGREDIENT_COUNT = 20;
-
 function dotRiskForItem(item: IngredientDisplayItem): IngredientRisk {
   if (item.tierLabel === "Probiotic" || item.tierLabel.startsWith("Probiotic")) return "risk-free";
   if (item.source === "rules" && item.risk === "risk-free") return "unknown";
@@ -108,7 +106,6 @@ export function IngredientPanel({
   intelligenceRows?: IngredientIntelligenceRow[];
 }) {
   const [showFull, setShowFull] = useState(false);
-  const [showAllIngredients, setShowAllIngredients] = useState(false);
   const items = parseIngredientsForDisplayWithIntelligence(ingredientsRaw, intelligenceRows);
   const summary = ingredientDisplaySummary(items);
 
@@ -123,10 +120,11 @@ export function IngredientPanel({
   const watchfulCount = items.filter((i) => i.risk === "limited").length;
   const allClean = summary.flagged === 0 && summary.hazardous === 0 && watchfulCount === 0;
   const concernCount = summary.flagged + watchfulCount;
-  const visibleItems = showAllIngredients ? items : items.slice(0, INITIAL_INGREDIENT_COUNT);
-  const hiddenCount = Math.max(0, items.length - visibleItems.length);
-  const highestRiskItem = [...items].sort((a, b) => riskRank(b) - riskRank(a))[0];
-  const showRiskCallout = highestRiskItem && riskRank(highestRiskItem) > 0;
+  // The ingredients that actually move the score — worst first. This is what a
+  // shopper needs; the other 20 "sugar, salt, flour" entries are noise up front.
+  const flagged = [...items]
+    .filter((i) => riskRank(i) > 0)
+    .sort((a, b) => riskRank(b) - riskRank(a));
 
   return (
     <div className="space-y-3">
@@ -145,33 +143,41 @@ export function IngredientPanel({
         />
       </div>
 
-      {showRiskCallout ? <RiskCallout item={highestRiskItem} /> : null}
+      {/* ── Worth noticing — the few that matter, expandable for why ── */}
+      {flagged.length > 0 ? (
+        <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
+          <p className="border-b border-(--color-line) bg-(--color-bg-soft) px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-(--color-fg-dim)">
+            Worth noticing
+          </p>
+          <ul>
+            {flagged.map((item, i) => (
+              <IngredientRow key={`flag-${item.display}-${i}`} item={item} />
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-(--color-good)/30 bg-(--color-good)/[0.06] px-3 py-2.5">
+          <p className="text-[13px] font-medium text-(--color-fg)">Clean label — nothing we&apos;d flag.</p>
+          <p className="mt-0.5 text-[12px] text-(--color-fg-muted)">
+            All {summary.total} ingredients read low-risk.
+          </p>
+        </div>
+      )}
 
-      {/* ── ingredient list ── */}
-      <div className="overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
-        <ul>
-          {visibleItems.map((item, i) => (
+      {/* ── Full list — collapsed, label order ── */}
+      <details className="group overflow-hidden rounded-lg border border-(--color-line) bg-(--color-panel)">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2.5 py-2 text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)">
+          <span className="transition-transform group-open:rotate-90" aria-hidden>
+            ›
+          </span>
+          All {summary.total} ingredients
+        </summary>
+        <ul className="border-t border-(--color-line)">
+          {items.map((item, i) => (
             <IngredientRow key={`${item.display}-${item.percent ?? ""}-${i}`} item={item} />
           ))}
         </ul>
-        {hiddenCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowAllIngredients(true)}
-            className="w-full border-t border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-left text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
-          >
-            Show {hiddenCount} more ingredient{hiddenCount !== 1 ? "s" : ""}
-          </button>
-        ) : showAllIngredients && items.length > INITIAL_INGREDIENT_COUNT ? (
-          <button
-            type="button"
-            onClick={() => setShowAllIngredients(false)}
-            className="w-full border-t border-(--color-line) bg-(--color-bg-soft) px-3 py-2 text-left text-[12px] font-medium text-(--color-fg-muted) transition hover:text-(--color-fg)"
-          >
-            Collapse ingredient list
-          </button>
-        ) : null}
-      </div>
+      </details>
 
       {/* ── raw label toggle ── */}
       {ingredientsRaw ? (
@@ -229,31 +235,3 @@ function SummaryTile({
   );
 }
 
-function RiskCallout({ item }: { item: IngredientDisplayItem }) {
-  const bad = item.risk === "hazardous" || item.risk === "moderate";
-  const color = bad ? "var(--score-bad)" : "var(--score-poor)";
-  const why = item.why?.split(/(?<=[.!?])\s+/)[0]?.trim();
-
-  return (
-    <div
-      className="rounded-xl border px-3 py-2.5"
-      style={{
-        borderColor: `color-mix(in srgb, ${color} 38%, var(--color-line))`,
-        backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-panel))`,
-      }}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color }}>
-        Ingredient to notice
-      </p>
-      <p className="mt-1 text-sm font-semibold text-(--color-fg)">
-        {item.display}
-        <span className="ml-2 text-[11px] font-medium" style={{ color }}>
-          {item.tierLabel}
-        </span>
-      </p>
-      {why ? (
-        <p className="mt-1 text-[12.5px] leading-snug text-(--color-fg-muted)">{why}</p>
-      ) : null}
-    </div>
-  );
-}
