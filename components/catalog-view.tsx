@@ -1095,7 +1095,7 @@ export function CatalogView({
                 </button>
               ) : null}
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
               <button
                 type="submit"
                 disabled={aiSearching}
@@ -1105,13 +1105,14 @@ export function CatalogView({
               </button>
               <button
                 type="button"
+                title="Filters"
+                aria-label="Open filters"
                 onClick={() => setRefineOpen((o) => !o)}
-                className="flex min-h-[34px] items-center justify-center gap-1.5 rounded-xl border border-(--color-bg)/20 bg-(--color-fg) px-4 text-[12px] font-medium text-(--color-bg) transition hover:opacity-80"
+                className="relative flex min-h-[48px] min-w-[48px] items-center justify-center rounded-2xl border border-(--color-line-strong) bg-(--color-bg) transition hover:border-(--color-fg-muted) hover:bg-(--color-bg-soft)"
               >
-                <SlidersHorizontal className="h-3 w-3 opacity-70" aria-hidden />
-                Refine
+                <SlidersHorizontal className="h-4 w-4 text-(--color-fg-muted)" aria-hidden />
                 {activeFilterCount > 0 ? (
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-bg) px-1 text-[9px] font-bold text-(--color-fg)">
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-fg) px-1 text-[9px] font-bold text-(--color-bg)">
                     {activeFilterCount}
                   </span>
                 ) : null}
@@ -1189,119 +1190,6 @@ export function CatalogView({
 
           <AiSavedPreferencesHint prefs={savedPrefs} onChange={setSavedPrefs} />
 
-          {aiMode && aiSummary ? (
-            <div className="mt-1">
-              {/* Summary + save preferences in one tight row */}
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-[13px] leading-snug text-(--color-fg-muted)">
-                  {/* Filter out robotic fallback text, show clean human sentence */}
-                  {/parsed your request|closest matches/i.test(aiSummary)
-                    ? aiParsed
-                      ? (() => {
-                          const terms = aiParsed.product_terms.join(", ") || "products";
-                          const sortLabel: Record<string, string> = {
-                            highest_protein: "· by protein",
-                            cheapest: "· by price",
-                            healthiest: "· by health score",
-                            best_match: "",
-                          };
-                          const sort = sortLabel[aiParsed.sort_intent] ?? "";
-                          return `${terms}${sort ? " " + sort : ""}`.trim();
-                        })()
-                      : null
-                    : aiSummary}
-                </p>
-                {aiParsed ? (
-                  <button
-                    type="button"
-                    title="Save diet, goals, and budget from this search"
-                    onClick={() => {
-                      const prefs = preferencesFromParsed(aiParsed);
-                      writeAiSearchPreferences(prefs);
-                      setSavedPrefs(prefs);
-                    }}
-                    className="flex-shrink-0 text-[11px] text-(--color-fg-dim) underline decoration-(--color-line) underline-offset-2 transition hover:text-(--color-fg)"
-                  >
-                    Save preferences
-                  </button>
-                ) : null}
-              </div>
-              <div className="mt-1.5">
-                <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
-              </div>
-              {aiRelaxed ? (
-                <div
-                  className="mt-2 rounded-lg border border-(--color-line) bg-(--color-bg-soft)/60 px-3 py-2 text-left"
-                  style={{ borderLeft: "2px solid var(--color-accent)" }}
-                >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-(--color-fg-muted)">
-                    Why these results
-                  </p>
-                  <div className="mt-1 space-y-0.5">
-                    {aiRelaxationExplanations.length > 0 ? (
-                      aiRelaxationExplanations.map((step) => (
-                        <p key={step} className="text-[12px] leading-snug text-(--color-fg-muted)">
-                          {step}
-                        </p>
-                      ))
-                    ) : (
-                      <p className="text-[12px] leading-snug text-(--color-fg-muted)">
-                        Exact matches were limited — showing closest options.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-              {/* Conversational refinement — server suggestions + standing quick modifiers.
-                  Sort-type chips re-rank the CURRENT results instantly (no LLM round-trip);
-                  constraint chips compose with the ask and re-run the search. */}
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-(--color-fg-dim)">Refine:</span>
-                {aiRefinements.map((refinement) => (
-                  <RefineChip
-                    key={refinement}
-                    label={refinement}
-                    onClick={() => {
-                      const next = `${aiPrompt.trim()} ${refinement.replace(/^Add /i, "")}`.trim();
-                      setAiPrompt(next);
-                      void runAiSearch(next);
-                    }}
-                  />
-                ))}
-                {QUICK_REFINEMENTS.filter(
-                  (q) =>
-                    !(q.phrase && aiPrompt.toLowerCase().includes(q.phrase.toLowerCase())) &&
-                    !aiRefinements.some((r) =>
-                      r.toLowerCase().includes(q.label.toLowerCase()),
-                    ),
-                ).map((q) => (
-                  <RefineChip
-                    key={q.label}
-                    label={q.label}
-                    onClick={() => {
-                      if (q.clientSort === "price") {
-                        // Instant: re-rank what's already on screen by price.
-                        setItems((prev) =>
-                          [...prev].sort(
-                            (a, b) =>
-                              (a.price_inr ?? Number.MAX_SAFE_INTEGER) -
-                              (b.price_inr ?? Number.MAX_SAFE_INTEGER),
-                          ),
-                        );
-                        setAiSummary((s) =>
-                          s && !/by price/i.test(s) ? `${s} · by price` : (s ?? "by price"),
-                        );
-                        return;
-                      }
-                      const next = `${aiPrompt.trim()} ${q.phrase}`.trim();
-                      setAiPrompt(next);
-                      void runAiSearch(next);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
         </section>
 
         {/* refreshing indicator */}
@@ -1312,175 +1200,119 @@ export function CatalogView({
         ) : null}
 
         {refineOpen && (
-          <div className="absolute left-0 right-0 top-full z-40 mt-1 rounded-xl border border-(--color-line) bg-(--color-panel) pb-4 shadow-xl">
-          <div className="space-y-4 px-4 pt-4">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--color-line) pb-4">
-              <GoalModePicker value={goal} onChange={pickGoal} compact />
-              <DietPicker value={diet} onChange={pickDiet} compact />
-            </div>
+          <div className="absolute right-0 top-full z-40 mt-1 w-72 rounded-xl border border-(--color-line) bg-(--color-panel) shadow-xl sm:w-80">
+            <div className="space-y-2.5 px-3.5 py-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <GoalModePicker value={goal} onChange={pickGoal} compact />
+                <DietPicker value={diet} onChange={pickDiet} compact />
+              </div>
 
-            <div className="flex flex-wrap gap-2">
-              {(["daily_staple", "good_choice", "occasional_treat", "skip"] as const).map((v) => {
-                const labels: Record<string, string> = {
-                  daily_staple: "Daily staples",
-                  good_choice: "Good choices",
-                  occasional_treat: "Treats",
-                  skip: "Skip",
-                };
-                const colors: Record<string, { fg: string; bg: string; border: string; activeBg: string }> = {
-                  daily_staple: { fg: "var(--color-good)", bg: "transparent", border: "var(--color-good)", activeBg: "color-mix(in srgb, var(--color-good) 14%, transparent)" },
-                  good_choice: { fg: "var(--score-good)", bg: "transparent", border: "var(--score-good)", activeBg: "color-mix(in srgb, var(--score-good) 14%, transparent)" },
-                  occasional_treat: { fg: "var(--color-warn)", bg: "transparent", border: "var(--color-warn)", activeBg: "color-mix(in srgb, var(--color-warn) 14%, transparent)" },
-                  skip: { fg: "var(--color-bad)", bg: "transparent", border: "var(--color-bad)", activeBg: "color-mix(in srgb, var(--color-bad) 14%, transparent)" },
-                };
-                const c = colors[v]!;
-                const active = activeState.verdict === v;
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => patch({ verdict: active ? "" : v })}
-                    className="rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition"
-                    style={{
-                      borderColor: c.border,
-                      color: c.fg,
-                      backgroundColor: active ? c.activeBg : c.bg,
-                    }}
-                  >
-                    {labels[v]}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => patch({ verdict: "" })}
-                className={`rounded-full px-3 py-1.5 text-[13px] transition ${
-                  !activeState.verdict
-                    ? "font-medium text-(--color-fg)"
-                    : "text-(--color-fg-dim) hover:text-(--color-fg-muted)"
-                }`}
+              <FilterSelect
+                label="Verdict"
+                value={activeState.verdict}
+                onChange={(e) => patch({ verdict: e.target.value })}
               >
-                All verdicts
-              </button>
-            </div>
+                <option value="">All verdicts</option>
+                <option value="daily_staple">Daily staples</option>
+                <option value="good_choice">Good choices</option>
+                <option value="occasional_treat">Treats</option>
+                <option value="skip">Skip</option>
+              </FilterSelect>
 
-            <div className="-mx-4 overflow-x-auto px-4 pb-1 scrollbar-none">
-              <div className="flex w-max items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => patch({ category: "" })}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
-                    !activeState.category
-                      ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                      : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
-                  }`}
-                >
-                  All aisles
-                </button>
+              <FilterSelect
+                label="Aisles"
+                value={activeState.category}
+                onChange={(e) => patch({ category: e.target.value })}
+                disabled={!metaReady || !filterOptions.categories.length}
+              >
+                <option value="">All aisles</option>
                 {filterOptions.categories.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => patch({ category: c })}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] transition ${
-                  activeState.category === c
-                    ? "bg-(--color-fg) font-medium text-(--color-bg)"
-                    : "border border-(--color-line) text-(--color-fg-muted) hover:border-(--color-fg-dim) hover:text-(--color-fg) hover:bg-(--color-bg-soft)"
-                }`}
-              >
-                {c}
-              </button>
+                  <option key={c} value={c}>{c}</option>
                 ))}
+              </FilterSelect>
+
+              <FilterSelect
+                label="Sort"
+                value={activeState.sort}
+                onChange={(e) => patch({ sort: e.target.value as CatalogSort })}
+              >
+                {CATALOG_BAR_SORT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </FilterSelect>
+
+              <FilterSelect
+                label="Brand"
+                value={activeState.brand}
+                onChange={(e) => patch({ brand: e.target.value })}
+                disabled={!metaReady || !filterOptions.brands.length}
+              >
+                <option value="">All brands</option>
+                {filterOptions.brands.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </FilterSelect>
+
+              <FilterSelect
+                label="Price"
+                value={activeState.maxPrice || ""}
+                onChange={(e) => patch({ maxPrice: e.target.value ? Number(e.target.value) : 0 })}
+              >
+                <option value="">Any price</option>
+                <option value="100">Under ₹100</option>
+                <option value="200">Under ₹200</option>
+                <option value="500">Under ₹500</option>
+              </FilterSelect>
+
+              <FilterSelect
+                label="Score"
+                value={activeState.minScore || ""}
+                onChange={(e) => patch({ minScore: e.target.value ? Number(e.target.value) : 0 })}
+              >
+                <option value="">Any score</option>
+                <option value="40">40+</option>
+                <option value="50">50+</option>
+                <option value="60">60+</option>
+                <option value="70">70+</option>
+              </FilterSelect>
+
+              <FilterSelect
+                label="Type"
+                value={activeState.subcategory}
+                onChange={(e) => patch({ subcategory: e.target.value })}
+                disabled={!metaReady || !filterOptions.subcategories.length}
+              >
+                <option value="">All types</option>
+                {filterOptions.subcategories.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </FilterSelect>
+
+              <label className="flex items-center gap-1.5 text-[11px] text-(--color-fg-dim)">
+                <input
+                  type="checkbox"
+                  checked={activeState.onlyScored}
+                  onChange={(e) => patch({ onlyScored: e.target.checked })}
+                  className="h-3.5 w-3.5 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
+                />
+                Scored only
+              </label>
+
+            {hasFilters ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeState.subcategory ? <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} /> : null}
+                {activeState.brand ? <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} /> : null}
+                {activeState.minScore > 0 ? <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} /> : null}
+                {activeState.maxPrice > 0 ? <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} /> : null}
+                {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
+                {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
+                {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
+                <button type="button" onClick={clearAll} className="ml-auto text-[11px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
+                  Clear all
+                </button>
               </div>
-            </div>
-            <div className="border-t border-(--color-line) pt-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <FilterSelect
-                  label="Brand"
-                  value={activeState.brand}
-                  onChange={(e) => patch({ brand: e.target.value })}
-                  disabled={!metaReady || !filterOptions.brands.length}
-                >
-                  <option value="">All brands</option>
-                  {filterOptions.brands.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </FilterSelect>
-
-                <FilterSelect
-                  label="Min score"
-                  value={activeState.minScore || ""}
-                  onChange={(e) => patch({ minScore: e.target.value ? Number(e.target.value) : 0 })}
-                >
-                  <option value="">Any score</option>
-                  <option value="40">40+</option>
-                  <option value="50">50+</option>
-                  <option value="60">60+</option>
-                  <option value="70">70+</option>
-                </FilterSelect>
-
-                <FilterSelect
-                  label="Max price"
-                  value={activeState.maxPrice || ""}
-                  onChange={(e) => patch({ maxPrice: e.target.value ? Number(e.target.value) : 0 })}
-                >
-                  <option value="">Any price</option>
-                  <option value="100">Under ₹100</option>
-                  <option value="200">Under ₹200</option>
-                  <option value="500">Under ₹500</option>
-                </FilterSelect>
-
-                <FilterSelect
-                  label="Type"
-                  value={activeState.subcategory}
-                  onChange={(e) => patch({ subcategory: e.target.value })}
-                  disabled={!metaReady || !filterOptions.subcategories.length}
-                >
-                  <option value="">All types</option>
-                  {filterOptions.subcategories.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </FilterSelect>
-
-                <FilterSelect
-                  label="Grade"
-                  value={activeState.grade}
-                  onChange={(e) => patch({ grade: (e.target.value || "") as Grade | "" })}
-                >
-                  <option value="">Any grade</option>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </FilterSelect>
-
-                <label className="flex min-h-[42px] cursor-pointer items-center gap-2.5 rounded-lg border border-(--color-line) bg-(--color-bg) px-3 text-sm text-(--color-fg-muted)">
-                  <input
-                    type="checkbox"
-                    checked={activeState.onlyScored}
-                    onChange={(e) => patch({ onlyScored: e.target.checked })}
-                    className="h-4 w-4 shrink-0 rounded border-(--color-line-strong) accent-(--color-fg)"
-                  />
-                  Scored only
-                </label>
-              </div>
-            </div>
-
-          {hasFilters ? (
-            <div className="flex flex-wrap items-center gap-2 border-t border-(--color-line) pt-3">
-              {activeState.subcategory ? <FilterChip label={activeState.subcategory} onClear={() => patch({ subcategory: "" })} /> : null}
-              {activeState.brand ? <FilterChip label={activeState.brand} onClear={() => patch({ brand: "" })} /> : null}
-              {activeState.minScore > 0 ? <FilterChip label={`Score ${activeState.minScore}+`} onClear={() => patch({ minScore: 0 })} /> : null}
-              {activeState.maxPrice > 0 ? <FilterChip label={`Under ₹${activeState.maxPrice}`} onClear={() => patch({ maxPrice: 0 })} /> : null}
-              {activeState.grade ? <FilterChip label={`Grade ${activeState.grade}`} onClear={() => patch({ grade: "" })} /> : null}
-              {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
-              {activeState.sublabel ? <FilterChip label={activeState.sublabel.replace(/_/g, " ")} onClear={() => patch({ sublabel: "" })} /> : null}
-              <button type="button" onClick={clearAll} className="ml-auto text-[12px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline">
-                Clear all
-              </button>
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
           </div>
         )}
       </div>
@@ -1551,54 +1383,127 @@ export function CatalogView({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {factBrowse ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[14px] text-(--color-fg-muted)">
-                <span className="font-semibold text-(--color-fg)">{factBrowse.total}</span> products ·{" "}
-                {factBrowse.headline}
-                {factBrowse.total > factBrowse.items.length ? (
-                  <span className="text-(--color-fg-dim)"> (showing {factBrowse.items.length})</span>
-                ) : null}
+        <div className="flex flex-col gap-5 md:flex-row md:gap-3">
+          {/* ── LEFT PANEL: context, subcategory chips, save/search ── */}
+          <aside className="w-full shrink-0 space-y-3 md:w-48 lg:w-52">
+            {aiMode && aiSummary ? (
+              <p className="text-[13px] leading-snug text-(--color-fg-muted)">
+                {/parsed your request|closest matches/i.test(aiSummary)
+                  ? aiParsed
+                    ? (() => {
+                        const terms = aiParsed.product_terms.join(", ") || "products";
+                        const sortLabel: Record<string, string> = {
+                          highest_protein: "· by protein",
+                          cheapest: "· by price",
+                          healthiest: "· by health score",
+                          best_match: "",
+                        };
+                        const sort = sortLabel[aiParsed.sort_intent] ?? "";
+                        return `${terms}${sort ? " " + sort : ""}`.trim();
+                      })()
+                    : null
+                  : aiSummary}
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setFactBrowse(null);
-                  setItems([]);
-                  setTotal(0);
+            ) : null}
+
+            {aiMode && subcategoryChips ? (
+              <SubcategoryChipRow
+                chips={subcategoryChips}
+                active={selectedSubcategory}
+                onSelect={(label) => {
+                  setSelectedSubcategory(label);
+                  setState((prev) => ({ ...prev, subcategory: "" }));
                 }}
-                className="text-[13px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline"
-              >
-                Back to Scout
-              </button>
-            </div>
-          ) : null}
-          {aiMode && subcategoryChips ? (
-            <SubcategoryChipRow
-              chips={subcategoryChips}
-              active={selectedSubcategory}
-              onSelect={(label) => {
-                setSelectedSubcategory(label);
-                setState((prev) => ({ ...prev, subcategory: "" }));
-              }}
-            />
-          ) : null}
-          <div
-            className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
-              refreshing ? "opacity-80" : "opacity-100"
-            } transition-opacity duration-100`}
-          >
-            {(aiMode ? displayedItems : items).map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                hrefQuery={productQuery}
-                goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
-                onSublabelClick={handleSublabelClick}
-                dietaryPrevalence={dietaryPrevalence}
               />
-            ))}
+            ) : null}
+
+            {(aiMode && aiSummary) || aiParsed ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {aiMode && aiSummary ? (
+                  <SavedSearchActions query={aiPrompt} preferences={savedPrefs} />
+                ) : null}
+                {aiParsed ? (
+                  <button
+                    type="button"
+                    title="Save diet, goals, and budget from this search"
+                    onClick={() => {
+                      const prefs = preferencesFromParsed(aiParsed);
+                      writeAiSearchPreferences(prefs);
+                      setSavedPrefs(prefs);
+                    }}
+                    className="text-[11px] text-(--color-fg-dim) underline decoration-(--color-line) underline-offset-2 transition hover:text-(--color-fg)"
+                  >
+                    Save preferences
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {aiRelaxed ? (
+              <div
+                className="rounded-lg border border-(--color-line) bg-(--color-bg-soft)/60 px-3 py-2 text-left"
+                style={{ borderLeft: "2px solid var(--color-accent)" }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-(--color-fg-muted)">
+                  Why these results
+                </p>
+                <div className="mt-1 space-y-0.5">
+                  {aiRelaxationExplanations.length > 0 ? (
+                    aiRelaxationExplanations.map((step) => (
+                      <p key={step} className="text-[12px] leading-snug text-(--color-fg-muted)">
+                        {step}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-[12px] leading-snug text-(--color-fg-muted)">
+                      Exact matches were limited — showing closest options.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </aside>
+
+          {/* ── RIGHT: product grid ── */}
+          <div className="min-w-0 flex-1 space-y-4">
+            {factBrowse ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[14px] text-(--color-fg-muted)">
+                  <span className="font-semibold text-(--color-fg)">{factBrowse.total}</span> products ·{" "}
+                  {factBrowse.headline}
+                  {factBrowse.total > factBrowse.items.length ? (
+                    <span className="text-(--color-fg-dim)"> (showing {factBrowse.items.length})</span>
+                  ) : null}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFactBrowse(null);
+                    setItems([]);
+                    setTotal(0);
+                  }}
+                  className="text-[13px] text-(--color-fg-dim) underline-offset-4 hover:text-(--color-fg) hover:underline"
+                >
+                  Back to Scout
+                </button>
+              </div>
+            ) : null}
+            <div
+              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
+                refreshing ? "opacity-80" : "opacity-100"
+              } transition-opacity duration-100`}
+            >
+              {(aiMode ? displayedItems : items).map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  hrefQuery={productQuery}
+                  goalFit={goal !== "balanced" ? goalFits[p.id] : undefined}
+                  onSublabelClick={handleSublabelClick}
+                  dietaryPrevalence={dietaryPrevalence}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1628,17 +1533,6 @@ export function CatalogView({
     </div>
   );
 }
-
-/** Standing one-tap modifiers — compose with the current ask like a follow-up
- *  sentence ("paneer under 150" + "with less sugar"). */
-const QUICK_REFINEMENTS: { label: string; phrase: string; clientSort?: "price" }[] = [
-  // clientSort chips never hit the network — they re-rank the current results.
-  { label: "Cheaper", phrase: "cheaper", clientSort: "price" },
-  { label: "Higher protein", phrase: "with higher protein" },
-  { label: "Less sugar", phrase: "with less sugar" },
-  { label: "No palm oil", phrase: "without palm oil" },
-  { label: "Cleaner ingredients", phrase: "with cleaner ingredients" },
-];
 
 function SubcategoryChipRow({
   chips,
@@ -1679,18 +1573,6 @@ function SubcategoryChipRow({
         </button>
       ))}
     </div>
-  );
-}
-
-function RefineChip({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border border-(--color-line) px-2.5 py-0.5 text-[11px] text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg)"
-    >
-      {label}
-    </button>
   );
 }
 
