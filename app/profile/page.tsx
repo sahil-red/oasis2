@@ -172,7 +172,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-(--color-bg)">
       <SiteNav />
-      <div className="mx-auto max-w-2xl px-5 pb-24 pt-8 md:px-6">
+      <div className="mx-auto max-w-5xl px-5 pb-24 pt-8 md:px-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">

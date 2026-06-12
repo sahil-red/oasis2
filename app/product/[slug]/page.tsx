@@ -150,7 +150,7 @@ export default async function ProductPage({
     loadIngredientIntelligenceForDisplay(displayIngredients),
   ]);
 
-  const swaps = findAlternatives(product, swapPool, goal, 3, { diet });
+  const swaps = findAlternatives(product, swapPool, goal, 8, { diet });
   const similarProducts = findSimilarProducts(product, swapPool, goal, 8, {
     diet,
     excludeIds: new Set(swaps.map((s) => s.product.id)),
@@ -239,20 +239,12 @@ export default async function ProductPage({
         <CatalogBackLink params={sp} />
 
         <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 lg:items-start">
-          {/* Left: images + goals at a glance */}
+          {/* Left: product imagery (whitespace below reads as intentional) */}
           <div className="space-y-5">
             <ProductGallery images={product.image_urls} alt={product.name} />
-            <Suspense fallback={null}>
-              <ProductGoalFitList
-                rows={goalRows}
-                overall={overallGoal}
-                className="mt-0"
-                cardClassName="text-sm"
-              />
-            </Suspense>
           </div>
 
-          {/* Right: meta, verdict, swaps, quick take */}
+          {/* Right: the full Scout analysis stack — verdict, macros, goals */}
           <div className="min-w-0">
             {product.brand ? (
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-(--color-fg-dim)">
@@ -326,6 +318,17 @@ export default async function ProductPage({
               />
             </div>
 
+            {/* Per-goal fit — completes the analysis stack and fills the column
+                so the two top columns end roughly even (no jagged right gap). */}
+            <Suspense fallback={null}>
+              <ProductGoalFitList
+                rows={goalRows}
+                overall={overallGoal}
+                className="mt-5"
+                cardClassName="text-sm"
+              />
+            </Suspense>
+
             {labelMismatch ? (
               <div className="mt-3">
                 <LabelMismatchCallout detail={labelMismatch} />
@@ -375,6 +378,7 @@ export default async function ProductPage({
             <SwapPanel
               current={product}
               suggestions={swaps}
+              compact
               goal={goal}
               title="Better alternatives"
               description="Similar products that look stronger on score, macros, or ingredients."
