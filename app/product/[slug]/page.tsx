@@ -331,20 +331,6 @@ export default async function ProductPage({
                 <LabelMismatchCallout detail={labelMismatch} />
               </div>
             ) : null}
-
-            {swaps.length > 0 ? (
-              <div className="mt-5">
-                <SwapPanel
-                  current={product}
-                  suggestions={swaps}
-                  compact
-                  goal={goal}
-                  title="Better alternatives"
-                  description="Similar products that look stronger on score, macros, or ingredients."
-                />
-              </div>
-            ) : null}
-
           </div>
         </div>
 
@@ -382,8 +368,24 @@ export default async function ProductPage({
           </aside>
         </div>
 
+        {/* Better alternatives — full-width, below the deep-dive, above discovery.
+            Action ("swap to something stronger") outranks browse, so it leads. */}
+        {swaps.length > 0 ? (
+          <div className="mt-12">
+            <SwapPanel
+              current={product}
+              suggestions={swaps}
+              goal={goal}
+              title="Better alternatives"
+              description="Similar products that look stronger on score, macros, or ingredients."
+              layout="grid"
+              gridColumns={4}
+            />
+          </div>
+        ) : null}
+
         {similarProducts.length > 0 ? (
-          <div className="mt-6">
+          <div className="mt-12">
             <SwapPanel
               current={product}
               suggestions={similarProducts}
