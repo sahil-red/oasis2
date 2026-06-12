@@ -75,7 +75,7 @@ export default async function Home() {
             />
             <button
               type="submit"
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-(--color-fg) px-5 text-sm font-semibold text-(--color-bg) transition hover:opacity-90"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-(--color-fg) px-4 text-sm font-semibold text-(--color-bg) transition hover:opacity-90 sm:px-5"
             >
               Ask Scout
               <ArrowRight className="h-4 w-4" />
