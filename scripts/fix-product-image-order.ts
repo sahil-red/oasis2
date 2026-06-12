@@ -15,6 +15,7 @@ import {
 } from "@/lib/products/catalog-hero-image";
 import { fetchVariantImagesFromBff, loadVariantImageCache } from "@/lib/zepto-import/fetch-variant-images";
 import { isZeptoVariantId } from "@/lib/zepto-import/variant-id";
+import { makePlaywrightFetch, closePlaywrightFetch } from "@/lib/grocery/http-playwright";
 
 loadEnv({ path: ".env.local" });
 
@@ -71,6 +72,18 @@ async function main() {
     console.warn("[fix-images] --refetch-bff needs .cache/zepto-session.json — URL reorder only");
   }
 
+  // Zepto's BFF sits behind Cloudflare; a plain HTTP client gets 429'd on every
+  // request. Route through the Playwright storage-state context (the same
+  // __cf_bm-bound TLS the scrapers use). Slow + gentle: ~2 rps.
+  const bffHttp = (refetchBff && session)
+    ? makePlaywrightFetch({
+        storageStatePath: ".cache/zepto-storage.json",
+        origin: "https://www.zepto.com",
+        rps: Number(process.env.ZEPTO_IMAGE_RPS ?? 2),
+        burst: 1,
+      })
+    : undefined;
+
   const imageCache = refetchBff ? await loadVariantImageCache() : new Map<string, string[]>();
 
   while (true) {
@@ -101,14 +114,18 @@ async function main() {
         refetchBff &&
         session &&
         isZeptoVariantId(sku) &&
-        needsHeroReorder(urls, { ocrImageUrl: row.ocr_image_url })
+        // For BFF mode, fetch EVERY multi-image product — Zepto's BFF returns the
+        // canonical front-first order, which is the only signal that fixes "blind"
+        // products (opaque UUID urls, no OCR label). The local needsHeroReorder
+        // heuristic can't see those, so gating on it skips the exact cases we want.
+        urls.length >= 2
       ) {
         try {
           const cached = imageCache.get(sku);
           const bff =
             cached?.length
               ? cached
-              : await fetchVariantImagesFromBff(sku, session);
+              : await fetchVariantImagesFromBff(sku, session, bffHttp);
           if (bff.length) {
             imageCache.set(sku, bff);
             const bffNorm = normalizeProductImageUrls(bff, { ocrImageUrl: row.ocr_image_url });
@@ -156,6 +173,8 @@ async function main() {
     offset += pageSize;
     if (rows.length < pageSize) break;
   }
+
+  if (bffHttp) await closePlaywrightFetch();
 
   console.log(
     `[fix-images] scanned=${scanned} flagged=${flagged} updated=${updated} bff=${refetched} mode=${dryRun ? "dry-run" : "apply"}`,
