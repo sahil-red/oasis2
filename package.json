@@ -11,6 +11,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "warm-session": "tsx scripts/00-warm-session.ts",
+    "warm-session:zepto": "GROCERY_PLATFORM=zepto tsx scripts/00-warm-session.ts --platform=zepto",
+    "catalog:fix-images:zepto": "GROCERY_PLATFORM=zepto tsx scripts/fix-product-image-order.ts --apply --refetch-bff",
     "pw:install": "playwright install chromium",
     "catalog:sync": "tsx scripts/sync-catalog-from-csv.ts",
     "catalog:fix-images": "tsx scripts/fix-product-image-order.ts",
