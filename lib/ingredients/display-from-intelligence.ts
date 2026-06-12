@@ -243,12 +243,12 @@ export function parseIngredientsForDisplayWithIntelligence(
 
   for (const item of base) {
     let next: IngredientDisplayItem;
-    const row = lookupIntelligence(item.key, byName);
+    const baseKey = item.key.split("|")[0] ?? item.key;
+    const row = lookupIntelligence(baseKey, byName);
     if (row) {
       next = fromIntelligence(item.key, row, item);
     } else {
-      const key = normalizeIngredientName(item.key);
-      const known = lookupKnownIngredient(key);
+      const known = lookupKnownIngredient(baseKey);
       next = known
         ? fromKnownIngredient(item.key, known, item)
         : { ...item, source: "rules" as const };
