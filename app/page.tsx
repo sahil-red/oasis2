@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { HomeRailCard } from "@/components/home-rail-card";
+import { HomeReckoning, HomeCategoryGrid } from "@/components/home-editorial";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
@@ -133,7 +134,10 @@ export default async function Home() {
         </section>
       )}
 
-      {/* ── One curated rail — quiet confidence, not a catalog dump ───────── */}
+      {/* ── The hook: marketing vs reality ───────────────────────────────── */}
+      {insights.dodgeList.length > 0 && <HomeReckoning products={insights.dodgeList} />}
+
+      {/* ── The light after the shade: what Scout actually loves ──────────── */}
       <Rail
         eyebrow="What Scout loves"
         title="Worth buying every week."
@@ -141,6 +145,9 @@ export default async function Home() {
         cta={{ href: "/search?verdict=daily_staple", label: "All staples" }}
         items={shelves.dailyStaples}
       />
+
+      {/* ── Explore: every aisle, judged ──────────────────────────────────── */}
+      {insights.bestInClass.length > 0 && <HomeCategoryGrid categories={insights.bestInClass} />}
 
       <SiteFooter />
     </main>
