@@ -79,10 +79,9 @@ async function upsertBatch(st: ReturnType<typeof adminClient>, rows: ProductSear
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await st.from("product_search_index").upsert(
-      slice.map((row) => ({
+      slice.map(({ type_embedding, ...row }) => ({
         ...row,
         embedding: row.embedding,
-        type_embedding: row.type_embedding,
         canonical_product_id: row.canonical_product_id ?? row.product_id,
         updated_at: new Date().toISOString(),
       })),

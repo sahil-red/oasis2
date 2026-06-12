@@ -19,6 +19,7 @@ import { searchV2ToAiResult } from "@/lib/search/v2/adapter";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+export const preferredRegion = "bom1";
 
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",

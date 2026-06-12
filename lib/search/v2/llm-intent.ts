@@ -186,8 +186,8 @@ export async function parseIntentWithLlm(
   const { content } = await deepseekChat({
     usageKind: "search",
     jsonObject: true,
-    maxTokens: 600,
-    timeoutMs: 20_000,
+    maxTokens: 400,
+    timeoutMs: 8_000,
     system: INTENT_SYSTEM_PROMPT,
     user: `Query: ${query}`,
   });
@@ -218,7 +218,7 @@ export async function relaxIntentWithLlm(
     usageKind: "search",
     jsonObject: true,
     maxTokens: 800,
-    timeoutMs: 20_000,
+    timeoutMs: 8_000,
     system: `You broaden a grocery search intent when results are sparse. Never change primary_type or required_flavours. Return JSON: {"intent":{...same schema as parse...},"explanation":string}`,
     user: JSON.stringify({
       current_intent: intent,
