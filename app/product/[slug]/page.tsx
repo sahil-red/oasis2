@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { IngredientPanel } from "@/components/ingredient-panel";
 import { PdpNutritionGlance } from "@/components/pdp-nutrition-glance";
+import { PdpMacroStrip } from "@/components/pdp-macro-strip";
 import { PdpLabelInsights } from "@/components/pdp-label-insights";
 import { PdpServingNote } from "@/components/pdp-serving-note";
 import { reconcileNutrition } from "@/lib/nutrition/sanity";
@@ -315,6 +316,15 @@ export default async function ProductPage({
                 />
               </div>
             ) : null}
+
+            {/* The four numbers people want, big and instant — right under the
+                verdict so they're never buried in the collapsed label. */}
+            <div className="mt-4">
+              <PdpMacroStrip
+                nutrition={displayNutrition ?? product.nutrition}
+                netWeight={product.net_weight}
+              />
+            </div>
 
             {labelMismatch ? (
               <div className="mt-3">

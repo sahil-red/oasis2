@@ -1476,6 +1476,34 @@ function seededPick<T extends { id: string }>(items: T[], count: number, seed: n
     .slice(0, count);
 }
 
+/** Seeded pick with a per-subcategory cap so a rail isn't 80% milk + yoghurt.
+ *  Greedy over a seeded shuffle: take up to `maxPerSub` from each subcategory,
+ *  then backfill from the overflow if we're short. */
+function seededDiversePick<
+  T extends { id: string; subcategory?: string | null; category?: string | null },
+>(items: T[], count: number, seed: number, maxPerSub = 2): T[] {
+  const shuffled = [...items].sort((a, b) => hashSeed(a.id, seed) - hashSeed(b.id, seed));
+  const perSub = new Map<string, number>();
+  const out: T[] = [];
+  const overflow: T[] = [];
+  for (const p of shuffled) {
+    if (out.length >= count) break;
+    const key = (p.subcategory ?? p.category ?? "other").trim().toLowerCase();
+    const n = perSub.get(key) ?? 0;
+    if (n < maxPerSub) {
+      perSub.set(key, n + 1);
+      out.push(p);
+    } else {
+      overflow.push(p);
+    }
+  }
+  for (const p of overflow) {
+    if (out.length >= count) break;
+    out.push(p);
+  }
+  return out.slice(0, count);
+}
+
 export async function getHomeShelves(): Promise<HomeShelves> {
   const supabase = db();
   const select = `${LIST_FIELDS}, core_scores!inner (${LIST_SCORE_FIELDS})`;
@@ -1537,7 +1565,9 @@ export async function getHomeShelves(): Promise<HomeShelves> {
     .map(mapListRow)
     .filter(filterReady);
 
-  const pickStaples = seededPick(staples, HOME_RAIL_COUNT + 2, seed + 1);
+  // Staples skew heavily dairy (milk/yoghurt dominate daily_staple) — cap per
+  // subcategory so the rail shows the real range of "buy every week".
+  const pickStaples = seededDiversePick(staples, 10, seed + 1, 2);
   const pickSkips = seededPick(skips, HOME_RAIL_COUNT + 2, seed + 2);
   const pickValue = seededPick(value, HOME_RAIL_COUNT + 2, seed + 3);
   const pickTreats = seededPick(treats, HOME_RAIL_COUNT + 2, seed + 4);
@@ -1553,7 +1583,7 @@ export async function getHomeShelves(): Promise<HomeShelves> {
 
   return {
     showcase,
-    dailyStaples: pickStaples.slice(0, HOME_RAIL_COUNT),
+    dailyStaples: pickStaples.slice(0, 10),
     skipWorthy: pickSkips.slice(0, HOME_RAIL_COUNT),
     bestValue: pickValue.slice(0, HOME_RAIL_COUNT),
     occasionalTreats: pickTreats.slice(0, HOME_RAIL_COUNT),
