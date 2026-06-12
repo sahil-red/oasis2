@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   }
 
   // For batch mode, fetch enough rows to find 'count' multi-image products
-  const needed = count * 15;
+  const needed = count * 12;
   const randomSkip = Math.floor(Math.random() * 5000);
 
   const { data, error } = await supabase

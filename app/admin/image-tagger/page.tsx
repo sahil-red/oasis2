@@ -10,7 +10,7 @@ type Product = {
   images: string[];
 };
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 100;
 
 export default function ImageTaggerPage() {
   const [loading, setLoading] = useState(true);
@@ -150,7 +150,7 @@ export default function ImageTaggerPage() {
         <div className="animate-pulse space-y-4">
           <div className="mx-auto h-5 w-48 rounded bg-(--color-bg-soft)" />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            {Array.from({ length: 50 }).map((_, i) => (
+            {Array.from({ length: 100 }).map((_, i) => (
               <div key={i} className="aspect-[9/16] rounded-xl bg-(--color-bg-soft)" />
             ))}
           </div>
@@ -208,7 +208,7 @@ export default function ImageTaggerPage() {
       ) : null}
 
       {/* Product grid — 2 cols mobile, 3-4 cols desktop */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {products.map((p) => {
           const hero = heroMap[p.id];
           return (
@@ -278,7 +278,7 @@ export default function ImageTaggerPage() {
       </div>
 
       {/* Bottom refresh */}
-      {products.length < 50 && remaining > 0 ? (
+      {products.length < 100 && remaining > 0 ? (
         <div className="mt-6 text-center">
           <button
             type="button"

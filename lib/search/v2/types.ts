@@ -173,7 +173,7 @@ export type SearchIntentV2 = {
   comparison_ref: string | null;
   comparison_mode: "healthier_than" | "cheaper_than" | null;
   confidence: number;
-  intent_source: "fast-path" | "llm-groq" | "llm-deepseek" | "cache" | "degraded";
+  intent_source: "fast-path" | "llm-groq" | "llm-deepseek" | "cache" | "degraded" | "python-classifier";
   raw_query: string;
   /** LLM-computed trait weights (28 traits → 0-1) — bypasses separate goal decomposition call */
   trait_weights?: Partial<Record<TraitId, number>>;

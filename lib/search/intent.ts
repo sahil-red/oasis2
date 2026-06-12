@@ -14,6 +14,7 @@ import {
   extractNumericConstraints,
   fastPathEligible,
 } from "@/lib/search/v2/numeric-constraints";
+import { classifyIntentWithPython } from "@/lib/search/python-classifier";
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
 
@@ -194,6 +195,29 @@ export async function resolveSearchIntent(
   if (fast && countActiveConstraints(numeric) <= 2) {
     const intent = applyPreferencesToIntent(fast, opts.preferences);
     return { intent, llm_calls: 0 };
+  }
+
+  // Try Python intent classifier before expensive LLM call (5-50ms vs 2-5s).
+  // Falls through silently on failure → LLM handles it as before.
+  try {
+    const pyIntent = await classifyIntentWithPython(query, opts.catalogMeta);
+    if (pyIntent) {
+      const merged = {
+        ...pyIntent,
+        constraints: {
+          ...pyIntent.constraints,
+          max_price: pyIntent.constraints.max_price ?? numeric.max_price,
+          max_sugar_g: pyIntent.constraints.max_sugar_g ?? numeric.max_sugar_g,
+          max_fat_g: pyIntent.constraints.max_fat_g ?? numeric.max_fat_g,
+          min_protein_g: pyIntent.constraints.min_protein_g ?? numeric.min_protein_g,
+        },
+      };
+      const intent = applyPreferencesToIntent(merged, opts.preferences);
+      void setCachedIntent(query, intent, opts.preferences, cached.embedding);
+      return { intent, llm_calls: 0 };
+    }
+  } catch {
+    // Python service unavailable — fall through to LLM
   }
 
   try {
