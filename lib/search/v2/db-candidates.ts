@@ -45,12 +45,8 @@ export async function fetchCandidatePool(
   const queryEmbed = await embedText(intent.raw_query, "query");
   const vecStr = queryEmbed.length ? `[${queryEmbed.join(",")}]` : null;
 
-  // Typed leg covers the asked type + its semantic equivalents (cached lookup).
-  const wanted = intent.primary_type?.trim().toLowerCase() ?? null;
-  const typedTypes = wanted
-    ? [...(await semanticTypeMatches(wanted))].slice(0, MAX_TYPED_TYPES)
-    : [];
-
+  // ANN leg needs only the query vector — fire it immediately, in parallel with
+  // the type-equivalents lookup (a separate centroid RPC the typed leg depends on).
   const annPromise = vecStr
     ? supabase.rpc("search_v2_rows", {
         p_query_embedding: vecStr,
@@ -58,6 +54,12 @@ export async function fetchCandidatePool(
         p_min_quality: minQuality,
       })
     : Promise.resolve({ data: null, error: null });
+
+  // Typed leg covers the asked type + its semantic equivalents (cached lookup).
+  const wanted = intent.primary_type?.trim().toLowerCase() ?? null;
+  const typedTypes = wanted
+    ? [...(await semanticTypeMatches(wanted))].slice(0, MAX_TYPED_TYPES)
+    : [];
 
   const typedPromises = typedTypes.map((t) =>
     supabase.rpc("search_v2_typed_rows", {

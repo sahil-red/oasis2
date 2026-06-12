@@ -93,9 +93,16 @@ function normalizeNullable(values: Array<number | null>, invert = false): number
 /** For explicit sorts (highest_protein, cheapest, etc.), type-match tier takes
  *  priority — "milk" products rank above whey that lexically-hallucinated "milk"
  *  in ingredients. Within the same tier the original sort applies. */
+/** Exact (0) and centroid-equivalent (1) are the SAME real category — never
+ *  split them under a metric sort ("snacks" vs "snack" would bury a 30g item
+ *  beneath 9g ones). Only lexical-only (2) and non-matches (99) get demoted —
+ *  that guard still stops "high protein milk" surfacing whey that merely names
+ *  milk in its ingredients. */
+function tierBucket(t: number): number {
+  return t <= 1 ? 0 : t;
+}
 function tieredSort(a: RankedCandidate, b: RankedCandidate): number {
-  if (a.type_tier !== b.type_tier) return a.type_tier - b.type_tier;
-  return 0;
+  return tierBucket(a.type_tier) - tierBucket(b.type_tier);
 }
 
 function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchIntentV2["sort"]): number {

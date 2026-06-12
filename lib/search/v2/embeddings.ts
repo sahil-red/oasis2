@@ -87,9 +87,14 @@ function resolveEmbeddingEndpoint(): EmbeddingEndpoint | null {
 
 let embedWarned = false;
 const embedCache = new Map<string, number[]>();
+/** In-flight requests keyed identically to embedCache — lets concurrent callers
+ *  for the same text share ONE network round-trip (e.g. the speculative
+ *  pipeline warm + the real fetchCandidatePool embed on a fast-path query). */
+const embedInflight = new Map<string, Promise<number[]>>();
 
 export function clearEmbeddingCache(): void {
   embedCache.clear();
+  embedInflight.clear();
 }
 
 export function isEmbeddingConfigured(): boolean {
@@ -179,10 +184,20 @@ export async function embedText(text: string, inputType: EmbeddingInputType = "d
   const cached = embedCache.get(key);
   if (cached) return cached;
 
-  const [vec] = await embedTexts([text], inputType);
-  const result = vec ?? [];
-  embedCache.set(key, result);
-  return result;
+  // Share an in-flight request so concurrent callers for the same text don't
+  // each hit Voyage. On rejection the entry is cleared so the next call retries.
+  const pending = embedInflight.get(key);
+  if (pending) return pending;
+
+  const p = embedTexts([text], inputType)
+    .then(([vec]) => {
+      const result = vec ?? [];
+      embedCache.set(key, result);
+      return result;
+    })
+    .finally(() => embedInflight.delete(key));
+  embedInflight.set(key, p);
+  return p;
 }
 
 export async function embedTextBatch(

@@ -2,6 +2,7 @@ import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates, typeMatchTier } from "@/lib/search/v2/candidate-generation";
 import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
+import { embedText } from "@/lib/search/v2/embeddings";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
@@ -59,6 +60,14 @@ export async function runSearchV2(
         : snapshot.index;
     return generateCandidates(pool, intentArg, snapshot.profiles, gw, minQ, limit);
   };
+
+  // Speculative embed: the query vector only needs rawQuery, not the parsed
+  // intent — so warm it in parallel with intent resolution. On a cache-miss
+  // query the intent LLM runs ~2.5s; embedText caches by (text, type), so the
+  // later fetchCandidatePool call hits a warm entry instead of paying ~400ms
+  // of Voyage latency serially after the LLM. Fire-and-forget (errors are
+  // re-surfaced when fetchCandidatePool awaits the real call).
+  void embedText(rawQuery, "query").catch(() => {});
 
   let llm_calls = 0;
   const resolved = await resolveSearchIntent(rawQuery, {
