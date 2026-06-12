@@ -110,6 +110,14 @@ function baseRowFromProduct(
   const primary_type = llm?.primary_type?.toLowerCase() ?? null;
   const semantic = llm ? mergeSemanticTraits(llm) : null;
 
+  const _servingSize = num(p.nutrition?.extra?.serving_size_value as number);
+  const _packWeight = parseNetWeight(p.net_weight).value ?? 100;
+  const _packFactor = (_servingSize ?? _packWeight) / 100;
+  const _perPack = (v: number | null | undefined): number | null => {
+    const n = num(v);
+    return n != null ? Math.round(n * _packFactor * 100) / 100 : null;
+  };
+
   return {
     product_id: p.id,
     slug: p.slug,
@@ -141,6 +149,10 @@ function baseRowFromProduct(
     iron_mg: num(p.nutrition?.iron_mg_100g),
     fiber_g: num(p.nutrition?.fiber_g_100g),
     carbs_g: num(p.nutrition?.carbs_g_100g),
+    total_protein_g: _perPack(p.nutrition?.protein_g_100g),
+    total_sugar_g: _perPack(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g),
+    total_fat_g: _perPack(p.nutrition?.fat_g_100g),
+    total_calories: _perPack(p.nutrition?.energy_kcal_100g),
     price_inr: p.price_inr ?? p.mrp_inr,
     sugar_tier: null,
     protein_tier: null,

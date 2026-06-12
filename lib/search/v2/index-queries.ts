@@ -82,6 +82,10 @@ export function mapDbRow(raw: Record<string, unknown>): ProductSearchIndexRow {
     carbs_g: raw.carbs_g != null ? Number(raw.carbs_g) : null,
     sodium_mg: raw.sodium_mg != null ? Number(raw.sodium_mg) : null,
     energy_kcal: raw.energy_kcal != null ? Number(raw.energy_kcal) : null,
+    total_protein_g: raw.total_protein_g != null ? Number(raw.total_protein_g) : null,
+    total_sugar_g: raw.total_sugar_g != null ? Number(raw.total_sugar_g) : null,
+    total_fat_g: raw.total_fat_g != null ? Number(raw.total_fat_g) : null,
+    total_calories: raw.total_calories != null ? Number(raw.total_calories) : null,
     price_inr: raw.price_inr != null ? Number(raw.price_inr) : null,
     sugar_tier: (raw.sugar_tier as ProductSearchIndexRow["sugar_tier"]) ?? null,
     protein_tier: (raw.protein_tier as ProductSearchIndexRow["protein_tier"]) ?? null,
@@ -176,7 +180,7 @@ async function loadProfilesFromDb(): Promise<CategoryTraitProfileRow[] | null> {
 /** Slim column list — everything the ranking pipeline reads EXCEPT the two 1024-dim
  *  vectors (~24KB/row as JSON). Vector relevance arrives as knn_distance from the RPC. */
 export const INDEX_COLUMNS =
-  "product_id,canonical_product_id,slug,name,brand,category,subcategory,l3_category,primary_type,base_name,form,flavours,variants,is_veg,is_vegan,is_gluten_free,is_jain,is_palm_oil_free,has_added_sugar,allergens,claims,sugar_g,protein_g,fat_g,saturated_fat_g,sodium_mg,energy_kcal,calcium_mg,iron_mg,fiber_g,carbs_g,price_inr,sugar_tier,protein_tier,fat_tier,traits,trait_source,trait_confidence,trait_reasons,scout_score,nova_group,data_quality_score,data_completeness,facet_confidence,brand_tier,pack_size_value,pack_size_unit,use_cases,search_doc,click_count,save_count,last_interaction_at,built_at,source_hash";
+  "product_id,canonical_product_id,slug,name,brand,category,subcategory,l3_category,primary_type,base_name,form,flavours,variants,is_veg,is_vegan,is_gluten_free,is_jain,is_palm_oil_free,has_added_sugar,allergens,claims,sugar_g,protein_g,fat_g,saturated_fat_g,sodium_mg,energy_kcal,total_protein_g,total_sugar_g,total_fat_g,total_calories,calcium_mg,iron_mg,fiber_g,carbs_g,price_inr,sugar_tier,protein_tier,fat_tier,traits,trait_source,trait_confidence,trait_reasons,scout_score,nova_group,data_quality_score,data_completeness,facet_confidence,brand_tier,pack_size_value,pack_size_unit,use_cases,search_doc,click_count,save_count,last_interaction_at,built_at,source_hash";
 
 async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
   try {

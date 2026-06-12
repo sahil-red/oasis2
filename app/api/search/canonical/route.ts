@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { getCanonicalSiblings } from "@/lib/search/v2/canonical-variants";
-import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
+import { getSearchIndexSnapshot, type SearchIndexSnapshot } from "@/lib/search/v2/index-queries";
 import { normalizeProductImageUrls } from "@/lib/products/catalog-hero-image";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "product_id required" }, { status: 400 });
   }
 
-  let snapshot: { index: Array<Record<string, unknown>> };
+  let snapshot: SearchIndexSnapshot;
   try {
     snapshot = await getSearchIndexSnapshot();
   } catch (e) {

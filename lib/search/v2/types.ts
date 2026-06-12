@@ -75,6 +75,10 @@ export type ProductSearchIndexRow = {
   carbs_g?: number | null;
   sodium_mg: number | null;
   energy_kcal: number | null;
+  total_protein_g: number | null;
+  total_sugar_g: number | null;
+  total_fat_g: number | null;
+  total_calories: number | null;
   price_inr: number | null;
   sugar_tier: NutritionTier | null;
   protein_tier: NutritionTier | null;

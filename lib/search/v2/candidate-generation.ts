@@ -67,10 +67,22 @@ function passesAvoidIngredients(row: ProductSearchIndexRow, avoid: string[]): bo
 function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): boolean {
   const c = intent.constraints;
   if (c.max_price != null && row.price_inr != null && row.price_inr > c.max_price) return false;
-  if (c.max_sugar_g != null && row.sugar_g != null && row.sugar_g > c.max_sugar_g) return false;
-  if (c.max_fat_g != null && row.fat_g != null && row.fat_g > c.max_fat_g) return false;
-  if (c.max_calories != null && row.energy_kcal != null && row.energy_kcal > c.max_calories) return false;
-  if (c.min_protein_g != null && row.protein_g != null && row.protein_g < c.min_protein_g) return false;
+  if (c.max_sugar_g != null) {
+    const s = row.total_sugar_g ?? row.sugar_g;
+    if (s != null && s > c.max_sugar_g) return false;
+  }
+  if (c.max_fat_g != null) {
+    const f = row.total_fat_g ?? row.fat_g;
+    if (f != null && f > c.max_fat_g) return false;
+  }
+  if (c.max_calories != null) {
+    const cal = row.total_calories ?? row.energy_kcal;
+    if (cal != null && cal > c.max_calories) return false;
+  }
+  if (c.min_protein_g != null) {
+    const p = row.total_protein_g ?? row.protein_g;
+    if (p != null && p < c.min_protein_g) return false;
+  }
   // Relative asks ("high protein", "low sugar") are RANKING signals, never gates.
   // Tiers are within-cohort percentiles — "low" tier can be 24g protein (tofu in
   // a paneer cohort) and "low" sugar can be 22g (within chocolate). Hard-gating

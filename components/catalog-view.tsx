@@ -61,8 +61,6 @@ import type { DietaryPrevalenceMap } from "@/lib/search/v2/types";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 import {
   CATALOG_BAR_SORT_OPTIONS,
-  CATALOG_SORT_OPTIONS,
-  sortCatalogItems,
   type CatalogSort,
 } from "@/lib/products/catalog-sort";
 import type { CatalogFilters, CatalogSearchResult, ProductListItem } from "@/lib/products/queries";
@@ -542,7 +540,18 @@ export function CatalogView({
       });
     }
     if (activeState.sort !== "score-desc") {
-      filtered = sortCatalogItems(filtered, activeState.sort);
+      filtered = [...filtered].sort((a, b) => {
+        switch (activeState.sort) {
+          case "price-asc":
+            return (a.price_inr ?? Infinity) - (b.price_inr ?? Infinity);
+          case "price-desc":
+            return (b.price_inr ?? 0) - (a.price_inr ?? 0);
+          case "name-asc":
+            return a.name.localeCompare(b.name);
+          default:
+            return (b.core_scores?.score ?? 0) - (a.core_scores?.score ?? 0);
+        }
+      });
     }
     return filtered;
   }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored, activeState.sublabel, activeState.sort]);
