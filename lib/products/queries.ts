@@ -1043,11 +1043,21 @@ export async function searchCatalogGrid(opts: {
   diet?: DietMode;
   sublabel?: string;
   verdict?: string;
+  slugs?: string[];
 }): Promise<CatalogSearchResult> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(120, Math.max(1, opts.limit ?? 96));
   const goal = opts.goal ?? "balanced";
   const diet = opts.diet ?? "any";
+
+  // Exact-set view — powers "expose" insight links (e.g. the homepage "53%"
+  // stat → the specific products behind it). Bypasses the filter/sort pipeline.
+  if (opts.slugs?.length) {
+    const rows = await getProductsBySlugs(opts.slugs);
+    const items = rows.map(toGridItem);
+    return { items, goalFits: {}, page: 1, limit: items.length, total: items.length, hasMore: false };
+  }
+
   const state = parseSearchState(opts);
 
   if (goal !== "balanced") {

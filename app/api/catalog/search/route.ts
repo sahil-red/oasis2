@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     diet: sp.get("diet") ?? undefined,
     sublabel: sp.get("sublabel") ?? undefined,
     verdict: sp.get("verdict") ?? undefined,
+    slugs: sp.get("slugs") ?? undefined,
   });
 
     return NextResponse.json(result, {

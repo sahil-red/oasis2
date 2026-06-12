@@ -81,6 +81,8 @@ export type CatalogSearchParams = {
   diet?: string;
   sublabel?: string;
   verdict?: string;
+  /** Comma-separated slugs — show this exact set (powers "expose" insight links). */
+  slugs?: string;
   page?: number;
   limit?: number;
 };
@@ -112,6 +114,7 @@ export async function getCachedCatalogSearch(
     diet,
     sublabel: params.sublabel ?? "",
     verdict: params.verdict ?? "",
+    slugs: params.slugs ?? "",
     page,
     limit,
   });
@@ -137,6 +140,7 @@ export async function getCachedCatalogSearch(
         diet,
         sublabel: params.sublabel,
         verdict: params.verdict,
+        slugs: params.slugs ? params.slugs.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
       }),
     ["catalog-search", cacheKey],
     { revalidate: 300 },

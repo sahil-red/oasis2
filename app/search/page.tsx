@@ -31,6 +31,7 @@ type SearchParams = {
   diet?: string;
   sublabel?: string;
   verdict?: string;
+  slugs?: string;
 };
 
 /** Shell renders immediately; catalog JSON loads client-side from cached API. */
