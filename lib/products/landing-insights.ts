@@ -68,6 +68,8 @@ export type LandingDodgeProduct = {
   score: number;
   claim: string;
   reality: string;
+  price: number | null;
+  image_urls: string[];
 };
 
 export type LandingWorthItProduct = {
@@ -509,6 +511,8 @@ function buildDodgeList(products: ProductListItem[]): LandingDodgeProduct[] {
         score,
         claim,
         reality: realities.join(", "),
+        price: p.price_inr ?? null,
+        image_urls: p.image_urls,
       };
     });
 }

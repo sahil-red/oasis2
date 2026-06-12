@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SuggestProductType } from "@/components/suggest-product-type";
 
 export function SiteFooter() {
   return (
@@ -16,6 +17,7 @@ export function SiteFooter() {
             We don&apos;t test food in a lab. We read what&apos;s printed on the
             pack and call it like we see it.
           </p>
+          <SuggestProductType />
         </div>
         <div className="flex gap-12 text-sm">
           <div className="space-y-2">

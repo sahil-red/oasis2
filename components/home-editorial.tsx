@@ -8,21 +8,21 @@ import type {
 
 /**
  * "Today's reckoning" — the betrayal hook. Beloved products whose front-of-pack
- * marketing doesn't survive the back label. This is the most human, most
- * shareable unit on the homepage; it earns the scroll the old staples rail didn't.
+ * marketing doesn't survive the back label. Uses the same editorial card layout
+ * as "Worth buying every week" so scrolling feels continuous, not jarring.
  */
 export function HomeReckoning({ products }: { products: LandingDodgeProduct[] }) {
-  const picks = products.slice(0, 3);
+  const picks = products.slice(0, 10);
   if (picks.length < 2) return null;
   return (
     <section className="border-b border-(--color-line)">
-      <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto max-w-7xl px-6 py-16 md:py-24">
+        <div className="mb-9 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-bad)">
               Today&apos;s reckoning
             </p>
-            <h2 className="font-display mt-2 text-3xl leading-tight md:text-[2.5rem]">
+            <h2 className="font-display mt-3 text-3xl leading-tight md:text-[2.5rem]">
               The marketing&apos;s a lie.
             </h2>
             <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-(--color-fg-muted)">
@@ -38,48 +38,73 @@ export function HomeReckoning({ products }: { products: LandingDodgeProduct[] })
           </Link>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {picks.map((p) => (
-            <Link
-              key={p.slug}
-              href={`/product/${p.slug}`}
-              className="group flex flex-col rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 transition hover:border-(--color-bad)/40"
-            >
-              <div className="flex items-start gap-3">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-(--color-bg-soft)">
-                  {p.image ? (
-                    <Image src={p.image} alt={p.name} fill sizes="56px" className="object-contain p-1" />
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  {p.brand ? (
-                    <p className="truncate text-[10px] uppercase tracking-[0.14em] text-(--color-fg-dim)">
-                      {p.brand}
-                    </p>
-                  ) : null}
-                  <p className="line-clamp-2 text-[14px] font-medium leading-snug text-(--color-fg) group-hover:text-(--color-accent)">
-                    {p.name}
-                  </p>
-                </div>
-                <span className="font-display shrink-0 text-2xl tabular-nums text-(--color-bad)">
-                  {p.score}
-                </span>
-              </div>
-              <div className="mt-3 space-y-1.5 border-t border-(--color-line) pt-3 text-[12px] leading-snug">
-                <p className="text-(--color-fg-muted)">
-                  <span className="font-semibold uppercase tracking-wide text-(--color-fg-dim)">Claims </span>
-                  {p.claim}
-                </p>
-                <p className="text-(--color-fg)">
-                  <span className="font-semibold uppercase tracking-wide text-(--color-bad)">Really </span>
-                  {p.reality}
-                </p>
-              </div>
-            </Link>
+            <HomeDodgeCard key={p.slug} product={p} />
           ))}
         </div>
       </div>
     </section>
+  );
+}
+
+function HomeDodgeCard({ product }: { product: LandingDodgeProduct }) {
+  const thumb = product.image_urls[0] ?? product.image;
+  const price = product.price;
+
+  return (
+    <Link
+      href={`/product/${product.slug}`}
+      className="group flex h-full flex-col"
+    >
+      <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
+        style={{ borderTop: "2px solid var(--score-bad)" }}
+      >
+        {thumb ? (
+          <Image
+            src={thumb}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
+            className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">
+            No image
+          </div>
+        )}
+        <span className="absolute left-2 top-2 rounded-full border border-(--score-bad) bg-transparent px-2 py-0.5 text-[10px] font-semibold text-(--score-bad) backdrop-blur">
+          Skip
+        </span>
+      </div>
+
+      <div className="mt-2.5 flex flex-1 flex-col">
+        {product.brand ? (
+          <p className="truncate text-[10px] uppercase tracking-[0.14em] text-(--color-fg-dim)">
+            {product.brand}
+          </p>
+        ) : null}
+        <p className="line-clamp-2 mt-0.5 text-[14px] leading-snug text-(--color-fg) group-hover:text-(--color-bad)">
+          {product.name}
+        </p>
+        {price != null ? (
+          <p className="mt-1 text-[12px] tabular-nums text-(--color-fg-muted)">
+            ₹{price}
+          </p>
+        ) : null}
+
+        <div className="mt-2.5 space-y-1 border-t border-(--color-line) pt-2 text-[11px] leading-snug">
+          <p className="text-(--color-fg-muted)">
+            <span className="font-semibold uppercase tracking-wide text-(--color-fg-dim)">Claims </span>
+            {product.claim}
+          </p>
+          <p className="text-(--color-fg)">
+            <span className="font-semibold uppercase tracking-wide text-(--score-bad)">Really </span>
+            {product.reality}
+          </p>
+        </div>
+      </div>
+    </Link>
   );
 }
 
