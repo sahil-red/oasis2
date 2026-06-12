@@ -1,5 +1,5 @@
 /**
- * In-DB candidate retrieval (pgvector) — two parallel legs, unioned:
+ * In-DB candidate retrieval (pgvector) — four parallel legs, unioned:
  *
  *  (a) ANN leg: search_v2_rows — cosine KNN over the whole index, slim jsonb
  *      rows + distance in ONE round-trip. Deliberately untyped: a selective
@@ -10,6 +10,11 @@
  *      ANN) for the asked type AND its centroid-equivalent types ("biscuit" ≡
  *      "biscuits" ≡ "cookie"). Guarantees every product of the asked type is
  *      in the pool regardless of ANN probe luck.
+ *  (c) brand leg: ILIKE on brand — bare brand queries ("lays") have weak
+ *      semantic signal and may not surface in the ANN top-K.
+ *  (d) lexical leg: ILIKE on search_doc — catches flavour/ingredient queries
+ *      ("keora", "vanilla", "strawberry") and partial name matches that the
+ *      ANN may miss. Uses existing search_doc trigram GIN index.
  *
  * Egress: ~3KB/row slim jsonb; vectors never leave the database.
  */
@@ -87,20 +92,47 @@ export async function fetchCandidatePool(
         .limit(limit)
     : Promise.resolve({ data: null, error: null });
 
-  const [ann, brand, ...typed] = await Promise.all([annPromise, brandPromise, ...typedPromises]);
+  // Lexical leg — LIKE search_doc for flavour/ingredient/partial-name queries.
+  // Always fires in parallel. search_doc is already lowercased, so LIKE is enough.
+  // For multi-word queries, match the WHOLE phrase (words in order) rather than
+  // chaining ILIKEs (which hits the PostgREST statement timeout on large tables).
+  const rawQuery = intent.raw_query.toLowerCase().trim();
+  const lexicalPhrase = rawQuery.replace(/\s+/g, "%");
+  const lexicalPromise =
+    rawQuery.length >= 2
+      ? supabase
+          .from("product_search_index")
+          .select(INDEX_COLUMNS)
+          .like("search_doc", `%${lexicalPhrase}%`)
+          .gte("data_quality_score", minQuality)
+          .limit(limit)
+      : (Promise.resolve({ data: null, error: null }) as unknown as ReturnType<typeof supabase.from>);
+
+  // Also try a token-by-token approach if the phrase match returns nothing:
+  // this is a second query that runs only when needed. For now, the phrase
+  // match catches "keora" and "vanilla ice cream" style queries.
+
+  const [ann, brand, lexicalRaw, ...typed] = await Promise.all([annPromise, brandPromise, lexicalPromise, ...typedPromises]);
+  const lexical = lexicalRaw as { data: unknown[] | null; error: Error | null };
 
   if (ann.error) console.warn("[db-candidates] ANN RPC failed:", ann.error.message);
   if (brand.error) console.warn("[db-candidates] brand fetch failed:", brand.error.message);
+  if (lexical.error) console.warn("[db-candidates] lexical fetch failed:", lexical.error.message);
   for (const t of typed) {
     if (t.error) console.warn("[db-candidates] typed RPC failed:", t.error.message);
   }
 
-  // Union, exact (brand/typed) first so they always survive the dedupe vs ANN.
   const byId = new Map<string, ProductSearchIndexRow>();
   if (Array.isArray(brand.data)) {
     for (const raw of brand.data as Record<string, unknown>[]) {
       const row = mapDbRow(raw);
       byId.set(row.product_id, row);
+    }
+  }
+  if (lexical.data && Array.isArray(lexical.data)) {
+    for (const raw of lexical.data as Record<string, unknown>[]) {
+      const row = mapDbRow(raw);
+      if (!byId.has(row.product_id)) byId.set(row.product_id, row);
     }
   }
   for (const t of typed) {
