@@ -1,6 +1,34 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+
+/** Gentle 0→target count-up on mount (ease-out, ~750ms). SSR and
+ *  prefers-reduced-motion render the final value with no animation. */
+function useCountUp(target: number, durationMs = 750): number {
+  const [value, setValue] = useState(target);
+  const raf = useRef<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setValue(target);
+      return;
+    }
+    let start: number | null = null;
+    setValue(0);
+    const tick = (t: number) => {
+      if (start == null) start = t;
+      const p = Math.min(1, (t - start) / durationMs);
+      setValue(Math.round(target * (1 - Math.pow(1 - p, 3)))); // ease-out cubic
+      if (p < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
+  }, [target, durationMs]);
+  return value;
+}
 import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
 import {
   SUBLABEL_DESCRIPTIONS,
@@ -100,7 +128,8 @@ export function VerdictSublabelChips({
 export function ScoreRing({ score, color }: { score: number; color: string }) {
   const r = 26;
   const circumference = 2 * Math.PI * r;
-  const filled = (Math.max(0, Math.min(100, score)) / 100) * circumference;
+  const display = useCountUp(score);
+  const filled = (Math.max(0, Math.min(100, display)) / 100) * circumference;
   return (
     <div className="relative h-16 w-16 shrink-0" role="img" aria-label={`Score ${score} out of 100`}>
       <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
