@@ -6,7 +6,7 @@ import { embedText } from "@/lib/search/v2/embeddings";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
 import { goalDisplayName, resolveGoalWeights } from "@/lib/search/v2/goal-graph";
-import { getSearchIndexSnapshot } from "@/lib/search/v2/index-queries";
+import { getSearchIndexSnapshot, ensureGoalMap, ensureProfiles } from "@/lib/search/v2/index-queries";
 import type { GoalTraitWeights } from "@/lib/search/v2/types";
 import { applyExplorationSlot } from "@/lib/search/v2/popularity";
 import { rankCandidates } from "@/lib/search/v2/ranking";
@@ -58,7 +58,7 @@ export async function runSearchV2(
       snapshot.source === "pgvector"
         ? await fetchCandidatePool(intentArg, minQ)
         : snapshot.index;
-    return generateCandidates(pool, intentArg, snapshot.profiles, gw, minQ, limit);
+    return generateCandidates(pool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
   };
 
   // Speculative embed: the query vector only needs rawQuery, not the parsed
@@ -115,7 +115,7 @@ export async function runSearchV2(
     candidates = await getCandidates(intent, goalWeights.weights, minDataQuality);
   } else if (intent.kind === "goal" && intent.goal_phrase) {
     // Goal route: weights drive candidate category-selection → must resolve first.
-    goalWeights = await resolveGoalWeights(intent.goal_phrase, snapshot.goalMap);
+    goalWeights = await resolveGoalWeights(intent.goal_phrase, await ensureGoalMap(snapshot));
     intent = { ...intent, goal_id: goalWeights.goal_id };
     llm_calls += goalWeights.llm_calls;
     candidates = await getCandidates(intent, goalWeights.weights, minDataQuality);
@@ -123,7 +123,7 @@ export async function runSearchV2(
     // Directed: goal weights only feed ranking, so resolve them in PARALLEL with
     // candidate generation+retrieval instead of serially (saves a ~2.5s DeepSeek call).
     const [gw, cands] = await Promise.all([
-      intent.goal_phrase ? resolveGoalWeights(intent.goal_phrase, snapshot.goalMap) : Promise.resolve(null),
+      intent.goal_phrase ? resolveGoalWeights(intent.goal_phrase, await ensureGoalMap(snapshot)) : Promise.resolve(null),
       getCandidates(intent, null, minDataQuality),
     ]);
     goalWeights = gw;
@@ -240,7 +240,7 @@ export async function runSearchV2(
       : { items: ranked.slice(0, limit), explored: false };
   const goalLabel =
     intent.goal_id != null
-      ? goalDisplayName(intent.goal_id, snapshot.goalMap)
+      ? goalDisplayName(intent.goal_id, await ensureGoalMap(snapshot))
       : intent.goal_phrase;
 
   const comparisonNote =

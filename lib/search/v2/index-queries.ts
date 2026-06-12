@@ -16,11 +16,29 @@ export type SearchIndexSnapshot = {
   catalogMeta: IndexCatalogMeta;
   source: "db" | "memory" | "pgvector";
   dietary_prevalence: DietaryPrevalenceMap;
+  /** Lazy-loaded — populated on first access, not during snapshot init */
+  _goalMapLoaded: boolean;
+  _profilesLoaded: boolean;
 };
 
 async function loadFacets(): Promise<IndexCatalogMeta> {
   try {
     const supabase = adminClient();
+    // Try the cached summary table first (~50ms vs 1-2s RPC)
+    const { data: cached } = await supabase
+      .from("catalog_facets")
+      .select("brands, primary_types")
+      .eq("id", 1)
+      .maybeSingle();
+    const row = cached as { brands?: string[]; primary_types?: string[] } | null;
+    if (row?.brands?.length) {
+      return {
+        brands: new Set(row.brands.map((b) => b.toLowerCase())),
+        primaryTypes: new Set((row.primary_types ?? []).map((t) => t.toLowerCase())),
+        flavours: new Set(),
+      };
+    }
+    // Fallback to RPC (first run after migration, or table not created yet)
     const { data } = await supabase.rpc("search_v2_facets");
     const obj = (data ?? {}) as { brands?: string[]; primary_types?: string[]; flavours?: string[] };
     return {
@@ -34,7 +52,7 @@ async function loadFacets(): Promise<IndexCatalogMeta> {
 }
 
 let cachedSnapshot: { data: SearchIndexSnapshot; at: number } | null = null;
-const SNAPSHOT_TTL_MS = 10 * 60 * 1000;
+const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
 
 function parseVector(raw: unknown): number[] | null {
   if (Array.isArray(raw)) return raw.map(Number);
@@ -312,22 +330,39 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     return cachedSnapshot.data;
   }
 
-  const [profilesRaw, goalMap, catalogMeta, dietary_prevalence] = await Promise.all([
-    loadProfilesFromDb(),
-    loadGoalMapFromDb(),
+  // Only load facets + dietary eagerly — goalMap + profiles are lazy-loaded
+  // on first access since they're only needed for goal queries (~10% of traffic).
+  const [catalogMeta, dietary_prevalence] = await Promise.all([
     loadFacets(),
     loadDietaryPrevalence(),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],
-    profiles: profilesRaw ?? [],
-    goalMap,
+    profiles: [],
+    goalMap: new Map(),
     catalogMeta,
     source: "pgvector",
     dietary_prevalence,
+    _goalMapLoaded: false,
+    _profilesLoaded: false,
   };
   cachedSnapshot = { data: snap, at: Date.now() };
   return snap;
+}
+
+export async function ensureGoalMap(snap: SearchIndexSnapshot): Promise<Map<string, GoalTraitMapRow>> {
+  if (snap._goalMapLoaded) return snap.goalMap;
+  snap.goalMap = await loadGoalMapFromDb();
+  snap._goalMapLoaded = true;
+  return snap.goalMap;
+}
+
+export async function ensureProfiles(snap: SearchIndexSnapshot): Promise<CategoryTraitProfileRow[]> {
+  if (snap._profilesLoaded) return snap.profiles;
+  const raw = await loadProfilesFromDb();
+  snap.profiles = raw ?? [];
+  snap._profilesLoaded = true;
+  return snap.profiles;
 }
 
 

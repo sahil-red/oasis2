@@ -288,6 +288,26 @@ async function main() {
     );
   }
 
+  // Persist facets to summary table (replaces slow search_v2_facets RPC)
+  try {
+    const { data: facets } = await st.rpc("search_v2_facets");
+    const f = facets as { brands?: string[]; primary_types?: string[] };
+    if (f?.brands?.length) {
+      await st.from("catalog_facets").upsert(
+        {
+          id: 1,
+          brands: f.brands,
+          primary_types: f.primary_types ?? [],
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+      console.log("[search:build-index] catalog_facets cached");
+    }
+  } catch (e) {
+    console.warn("[search:build-index] catalog_facets cache failed:", (e as Error).message);
+  }
+
   const { clearSearchIndexSnapshotCache } = await import("@/lib/search/v2/index-queries");
   clearSearchIndexSnapshotCache();
   console.log("[search:build-index] done (snapshot cache cleared)");
