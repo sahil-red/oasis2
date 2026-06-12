@@ -15,7 +15,7 @@
 
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 
-type KnownIngredient = Omit<IngredientIntelligenceRow, "synonyms"> & {
+export type KnownIngredient = Omit<IngredientIntelligenceRow, "synonyms"> & {
   synonyms?: string[];
 };
 

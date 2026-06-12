@@ -74,7 +74,6 @@ export function judgeNutrition(rows: ResolvedNutritionRow[]): {
   const watch: JudgedNutrient[] = [];
   const good: JudgedNutrient[] = [];
   for (const row of rows) {
-    if (row.indent) continue; // skip sub-rows (e.g. "of which sugars" duplicates)
     const verdict = judgeNutrientRow(row);
     if (!verdict || row.per100 == null) continue;
     const entry: JudgedNutrient = {

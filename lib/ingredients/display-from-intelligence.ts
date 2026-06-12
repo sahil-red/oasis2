@@ -6,6 +6,8 @@ import {
 } from "@/lib/ingredients/parse";
 import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 import { expandAndNormalize } from "@/lib/scoring/ingredient-normalize";
+import { getKnownIngredient as lookupKnownIngredient } from "@/lib/scoring/ingredient-known";
+import type { KnownIngredient } from "@/lib/scoring/ingredient-known";
 import {
   insCodesFromText,
   isInsulinMislabel,
@@ -175,6 +177,53 @@ function fromIntelligence(
   };
 }
 
+/** Build display item from the curated known-ingredient dictionary when no intelligence row or rule matches. */
+function fromKnownIngredient(
+  token: string,
+  known: KnownIngredient,
+  base: ParsedIngredient,
+): IngredientDisplayItem {
+  const display = known.display_name?.trim() || base.display;
+  const isPrebiotic = known.role === "probiotic" || isProbioticName(display, base.key, known.normalized_name);
+
+  let risk: IngredientRisk;
+  if (known.concern_tier === "hazardous" || known.concern_tier === "problematic") {
+    risk = "hazardous";
+  } else if (known.concern_tier === "watchful") {
+    risk = "limited";
+  } else if (known.concern_tier === "innocuous") {
+    risk = BENEFICIAL_ROLES.has(known.role) ? "risk-free" : "unknown";
+  } else {
+    risk = "unknown";
+  }
+
+  const why = known.concern_reasons.length > 0 ? known.concern_reasons.join(" · ") : base.why;
+  const nova = known.nova_class;
+
+  let tierLabel: string;
+  if (isPrebiotic) {
+    tierLabel = "Prebiotic · Beneficial";
+  } else if (risk === "risk-free") {
+    tierLabel = nova ? `Beneficial · NOVA ${nova}` : "Beneficial";
+  } else if (risk === "unknown") {
+    tierLabel = nova ? `Neutral · NOVA ${nova}` : "Neutral";
+  } else {
+    tierLabel = nova ? `${TIER_LABELS[risk]} · NOVA ${nova}` : TIER_LABELS[risk];
+  }
+
+  return {
+    ...base,
+    display,
+    risk,
+    tierLabel,
+    why,
+    flagged: risk !== "risk-free" && risk !== "unknown",
+    source: "intelligence",
+    nova_class: nova,
+    role: known.role,
+  };
+}
+
 /** Label segments enriched with cached ingredient_intelligence (regex fallback). */
 export function parseIngredientsForDisplayWithIntelligence(
   raw: string | null,
@@ -193,10 +242,17 @@ export function parseIngredientsForDisplayWithIntelligence(
   const seen = new Set<string>();
 
   for (const item of base) {
+    let next: IngredientDisplayItem;
     const row = lookupIntelligence(item.key, byName);
-    const next = row
-      ? fromIntelligence(item.key, row, item)
-      : { ...item, source: "rules" as const };
+    if (row) {
+      next = fromIntelligence(item.key, row, item);
+    } else {
+      const key = normalizeIngredientName(item.key);
+      const known = lookupKnownIngredient(key);
+      next = known
+        ? fromKnownIngredient(item.key, known, item)
+        : { ...item, source: "rules" as const };
+    }
     const dedupe = `${next.display}|${next.percent ?? ""}|${next.eNumber ?? ""}`;
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
