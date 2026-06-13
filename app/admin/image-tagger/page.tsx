@@ -8,6 +8,7 @@ type Product = {
   name: string;
   brand: string | null;
   images: string[];
+  ocr_status?: "untagged" | "tagged" | "skipped";
 };
 
 const BATCH_SIZE = 100;
@@ -21,10 +22,16 @@ export default function ImageTaggerPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Search mode
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   const fetchBatch = useCallback(async () => {
     setLoading(true);
     setHeroMap({});
     setMessage(null);
+    setSearchActive(false);
     try {
       const res = await fetch(`/api/admin/reorder-images?count=${BATCH_SIZE}`);
       const data = (await res.json()) as {
@@ -46,6 +53,42 @@ export default function ImageTaggerPage() {
     void fetchBatch();
   }, [fetchBatch]);
 
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      void fetchBatch();
+      return;
+    }
+    setSearchLoading(true);
+    setSearchActive(true);
+    setHeroMap({});
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/reorder-images?search=${encodeURIComponent(q.trim())}`);
+      const data = (await res.json()) as {
+        done?: number;
+        total?: number;
+        products: Product[];
+      };
+      setProducts(data.products ?? []);
+      setMessage(`${data.products.length} results for "${q.trim()}"`);
+    } catch {
+      setMessage("Search failed");
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [fetchBatch]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void doSearch(searchQuery);
+    }
+    if (e.key === "Escape") {
+      setSearchQuery("");
+      if (searchActive) void fetchBatch();
+    }
+  };
+
   const toggleHero = (productId: string, url: string) => {
     setHeroMap((prev) => {
       const next = { ...prev };
@@ -63,14 +106,12 @@ export default function ImageTaggerPage() {
   const saveBatch = useCallback(async () => {
     if (heroCount === 0) return;
     setSaving(true);
-    // Save selected heroes AND skip the rest
-    const actions = products.map((p) => {
-      const heroUrl = heroMap[p.id];
-      if (heroUrl) {
-        return { productId: p.id, heroUrl, reorder: true };
-      }
-      return { productId: p.id, skip: true };
-    });
+    // Only save SELECTED products — don't auto-skip unselected
+    const actions = Object.entries(heroMap).map(([productId, heroUrl]) => ({
+      productId,
+      heroUrl,
+      reorder: true,
+    }));
     try {
       const res = await fetch("/api/admin/reorder-images", {
         method: "POST",
@@ -78,8 +119,8 @@ export default function ImageTaggerPage() {
         body: JSON.stringify({ actions }),
       });
       if (!res.ok) throw new Error("Save failed");
-      setDone((d) => d + products.length);
-      setMessage(`Saved ${heroCount}, skipped ${products.length - heroCount}`);
+      setDone((d) => d + heroCount);
+      setMessage(`Saved ${heroCount} products`);
       void fetchBatch();
     } catch {
       setMessage("Save failed");
@@ -144,7 +185,9 @@ export default function ImageTaggerPage() {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const remaining = total - done;
 
-  if (loading) {
+  const isLoading = loading || searchLoading;
+
+  if (isLoading) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8">
         <div className="animate-pulse space-y-4">
@@ -161,45 +204,87 @@ export default function ImageTaggerPage() {
 
   return (
     <main className="mx-auto max-w-[90rem] px-4 py-6">
-      {/* Top bar */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-3">
-            <span className="font-semibold text-sm text-(--color-fg)">
-              {done.toLocaleString()} / {total.toLocaleString()}
-            </span>
-            <span className="text-[12px] text-(--color-fg-dim)">
-              {remaining > 0
-                ? `${remaining.toLocaleString()} left · ${pct}%`
-                : "Done!"}
-            </span>
-          </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-(--color-line)/40">
-            <div
-              className="h-full rounded-full bg-(--color-accent) transition-all"
-              style={{ width: `${pct}%` }}
+      {/* Top bar with search */}
+      <div className="mb-4 space-y-3">
+        {/* Search row */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search products by name or brand…"
+              className="w-full rounded-xl border border-(--color-line-strong) bg-(--color-bg) px-4 py-2 text-[13px] text-(--color-fg) outline-none placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted)"
             />
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); void fetchBatch(); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-(--color-fg-dim) hover:text-(--color-fg)"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : null}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={skipAll}
-            disabled={saving || products.length === 0}
-            className="rounded-full border border-(--color-line) px-4 py-1.5 text-[12px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg) disabled:opacity-40"
+            onClick={() => void doSearch(searchQuery)}
+            disabled={!searchQuery.trim() || saving}
+            className="rounded-xl bg-(--color-fg) px-5 py-2 text-[13px] font-semibold text-(--color-bg) transition hover:opacity-80 disabled:opacity-40"
           >
-            Skip all {products.length}
+            Search
           </button>
-          {heroCount > 0 ? (
+        </div>
+
+        {/* Progress + actions row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-3">
+              <span className="font-semibold text-sm text-(--color-fg)">
+                {searchActive
+                  ? `${products.length} results`
+                  : `${done.toLocaleString()} / ${total.toLocaleString()}`}
+              </span>
+              {!searchActive ? (
+                <span className="text-[12px] text-(--color-fg-dim)">
+                  {remaining > 0
+                    ? `${remaining.toLocaleString()} left · ${pct}%`
+                    : "Done!"}
+                </span>
+              ) : null}
+            </div>
+            {!searchActive ? (
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-(--color-line)/40">
+                <div
+                  className="h-full rounded-full bg-(--color-accent) transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void saveBatch()}
-              disabled={saving}
-              className="rounded-full bg-(--color-fg) px-4 py-1.5 text-[12px] font-semibold text-(--color-bg) transition hover:opacity-80 disabled:opacity-40"
+              onClick={skipAll}
+              disabled={saving || products.length === 0}
+              className="rounded-full border border-(--color-line) px-4 py-1.5 text-[12px] font-medium text-(--color-fg-muted) transition hover:border-(--color-fg-dim) hover:text-(--color-fg) disabled:opacity-40"
             >
-              Save {heroCount} selected
+              Skip all {products.length}
             </button>
-          ) : null}
+            {heroCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => void saveBatch()}
+                disabled={saving}
+                className="rounded-full bg-(--color-fg) px-4 py-1.5 text-[12px] font-semibold text-(--color-bg) transition hover:opacity-80 disabled:opacity-40"
+              >
+                Save {heroCount} selected
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -207,7 +292,7 @@ export default function ImageTaggerPage() {
         <p className="mb-3 text-center text-[11px] text-(--color-fg-dim)">{message}</p>
       ) : null}
 
-      {/* Product grid — 2 cols mobile, 3-4 cols desktop */}
+      {/* Product grid — 2 cols mobile, 4 cols desktop */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {products.map((p) => {
           const hero = heroMap[p.id];
@@ -227,6 +312,19 @@ export default function ImageTaggerPage() {
                   {p.name}
                 </p>
               </div>
+
+              {/* Status badge — only in search mode */}
+              {searchActive && p.ocr_status && p.ocr_status !== "untagged" ? (
+                <div className="mb-1">
+                  <span className={`inline-block rounded-full px-1.5 py-0.5 text-[8px] font-semibold ${
+                    p.ocr_status === "tagged"
+                      ? "bg-(--color-accent)/15 text-(--color-accent)"
+                      : "bg-(--color-warn)/15 text-(--color-warn)"
+                  }`}>
+                    {p.ocr_status === "tagged" ? "Tagged" : "Reviewed"}
+                  </span>
+                </div>
+              ) : null}
 
               {/* Images — 2-column grid, show all */}
               <div className="grid grid-cols-2 gap-0.5">
@@ -278,7 +376,7 @@ export default function ImageTaggerPage() {
       </div>
 
       {/* Bottom refresh */}
-      {products.length < 100 && remaining > 0 ? (
+      {!searchActive && products.length < 100 && remaining > 0 ? (
         <div className="mt-6 text-center">
           <button
             type="button"

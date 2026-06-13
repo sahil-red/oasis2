@@ -31,13 +31,18 @@ function clearCountCache() {
   cachedCounts = null;
 }
 
-function productShape(p: ProductRow) {
+function productShape(p: ProductRow, includeStatus = false) {
   return {
     id: p.id,
     slug: p.slug,
     name: p.name,
     brand: p.brand,
     images: (p.image_urls ?? []).filter(Boolean),
+    ...(includeStatus ? {
+      ocr_status: p.ocr_image_url
+        ? (p.ocr_image_url === "REVIEWED" ? "skipped" : "tagged")
+        : "untagged",
+    } : {}),
   };
 }
 
@@ -46,8 +51,37 @@ export async function GET(req: NextRequest) {
   const skipId = req.nextUrl.searchParams.get("skip")?.trim() ?? null;
   const selectedId = req.nextUrl.searchParams.get("selected")?.trim() ?? null;
   const count = Number(req.nextUrl.searchParams.get("count") ?? 1) || 1;
+  const search = req.nextUrl.searchParams.get("search")?.trim() ?? null;
 
   const { done, total } = await getCounts(supabase);
+
+  // ── Search mode: direct product lookup (returns ALL images, includes tagged) ──
+  if (search) {
+    const tokens = search.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) {
+      return NextResponse.json({ done, total, products: [] });
+    }
+    let q = supabase
+      .from("products")
+      .select("id, slug, name, brand, image_urls, ocr_image_url")
+      .eq("platform", "zepto")
+      .not("image_urls", "is", null)
+      .limit(500);
+
+    // Match ALL tokens against name OR brand (AND semantics)
+    for (const t of tokens) {
+      q = q.or(`name.ilike.%${t}%,brand.ilike.%${t}%`);
+    }
+
+    const { data: rows, error } = await q;
+    if (error || !rows?.length) {
+      return NextResponse.json({ done, total, products: [] });
+    }
+    return NextResponse.json({
+      done, total,
+      products: (rows as ProductRow[]).map((p) => productShape(p, true)),
+    });
+  }
 
   if (selectedId) {
     const { data: row } = await supabase
@@ -89,7 +123,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     done,
     total,
-    products: selected.map(productShape),
+    products: selected.map((p) => productShape(p)),
   });
 }
 

@@ -266,7 +266,8 @@ export function classifyIntent(
     return buildIntent({
       kind: "directed",
       sort: isHealthier ? "healthiest" : "cheapest",
-      confidence: 0.55,  // degrade to LLM
+      confidence: 0.55,
+      query: queryLower,
     });
   }
 
@@ -282,56 +283,56 @@ export function classifyIntent(
 
   // Pure brand (full query matches brand)
   if (brand && idx.brandsSet.has(normalize(queryLower))) {
-    return buildIntent({ kind: "brand", brand, confidence: 0.95 });
+    return buildIntent({ kind: "brand", brand, confidence: 0.95, query: queryLower });
   }
 
   // Pure brand (multi-word matched, single token)
   if (brand && tokens.length === 1) {
-    return buildIntent({ kind: "brand", brand, confidence: 0.95 });
+    return buildIntent({ kind: "brand", brand, confidence: 0.95, query: queryLower });
   }
 
   // Brand + Type (skip for natural language)
   if (brand && ptype && !isNaturalLang) {
-    return buildIntent({ kind: "directed", brand, primary_type: ptype, goal_phrase: goalPhrase, modifiers, sort, confidence: 0.92 });
+    return buildIntent({ kind: "directed", brand, primary_type: ptype, goal_phrase: goalPhrase, modifiers, sort, confidence: 0.92, query: queryLower });
   }
 
   // Pure type
   if (ptype && tokens.length === 1 && !brand) {
-    return buildIntent({ kind: "directed", primary_type: ptype, confidence: 0.95 });
+    return buildIntent({ kind: "directed", primary_type: ptype, confidence: 0.95, query: queryLower });
   }
 
   // Vague or natural language → degrade to LLM
   if (isVague || isNaturalLang) {
-    return buildIntent({ kind: "ambiguous", confidence: 0.30 });
+    return buildIntent({ kind: "ambiguous", confidence: 0.30, query: queryLower });
   }
 
   // Goal + Type
   if (goalPhrase && ptype) {
-    return buildIntent({ kind: "directed", primary_type: ptype, goal_phrase: goalPhrase, modifiers, sort, confidence: 0.82 });
+    return buildIntent({ kind: "directed", primary_type: ptype, goal_phrase: goalPhrase, modifiers, sort, confidence: 0.82, query: queryLower });
   }
 
   // Pure goal
   if (goalPhrase && !isVague) {
-    return buildIntent({ kind: "goal", goal_phrase: goalPhrase, primary_type: ptype, modifiers, sort, confidence: 0.80 });
+    return buildIntent({ kind: "goal", goal_phrase: goalPhrase, primary_type: ptype, modifiers, sort, confidence: 0.80, query: queryLower });
   }
 
   // Modifiers + type
   if (ptype) {
-    return buildIntent({ kind: "directed", primary_type: ptype, modifiers, sort, confidence: 0.72 });
+    return buildIntent({ kind: "directed", primary_type: ptype, modifiers, sort, confidence: 0.72, query: queryLower });
   }
 
   // Modifiers only → low confidence
   if (modifiers.length) {
-    return buildIntent({ kind: "directed", modifiers, sort, confidence: 0.55 });
+    return buildIntent({ kind: "directed", modifiers, sort, confidence: 0.55, query: queryLower });
   }
 
   // Brand only (fuzzy)
   if (brand) {
-    return buildIntent({ kind: "brand", brand, confidence: 0.65 });
+    return buildIntent({ kind: "brand", brand, confidence: 0.65, query: queryLower });
   }
 
   // Ambiguous → degrade
-  return buildIntent({ kind: "ambiguous", confidence: 0.30 });
+  return buildIntent({ kind: "ambiguous", confidence: 0.30, query: queryLower });
 }
 
 // ── Intent builder ──
@@ -344,9 +345,31 @@ type PartialIntent = {
   modifiers?: string[];
   sort?: SearchIntentV2["sort"];
   confidence: number;
+  query?: string;
 };
 
+function dietaryConstraints(query: string, goalPhrase?: string | null) {
+  const q = query.toLowerCase();
+  const g = goalPhrase?.toLowerCase() ?? "";
+  return {
+    vegan:
+      g.includes("vegan") || g.includes("plant based") || g.includes("dairy free") ||
+      q.includes("vegan") || q.includes("plant based") || q.includes("dairy free")
+        ? true
+        : undefined,
+    vegetarian:
+      g.includes("vegetarian") || q.includes("vegetarian") ? true : undefined,
+    gluten_free:
+      g.includes("gluten free") || q.includes("gluten free") || g.includes("celiac") || q.includes("celiac")
+        ? true
+        : undefined,
+    palm_oil_free:
+      q.includes("no palm oil") || q.includes("palm oil free") ? true : undefined,
+  };
+}
+
 function buildIntent(p: PartialIntent): SearchIntentV2 {
+  const diet = dietaryConstraints(p.query ?? "", p.goal_phrase);
   return {
     kind: p.kind,
     goal_phrase: p.goal_phrase?.trim() || null,
@@ -359,6 +382,10 @@ function buildIntent(p: PartialIntent): SearchIntentV2 {
     constraints: {
       avoid_ingredients: [],
       allergens_excluded: [],
+      ...(diet.vegan ? { vegan: true } : {}),
+      ...(diet.vegetarian ? { vegetarian: true } : {}),
+      ...(diet.gluten_free ? { gluten_free: true } : {}),
+      ...(diet.palm_oil_free ? { palm_oil_free: true } : {}),
     },
     constraint_priorities: [] as ConstraintPriority[],
     sort: p.sort ?? "best_match",
