@@ -70,7 +70,12 @@ Rules:
   Do NOT invent a random primary_type like "chicken thighs" — leave it null when no real type exists.
 - constraint_priorities: lower number = relax first (price before sugar before avoid_ingredients).
 - modifiers may include: high_protein_tier, low_sugar, no_added_sugar when user asks relatively.
-- Populate avoid_ingredients/allergens from negation in the query.
+- Populate avoid_ingredients/allergens from negation in the query (X-free, no X, without X).
+  "lactose free" → allergens_excluded: ["lactose"]. "dairy free" → allergens_excluded: ["dairy"].
+  "nut free" / "peanut free" / "soy free" → allergens_excluded: [the allergen word].
+  "gluten free" → constraints.gluten_free:true (dietary boolean, not allergen).
+  "no maida" / "without preservatives" / "no artificial colours" → avoid_ingredients.
+  "no palm oil" (ingredient avoidance, not dietary boolean) → avoid_ingredients: ["palm oil"].
 - "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
 - "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".
 - ALWAYS output trait_weights — a map of trait IDs to 0-1 weights that capture the HEALTH/NUTRITION intent of the query. Use only these trait IDs: ${TRAIT_IDS.join(", ")}. Even for brand/directed queries, output trait_weights based on any health context (e.g. "healthy chips" → {whole_food:0.3,clean_label:0.3,low_fat:0.2,low_sodium:0.2}). For purely neutral queries ("milk", "amul butter"), output empty {}. Trait weights should sum to 1.0.

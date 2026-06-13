@@ -104,12 +104,20 @@ async function fetchMatches(wanted: string): Promise<TypeMatch[]> {
   // weak neighbor matches. Extend by substring-matching against all known types.
   // "greek yogurt" (1 product) → add "yogurt", "frozen yogurt", etc.
   if (key.length >= 3) {
-    const words = key.split(/\s+/).filter((w) => w.length >= 3);
+    const words = key.split(/\s+/).filter((w) => w.length >= 4);
     if (words.length) {
       const allTypes = await getAllKnownTypes();
       const fallback = allTypes
         .filter((t) => t !== key && words.some((w) => t.includes(w)))
-        .slice(0, FETCH_LIMIT)
+        // Sort by relevance: more shared words = higher rank.
+        // Tiebreak: shorter name first (base types before compound)
+        .sort((a, b) => {
+          const aScore = words.filter((w) => a.includes(w)).length;
+          const bScore = words.filter((w) => b.includes(w)).length;
+          if (aScore !== bScore) return bScore - aScore;
+          return a.length - b.length;
+        })
+        .slice(0, 5)  // Keep only the 5 most relevant fallback types
         .map((t) => ({ primary_type: t, distance: 0.04 }));
       const existing = new Set(matches.map((m) => m.primary_type));
       for (const f of fallback) {
