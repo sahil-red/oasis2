@@ -71,6 +71,7 @@
     "mobile:start:lan": "pnpm mobile:env && cd oasis-mobile && pnpm install --ignore-workspace && pnpm start:lan"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.19.4",
     "@sentry/nextjs": "^10.57.0",
     "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^2.0.1",
