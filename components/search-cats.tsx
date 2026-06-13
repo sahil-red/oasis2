@@ -3,142 +3,124 @@
 import { useState } from "react";
 
 /**
- * A little distraction for the 1–5s AI-search wait: two kittens batting a ball
- * of yarn back and forth. Pure SVG + CSS transforms (no deps, no network), so it
- * stays crisp at any size and themes for free. Colours, yarn and tempo are
- * randomised per mount, so two searches in a row never look the same.
+ * The 1–5s AI-search wait, made fun: two kittens gallop and chase each other
+ * across the screen, taking turns leading as they ping-pong left↔right. Pure
+ * inline SVG + CSS transforms — no deps, no images, no network; vector-crisp at
+ * any size and GPU-cheap. Coat colours and tempo randomise per mount, so two
+ * searches running back-to-back never look the same. Respects reduced-motion.
  *
  * Positioning uses the SVG `transform` ATTRIBUTE; motion uses the CSS `transform`
- * PROPERTY on nested groups — they must stay on separate elements (CSS transform
- * overrides the attribute on the same node). transform-box:fill-box makes every
- * transform-origin refer to the element's own box. Respects reduced-motion.
+ * PROPERTY on nested groups (they must live on separate nodes — CSS transform
+ * overrides the attribute). transform-box:fill-box anchors every origin to the
+ * element's own box.
  */
 
-type Coat = { body: string; belly: string; ear: string; line: string };
+type Coat = { body: string; belly: string; ear: string; line: string; leg: string };
 
 const COATS: Coat[] = [
-  { body: "#e2904f", belly: "#f6dcbd", ear: "#c76f37", line: "rgba(70,40,15,.42)" }, // ginger tabby
-  { body: "#9ea4ab", belly: "#eceae6", ear: "#7c828a", line: "rgba(35,38,45,.40)" }, // grey
-  { body: "#ecdcc2", belly: "#fbf4e8", ear: "#d8c3a0", line: "rgba(80,58,28,.38)" }, // cream
-  { body: "#736d66", belly: "#d0c9c1", ear: "#565049", line: "rgba(18,18,22,.45)" }, // charcoal
-  { body: "#e7b06f", belly: "#f8ecd6", ear: "#aa7440", line: "rgba(75,48,20,.42)" }, // butterscotch
+  { body: "#e2904f", belly: "#f6dcbd", ear: "#c76f37", leg: "#c97e42", line: "rgba(70,40,15,.4)" }, // ginger
+  { body: "#9ea4ab", belly: "#edebe7", ear: "#7c828a", leg: "#8a9098", line: "rgba(35,38,45,.4)" }, // grey
+  { body: "#6f6962", belly: "#cdc6be", ear: "#544e48", leg: "#615b54", line: "rgba(18,18,22,.45)" }, // charcoal
+  { body: "#e8b573", belly: "#f8eed9", ear: "#b07d44", leg: "#d2a262", line: "rgba(75,48,20,.4)" }, // butterscotch
+  { body: "#d9d2c7", belly: "#fbf6ed", ear: "#bcae99", leg: "#c7bfb1", line: "rgba(80,62,34,.36)" }, // white/cream
 ];
 
-const YARNS = ["#cf5b4a", "#d98aa0", "#6f98c6", "#7aa05a", "#c98a2e"];
-
-function pick<T>(arr: T[], notIndex = -1): [T, number] {
-  let i = Math.floor(Math.random() * arr.length);
-  if (i === notIndex) i = (i + 1) % arr.length;
-  return [arr[i]!, i];
+function pick<T>(a: T[], not = -1): [T, number] {
+  let i = Math.floor(Math.random() * a.length);
+  if (i === not) i = (i + 1) % a.length;
+  return [a[i]!, i];
 }
 
-/** One kitten, facing right, base of the sit at (64,132), head centred (64,61). */
-function Kitten({ coat, blinkDelay, tailDelay }: { coat: Coat; blinkDelay: string; tailDelay: string }) {
+/** A galloping cat in side profile, facing right. Local box ~128×120, feet y≈108. */
+function RunCat({ coat, legPhase }: { coat: Coat; legPhase: string }) {
+  const legProps = { stroke: coat.leg, strokeWidth: 7, strokeLinecap: "round" as const };
+  const farLegProps = { stroke: coat.line, strokeWidth: 7, strokeLinecap: "round" as const, opacity: 0.85 };
   return (
     <g
-      style={
-        {
-          "--cb": coat.body,
-          "--cl": coat.belly,
-          "--ce": coat.ear,
-          "--cln": coat.line,
-        } as React.CSSProperties
-      }
+      style={{ "--cb": coat.body, "--cl": coat.belly, "--ce": coat.ear, "--cln": coat.line } as React.CSSProperties}
       stroke="var(--cln)"
-      strokeWidth={2}
+      strokeWidth={2.2}
       strokeLinejoin="round"
-      strokeLinecap="round"
     >
-      {/* tail — swishes from its base on the cat's back */}
-      <g className="scat-tail" style={{ animationDelay: tailDelay }}>
-        <path d="M41 120 C16 118 12 92 26 82 C30 90 30 102 44 110 Z" fill="var(--cb)" />
+      {/* far legs (behind body) */}
+      <g className="scat-leg" style={{ animationDelay: legPhase }}>
+        <line x1="40" y1="80" x2="34" y2="108" {...farLegProps} />
       </g>
-      {/* body (sitting teardrop) */}
-      <path d="M40 133 C33 101 46 79 64 79 C82 79 95 101 88 133 Z" fill="var(--cb)" />
-      {/* lighter belly */}
-      <path d="M57 130 C52 112 56 98 64 98 C72 98 76 112 71 130 Z" fill="var(--cl)" stroke="none" />
-      {/* front paws */}
-      <ellipse cx="55" cy="131" rx="7" ry="5.5" fill="var(--cl)" />
-      <ellipse cx="73" cy="131" rx="7" ry="5.5" fill="var(--cl)" />
-      {/* head */}
-      <circle cx="64" cy="61" r="20" fill="var(--cb)" />
-      {/* ears */}
-      <path d="M47 49 L44 28 L62 44 Z" fill="var(--cb)" />
-      <path d="M81 49 L84 28 L66 44 Z" fill="var(--cb)" />
-      <path d="M50 46 L49 35 L59 44 Z" fill="var(--ce)" stroke="none" />
-      <path d="M78 46 L79 35 L69 44 Z" fill="var(--ce)" stroke="none" />
-      {/* eyes — blink */}
-      <g className="scat-blink" style={{ animationDelay: blinkDelay }}>
-        <ellipse cx="57" cy="60" rx="2.6" ry="4.2" fill="var(--cln)" stroke="none" />
-        <ellipse cx="71" cy="60" rx="2.6" ry="4.2" fill="var(--cln)" stroke="none" />
+      <g className="scat-leg" style={{ animationDelay: `calc(${legPhase} - .12s)` }}>
+        <line x1="96" y1="80" x2="102" y2="108" {...farLegProps} />
       </g>
-      {/* nose + mouth */}
-      <path d="M61 67 L67 67 L64 70.5 Z" fill="var(--ce)" stroke="none" />
-      <path d="M64 70.5 V73 M64 73 C62 75 59.5 74.5 58.5 73 M64 73 C66 75 68.5 74.5 69.5 73" fill="none" strokeWidth="1.4" />
-      {/* whiskers */}
-      <g stroke="var(--cln)" strokeWidth="1.1" opacity="0.6">
-        <path d="M52 64 L38 62" />
-        <path d="M52 67 L39 69" />
-        <path d="M76 64 L90 62" />
-        <path d="M76 67 L89 69" />
-      </g>
-    </g>
-  );
-}
 
-function Yarn({ color }: { color: string }) {
-  const dark = "rgba(0,0,0,.18)";
-  return (
-    <g stroke={dark} strokeWidth="1.1" strokeLinecap="round">
-      <circle cx="0" cy="0" r="11" fill={color} />
-      <path d="M-9 -3 C-3 -9 4 -9 9 -2" fill="none" />
-      <path d="M-10 2 C-4 7 6 8 10 1" fill="none" />
-      <path d="M-6 -9 C0 -3 1 6 -3 10" fill="none" />
-      <path d="M6 -9 C2 -2 3 6 7 9" fill="none" />
-      {/* loose tail strand */}
-      <path d="M10 1 C18 3 16 9 22 9" fill="none" strokeWidth="1.3" />
+      {/* tail — streams behind, waving */}
+      <g className="scat-tail">
+        <path d="M22 66 C0 60 -4 32 10 18 C18 28 12 50 34 64 Z" fill="var(--cb)" />
+      </g>
+
+      {/* body group — bobs with the gait */}
+      <g className="scat-body" style={{ animationDelay: legPhase }}>
+        {/* haunch */}
+        <circle cx="34" cy="66" r="24" fill="var(--cb)" />
+        {/* torso */}
+        <path d="M14 76 C8 56 20 46 44 45 C70 44 94 46 106 52 C120 60 116 78 96 83 C68 91 36 90 14 76 Z" fill="var(--cb)" />
+        {/* belly */}
+        <path d="M30 86 C52 92 80 91 98 81 C94 89 74 95 54 94 C42 93 34 90 30 86 Z" fill="var(--cl)" stroke="none" />
+        {/* neck + head */}
+        <circle cx="106" cy="46" r="15" fill="var(--cb)" />
+        {/* muzzle */}
+        <path d="M118 44 C126 45 126 53 119 55 C115 53 115 47 118 44 Z" fill="var(--cb)" />
+        {/* ears */}
+        <path d="M97 35 L94 16 L109 31 Z" fill="var(--cb)" />
+        <path d="M114 33 L121 17 L107 31 Z" fill="var(--cb)" />
+        <path d="M100 33 L99 23 L107 31 Z" fill="var(--ce)" stroke="none" />
+        {/* eye (blinks) */}
+        <ellipse className="scat-blink" cx="109" cy="43" rx="2.4" ry="3.4" fill="var(--cln)" stroke="none" />
+        {/* nose */}
+        <circle cx="123" cy="51" r="1.8" fill="var(--ce)" stroke="none" />
+        {/* whiskers */}
+        <g stroke="var(--cln)" strokeWidth="1" opacity="0.55">
+          <path d="M120 52 L132 50" />
+          <path d="M120 55 L131 57" />
+        </g>
+      </g>
+
+      {/* near legs (in front of body) */}
+      <g className="scat-leg" style={{ animationDelay: `calc(${legPhase} - .12s)` }}>
+        <line x1="44" y1="82" x2="50" y2="108" {...legProps} />
+      </g>
+      <g className="scat-leg" style={{ animationDelay: legPhase }}>
+        <line x1="92" y1="82" x2="86" y2="108" {...legProps} />
+      </g>
     </g>
   );
 }
 
 export function SearchCats({ className = "" }: { className?: string }) {
-  // Lock in a random cast for the lifetime of this mount (one search).
-  const [{ left, right, yarn, dur }] = useState(() => {
+  const [{ lead, chase, dur }] = useState(() => {
     const [a, ai] = pick(COATS);
     const [b] = pick(COATS, ai);
-    const [y] = pick(YARNS);
-    return { left: a, right: b, yarn: y, dur: 3.3 + Math.random() * 0.9 };
+    return { lead: a, chase: b, dur: 4.4 + Math.random() * 1.6 };
   });
 
   return (
-    <div className={`mx-auto w-full max-w-[300px] ${className}`} aria-hidden>
+    <div className={`w-full ${className}`} aria-hidden>
       <style>{CAT_CSS}</style>
-      <svg viewBox="0 0 340 150" className="h-auto w-full" style={{ ["--scat-dur" as string]: `${dur}s` }}>
-        {/* soft ground shadows under each cat */}
-        <ellipse cx="100" cy="140" rx="40" ry="7" fill="rgba(60,40,20,.10)" />
-        <ellipse cx="240" cy="140" rx="40" ry="7" fill="rgba(60,40,20,.10)" />
-        {/* travelling shadow under the yarn */}
-        <g transform="translate(100 141)">
-          <ellipse className="scat-ball-sh" cx="0" cy="0" rx="13" ry="4" fill="rgba(60,40,20,.16)" />
-        </g>
+      <svg
+        viewBox="0 0 760 132"
+        className="mx-auto h-auto w-full max-w-[640px]"
+        style={{ ["--scat-dur" as string]: `${dur}s` }}
+      >
+        {/* ground line — soft, to anchor the run */}
+        <line x1="40" y1="120" x2="720" y2="120" stroke="var(--color-line)" strokeWidth="2" strokeDasharray="2 12" strokeLinecap="round" />
 
-        {/* left cat */}
-        <g transform="translate(36 8)">
-          <g className="scat-bat-l">
-            <Kitten coat={left} blinkDelay="0s" tailDelay="0s" />
+        {/* chaser (trails by ~135px) */}
+        <g className="scat-run" style={{ ["--reach" as string]: "320px" }}>
+          <g transform="translate(20 8)">
+            <RunCat coat={chase} legPhase="-0.2s" />
           </g>
         </g>
-        {/* right cat (mirrored) */}
-        <g transform="translate(304 8) scale(-1 1)">
-          <g className="scat-bat-r">
-            <Kitten coat={right} blinkDelay="-2.1s" tailDelay="-0.8s" />
-          </g>
-        </g>
-
-        {/* yarn — positioned by attribute, animated by CSS on the inner group */}
-        <g transform="translate(100 118)">
-          <g className="scat-ball">
-            <Yarn color={yarn} />
+        {/* leader */}
+        <g className="scat-run" style={{ ["--reach" as string]: "320px" }}>
+          <g transform="translate(155 8)">
+            <RunCat coat={lead} legPhase="0s" />
           </g>
         </g>
       </svg>
@@ -147,52 +129,41 @@ export function SearchCats({ className = "" }: { className?: string }) {
 }
 
 const CAT_CSS = `
-.scat-ball, .scat-ball-sh, .scat-bat-l, .scat-bat-r, .scat-tail, .scat-blink { transform-box: fill-box; }
-.scat-ball { transform-origin: center; animation: scat-ball var(--scat-dur) cubic-bezier(.4,0,.6,1) infinite; }
-.scat-ball-sh { transform-origin: center; animation: scat-ball-sh var(--scat-dur) cubic-bezier(.4,0,.6,1) infinite; }
-.scat-bat-l { transform-origin: 50% 100%; animation: scat-bat-l var(--scat-dur) ease-in-out infinite; }
-.scat-bat-r { transform-origin: 50% 100%; animation: scat-bat-r var(--scat-dur) ease-in-out infinite; }
-.scat-tail { transform-origin: 90% 100%; animation: scat-tail 1.7s ease-in-out infinite; }
-.scat-blink { transform-origin: center; animation: scat-blink 4.6s ease-in-out infinite; }
+.scat-run, .scat-leg, .scat-tail, .scat-body, .scat-blink { transform-box: fill-box; }
+.scat-run  { transform-origin: center; animation: scat-run var(--scat-dur) ease-in-out infinite; }
+.scat-leg  { transform-origin: 50% 6%; animation: scat-leg .42s linear infinite; }
+.scat-tail { transform-origin: 90% 90%; animation: scat-tail .5s ease-in-out infinite; }
+.scat-body { transform-origin: center; animation: scat-body .42s ease-in-out infinite; }
+.scat-blink{ transform-origin: center; animation: scat-blink 3.4s ease-in-out infinite; }
 
-@keyframes scat-ball {
-  0%   { transform: translate(0px,0px) rotate(0deg) scale(1.16,.84); }
-  7%   { transform: translate(18px,-28px) rotate(42deg) scale(1,1); }
-  25%  { transform: translate(70px,-66px) rotate(150deg) scale(.94,1.06); }
-  43%  { transform: translate(128px,-28px) rotate(292deg) scale(1,1); }
-  50%  { transform: translate(160px,2px) rotate(360deg) scale(1.16,.84); }
-  57%  { transform: translate(128px,-28px) rotate(430deg) scale(1,1); }
-  75%  { transform: translate(70px,-66px) rotate(560deg) scale(.94,1.06); }
-  93%  { transform: translate(18px,-28px) rotate(680deg) scale(1,1); }
-  100% { transform: translate(0px,0px) rotate(720deg) scale(1.16,.84); }
+/* ping-pong across the screen, flipping to face the run direction at each end */
+@keyframes scat-run {
+  0%    { transform: translateX(0)            scaleX(1);  }
+  44%   { transform: translateX(var(--reach)) scaleX(1);  }
+  50%   { transform: translateX(var(--reach)) scaleX(-1); }
+  94%   { transform: translateX(0)            scaleX(-1); }
+  100%  { transform: translateX(0)            scaleX(1);  }
 }
-@keyframes scat-ball-sh {
-  0%   { transform: translate(0px,0) scaleX(1.1); opacity:.16; }
-  25%  { transform: translate(70px,0) scaleX(.45); opacity:.06; }
-  50%  { transform: translate(160px,0) scaleX(1.1); opacity:.16; }
-  75%  { transform: translate(82px,0) scaleX(.45); opacity:.06; }
-  100% { transform: translate(0px,0) scaleX(1.1); opacity:.16; }
+/* gallop: legs swing fore/aft around the hip */
+@keyframes scat-leg {
+  0%   { transform: rotate(26deg);  }
+  50%  { transform: rotate(-26deg); }
+  100% { transform: rotate(26deg);  }
 }
-@keyframes scat-bat-l {
-  0%,4%    { transform: rotate(-9deg) translateY(-2px); }
-  12%,88%  { transform: rotate(0deg) translateY(0); }
-  97%,100% { transform: rotate(-9deg) translateY(-2px); }
-}
-@keyframes scat-bat-r {
-  0%,40%   { transform: rotate(0deg) translateY(0); }
-  47%,53%  { transform: rotate(-9deg) translateY(-2px); }
-  61%,100% { transform: rotate(0deg) translateY(0); }
+@keyframes scat-body {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-5px); }
 }
 @keyframes scat-tail {
-  0%,100% { transform: rotate(-11deg); }
-  50%     { transform: rotate(13deg); }
+  0%,100% { transform: rotate(-12deg); }
+  50%     { transform: rotate(16deg); }
 }
 @keyframes scat-blink {
-  0%,42%,47%,91%,96%,100% { transform: scaleY(1); }
-  44.5%,93.5%             { transform: scaleY(.1); }
+  0%,46%,51%,100% { transform: scaleY(1); }
+  48.5%           { transform: scaleY(.1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .scat-ball, .scat-ball-sh, .scat-bat-l, .scat-bat-r, .scat-tail, .scat-blink { animation: none !important; }
-  .scat-ball { transform: translate(80px,-66px); }
+  .scat-run, .scat-leg, .scat-tail, .scat-body, .scat-blink { animation: none !important; }
+  .scat-run { transform: translateX(150px); }
 }
 `;

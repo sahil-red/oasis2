@@ -1320,17 +1320,7 @@ export function CatalogView({
 
       {/* ── Data-rich landing or product grid ────────────────────────── */}
       {aiSearching ? (
-        <div className="space-y-4 py-8">
-          <AiSearchProgress />
-          <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="animate-pulse space-y-2">
-                <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
-                <div className="h-4 w-3/4 rounded bg-(--color-bg-soft)" />
-              </div>
-            ))}
-          </div>
-        </div>
+        <AiSearchProgress />
       ) : !aiMode && !hasFilters && !factBrowse ? (
         <ScoutLanding
           stats={stats ?? null}
@@ -1595,15 +1585,15 @@ function AiSearchProgress() {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="flex flex-col items-center gap-3.5 py-2">
-      <SearchCats />
-      <div className="flex items-center justify-center gap-2.5 text-sm text-(--color-fg-muted)">
+    <div className="flex min-h-[58vh] flex-col items-center justify-center gap-8 py-6">
+      <div className="flex items-center justify-center gap-2.5 text-[15px] text-(--color-fg-muted)">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
         </span>
         <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
       </div>
+      <SearchCats />
     </div>
   );
 }
