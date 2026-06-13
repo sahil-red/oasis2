@@ -29,6 +29,7 @@ export const TRAIT_IDS = [
   "diabetic_friendly",
   "gym_friendly",
   "elderly_friendly",
+  "no_artificial_sweetener",
 ] as const;
 
 export type TraitId = (typeof TRAIT_IDS)[number];

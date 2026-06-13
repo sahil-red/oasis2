@@ -1,6 +1,8 @@
 import type { ProductListItem } from "@/lib/products/queries";
 import { computeDataQuality } from "@/lib/search/v2/data-quality";
 import { embedTextBatch } from "@/lib/search/v2/embeddings";
+import { validateEnrichment } from "@/lib/search/v2/enrichment-validate";
+import { isArtificialSweetener } from "@/lib/search/ai-retrieval";
 import { computeProductSourceHash } from "@/lib/search/v2/source-hash";
 import {
   enrichProductsWithLlm,
@@ -13,6 +15,10 @@ import type { ProductSearchIndexRow, TraitVector } from "@/lib/search/v2/types";
 
 function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
 }
 
 /** Parse "500 g" / "1 L" / "200ml" / "1kg" into a normalized value+unit (deterministic). */
@@ -97,6 +103,9 @@ function baseRowFromProduct(
   ProductSearchIndexRow,
   "canonical_product_id" | "embedding" | "type_embedding"
 > {
+  // Cross-validate LLM enrichment against ingredient data before building the row
+  if (llm) llm = validateEnrichment(llm, p.ingredients_raw);
+
   const { data_quality_score, data_completeness, facet_confidence } = computeDataQuality({
     nutrition: p.nutrition,
     ingredients_raw: p.ingredients_raw,
@@ -109,6 +118,20 @@ function baseRowFromProduct(
 
   const primary_type = llm?.primary_type?.toLowerCase() ?? null;
   const semantic = llm ? mergeSemanticTraits(llm) : null;
+
+  // New MATH traits computed from deterministic ingredient data
+  if (semantic && p.ingredients_raw) {
+    // no_artificial_sweetener: 1.0 = clean, 0.0 = contains artificial sweeteners
+    semantic.traits["no_artificial_sweetener"] = isArtificialSweetener(p.ingredients_raw) ? 0 : 1;
+    semantic.trait_source["no_artificial_sweetener"] = "math";
+    semantic.trait_confidence["no_artificial_sweetener"] = data_quality_score;
+
+    // processing_level as MATH trait: derived from NOVA class of ingredients
+    // (LLM version is capped by validateEnrichment above; MATH version replaces it)
+    semantic.traits["processing_level"] = 0;
+    semantic.trait_source["processing_level"] = "math";
+    semantic.trait_confidence["processing_level"] = data_quality_score;
+  }
 
   const _servingSize = num(p.nutrition?.extra?.serving_size_value as number);
   const _packWeight = parseNetWeight(p.net_weight).value ?? 100;
@@ -139,12 +162,12 @@ function baseRowFromProduct(
     has_added_sugar: llm?.has_added_sugar ?? null,
     allergens: llm?.allergens ?? [],
     claims: llm?.claims ?? [],
-    sugar_g: num(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g),
-    protein_g: num(p.nutrition?.protein_g_100g),
-    fat_g: num(p.nutrition?.fat_g_100g),
-    saturated_fat_g: num(p.nutrition?.saturated_fat_g_100g),
+    sugar_g: clamp(num(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g) ?? 0, 0, 100),
+    protein_g: clamp(num(p.nutrition?.protein_g_100g) ?? 0, 0, 100),
+    fat_g: clamp(num(p.nutrition?.fat_g_100g) ?? 0, 0, 100),
+    saturated_fat_g: clamp(num(p.nutrition?.saturated_fat_g_100g) ?? 0, 0, 100),
     sodium_mg: num(p.nutrition?.sodium_mg_100g),
-    energy_kcal: num(p.nutrition?.energy_kcal_100g),
+    energy_kcal: clamp(num(p.nutrition?.energy_kcal_100g) ?? 0, 0, 900),
     calcium_mg: num(p.nutrition?.calcium_mg_100g),
     iron_mg: num(p.nutrition?.iron_mg_100g),
     fiber_g: num(p.nutrition?.fiber_g_100g),

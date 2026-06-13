@@ -94,25 +94,25 @@ export function computeQuantitativeTraits(opts: {
   const iron = num(n?.iron_mg_100g);
   const carbs = num(n?.carbs_g_100g);
 
-  if (protein != null && proteins.length >= 5) {
+  if (protein != null && proteins.length >= 10) {
     setMath("protein_density", percentileRank(protein, proteins));
   }
-  if (fiber != null && fibers.length >= 5) {
+  if (fiber != null && fibers.length >= 10) {
     setMath("fiber_density", percentileRank(fiber, fibers));
   }
-  if (sugar != null && sugars.length >= 5) {
+  if (sugar != null && sugars.length >= 10) {
     setMath("low_sugar", percentileRank(sugar, sugars, true));
   }
-  if (sodium != null && sodiums.length >= 5) {
+  if (sodium != null && sodiums.length >= 10) {
     setMath("low_sodium", percentileRank(sodium, sodiums, true));
   }
-  if (fat != null && fats.length >= 5) {
+  if (fat != null && fats.length >= 10) {
     setMath("low_fat", percentileRank(fat, fats, true));
   }
-  if (saturatedFat != null && saturatedFats.length >= 5) {
+  if (saturatedFat != null && saturatedFats.length >= 10) {
     setMath("low_saturated_fat", percentileRank(saturatedFat, saturatedFats, true));
   }
-  if (fat != null && saturatedFat != null && fat > 0 && fats.length >= 5 && saturatedFats.length >= 5) {
+  if (fat != null && saturatedFat != null && fat > 0 && fats.length >= 10 && saturatedFats.length >= 10) {
     const unsaturatedRatio = Math.max(0, (fat - saturatedFat) / fat);
     const cohortRatios = cohort
       .map((c) =>
@@ -121,20 +121,20 @@ export function computeQuantitativeTraits(opts: {
           : null,
       )
       .filter((v): v is number => v != null);
-    if (cohortRatios.length >= 5) {
+    if (cohortRatios.length >= 10) {
       setMath("healthy_fats", percentileRank(unsaturatedRatio, cohortRatios));
     }
   }
-  if (calcium != null && calciums.length >= 5) {
+  if (calcium != null && calciums.length >= 10) {
     setMath("calcium_rich", percentileRank(calcium, calciums));
   }
-  if (iron != null && irons.length >= 5) {
+  if (iron != null && irons.length >= 10) {
     setMath("iron_rich", percentileRank(iron, irons));
   }
-  if (carbs != null && carbsList.length >= 5) {
+  if (carbs != null && carbsList.length >= 10) {
     setMath("low_carb", percentileRank(carbs, carbsList, true));
   }
-  if (kcal != null && kcals.length >= 5) {
+  if (kcal != null && kcals.length >= 10) {
     setMath("low_calorie_density", percentileRank(kcal, kcals, true));
   }
   if (opts.has_added_sugar === false) setMath("no_added_sugar", 0.9);

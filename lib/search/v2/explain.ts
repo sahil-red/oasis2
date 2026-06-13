@@ -39,6 +39,7 @@ const TRAIT_LABELS: Record<TraitId, string> = {
   diabetic_friendly: "Diabetes-friendly profile",
   gym_friendly: "Gym-friendly protein",
   elderly_friendly: "Gentle nutrition profile",
+  no_artificial_sweetener: "No artificial sweeteners",
 };
 
 export function buildTraitReasons(
