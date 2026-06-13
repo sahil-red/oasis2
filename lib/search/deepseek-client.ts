@@ -26,6 +26,9 @@ export type DeepseekChatOptions = {
   maxTokens?: number;
   timeoutMs?: number;
   jsonObject?: boolean;
+  /** Set to false to skip DeepSeek-specific params (thinking) when calling
+   *  OpenAI‑compatible providers like Groq. Defaults to true. */
+  deepseekExtras?: boolean;
 };
 
 export type DeepseekChatResult = {
@@ -65,7 +68,7 @@ export async function deepseekChat(opts: DeepseekChatOptions): Promise<DeepseekC
         temperature: 0,
         max_tokens: opts.maxTokens ?? 1200,
         ...(opts.jsonObject ? { response_format: { type: "json_object" } } : {}),
-        thinking: { type: "disabled" },
+        ...(opts.deepseekExtras !== false ? { thinking: { type: "disabled" as const } } : {}),
         messages: [
           { role: "system", content: opts.system },
           { role: "user", content: opts.user },

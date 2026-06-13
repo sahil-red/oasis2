@@ -82,8 +82,10 @@ export async function fetchCandidatePool(
   // may never surface in the ANN top-K (lays/kurkure/haldiram returned 0). Fetch
   // the brand's products directly. "%" between alnum runs tolerates apostrophes &
   // spaces ("lay's" → %lay%s% matches "Lays" AND "Lay's") and is injection-safe.
+  // Fire whenever brand is set, not only when kind==brand — LLM may return
+  // kind=directed with a brand (e.g. "bournvita" → brand=Bournvita, kind=directed).
   const brandPattern =
-    intent.kind === "brand" && intent.brand
+    intent.brand
       ? `%${intent.brand.toLowerCase().replace(/[^a-z0-9]+/g, "%")}%`
       : null;
   const brandPromise = brandPattern

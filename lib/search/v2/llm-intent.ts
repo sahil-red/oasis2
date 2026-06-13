@@ -1,13 +1,44 @@
 /**
- * L3 online intent — DeepSeek for all live calls (single provider).
+ * L3 online intent — Groq (fast/cheap) escalated to DeepSeek for complex queries.
  */
 import { deepseekChat, extractJsonObject } from "@/lib/search/deepseek-client";
 import {
   extractNumericConstraints,
   type NumericExtraction,
 } from "@/lib/search/v2/numeric-constraints";
+import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { ConstraintPriority, SearchIntentKind, SearchIntentV2, TraitId } from "@/lib/search/v2/types";
 import { TRAIT_IDS } from "@/lib/search/v2/types";
+
+/** Find matching catalog brands/types for the query — gives the LLM hints so it
+ *  can pick canonical brand names ("cadbury bournvita" not "Bournvita") and
+ *  avoid hallucinating terms not in the catalog. Limited to top-8 per category
+ *  to stay within token budget (~200 chars). */
+function buildCatalogHints(query: string, meta?: IndexCatalogMeta): string {
+  if (!meta) return "";
+  const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
+  const qNorm = norm(query);
+  // Filter out negation words and short tokens (< 3 chars) to avoid noise
+  const SKIP = new Set(["no", "not", "without", "bina", "bagair", "nahi", "nako", "free", "the", "and", "for", "with"]);
+  const tokens = qNorm.split(/\s+/).filter((t) => t.length >= 3 && !SKIP.has(t));
+  if (!tokens.length) return "";
+
+  // Find brands whose normalized name contains any query token
+  const brandMatches = [...meta.brands]
+    .filter((b) => tokens.some((t) => norm(b).includes(t)) || norm(b).includes(qNorm))
+    .slice(0, 8);
+
+  const typeMatches = [...meta.primaryTypes]
+    .filter((t) => tokens.some((tk) => norm(t).includes(tk)) || norm(t).includes(qNorm))
+    .slice(0, 8);
+
+  if (!brandMatches.length && !typeMatches.length) return "";
+
+  const parts: string[] = [];
+  if (brandMatches.length) parts.push(`brands: [${brandMatches.join(", ")}]`);
+  if (typeMatches.length) parts.push(`types: [${typeMatches.join(", ")}]`);
+  return `\nCatalog hints (use these exact names if relevant): ${parts.join("; ")}`;
+}
 
 const INTENT_SYSTEM_PROMPT = `You parse Indian grocery search queries into strict JSON for Scout Search.
 Return exactly one JSON object. No markdown.
@@ -78,8 +109,15 @@ Rules:
   "no palm oil" (ingredient avoidance, not dietary boolean) → avoid_ingredients: ["palm oil"].
 - "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
 - "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".
-- ALWAYS output trait_weights — a map of trait IDs to 0-1 weights that capture the HEALTH/NUTRITION intent of the query. Use only these trait IDs: ${TRAIT_IDS.join(", ")}. Even for brand/directed queries, output trait_weights based on any health context (e.g. "healthy chips" → {whole_food:0.3,clean_label:0.3,low_fat:0.2,low_sodium:0.2}). For purely neutral queries ("milk", "amul butter"), output empty {}. Trait weights should sum to 1.0.
-`;
+- trait_weights is REQUIRED for EVERY query. Map HEALTH/NUTRITION intent to trait weights.
+  Use only these trait IDs: ${TRAIT_IDS.join(", ")}. Sum must be 1.0.
+  For neutral queries ("amul", "atta"), return {"whole_food": 1.0}.
+  For junk food with asked-for improvement ("healthy chips"), distribute across traits.
+  NEVER return empty {} — this field is mandatory.`;
+
+/** Groq API — faster, free-tier alternative to DeepSeek for simple queries. */
+const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+const GROQ_MODEL = "llama-3.1-8b-instant";
 
 type LlmIntentJson = {
   kind?: SearchIntentKind;
@@ -188,34 +226,94 @@ function defaultConstraintPriorities(
 
 export async function parseIntentWithLlm(
   query: string,
-  _opts: { escalateDeepseek?: boolean } = {},
+  opts: {
+    escalateDeepseek?: boolean;
+    catalogMeta?: IndexCatalogMeta;
+  } = {},
 ): Promise<{ intent: SearchIntentV2; llm_calls: number }> {
   const numeric = extractNumericConstraints(query);
+  const hints = buildCatalogHints(query, opts.catalogMeta);
 
-  const { content } = await deepseekChat({
-    usageKind: "search",
-    jsonObject: true,
-    maxTokens: 400,
-    // Tight cap on the hot path — DeepSeek p50 ~2.5s, but tail spikes to 8-11s
-    // and this call blocks the whole search. On timeout the caller falls back to
-    // the fast-path / degraded parse rather than hanging the user.
-    timeoutMs: 6_000,
-    system: INTENT_SYSTEM_PROMPT,
-    user: `Query: ${query}`,
-  });
-  let intent = normalizeLlmIntent(extractJsonObject(content) as LlmIntentJson, query);
-  intent.intent_source = "llm-deepseek";
+  // Tier 1: Groq (fast, free tier, ~400ms). Hit Groq first for simple queries;
+  // DeepSeek escalation only when Groq fails or returns low confidence (<0.7)
+  // or on explicitly escalated queries (≥2 constraints).
+  const groqKey = process.env.GROQ_API_KEY?.trim();
+  let intentFromGroq: SearchIntentV2 | null = null;
 
-  intent = mergeNumericIntoIntent(intent, numeric);
-  if (!intent.comparison_ref && numeric.comparison_ref) {
-    intent = {
-      ...intent,
-      comparison_ref: numeric.comparison_ref,
-      comparison_mode: numeric.comparison_mode ?? null,
-    };
+  if (groqKey && !opts.escalateDeepseek) {
+    try {
+      const { content } = await deepseekChat({
+        apiKey: groqKey,
+        baseUrl: GROQ_BASE_URL,
+        model: GROQ_MODEL,
+        usageKind: "search",
+        jsonObject: false,
+        deepseekExtras: false, // Groq doesn't support thinking/response_format
+        maxTokens: 400,
+        timeoutMs: 3_000,
+        system: INTENT_SYSTEM_PROMPT,
+        user: `Query: ${query}${hints}`,
+      });
+      const parsed = extractJsonObject(content) as LlmIntentJson;
+      intentFromGroq = normalizeLlmIntent(parsed, query);
+      intentFromGroq.intent_source = "llm-groq";
+
+      // If Groq returned high confidence and plausible output, accept it
+      const hasMeaningfulOutput =
+        intentFromGroq.primary_type || intentFromGroq.brand ||
+        intentFromGroq.goal_phrase || intentFromGroq.kind !== "directed";
+      if ((intentFromGroq.confidence ?? 0) >= 0.7 && hasMeaningfulOutput) {
+        let intent = intentFromGroq;
+        intent = mergeNumericIntoIntent(intent, numeric);
+        if (!intent.comparison_ref && numeric.comparison_ref) {
+          intent = {
+            ...intent,
+            comparison_ref: numeric.comparison_ref,
+            comparison_mode: numeric.comparison_mode ?? null,
+          };
+        }
+        return { intent, llm_calls: 0 }; // Groq is free
+      }
+    } catch {
+      // Groq failed — fall through to DeepSeek
+    }
   }
 
-  return { intent, llm_calls: 1 };
+  // Tier 2: DeepSeek (slower, higher quality, ~2.5s). Used when Groq is
+  // unavailable, low-confidence, or when the query is explicitly escalated.
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const { content } = await deepseekChat({
+        usageKind: "search",
+        jsonObject: true,
+        maxTokens: 400,
+        timeoutMs: attempt === 1 ? 6_000 : 10_000,
+        system: INTENT_SYSTEM_PROMPT,
+        user: intentFromGroq
+          // Pass Groq's best guess as context so DeepSeek can refine, not restart
+          ? `Query: ${query}${hints}\nGroq guessed: ${JSON.stringify({ kind: intentFromGroq.kind, brand: intentFromGroq.brand, primary_type: intentFromGroq.primary_type, goal_phrase: intentFromGroq.goal_phrase })}`
+          : `Query: ${query}${hints}`,
+      });
+      let intent = normalizeLlmIntent(extractJsonObject(content) as LlmIntentJson, query);
+      intent.intent_source = "llm-deepseek";
+
+      intent = mergeNumericIntoIntent(intent, numeric);
+      if (!intent.comparison_ref && numeric.comparison_ref) {
+        intent = {
+          ...intent,
+          comparison_ref: numeric.comparison_ref,
+          comparison_mode: numeric.comparison_mode ?? null,
+        };
+      }
+
+      return { intent, llm_calls: 1 };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr ?? new Error("LLM intent parsing failed after retries");
 }
 
 /** §11 relaxation: LLM proposes next-broader intent */

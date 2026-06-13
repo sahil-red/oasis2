@@ -141,25 +141,82 @@ export function countActiveConstraints(n: NumericExtraction): number {
   return c;
 }
 
-/** Fast-path eligible when every residual token is a known brand or primary_type (§6). */
+/** Fast-path eligible when any token (or consecutive pair) is a known brand or primary_type (§6). */
 export function fastPathEligible(residual: string, meta: IndexCatalogMeta): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
   const fullNorm = norm(residual);
 
-  // Check the full residual string first — handles multi-word brands like
+  // §6.1 — Long queries (>10 tokens) fall through to LLM to parse complex constraints
+  const rawTokens = fullNorm.split(/\s+/);
+  if (rawTokens.length > 10) return false;
+
+  // §6.2 — Strip negation-prefixed tokens ("no dairy", "bina cheeni", "without oil").
+  // Tokens following a negation word are excluded from brand/type matching so we
+  // don't return products OF the thing the user said no to.
+  // NOTE: "free" is NOT a prefix negation word — it's suffix-style ("sugar-free"
+  // means "no sugar", not "free sugar"). Suffix-negation is handled by the LLM path.
+  const NEGATION_WORDS = new Set(["no", "not", "without", "bina", "bagair", "nahi", "nako"]);
+  const safeTokens: string[] = [];
+  let negCount = 0;
+  for (let i = 0; i < rawTokens.length; i++) {
+    if (NEGATION_WORDS.has(rawTokens[i]!) && i + 1 < rawTokens.length) {
+      negCount++;
+      i++; // skip the negated token
+      continue;
+    }
+    safeTokens.push(rawTokens[i]!);
+  }
+
+  const tokens = safeTokens.filter((t) => t.length >= 2);
+  if (!tokens.length) return false;
+
+  // §6.2a — Negation gate: ANY negation in a multi-token query indicates
+  // ingredient/dietary constraints that fast-path cannot enforce. Route to LLM.
+  // LLM prompt §3 (llm-intent.ts:73) handles "no X" → avoid_ingredients: [X] and
+  // corrects typos naturally ("malodextrinn" → "maltodextrin").
+  // 3-token minimum preserves single-word fast-path for zero-negation queries.
+  if (negCount >= 1 && rawTokens.length >= 3) {
+    return false;
+  }
+
+  // §6.3 — Check the full residual string first — handles multi-word brands like
   // "karachi bakery" where individual tokens won't match the stored brand name.
   if (meta.brands.has(fullNorm) || meta.primaryTypes.has(fullNorm)) return true;
 
-  const tokens = fullNorm
-    .split(/\s+/)
-    .filter((t) => t.length >= 2);
-  if (!tokens.length || tokens.length > 2) return false;
-  if (tokens.length === 1) {
-    return meta.brands.has(tokens[0]!) || meta.primaryTypes.has(tokens[0]!);
+  // §6.4 — Confidence ratio: for queries with >3 tokens, at least 40% of tokens
+  // must be known catalog terms. Prevents single-incidental-token hijack
+  // ("memory sharp karne ka food" → "sharp" matched brand → wrong intent).
+  if (tokens.length > 3) {
+    const knownCount = tokens.filter((t) => meta.brands.has(t) || meta.primaryTypes.has(t)).length;
+    // Also count pair matches
+    let pairMatches = 0;
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const pair = tokens[i]! + " " + tokens[i + 1]!;
+      if (meta.brands.has(pair) || meta.primaryTypes.has(pair)) pairMatches++;
+    }
+    // Each pair match counts as 2 known tokens
+    const effective = knownCount + pairMatches * 2;
+    if (effective / tokens.length < 0.4) return false;
+
+    // §6.4a — Single-brand ambiguity: for 4+ token queries where only a
+    // single-token brand was matched (no pairs) and ≤1 individual type, the
+    // brand is likely incidental ("satvik diet snacks" → user means sattvic
+    // diet, not the Satvik brand). Route to LLM for disambiguation.
+    const indivBrands = tokens.filter((t) => meta.brands.has(t));
+    const indivTypes = tokens.filter((t) => meta.primaryTypes.has(t));
+    if (indivBrands.length > 0 && pairMatches === 0 && indivTypes.length <= 1) {
+      return false;
+    }
   }
-  const [a, b] = tokens;
-  return (
-    (meta.brands.has(a!) && meta.primaryTypes.has(b!)) ||
-    (meta.brands.has(b!) && meta.primaryTypes.has(a!))
-  );
+
+  // Any token matches a brand or type → eligible
+  if (tokens.some((t) => meta.brands.has(t) || meta.primaryTypes.has(t))) return true;
+
+  // Check consecutive pairs for multi-word brands ("slurrp farm", "karachi bakery")
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const pair = tokens[i]! + " " + tokens[i + 1]!;
+    if (meta.brands.has(pair) || meta.primaryTypes.has(pair)) return true;
+  }
+
+  return false;
 }

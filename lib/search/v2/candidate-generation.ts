@@ -205,13 +205,28 @@ export async function generateCandidates(
     ? await semanticTypeMatches(intent.primary_type)
     : new Set<string>();
 
-  if (intent.kind === "brand" && intent.brand) {
-    // Compare on alnum-only so apostrophes/spaces don't block matches:
-    // "lay's" → "lays" includes into "Lays" → "lays". (Plain includes failed.)
-    const brandQ = intent.brand.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const brandFiltered = pool.filter((row) =>
-      (row.brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(brandQ),
-    );
+  if (intent.brand) {
+    // §5.1 — Brand filter fires whenever brand is set, not only when kind==brand.
+    // LLM may return kind=directed with a brand (e.g. "bournvita").
+    // §5.2 — Word-boundary match to prevent substring leakage:
+    // "be rite" must match as distinct word tokens, not substring-matching
+    // "RiteBite" (which contains "rite" but not "be rite" as words).
+    const brandQ = intent.brand.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+    const brandWords = brandQ.split(/\s+/).filter((w) => w.length > 1);
+    if (brandWords.length === 0) brandWords.push(brandQ);
+    const brandFiltered = pool.filter((row) => {
+      const itemBrand = (row.brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      // Every word in the query brand must appear as a substring in the item brand,
+      // and for single-word queries, require word-boundary match
+      if (brandWords.length === 1) {
+        // Single-word brand: must match at word boundary, not substring
+        const w = brandWords[0]!;
+        return new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i").test(
+          (row.brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, " ")
+        );
+      }
+      return brandWords.every((w) => itemBrand.includes(w));
+    });
     if (brandFiltered.length > 0) pool = brandFiltered;
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();

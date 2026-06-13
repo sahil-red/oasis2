@@ -80,9 +80,29 @@ function buildFastPathIntent(
 ): SearchIntentV2 | null {
   const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
   const residual = numeric.residual_text.toLowerCase().trim();
-  if (!residual || !fastPathEligible(residual, meta)) return null;
 
-  const tokens = residual.split(/\s+/).filter(Boolean);
+  // Fast-path eligibility runs on residual (constraint words stripped), but
+  // type/brand discovery uses the FULL query so tokens consumed by numeric
+  // extraction ("high protein" in "high protein low sugar") are still available.
+  if (!fastPathEligible(residual, meta)) return null;
+
+  // §3.1 — Use full query for type/brand discovery. The residual had constraint
+  // words stripped, but those words include valid types ("protein", "sugar").
+  const fullText = query.toLowerCase().trim();
+
+  // §3.2 — Strip negation-prefixed tokens ("no dairy", "bina cheeni", "without oil")
+  // before matching so we don't set primary_type to the negated token.
+  const NEGATION_WORDS = new Set(["no", "not", "without", "bina", "bagair", "nahi", "nako"]);
+  const rawTokens = fullText.split(/\s+/);
+  const safeTokens: string[] = [];
+  for (let i = 0; i < rawTokens.length; i++) {
+    if (NEGATION_WORDS.has(rawTokens[i]!) && i + 1 < rawTokens.length) {
+      i++; // skip the negated token
+      continue;
+    }
+    safeTokens.push(rawTokens[i]!);
+  }
+  const tokens = safeTokens.filter(Boolean);
   const normTokens = tokens.map((t) => norm(t));
 
   let brand: string | null = null;
@@ -93,7 +113,7 @@ function buildFastPathIntent(
   // Multi-token: check if the full residual is a known brand or type before
   // tokenizing. Handles multi-word brands like "karachi bakery" where individual
   // tokens don't match the stored brand name.
-  const fullNorm = norm(residual);
+  const fullNorm = norm(fullText);
   if (tokens.length >= 2) {
     if (meta.brands.has(fullNorm)) {
       brand = residual;
@@ -101,6 +121,58 @@ function buildFastPathIntent(
     } else if (meta.primaryTypes.has(fullNorm)) {
       primary_type = residual;
       kind = "directed";
+    }
+  }
+
+  // Check consecutive token pairs for multi-word brands/types.
+  // "slurrp farm millet snacks" → pair "slurrp farm" matches brand "slurrp farm"
+  let pairConsumedStart = -1;
+  let pairConsumedEnd = -1;
+  if (!brand && !primary_type && tokens.length >= 3) {
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const pair = normTokens[i]! + " " + normTokens[i + 1]!;
+      if (!brand && meta.brands.has(pair)) {
+        brand = tokens.slice(i, i + 2).join(" ");
+        kind = "brand";
+        pairConsumedStart = i;
+        pairConsumedEnd = i + 1;
+      }
+      if (!primary_type && meta.primaryTypes.has(pair)) {
+        primary_type = tokens.slice(i, i + 2).join(" ");
+        kind = "directed";
+        pairConsumedStart = i;
+        pairConsumedEnd = i + 1;
+      }
+    }
+  }
+
+  // Scan individual tokens for remaining brand/type.
+  // For "slurrp farm millet snacks": brand="slurrp farm" found by pair check,
+  // then "millet" found as primary_type here.
+  if (!brand || !primary_type) {
+    for (let i = 0; i < tokens.length; i++) {
+      if (i >= pairConsumedStart && i <= pairConsumedEnd) continue;
+      const t = normTokens[i]!;
+      if (!primary_type && meta.primaryTypes.has(t)) {
+        primary_type = tokens[i]!;
+        if (!brand) kind = "directed";
+      } else if (!brand && meta.brands.has(t)) {
+        brand = tokens[i]!;
+        kind = "brand";
+      }
+    }
+  }
+
+  // §3.3 — Pair-type priority: when primary_type was set by a pair match but
+  // an individual known type token exists at an EARLIER position, prefer the
+  // individual token. "navratri fasting snacks sendha namak": "snacks" (idx 2)
+  // < "sendha namak" pair (idx 3-4) → primary_type="snacks", not a salt product.
+  if (primary_type && pairConsumedStart > 0) {
+    for (let i = 0; i < pairConsumedStart; i++) {
+      if (meta.primaryTypes.has(normTokens[i]!)) {
+        primary_type = tokens[i]!;
+        break;
+      }
     }
   }
 
@@ -199,6 +271,7 @@ export async function resolveSearchIntent(
   try {
     const { intent: llmIntent, llm_calls } = await parseIntentWithLlm(query, {
       escalateDeepseek: countActiveConstraints(numeric) >= 2,
+      catalogMeta: opts.catalogMeta,
     });
     const intent = applyPreferencesToIntent(
       {
@@ -219,6 +292,15 @@ export async function resolveSearchIntent(
     void setCachedIntent(query, intent, opts.preferences, cached.embedding);
     return { intent, llm_calls };
   } catch {
+    // Try fast-path as fallback before degraded — fast-path (confidence 0.92,
+    // correct type/brand matching) is better than degraded (confidence 0.3,
+    // no flavours, no modifiers) for most queries.
+    const fastFallback = buildFastPathIntent(query, opts.catalogMeta, numeric);
+    if (fastFallback) {
+      return { intent: applyPreferencesToIntent(fastFallback, opts.preferences), llm_calls: 0 };
+    }
+
+    // §9 degradation: exact index token match only — no substring rules
     const norm = (s: string) => s.toLowerCase().replace(/['']/g, "").trim();
     const residual = numeric.residual_text.toLowerCase().trim();
     const normResidual = norm(residual);
