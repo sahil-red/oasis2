@@ -16,6 +16,9 @@ export type SearchIndexSnapshot = {
   catalogMeta: IndexCatalogMeta;
   source: "db" | "memory" | "pgvector";
   dietary_prevalence: DietaryPrevalenceMap;
+  /** Pre-loaded type centroids for in-memory cosine matching — avoids
+   *  8s RPC calls to search_v2_type_matches. Populated during snapshot init. */
+  typeCentroids: Map<string, number[]>;
   /** Lazy-loaded — populated on first access, not during snapshot init */
   _goalMapLoaded: boolean;
   _profilesLoaded: boolean;
@@ -341,16 +344,36 @@ export function clearSearchIndexSnapshotCache(): void {
   cachedSnapshot = null;
 }
 
+/** Load all type centroids from the DB — ~1,086 rows, ~5 MB in memory.
+ *  Enables in-memory cosine matching instead of the 8s RPC call. */
+async function loadTypeCentroids(): Promise<Map<string, number[]>> {
+  const supabase = adminClient();
+  const centroids = new Map<string, number[]>();
+  const PAGE = 1000;
+  for (let page = 0; page < 5; page++) {
+    const { data, error } = await supabase
+      .from("type_centroids")
+      .select("primary_type, centroid")
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (error || !data?.length) break;
+    for (const r of data) {
+      if (r.centroid) centroids.set((r.primary_type as string).toLowerCase(), r.centroid as number[]);
+    }
+  }
+  return centroids;
+}
+
 export async function getSearchIndexSnapshot(forceRefresh = false): Promise<SearchIndexSnapshot> {
   if (!forceRefresh && cachedSnapshot && Date.now() - cachedSnapshot.at < SNAPSHOT_TTL_MS) {
     return cachedSnapshot.data;
   }
 
-  // Only load facets + dietary eagerly — goalMap + profiles are lazy-loaded
-  // on first access since they're only needed for goal queries (~10% of traffic).
-  const [catalogMeta, dietary_prevalence] = await Promise.all([
+  // Only load facets + dietary + type centroids eagerly — goalMap + profiles
+  // are lazy-loaded on first access since they're only needed for goal queries (~10%).
+  const [catalogMeta, dietary_prevalence, typeCentroids] = await Promise.all([
     loadFacets(),
     loadDietaryPrevalence(),
+    loadTypeCentroids(),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],
@@ -359,6 +382,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     catalogMeta,
     source: "pgvector",
     dietary_prevalence,
+    typeCentroids,
     _goalMapLoaded: false,
     _profilesLoaded: false,
   };

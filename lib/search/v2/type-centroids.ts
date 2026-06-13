@@ -13,7 +13,7 @@
  * fall back to embedding the term and matching against centroids in-DB.
  */
 import { adminClient } from "@/lib/supabase/admin";
-import { embedText } from "@/lib/search/v2/embeddings";
+import { cosineSimilarity, embedText } from "@/lib/search/v2/embeddings";
 
 /** Cosine-distance bands over type centroids. Same product class ≤ EQUIVALENT_MAX;
  *  related-but-distinct ≤ NEIGHBOR_MAX. Both act on one observable quantity and
@@ -25,6 +25,16 @@ const EQUIVALENT_MAX = 0.05;
 const NEIGHBOR_MAX = 0.3;
 const FETCH_LIMIT = 24;
 const TTL_MS = 15 * 60_000;
+
+/** Module-level cache: type centroids pre-loaded from the index snapshot.
+ *  When set, semanticTypeMatches() computes cosine distances in-memory (~2ms)
+ *  instead of calling the 8s Supabase RPC. */
+let _typeCentroids: Map<string, number[]> | null = null;
+
+/** Called by the pipeline after the snapshot is loaded. */
+export function setTypeCentroids(centroids: Map<string, number[]> | null): void {
+  _typeCentroids = centroids;
+}
 
 type TypeMatch = { primary_type: string; distance: number };
 const cache = new Map<string, { at: number; matches: TypeMatch[] }>();
@@ -134,6 +144,21 @@ async function fetchMatches(wanted: string): Promise<TypeMatch[]> {
 export async function semanticTypeMatches(wanted: string): Promise<Set<string>> {
   const key = wanted.trim().toLowerCase();
   const out = new Set<string>(key ? [key] : []);
+
+  // In-memory path: compute cosine distance against all pre-loaded centroids.
+  // ~2ms for 1,086 comparisons vs. 8s for the Supabase RPC.
+  if (_typeCentroids?.has(key)) {
+    const wantedVec = _typeCentroids.get(key)!;
+    for (const [type, vec] of _typeCentroids) {
+      if (type === key) continue;
+      const sim = cosineSimilarity(wantedVec, vec);
+      const dist = 1 - sim;
+      if (dist <= EQUIVALENT_MAX) out.add(type);
+    }
+    return out;
+  }
+
+  // Fallback: RPC path (for types not in centroids, or pre-snapshot load)
   for (const m of await fetchMatches(key)) {
     if (m.distance <= EQUIVALENT_MAX) out.add(m.primary_type);
   }

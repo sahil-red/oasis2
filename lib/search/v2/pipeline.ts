@@ -13,7 +13,7 @@ import { rankCandidates } from "@/lib/search/v2/ranking";
 import { retrieveAndRerank } from "@/lib/search/v2/retrieve";
 import { relaxIntentDeterministic, relaxIntentWithLlm } from "@/lib/search/v2/relaxation";
 import { nearestPrimaryTypes } from "@/lib/search/v2/type-neighbors";
-import { semanticTypeMatches } from "@/lib/search/v2/type-centroids";
+import { semanticTypeMatches, setTypeCentroids } from "@/lib/search/v2/type-centroids";
 import { isPrecisionAtRisk, verifyTopCandidates } from "@/lib/search/v2/verification";
 import type { SearchIntentV2, SearchV2Result } from "@/lib/search/v2/types";
 import { DATA_QUALITY_MIN } from "@/lib/search/v2/types";
@@ -46,6 +46,9 @@ export async function runSearchV2(
   const limit = Math.min(100, Math.max(8, opts.limit ?? 48));
   const snapshot = await getSearchIndexSnapshot();
   const catalogMeta = snapshot.catalogMeta;
+  // Wire pre-loaded type centroids so semanticTypeMatches() uses in-memory
+  // cosine distance (~2ms) instead of the 8s Supabase RPC.
+  setTypeCentroids(snapshot.typeCentroids);
 
   // Fetch candidates either from the in-memory index or, in pgvector mode, from the DB
   // (filtered vector-KNN) — then the same in-memory refine runs over the bounded pool.
