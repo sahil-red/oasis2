@@ -179,7 +179,11 @@ export async function POST(req: NextRequest) {
       }
     }
     clearCountCache();
-    return NextResponse.json({ ok: true, results });
+    const failures = results.filter(r => !r.ok);
+    if (failures.length > 0) {
+      console.error("[reorder-images] failures:", JSON.stringify(failures.slice(0, 5)));
+    }
+    return NextResponse.json({ ok: failures.length === 0, results, failed: failures.length });
   }
 
   // Single mode (backward compat)

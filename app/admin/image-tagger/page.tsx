@@ -121,8 +121,10 @@ export default function ImageTaggerPage() {
         body: JSON.stringify({ actions }),
       });
       if (!res.ok) throw new Error("Save failed");
-      setDone((d) => d + products.length);
-      setMessage(`Saved ${heroCount}, skipped ${products.length - heroCount}`);
+      const data = await res.json();
+      const failed = (data as { failed?: number }).failed ?? 0;
+      setDone((d) => d + products.length - failed);
+      setMessage(`Saved ${heroCount - failed}, skipped ${products.length - heroCount}${failed > 0 ? ` — ${failed} FAILED` : ""}`);
       void fetchBatch();
     } catch {
       setMessage("Save failed");

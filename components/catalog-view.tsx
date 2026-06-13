@@ -7,6 +7,7 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { DietPicker } from "@/components/diet-picker";
 import { GoalModePicker } from "@/components/goal-mode-picker";
 import { ProductCard } from "@/components/product-card";
+import { SearchCats } from "@/components/search-cats";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
@@ -1594,12 +1595,15 @@ function AiSearchProgress() {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="flex items-center justify-center gap-2.5 text-sm text-(--color-fg-muted)">
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
-      </span>
-      <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
+    <div className="flex flex-col items-center gap-3.5 py-2">
+      <SearchCats />
+      <div className="flex items-center justify-center gap-2.5 text-sm text-(--color-fg-muted)">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
+        </span>
+        <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
+      </div>
     </div>
   );
 }

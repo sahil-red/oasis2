@@ -184,6 +184,8 @@ function buildCatalogOrder(urls: string[], labelIdx: number | null, heroIdx: num
 
 /**
  * Reorder: hero first, other pack shots in original order, OCR label last.
+ * When the product has been tagged by a human (ocr_image_url is set), the
+ * tagger already placed the hero at index 0 — respect that order as-is.
  */
 export function orderCatalogImageUrls(
   urls: string[],
@@ -191,6 +193,12 @@ export function orderCatalogImageUrls(
 ): string[] {
   const deduped = dedupeImageUrls(urls);
   if (deduped.length <= 1) return deduped;
+
+  // When already tagged, the user explicitly chose the hero. The tagger
+  // moved it to position 0. Don't second-guess with auto-hero heuristics.
+  if (opts.ocrImageUrl?.trim()) {
+    return deduped;
+  }
 
   const labelIdx = resolveLabelImageIndex(deduped, opts);
   const heroIdx = pickHeroIndex(deduped, labelIdx);
