@@ -2,7 +2,7 @@
 
 import { useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Search-loader mascots — professionally-animated Lottie vectors, shown ONE AT A
@@ -57,6 +57,7 @@ export function SearchCats({ className = "" }: { className?: string }) {
   const [show, setShow] = useState(true);
   const asset = order[i % order.length]!;
   const isCross = !!asset.cross && !reduce;
+  const bgCleared = useRef(false);
 
   useEffect(() => {
     if (reduce) return;
@@ -68,7 +69,7 @@ export function SearchCats({ className = "" }: { className?: string }) {
 
   return (
     <div className={`relative h-[190px] w-full overflow-hidden ${className}`} aria-hidden>
-      <style>{FLY_CSS}</style>
+      <style>{FLY_STYLE}</style>
       <div
         className="absolute inset-0 transition-opacity ease-out"
         style={{ opacity: show ? 1 : 0, transitionDuration: `${FADE}ms` }}
@@ -83,7 +84,18 @@ export function SearchCats({ className = "" }: { className?: string }) {
               : { left: "50%", transform: "translate(-50%, -50%)" }
           }
         >
-          <DotLottieReact src={`/lottie/${asset.src}`} loop autoplay style={{ width: asset.size, height: asset.size }} />
+          <DotLottieReact
+            src={`/lottie/${asset.src}`}
+            loop
+            autoplay
+            style={{ width: asset.size, height: asset.size }}
+            dotLottieRefCallback={(dotLottie) => {
+              if (dotLottie && !bgCleared.current) {
+                bgCleared.current = true;
+                dotLottie.setBackgroundColor("transparent");
+              }
+            }}
+          />
         </div>
       </div>
     </div>
@@ -94,7 +106,7 @@ export function SearchCats({ className = "" }: { className?: string }) {
 // on-screen (left-of-centre) when the crossfade hands off — she clearly flies
 // most of the way across, but never leaves the stage empty. Entry from the right
 // edge is quick and hidden under the fade-in.
-const FLY_CSS = `
+const FLY_STYLE = `
 .cat-fly { animation-duration: 5.6s; animation-timing-function: linear; animation-iteration-count: 1; animation-fill-mode: both; will-change: left; }
 @keyframes catFlyRtl { from { left: 94%; } to { left: calc(-1 * var(--cw)); } }
 @keyframes catFlyLtr { from { left: calc(94% - var(--cw)); } to { left: 100%; } }
