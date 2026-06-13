@@ -10,6 +10,7 @@ import { ProductCard } from "@/components/product-card";
 import { SearchCats } from "@/components/search-cats";
 import { writeStoredGoal } from "@/lib/goals/storage";
 import { GOAL_PROFILES, goalFromParam, type GoalId } from "@/lib/goals/types";
+import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
 import { writeDietMode } from "@/lib/diet/storage";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
@@ -554,8 +555,20 @@ export function CatalogView({
         }
       });
     }
+    // In AI mode, re-rank by goal fit when a goal is selected (no backend call).
+    if (aiMode && goal !== "balanced") {
+      const fits = new Map<string, number>();
+      for (const item of filtered) {
+        const inputs = goalFitInputs(item as any);
+        if (inputs) {
+          const { fit } = computeGoalFit(goal, inputs);
+          fits.set(item.id, fit);
+        }
+      }
+      filtered = [...filtered].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
+    }
     return filtered;
-  }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored, activeState.sublabel, activeState.sort]);
+  }, [aiMode, items, selectedSubcategory, activeState.category, activeState.subcategory, activeState.brand, activeState.minScore, activeState.maxPrice, activeState.grade, activeState.verdict, activeState.onlyScored, activeState.sublabel, activeState.sort, goal]);
 
   // Subcategory distribution from current items — for subcategory chip nav
   const subcategoryChips = useMemo(() => {
@@ -778,14 +791,6 @@ export function CatalogView({
     writeStoredGoal(g);
     setShowGoalHint(false);
     setGoal(g);
-    // Exit AI mode so goal-based ranking takes effect immediately
-    if (aiModeRef.current) {
-      setAiMode(false);
-      setAiSummary(null);
-      setAiWarning(null);
-      setAiRefinements([]);
-      setAiParsed(null);
-    }
   }, []);
 
   const pickDiet = useCallback((d: DietMode) => {

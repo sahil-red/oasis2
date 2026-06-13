@@ -228,14 +228,11 @@ export async function generateCandidates(
       return brandWords.every((w) => itemBrand.includes(w));
     });
     if (brandFiltered.length > 0) pool = brandFiltered;
+    else pool = [];
   } else if (intent.primary_type) {
     const wanted = intent.primary_type.toLowerCase();
     const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, typeEquivalents) < 99);
-    // User explicitly asked for this type — keep the filter whenever it matches
-    // anything at all; the typed retrieval leg guarantees real coverage.
-    if (typeFiltered.length > 0) {
-      pool = typeFiltered;
-    }
+    pool = typeFiltered;
   }
 
   pool = pool.filter(
