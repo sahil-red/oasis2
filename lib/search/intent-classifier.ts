@@ -487,7 +487,14 @@ function buildIntent(p: PartialIntent): SearchIntentV2 {
     confidence: Math.max(0, Math.min(1, p.confidence)),
     intent_source: "python-classifier",
     raw_query: "",
-    trait_weights: TRAIT_WEIGHT_CACHE.get(p.goal_phrase?.toLowerCase() ?? "") ?? {},
+    // Only set trait_weights for DIRECTED queries (ranking boost, no category filter).
+    // For GOAL queries, the pipeline's resolveGoalWeights handles category-based
+    // selection + trait weights correctly. Setting them here would bypass that
+    // and apply aggressive category filtering (e.g. "high protein" → only
+    // muscle-gain categories → only soya chunks instead of all protein products).
+    trait_weights: p.kind !== "goal"
+      ? (TRAIT_WEIGHT_CACHE.get(p.goal_phrase?.toLowerCase() ?? "") ?? {})
+      : {},
   };
 }
 
