@@ -555,8 +555,12 @@ export function classifyIntent(
   if (goalPhrase && ptype) {
     return buildIntent({ kind: "directed", primary_type: ptype, goal_phrase: goalPhrase, modifiers, sort, confidence: 0.82, ...bopts });
   }
+  // Bare goal with no type → directed with goal_phrase for ranking.
+  // Avoids the pipeline's kind:"goal" path which triggers aggressive
+  // category filtering (e.g., "high protein" matching "muscle gain" seed
+  // → only protein supplements survive, not all high-protein foods).
   if (goalPhrase && !isVague) {
-    return buildIntent({ kind: "goal", goal_phrase: goalPhrase, primary_type: ptype, modifiers, sort, confidence: 0.80, ...bopts });
+    return buildIntent({ kind: "directed", goal_phrase: goalPhrase, primary_type: ptype, modifiers, sort, confidence: 0.78, ...bopts });
   }
   if (ptype) {
     return buildIntent({ kind: "directed", primary_type: ptype, modifiers, sort, confidence: 0.72, ...bopts });

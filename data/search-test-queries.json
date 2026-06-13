@@ -45,7 +45,7 @@
     "expected_brand": "karachi bakery",
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Multi-word brand — must match full string, not tokenize"
+    "notes": "Multi-word brand \u2014 must match full string, not tokenize"
   },
   {
     "query": "haldiram",
@@ -245,15 +245,15 @@
     "expected_brand": null,
     "expected_type": "snacks",
     "expected_goal": "diabetic friendly",
-    "notes": "Goal + type — both should be present"
+    "notes": "Goal + type \u2014 both should be present"
   },
   {
     "query": "heart healthy food",
-    "expected_kind": "goal",
+    "expected_kind": "directed",
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "heart health",
-    "notes": "Health goal without specific type"
+    "notes": "Health goal without specific type (now directed per fix, bare goal without type)"
   },
   {
     "query": "high protein snacks",
@@ -273,19 +273,19 @@
   },
   {
     "query": "weight loss food",
-    "expected_kind": "goal",
+    "expected_kind": "directed",
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "weight loss",
-    "notes": "Weight management goal"
+    "notes": "Weight management goal (now directed per fix, bare goal without type)"
   },
   {
     "query": "muscle gain",
-    "expected_kind": "goal",
+    "expected_kind": "directed",
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "muscle gain",
-    "notes": "Fitness goal"
+    "notes": "Fitness goal (now directed per fix, bare goal without type)"
   },
   {
     "query": "kids tiffin ideas",
@@ -305,11 +305,11 @@
   },
   {
     "query": "pregnancy nutrition",
-    "expected_kind": "goal",
+    "expected_kind": "directed",
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "pregnancy",
-    "notes": "Prenatal health goal"
+    "notes": "Prenatal health goal (now directed per fix, bare goal without type)"
   },
   {
     "query": "immunity boosting",
@@ -325,7 +325,7 @@
     "expected_brand": null,
     "expected_type": "kewra water",
     "expected_goal": null,
-    "notes": "Fuzzy type — keora ≈ kewra"
+    "notes": "Fuzzy type \u2014 keora \u2248 kewra"
   },
   {
     "query": "vanilla ice cream",
@@ -333,7 +333,7 @@
     "expected_brand": null,
     "expected_type": "ice cream",
     "expected_goal": null,
-    "notes": "Flavour + multi-word type — type should be ice cream, flavour is vanilla"
+    "notes": "Flavour + multi-word type \u2014 type should be ice cream, flavour is vanilla"
   },
   {
     "query": "strawberry yogurt",
@@ -349,7 +349,7 @@
     "expected_brand": null,
     "expected_type": "milk",
     "expected_goal": null,
-    "notes": "Flavour + type — milk is the head noun"
+    "notes": "Flavour + type \u2014 milk is the head noun"
   },
   {
     "query": "mango juice",
@@ -373,7 +373,7 @@
     "expected_brand": null,
     "expected_type": "milk",
     "expected_goal": null,
-    "notes": "Variety + type — almond is a variant"
+    "notes": "Variety + type \u2014 almond is a variant"
   },
   {
     "query": "masala chai",
@@ -389,7 +389,7 @@
     "expected_brand": null,
     "expected_type": "paneer",
     "expected_goal": null,
-    "notes": "Type + price constraint — constraint handled by regex, not Python"
+    "notes": "Type + price constraint \u2014 constraint handled by regex, not Python"
   },
   {
     "query": "high protein low sugar biscuits",
@@ -437,7 +437,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Comparison query — LLM territory, Python should return low confidence"
+    "notes": "Comparison query \u2014 LLM territory, Python should return low confidence"
   },
   {
     "query": "cheaper than amul butter",
@@ -445,7 +445,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Comparison query — LLM territory"
+    "notes": "Comparison query \u2014 LLM territory"
   },
   {
     "query": "healthier than coke",
@@ -453,7 +453,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Comparison query — LLM territory"
+    "notes": "Comparison query \u2014 LLM territory"
   },
   {
     "query": "best protein bars for muscle gain",
@@ -461,7 +461,7 @@
     "expected_brand": null,
     "expected_type": "protein bar",
     "expected_goal": "muscle gain",
-    "notes": "Complex natural language query — borderline"
+    "notes": "Complex natural language query \u2014 borderline"
   },
   {
     "query": "what are good healthy snacks for kids",
@@ -469,7 +469,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "kids",
-    "notes": "Natural language + goal — LLM territory, Python should return low confidence"
+    "notes": "Natural language + goal \u2014 LLM territory, Python should return low confidence"
   },
   {
     "query": "doodh",
@@ -477,7 +477,7 @@
     "expected_brand": null,
     "expected_type": "milk",
     "expected_goal": null,
-    "notes": "Hindi — type in Hindi. Python may not match unless 'doodh' is in types or fuzzy-matched"
+    "notes": "Hindi \u2014 type in Hindi. Python may not match unless 'doodh' is in types or fuzzy-matched"
   },
   {
     "query": "bina cheeni",
@@ -485,7 +485,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "no added sugar",
-    "notes": "Hindi modifier — 'without sugar'. Python may not handle Hinglish"
+    "notes": "Hindi modifier \u2014 'without sugar'. Python may not handle Hinglish"
   },
   {
     "query": "paneer kam fat wala",
@@ -493,7 +493,7 @@
     "expected_brand": null,
     "expected_type": "paneer",
     "expected_goal": "low fat",
-    "notes": "Hinglish query — 'paneer with less fat'"
+    "notes": "Hinglish query \u2014 'paneer with less fat'"
   },
   {
     "query": "atta",
@@ -517,7 +517,7 @@
     "expected_brand": null,
     "expected_type": "rice",
     "expected_goal": null,
-    "notes": "Hindi type — 'rice'. Python may not match unless fuzzy or type list includes 'chawal'"
+    "notes": "Hindi type \u2014 'rice'. Python may not match unless fuzzy or type list includes 'chawal'"
   },
   {
     "query": "choclate",
@@ -525,7 +525,7 @@
     "expected_brand": null,
     "expected_type": "chocolate",
     "expected_goal": null,
-    "notes": "Typo — should fuzzy-match to chocolate"
+    "notes": "Typo \u2014 should fuzzy-match to chocolate"
   },
   {
     "query": "protien shake",
@@ -533,7 +533,7 @@
     "expected_brand": null,
     "expected_type": "protein shake",
     "expected_goal": null,
-    "notes": "Typo + multi-word — 'protien' should fuzzy-match 'protein'"
+    "notes": "Typo + multi-word \u2014 'protien' should fuzzy-match 'protein'"
   },
   {
     "query": "biskut",
@@ -541,7 +541,7 @@
     "expected_brand": null,
     "expected_type": "biscuits",
     "expected_goal": null,
-    "notes": "Typo — Hinglish spelling of biscuits"
+    "notes": "Typo \u2014 Hinglish spelling of biscuits"
   },
   {
     "query": "keto choclate milkshake",
@@ -549,7 +549,7 @@
     "expected_brand": null,
     "expected_type": "chocolate milkshake",
     "expected_goal": "keto",
-    "notes": "Goal + typo — hard case"
+    "notes": "Goal + typo \u2014 hard case"
   },
   {
     "query": "something healthy",
@@ -557,7 +557,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Vague query — should degrade to LLM or return ambiguous"
+    "notes": "Vague query \u2014 should degrade to LLM or return ambiguous"
   },
   {
     "query": "good food",
@@ -573,7 +573,7 @@
     "expected_brand": null,
     "expected_type": "snacks",
     "expected_goal": null,
-    "notes": "Subjective prefix + type — type should be extracted"
+    "notes": "Subjective prefix + type \u2014 type should be extracted"
   },
   {
     "query": "best biscuits",
@@ -589,7 +589,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Nonsense — should degrade to LLM or ambiguous"
+    "notes": "Nonsense \u2014 should degrade to LLM or ambiguous"
   },
   {
     "query": "a",
@@ -597,7 +597,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": null,
-    "notes": "Very short — should degrade"
+    "notes": "Very short \u2014 should degrade"
   },
   {
     "query": "breakfast for kids with high protein",
@@ -605,7 +605,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "kids",
-    "notes": "Natural language — LLM territory"
+    "notes": "Natural language \u2014 LLM territory"
   },
   {
     "query": "palak paneer",
@@ -613,7 +613,7 @@
     "expected_brand": null,
     "expected_type": "paneer",
     "expected_goal": null,
-    "notes": "Indian dish name — type should be paneer"
+    "notes": "Indian dish name \u2014 type should be paneer"
   },
   {
     "query": "butter chicken masala",
@@ -621,7 +621,7 @@
     "expected_brand": null,
     "expected_type": "chicken masala",
     "expected_goal": null,
-    "notes": "Indian dish — multi-word type"
+    "notes": "Indian dish \u2014 multi-word type"
   },
   {
     "query": "idli dosa batter",
@@ -629,7 +629,7 @@
     "expected_brand": null,
     "expected_type": "dosa batter",
     "expected_goal": null,
-    "notes": "Indian breakfast — type extraction"
+    "notes": "Indian breakfast \u2014 type extraction"
   },
   {
     "query": "pre workout snack",
@@ -645,7 +645,7 @@
     "expected_brand": null,
     "expected_type": null,
     "expected_goal": "school lunch",
-    "notes": "Use case — natural language"
+    "notes": "Use case \u2014 natural language"
   },
   {
     "query": "post workout protein",
@@ -741,7 +741,7 @@
     "expected_brand": null,
     "expected_type": "ready to eat",
     "expected_goal": null,
-    "notes": "Dish name + category — type should be ready-to-eat"
+    "notes": "Dish name + category \u2014 type should be ready-to-eat"
   },
   {
     "query": "instant noodles masala",
@@ -750,5 +750,125 @@
     "expected_type": "instant noodles",
     "expected_goal": null,
     "notes": "Category + flavour"
+  },
+  {
+    "query": "high protein",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "high protein",
+    "notes": "Bare modifier \u2014 should not trigger category filtering"
+  },
+  {
+    "query": "low sugar",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low sugar",
+    "notes": "Bare dietary modifier"
+  },
+  {
+    "query": "low fat",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low fat",
+    "notes": "Bare dietary modifier"
+  },
+  {
+    "query": "low calorie",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low calorie",
+    "notes": "Bare dietary modifier"
+  },
+  {
+    "query": "low carb",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low carb",
+    "notes": "Bare dietary modifier (keto synonym)"
+  },
+  {
+    "query": "sugar free",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "sugar free",
+    "notes": "Bare dietary modifier"
+  },
+  {
+    "query": "no added sugar",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "no added sugar",
+    "notes": "Bare dietary modifier"
+  },
+  {
+    "query": "gluten free",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "gluten free",
+    "notes": "Bare dietary restriction \u2014 should set gluten_free constraint"
+  },
+  {
+    "query": "high fiber",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": null,
+    "notes": "Bare modifier \u2014 no explicit goal phrase matches"
+  },
+  {
+    "query": "heart healthy",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "heart healthy",
+    "notes": "Bare health goal"
+  },
+  {
+    "query": "clean eating",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "clean eating",
+    "notes": "Bare lifestyle goal"
+  },
+  {
+    "query": "protein rich",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "high protein",
+    "notes": "Bare modifier \u2014 maps to high protein"
+  },
+  {
+    "query": "hydration",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "hydration",
+    "notes": "Bare health goal"
+  },
+  {
+    "query": "gut health",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "gut health",
+    "notes": "Bare health goal"
+  },
+  {
+    "query": "bone health",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "bone health",
+    "notes": "Bare health goal"
   }
 ]
