@@ -35,6 +35,7 @@ const TRAIT_LABELS: Record<string, string> = {
   diabetic_friendly: "Diabetes-Friendly",
   gym_friendly: "Gym-Friendly Protein",
   elderly_friendly: "Gentle Nutrition",
+  no_artificial_sweetener: "No Artificial Sweeteners",
 };
 
 const DIETARY_BADGES: Array<{
@@ -117,7 +118,9 @@ export function getDisplayChips(
   // 2. Verified claims (score 0.7 base) — filter out marketing fluff
   for (const claim of row.claims ?? []) {
     if (!isChippableClaim(claim, row.primary_type)) continue;
-    product.push({ label: claim, priority: 70, group: "product" });
+    // Format claims consistently with Title Case, same as trait labels
+    const formatted = claim.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+    product.push({ label: formatted, priority: 70, group: "product" });
   }
 
   // 3. Dietary badges with prevalence suppression (skip if cohort < 5 — unreliable)
@@ -143,11 +146,12 @@ export function getDisplayChips(
   product.sort((a, b) => b.priority - a.priority);
   ai.sort((a, b) => b.priority - a.priority);
 
-  // Deduplicate across groups
+  // Deduplicate across groups (case-insensitive)
   const seen = new Set<string>();
   const add = (label: string) => {
-    if (seen.has(label)) return false;
-    seen.add(label);
+    const key = label.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   };
 

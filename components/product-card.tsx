@@ -38,7 +38,7 @@ function renderChips(
   aiReasons: string[],
   dietaryPrevalence?: DietaryPrevalenceMap | null,
 ): ReactNode[] {
-  const chipClass = "rounded-full border border-(--color-line) bg-(--color-bg-soft)/60 px-1.5 py-0.5 text-[8.5px] font-medium text-(--color-fg-muted)";
+  const chipClass = "rounded-full bg-neutral-100/80 px-2 py-0.5 text-[10px] font-medium text-neutral-500 leading-tight max-w-[130px] truncate";
   const itemType = obj.primary_type as string | undefined;
 
   // Pre-computed display_chips from backend — use directly
@@ -82,21 +82,23 @@ function renderChips(
   const seen = new Set<string>();
   const result: string[] = [];
 
-  // Fill product slots first
+  // Fill product slots first (case-insensitive dedup)
   for (const c of candidates) {
     if (c.isAi) continue;
     if (result.length >= CHIP_PRODUCT_SLOTS) break;
-    if (seen.has(c.label)) continue;
-    seen.add(c.label);
+    const key = c.label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     result.push(c.label);
   }
 
-  // Fill remaining with AI reasons
+  // Fill remaining with AI reasons (case-insensitive dedup)
   for (const c of candidates) {
     if (!c.isAi) continue;
     if (result.length >= CHIP_MAX) break;
-    if (seen.has(c.label)) continue;
-    seen.add(c.label);
+    const key = c.label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     result.push(c.label);
   }
 
