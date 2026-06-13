@@ -196,7 +196,10 @@ export async function parseIntentWithLlm(
     usageKind: "search",
     jsonObject: true,
     maxTokens: 400,
-    timeoutMs: 8_000,
+    // Tight cap on the hot path — DeepSeek p50 ~2.5s, but tail spikes to 8-11s
+    // and this call blocks the whole search. On timeout the caller falls back to
+    // the fast-path / degraded parse rather than hanging the user.
+    timeoutMs: 6_000,
     system: INTENT_SYSTEM_PROMPT,
     user: `Query: ${query}`,
   });

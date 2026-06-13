@@ -60,8 +60,10 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{1,3})\s*g\s*sugar/) ??
     firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(?:under|below|less than)\s*(\d{1,3})\s*g\s*sugar/);
-  if (/zero sugar/.test(text)) out.max_sugar_g = 1;
-  if (/no sugar|no added sugar/.test(text)) out.no_added_sugar = true;
+  // "zero / no / no-added sugar" all express the NO-ADDED-SUGAR intent. Flag it,
+  // but DON'T hard-gate total sugar — a 1g cap filtered out naturally-sweet items
+  // (coconut water, plain yoghurt, fruit). Ranking handles "added sugar" softly.
+  if (/zero sugar|no sugar|no added sugar/.test(text)) out.no_added_sugar = true;
   if (out.max_sugar_g == null && sugarLimit) out.max_sugar_g = sugarLimit;
   if (out.max_sugar_g == null && /low sugar|less sugar/.test(text)) {
     out.low_sugar_tier = true;

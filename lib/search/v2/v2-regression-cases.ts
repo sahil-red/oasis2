@@ -20,8 +20,10 @@ export const NUMERIC_CASES: Array<{
     check: (n) => n.low_sugar_tier && n.max_sugar_g == null,
   },
   {
+    // "zero sugar" = no-added-sugar intent, NOT a 1g hard cap (that filtered out
+    // coconut water / fruit / plain yoghurt with natural sugars).
     query: "zero sugar drinks",
-    check: (n) => n.max_sugar_g === 1 && n.no_added_sugar,
+    check: (n) => n.no_added_sugar && n.max_sugar_g == null,
   },
   {
     query: "healthier than maggi",
