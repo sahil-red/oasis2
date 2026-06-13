@@ -1,124 +1,257 @@
 "use client";
 
 /**
- * AI-search wait vignettes — two cats flanking the status line.
- * Lottie behavior pool (LottieFiles / Lottie Simple License): run, stretch,
- * pounce, sit, play, sleep, nose. Either cat can play any behavior; roles shuffle each scene.
+ * AI-search wait — two matching cats (light + dark grey) flanking the status line.
+ * One shared silhouette, behavior-driven Framer Motion poses. Either cat can play any action.
  */
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import Lottie, { type LottieRefCurrentProps } from "lottie-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 type Behavior = "run" | "stretch" | "pounce" | "sit" | "play" | "sleep" | "nose";
+
+type Coat = {
+  body: string;
+  bodyDark: string;
+  belly: string;
+  ear: string;
+  line: string;
+};
+
+/** Sketch palette: light grey + dark grey tabbies — same shape, different coats. */
+const COAT_LIGHT: Coat = {
+  body: "#b8bcc4",
+  bodyDark: "#9aa0a8",
+  belly: "#e8eaed",
+  ear: "#d4a8b4",
+  line: "rgba(42, 46, 54, 0.45)",
+};
+const COAT_DARK: Coat = {
+  body: "#5a5f68",
+  bodyDark: "#454950",
+  belly: "#8a9099",
+  ear: "#b8929e",
+  line: "rgba(18, 20, 26, 0.5)",
+};
 
 type Vignette = {
   id: string;
   a: Behavior;
   b: Behavior;
   props?: Array<"yarn" | "hearts" | "butterfly" | "zzz" | "dust">;
-  /** Both cats drift toward center (nose boop / leap). */
   meet?: boolean;
-  speedA?: number;
-  speedB?: number;
 };
 
 const VIGNETTES: Vignette[] = [
-  { id: "leap", a: "run", b: "run", meet: true, speedA: 1.05, speedB: 1.05 },
-  { id: "stretch-yarn", a: "stretch", b: "sit", props: ["yarn"], speedA: 0.9, speedB: 1 },
-  { id: "chase", a: "run", b: "pounce", props: ["dust"], speedA: 1.15, speedB: 1 },
-  { id: "dream", a: "sit", b: "sleep", props: ["hearts"], speedA: 1, speedB: 0.85 },
-  { id: "butterfly", a: "play", b: "sit", props: ["butterfly"], speedA: 1, speedB: 1 },
-  { id: "nap", a: "sleep", b: "sleep", props: ["zzz"], speedA: 0.85, speedB: 0.85 },
-  { id: "boop", a: "run", b: "run", meet: true, speedA: 0.95, speedB: 0.95 },
+  { id: "leap", a: "run", b: "run", meet: true },
+  { id: "stretch-yarn", a: "stretch", b: "sit", props: ["yarn"] },
+  { id: "chase", a: "run", b: "pounce", props: ["dust"] },
+  { id: "dream", a: "sit", b: "sleep", props: ["hearts"] },
+  { id: "butterfly", a: "play", b: "sit", props: ["butterfly"] },
+  { id: "nap", a: "sleep", b: "sleep", props: ["zzz"] },
+  { id: "boop", a: "nose", b: "nose", meet: true },
 ];
-
-const BEHAVIORS: Behavior[] = ["run", "stretch", "pounce", "sit", "play", "sleep", "nose"];
 
 const SCENE_MS = 2400;
 const FADE = { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const };
+const EASE = [0.22, 1, 0.36, 1] as const;
 
-const lottieCache = new Map<Behavior, object>();
+const legNear: Variants = {
+  run: {
+    rotate: [28, -28, 28],
+    transition: { duration: 0.36, repeat: Infinity, ease: "easeInOut" },
+  },
+  pounce: {
+    rotate: [40, -12, 40],
+    transition: { duration: 0.55, repeat: Infinity, ease: EASE },
+  },
+  play: {
+    rotate: [-8, -52, -8],
+    transition: { duration: 0.7, repeat: Infinity, ease: EASE },
+  },
+  stretch: { rotate: 18, transition: { duration: 0.6, ease: EASE } },
+  sit: { rotate: 4, transition: { duration: 0.5 } },
+  sleep: { rotate: 0 },
+  nose: { rotate: 6, transition: { duration: 0.5 } },
+};
 
-function loadBehavior(behavior: Behavior): Promise<object> {
-  const hit = lottieCache.get(behavior);
-  if (hit) return Promise.resolve(hit);
-  return fetch(`/lottie/cats/${behavior}.json`)
-    .then((r) => {
-      if (!r.ok) throw new Error(`lottie ${behavior}`);
-      return r.json();
-    })
-    .then((data) => {
-      lottieCache.set(behavior, data);
-      return data;
-    });
-}
+const legFar: Variants = {
+  run: {
+    rotate: [28, -28, 28],
+    transition: { duration: 0.36, repeat: Infinity, ease: "easeInOut", delay: 0.18 },
+  },
+  pounce: {
+    rotate: [40, -12, 40],
+    transition: { duration: 0.55, repeat: Infinity, ease: EASE, delay: 0.12 },
+  },
+  play: {
+    rotate: [-8, -52, -8],
+    transition: { duration: 0.7, repeat: Infinity, ease: EASE, delay: 0.1 },
+  },
+  stretch: { rotate: 12, transition: { duration: 0.6, ease: EASE } },
+  sit: { rotate: 2, transition: { duration: 0.5 } },
+  sleep: { rotate: 0 },
+  nose: { rotate: 4, transition: { duration: 0.5 } },
+};
 
-function useLottiePool() {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    Promise.all(BEHAVIORS.map(loadBehavior))
-      .then(() => {
-        if (alive) setReady(true);
-      })
-      .catch(() => {
-        if (alive) setReady(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return ready;
-}
+const bodyPose: Variants = {
+  run: {
+    y: [0, -5, 0, -4, 0],
+    transition: { duration: 0.36, repeat: Infinity, ease: "easeInOut" },
+  },
+  stretch: {
+    y: 6,
+    rotate: -18,
+    transition: { duration: 0.8, ease: EASE },
+  },
+  pounce: {
+    y: [0, -14, 3, 0],
+    rotate: [0, -8, 4, 0],
+    transition: { duration: 0.55, repeat: Infinity, ease: EASE },
+  },
+  sit: { y: 0, rotate: 0 },
+  play: {
+    y: [0, -6, 0],
+    rotate: [0, -6, 0],
+    transition: { duration: 0.7, repeat: Infinity, ease: EASE },
+  },
+  sleep: {
+    scaleY: [1, 1.03, 1],
+    transition: { duration: 2.8, repeat: Infinity, ease: "easeInOut" },
+  },
+  nose: {
+    x: [0, 5, 0],
+    transition: { duration: 1.2, repeat: Infinity, ease: EASE },
+  },
+};
 
-function CatLottie({
+const tailPose: Variants = {
+  run: {
+    rotate: [-12, 14, -12],
+    transition: { duration: 0.42, repeat: Infinity, ease: "easeInOut" },
+  },
+  stretch: { rotate: 32, transition: { duration: 0.6 } },
+  pounce: { rotate: [-20, 8, -20], transition: { duration: 0.55, repeat: Infinity } },
+  sit: { rotate: [-6, 10, -6], transition: { duration: 2.2, repeat: Infinity, ease: EASE } },
+  play: { rotate: 16, transition: { duration: 0.5 } },
+  sleep: { rotate: 24, transition: { duration: 0.5 } },
+  nose: { rotate: 4, transition: { duration: 0.8 } },
+};
+
+const headPose: Variants = {
+  run: { y: 0 },
+  stretch: { y: 8, rotate: 12, transition: { duration: 0.6 } },
+  pounce: { y: [0, 4, 0], rotate: [0, 8, 0], transition: { duration: 0.55, repeat: Infinity } },
+  sit: { y: 0 },
+  play: { y: -4, rotate: -10, transition: { duration: 0.5 } },
+  sleep: { y: 2, rotate: 8 },
+  nose: { x: [0, 7, 0], transition: { duration: 1.2, repeat: Infinity, ease: EASE } },
+};
+
+function CatFigure({
+  coat,
   behavior,
   mirror,
-  speed = 1,
-  className = "",
 }: {
+  coat: Coat;
   behavior: Behavior;
   mirror?: boolean;
-  speed?: number;
-  className?: string;
 }) {
   const reduced = useReducedMotion();
-  const lottieRef = useRef<LottieRefCurrentProps>(null);
-  const [data, setData] = useState<object | null>(() => lottieCache.get(behavior) ?? null);
-
-  useEffect(() => {
-    let alive = true;
-    loadBehavior(behavior).then((d) => {
-      if (alive) setData(d);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [behavior]);
-
-  useEffect(() => {
-    lottieRef.current?.setSpeed(speed);
-  }, [speed, data]);
+  const sleeping = behavior === "sleep";
+  const pose = reduced ? "sit" : behavior;
 
   return (
-    <div
-      className={`h-[108px] w-[108px] sm:h-[124px] sm:w-[124px] ${className}`}
+    <svg
+      viewBox="0 0 148 108"
+      className="h-[108px] w-[124px] sm:h-[124px] sm:w-[142px]"
       style={{ transform: mirror ? "scaleX(-1)" : undefined }}
+      aria-hidden
     >
-      {data ? (
-        <Lottie
-          lottieRef={lottieRef}
-          animationData={data}
-          loop={!reduced}
-          autoplay={!reduced}
-          style={{ width: "100%", height: "100%" }}
-          rendererSettings={{ preserveAspectRatio: "xMidYMax meet" }}
-        />
+      <defs>
+        <linearGradient id={`fur-${coat.body}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={coat.body} />
+          <stop offset="100%" stopColor={coat.bodyDark} />
+        </linearGradient>
+      </defs>
+
+      {sleeping ? (
+        <motion.g variants={bodyPose} animate={pose} style={{ transformOrigin: "74px 80px" }}>
+          <ellipse cx="74" cy="72" rx="38" ry="26" fill={`url(#fur-${coat.body})`} />
+          <path
+            d="M44 78 C36 58 52 44 74 44 C98 44 112 58 108 76 C100 88 82 92 68 90 C54 88 48 84 44 78 Z"
+            fill={coat.belly}
+          />
+          <motion.path
+            d="M100 76 C118 72 122 58 112 52 C108 62 102 70 94 74 Z"
+            fill={`url(#fur-${coat.body})`}
+            variants={tailPose}
+            animate={pose}
+            style={{ transformOrigin: "112px 64px" }}
+          />
+          <circle cx="52" cy="64" r="16" fill={`url(#fur-${coat.body})`} />
+          <path d="M40 54 L36 42 L50 56 Z" fill={`url(#fur-${coat.body})`} />
+          <path d="M58 52 L62 40 L48 54 Z" fill={`url(#fur-${coat.body})`} />
+          <path d="M42 52 L41 46 L47 53 Z" fill={coat.ear} stroke="none" />
+          <path d="M48 68 Q54 72 60 68" fill="none" stroke={coat.line} strokeWidth="1.4" />
+        </motion.g>
       ) : (
-        <div className="h-full w-full animate-pulse rounded-full bg-(--color-bg-soft) motion-reduce:animate-none" />
+        <g stroke={coat.line} strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round">
+          {/* far legs */}
+          <motion.g variants={legFar} animate={pose} style={{ transformOrigin: "32px 78px" }}>
+            <line x1="36" y1="76" x2="28" y2="102" stroke={coat.bodyDark} strokeWidth="6.5" />
+          </motion.g>
+          <motion.g variants={legFar} animate={pose} style={{ transformOrigin: "96px 78px" }}>
+            <line x1="92" y1="76" x2="100" y2="102" stroke={coat.bodyDark} strokeWidth="6.5" />
+          </motion.g>
+
+          <motion.g variants={tailPose} animate={pose} style={{ transformOrigin: "22px 64px" }}>
+            <path
+              d="M24 62 C4 56 0 30 14 16 C22 26 18 46 30 58 Z"
+              fill={`url(#fur-${coat.body})`}
+              stroke="none"
+            />
+          </motion.g>
+
+          <motion.g variants={bodyPose} animate={pose} style={{ transformOrigin: "70px 78px" }}>
+            <ellipse cx="38" cy="60" rx="26" ry="22" fill={`url(#fur-${coat.body})`} stroke="none" />
+            <path
+              d="M16 64 C10 46 28 38 56 36 C84 34 108 38 120 50 C128 62 118 74 98 78 C70 84 38 82 16 64 Z"
+              fill={`url(#fur-${coat.body})`}
+              stroke="none"
+            />
+            <path
+              d="M28 74 C50 80 86 78 104 68 C100 76 80 82 58 81 C46 80 36 77 28 74 Z"
+              fill={coat.belly}
+              stroke="none"
+            />
+
+            <motion.g variants={headPose} animate={pose} style={{ transformOrigin: "112px 48px" }}>
+              <circle cx="114" cy="44" r="14" fill={`url(#fur-${coat.body})`} stroke="none" />
+              <path d="M124 42 C132 42 132 50 125 52 C121 49 121 44 124 42 Z" fill={`url(#fur-${coat.body})`} stroke="none" />
+              <path d="M104 34 L100 18 L114 30 Z" fill={`url(#fur-${coat.body})`} stroke="none" />
+              <path d="M120 32 L128 18 L114 30 Z" fill={`url(#fur-${coat.body})`} stroke="none" />
+              <path d="M107 30 L106 22 L113 29 Z" fill={coat.ear} stroke="none" />
+              <path d="M122 28 L127 20 L118 28 Z" fill={coat.ear} stroke="none" />
+              <ellipse cx="115" cy="42" rx="2.2" ry="3" fill={coat.line} stroke="none" />
+              <circle cx="128" cy="48" r="1.6" fill={coat.ear} stroke="none" />
+              <g stroke={coat.line} strokeWidth="0.9" opacity="0.55">
+                <path d="M125 49 L136 47" />
+                <path d="M125 52 L135 54" />
+              </g>
+            </motion.g>
+          </motion.g>
+
+          {/* near legs */}
+          <motion.g variants={legNear} animate={pose} style={{ transformOrigin: "51px 80px" }}>
+            <line x1="48" y1="78" x2="54" y2="102" stroke={coat.body} strokeWidth="7" />
+          </motion.g>
+          <motion.g variants={legNear} animate={pose} style={{ transformOrigin: "97px 80px" }}>
+            <line x1="100" y1="78" x2="94" y2="102" stroke={coat.body} strokeWidth="7" />
+          </motion.g>
+        </g>
       )}
-    </div>
+    </svg>
   );
 }
 
@@ -126,26 +259,25 @@ function CatSlot({
   side,
   vignette,
   behavior,
-  speed,
+  coat,
   mirror,
 }: {
   side: "left" | "right";
   vignette: Vignette;
   behavior: Behavior;
-  speed?: number;
+  coat: Coat;
   mirror?: boolean;
 }) {
-  const meet = vignette.meet;
-  const drift = meet ? (side === "left" ? 18 : -18) : 0;
+  const drift = vignette.meet ? (side === "left" ? 20 : -20) : 0;
 
   return (
     <motion.div
       className="flex shrink-0"
       initial={false}
       animate={{ x: drift }}
-      transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 1.8, ease: EASE }}
     >
-      <CatLottie behavior={behavior} mirror={mirror} speed={speed} />
+      <CatFigure coat={coat} behavior={behavior} mirror={mirror} />
     </motion.div>
   );
 }
@@ -178,8 +310,14 @@ function SceneProps({ items }: { items: Vignette["props"] }) {
       )}
       {items.includes("hearts") && (
         <g fill="#e87a93">
-          <path d="M52 20 C49 16 44 18 44 22 C44 26 52 30 52 30 C52 30 60 26 60 22 C60 18 55 16 52 20 Z" className="animate-bounce motion-reduce:animate-none" />
-          <path d="M68 14 C66 11 62 12 62 15 C62 18 68 21 68 21 C68 21 74 18 74 15 C74 12 70 11 68 14 Z" opacity="0.7" />
+          <path
+            d="M52 20 C49 16 44 18 44 22 C44 26 52 30 52 30 C52 30 60 26 60 22 C60 18 55 16 52 20 Z"
+            className="animate-bounce motion-reduce:animate-none"
+          />
+          <path
+            d="M68 14 C66 11 62 12 62 15 C62 18 68 21 68 21 C68 21 74 18 74 15 C74 12 70 11 68 14 Z"
+            opacity="0.7"
+          />
         </g>
       )}
       {items.includes("butterfly") && (
@@ -205,11 +343,9 @@ export function SearchCats({
   center,
 }: {
   className?: string;
-  /** Status line rendered between the two cats (sketch layout). */
   center?: ReactNode;
 }) {
   const reduced = useReducedMotion();
-  const poolReady = useLottiePool();
   const [sceneIndex, setSceneIndex] = useState(0);
   const [swapped, setSwapped] = useState(false);
 
@@ -232,35 +368,27 @@ export function SearchCats({
   );
 
   return (
-    <div className={`flex w-full flex-col items-center gap-5 ${className}`}>
+    <div className={`flex w-full flex-col items-center gap-5 ${className}`} aria-hidden>
       <div className="relative w-full min-h-[148px] sm:min-h-[168px]">
-        {poolReady ? (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={sceneKey}
-              className="absolute inset-0 flex items-end justify-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={FADE}
-            >
-              <div className="flex w-full max-w-[720px] items-end justify-center gap-1 px-1 sm:gap-3 sm:px-4">
-                <CatSlot side="left" vignette={vignette} behavior={behA} speed={vignette.speedA} />
-                <div className="relative z-10 flex min-h-[108px] min-w-[7.5rem] flex-1 flex-col items-center justify-center px-1 sm:min-w-[9rem] sm:px-2">
-                  {center}
-                  <SceneProps items={vignette.props} />
-                </div>
-                <CatSlot side="right" vignette={vignette} behavior={behB} speed={vignette.speedB} mirror />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={sceneKey}
+            className="absolute inset-0 flex items-end justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={FADE}
+          >
+            <div className="flex w-full max-w-[720px] items-end justify-center gap-1 px-1 sm:gap-3 sm:px-4">
+              <CatSlot side="left" vignette={vignette} behavior={behA} coat={COAT_LIGHT} />
+              <div className="relative z-10 flex min-h-[108px] min-w-[7.5rem] flex-1 flex-col items-center justify-center px-1 sm:min-w-[9rem] sm:px-2">
+                {center}
+                <SceneProps items={vignette.props} />
               </div>
-            </motion.div>
-          </AnimatePresence>
-        ) : (
-          <div className="flex h-[148px] items-end justify-center gap-4 px-4">
-            <div className="h-[108px] w-[108px] animate-pulse rounded-2xl bg-(--color-bg-soft) motion-reduce:animate-none" />
-            <div className="h-8 w-32 animate-pulse rounded bg-(--color-bg-soft) motion-reduce:animate-none" />
-            <div className="h-[108px] w-[108px] animate-pulse rounded-2xl bg-(--color-bg-soft) motion-reduce:animate-none" />
-          </div>
-        )}
+              <CatSlot side="right" vignette={vignette} behavior={behB} coat={COAT_DARK} mirror />
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       <div
@@ -269,7 +397,6 @@ export function SearchCats({
           backgroundImage:
             "repeating-linear-gradient(90deg, var(--color-line) 0 6px, transparent 6px 18px)",
         }}
-        aria-hidden
       />
     </div>
   );
