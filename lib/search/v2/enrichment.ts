@@ -63,7 +63,7 @@ function buildSearchDoc(row: {
     ...(row.variants ?? []),
     ...(row.claims ?? []),
     ...(row.use_cases ?? []).map((u) => u.replace(/_/g, " ")),
-    (row.ingredients_raw ?? "").slice(0, 240),
+    (row.ingredients_raw ?? "").slice(0, 800),
   ]
     .filter(Boolean)
     .join(" ")

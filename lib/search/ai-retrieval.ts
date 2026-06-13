@@ -43,8 +43,10 @@ export function isArtificialSweetener(ingredientsText: string): boolean {
     return names.some((n) => boundedMatch(ingredientsText, n));
   }
 
-  // §C — Fallback: bounded regex of the most common synthetic sweeteners + E-numbers
-  return /\b(?:aspartame|sucralose|acesulfame(?:\s+k| potassium)?|saccharin|neotame|steviol(?:\s+glycosides?)?)\b|\b(?:e|ins)\s*95[015]\b/i.test(ingredientsText);
+  // §C — Fallback: bounded regex of the most common synthetic sweeteners + E-numbers.
+  // E950-E968 covers acesulfame (950), aspartame (951), saccharin (954), sucralose (955),
+  // steviol glycosides (960), neotame (961), maltitol (965), erythritol (968), etc.
+  return /\b(?:aspartame|sucralose|acesulfame(?:\s+k| potassium)?|saccharin|neotame|steviol(?:\s+glycosides?)?)\b|\b(?:e|ins)?\s*(?:95[0-9]|96[0-8])\b/i.test(ingredientsText);
 }
 
 /** Word-boundary, case-insensitive match. Safer than includes() — prevents

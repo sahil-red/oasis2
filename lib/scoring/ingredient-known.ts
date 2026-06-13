@@ -103,6 +103,14 @@ export const KNOWN_INGREDIENTS: Record<string, KnownIngredient> = {
   "sodium metabisulphite": { normalized_name: "sodium metabisulphite", display_name: "Sodium Metabisulphite (E223)", nova_class: 4, role: "preservative", concern_tier: "watchful", concern_reasons: ["Sulphite; can trigger asthma or allergic reactions in sensitive individuals"], intrinsic_quality: 35 },
   "sodium metabisulfite": { normalized_name: "sodium metabisulfite", display_name: "Sodium Metabisulphite (E223)", nova_class: 4, role: "preservative", concern_tier: "watchful", concern_reasons: ["Sulphite; can trigger reactions in sulphite-sensitive individuals"], intrinsic_quality: 35 },
 
+  // ──────────── ARTIFICIAL COLORS ────────────
+  tartrazine: { normalized_name: "tartrazine", display_name: "Tartrazine (E102)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye; may cause hyperactivity in children"], intrinsic_quality: 30 },
+  "sunset yellow": { normalized_name: "sunset yellow", display_name: "Sunset Yellow (E110)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye; restricted in some countries"], intrinsic_quality: 30 },
+  carmoisine: { normalized_name: "carmoisine", display_name: "Carmoisine (E122)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye; may cause allergic reactions"], intrinsic_quality: 30 },
+  "allura red": { normalized_name: "allura red", display_name: "Allura Red (E129)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye; restricted in EU for children"], intrinsic_quality: 30 },
+  "brilliant blue": { normalized_name: "brilliant blue", display_name: "Brilliant Blue (E133)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic dye; generally regarded as safe"], intrinsic_quality: 35 },
+  "ammonia caramel": { normalized_name: "ammonia caramel", display_name: "Ammonia Caramel (E150c)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic caramel colour; may contain 4-MEI by-product"], intrinsic_quality: 35 },
+
   // ──────────── COMMON WHOLE FOODS ────────────
   water: { normalized_name: "water", display_name: "Water", nova_class: 1, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 100 },
   milk: { normalized_name: "milk", display_name: "Milk", nova_class: 1, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 80 },
@@ -125,6 +133,30 @@ export const KNOWN_INGREDIENTS: Record<string, KnownIngredient> = {
   peanuts: { normalized_name: "peanuts", display_name: "Peanuts", nova_class: 1, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 82 },
   "peanut butter": { normalized_name: "peanut butter", display_name: "Peanut Butter", nova_class: 2, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 78 },
   eggs: { normalized_name: "eggs", display_name: "Eggs", nova_class: 1, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 92 },
+
+  // ──────────── E-number aliases (bare numbers resolve to named entries) ────────────
+  // Sweeteners
+  "950": { normalized_name: "950", display_name: "Acesulfame Potassium (E950)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Synthetic sweetener; often paired with aspartame"], intrinsic_quality: 35 },
+  "951": { normalized_name: "951", display_name: "Aspartame (E951)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Synthetic sweetener; avoid in PKU"], intrinsic_quality: 30 },
+  "954": { normalized_name: "954", display_name: "Saccharin (E954)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Oldest synthetic sweetener"], intrinsic_quality: 25 },
+  "955": { normalized_name: "955", display_name: "Sucralose (E955)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Synthetic sweetener; may affect gut microbiome"], intrinsic_quality: 35 },
+  "960": { normalized_name: "960", display_name: "Steviol Glycosides (E960)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Extracted sweetener"], intrinsic_quality: 60 },
+  "961": { normalized_name: "961", display_name: "Neotame (E961)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Synthetic sweetener"], intrinsic_quality: 35 },
+  // Preservatives
+  "202": { normalized_name: "202", display_name: "Potassium Sorbate (E202)", nova_class: 4, role: "preservative", concern_tier: "watchful", concern_reasons: ["Synthetic preservative"], intrinsic_quality: 40 },
+  "211": { normalized_name: "211", display_name: "Sodium Benzoate (E211)", nova_class: 4, role: "preservative", concern_tier: "watchful", concern_reasons: ["Reacts with vitamin C to form benzene"], intrinsic_quality: 30 },
+  "223": { normalized_name: "223", display_name: "Sodium Metabisulphite (E223)", nova_class: 4, role: "preservative", concern_tier: "watchful", concern_reasons: ["Sulphite; can trigger asthma"], intrinsic_quality: 35 },
+  // Colors
+  "102": { normalized_name: "102", display_name: "Tartrazine (E102)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye"], intrinsic_quality: 30 },
+  "110": { normalized_name: "110", display_name: "Sunset Yellow (E110)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye"], intrinsic_quality: 30 },
+  "122": { normalized_name: "122", display_name: "Carmoisine (E122)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye"], intrinsic_quality: 30 },
+  "129": { normalized_name: "129", display_name: "Allura Red (E129)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic azo dye"], intrinsic_quality: 30 },
+  "133": { normalized_name: "133", display_name: "Brilliant Blue (E133)", nova_class: 4, role: "color", concern_tier: "watchful", concern_reasons: ["Synthetic dye"], intrinsic_quality: 35 },
+  // Emulsifiers
+  "322": { normalized_name: "322", display_name: "Lecithin (E322)", nova_class: 4, role: "emulsifier", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 55 },
+  "471": { normalized_name: "471", display_name: "Mono- and Diglycerides (E471)", nova_class: 4, role: "emulsifier", concern_tier: "watchful", concern_reasons: ["Partially synthetic"], intrinsic_quality: 35 },
+  // Starch
+  "621": { normalized_name: "621", display_name: "MSG / Monosodium Glutamate (E621)", nova_class: 4, role: "flavor", concern_tier: "watchful", concern_reasons: ["Linked to headache in sensitive individuals"], intrinsic_quality: 40 },
 };
 
 /**
@@ -153,8 +185,9 @@ export const INGREDIENT_ROLE_EXPANSION: Record<string, { role: string; minNova?:
   "emulsifier":           { role: "emulsifier" },
   "maida":                { role: "starch", maxQuality: 20 },
   "refined flour":        { role: "starch", maxQuality: 20 },
-  "msg":                  { role: "flavor" },
-  "monosodium glutamate": { role: "flavor" },
+  // NOTE: "msg" and "monosodium glutamate" are handled by a dedicated regex
+  // family in ingredientPresent() — NOT by role expansion (prevents false
+  // matching on salt/rock salt which also have role:"flavor").
 };
 
 // Computed at module load — list of ingredient names (normalized + aliases)
