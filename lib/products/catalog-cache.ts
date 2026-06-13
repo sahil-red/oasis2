@@ -18,11 +18,11 @@ import type { Grade } from "@/lib/supabase/types";
 export async function getCachedCatalogMeta(category?: string): Promise<CatalogMeta> {
   if (category) {
     return unstable_cache(() => getCatalogMeta(category), ["catalog-meta", category], {
-      revalidate: 3600,
+      revalidate: 3600, tags: ["catalog-meta"],
     })();
   }
   return unstable_cache(() => getCatalogMeta(), ["catalog-meta"], {
-    revalidate: 3600,
+    revalidate: 3600, tags: ["catalog-meta"],
   })();
 }
 
@@ -142,7 +142,7 @@ export async function getCachedCatalogSearch(
         verdict: params.verdict,
         slugs: params.slugs ? params.slugs.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
       }),
-    ["catalog-search", cacheKey],
-    { revalidate: 300 },
+      ["catalog-search", cacheKey],
+      { revalidate: 60, tags: ["catalog-search"] },
   )();
 }

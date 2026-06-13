@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CatalogLoader } from "@/components/catalog-loader";
+import { CatalogBackdrop } from "@/components/catalog-backdrop";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import {
@@ -49,10 +50,11 @@ export default async function CatalogPage({
   ]);
 
   return (
-    <main className="min-h-screen">
+    <main className="relative isolate min-h-screen overflow-hidden">
+      <CatalogBackdrop />
       <SiteNav />
 
-      <div className="mx-auto max-w-7xl px-3 pb-20 pt-3 md:px-5 md:pt-4">
+      <div className="relative mx-auto max-w-7xl px-3 pb-20 pt-3 md:px-5 md:pt-4">
         <CatalogLoader initialParams={params} initialMeta={meta} initialSearch={initialSearch} />
       </div>
 

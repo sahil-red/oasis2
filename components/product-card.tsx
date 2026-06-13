@@ -29,8 +29,8 @@ const VERDICT_SHORT: Record<VerdictId, string> = {
   skip: "Skip",
 };
 
-const CHIP_MAX = 4;
-const CHIP_PRODUCT_SLOTS = 3;
+const CHIP_MAX = 3;
+const CHIP_PRODUCT_SLOTS = 2;
 
 function renderChips(
   obj: Record<string, unknown>,
@@ -38,7 +38,7 @@ function renderChips(
   aiReasons: string[],
   dietaryPrevalence?: DietaryPrevalenceMap | null,
 ): ReactNode[] {
-  const chipClass = "inline-flex items-center rounded-full border border-(--color-line) bg-(--color-bg-soft)/80 px-2.5 py-0.5 text-[10.5px] font-medium text-(--color-fg-muted) tracking-wide max-w-[135px] truncate";
+  const chipClass = "inline-flex items-center rounded-full border border-(--color-line)/70 bg-(--color-bg-soft)/55 px-2 py-[2px] text-[10px] font-medium leading-tight text-(--color-fg-muted) max-w-[118px] truncate";
   const itemType = obj.primary_type as string | undefined;
 
   // Pre-computed display_chips from backend — use directly

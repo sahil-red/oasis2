@@ -1200,9 +1200,9 @@ export function CatalogView({
         ) : null}
 
         {refineOpen && (
-          <div className="absolute right-0 top-full z-40 mt-1 w-72 rounded-xl border border-(--color-line) bg-(--color-panel) shadow-xl sm:w-80">
-            <div className="space-y-2.5 px-3.5 py-3">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-2xl border border-(--color-line) bg-(--color-panel) shadow-[0_16px_48px_-16px_rgba(60,40,20,0.3)] ring-1 ring-black/[0.02] sm:w-80">
+            <div className="space-y-3 px-4 py-4">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-(--color-line) pb-3">
                 <GoalModePicker value={goal} onChange={pickGoal} compact />
                 <DietPicker value={diet} onChange={pickDiet} compact />
               </div>
