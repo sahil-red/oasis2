@@ -106,12 +106,14 @@ export default function ImageTaggerPage() {
   const saveBatch = useCallback(async () => {
     if (heroCount === 0) return;
     setSaving(true);
-    // Only save SELECTED products — don't auto-skip unselected
-    const actions = Object.entries(heroMap).map(([productId, heroUrl]) => ({
-      productId,
-      heroUrl,
-      reorder: true,
-    }));
+    // Save selected heroes AND auto-skip the rest
+    const actions = products.map((p) => {
+      const heroUrl = heroMap[p.id];
+      if (heroUrl) {
+        return { productId: p.id, heroUrl, reorder: true };
+      }
+      return { productId: p.id, skip: true };
+    });
     try {
       const res = await fetch("/api/admin/reorder-images", {
         method: "POST",
@@ -119,8 +121,8 @@ export default function ImageTaggerPage() {
         body: JSON.stringify({ actions }),
       });
       if (!res.ok) throw new Error("Save failed");
-      setDone((d) => d + heroCount);
-      setMessage(`Saved ${heroCount} products`);
+      setDone((d) => d + products.length);
+      setMessage(`Saved ${heroCount}, skipped ${products.length - heroCount}`);
       void fetchBatch();
     } catch {
       setMessage("Save failed");
