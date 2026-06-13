@@ -1,7 +1,7 @@
 /** Rotate example search chips every 15 minutes (client + SSR-safe slot math). */
 export const PROMPT_ROTATION_MS = 15 * 60 * 1000;
 
-export const PROMPTS_PER_VIEW = 12;
+export const PROMPTS_PER_VIEW = 24;
 
 const MAX_PROMPT_LENGTH = 36;
 
@@ -56,6 +56,58 @@ export const ALL_PROMPT_EXAMPLES = [
   "ragi biscuits for kids",
   "millet based snacks",
   "low fat paneer for diet",
+  "amul fresh milk",
+  "real fruit juice no sugar",
+  "whole wheat atta",
+  "idli dosa batter fresh",
+  "parle g biscuits",
+  "haldiram bhujia low oil",
+  "mtr ready to eat",
+  "tata tea premium",
+  "paper boat drinks",
+  "mom's magic cookies",
+  "yoga bar protein bars",
+  "slurrp farm millet snacks",
+  "organic honey raw",
+  "brown rice healthy",
+  "tea without sugar",
+  "noodles whole wheat",
+  "pasta without maida",
+  "butter amul salted",
+  "cheese slices low fat",
+  "ice cream sugar free",
+  "ketchup no preservatives",
+  "coconut oil cold pressed",
+  "olive oil extra virgin",
+  "jaggery powder natural",
+  "besan organic",
+  "soya chunks high protein",
+  "chana sattu protein",
+  "makhana roasted no salt",
+  "kabuli chana canned",
+  "rajma ready to eat",
+  "fruit jam no added sugar",
+  "mango pickle homemade",
+  "tamarind paste pure",
+  "garam masala whole spices",
+  "turmeric powder organic",
+  "cumin seeds jeera",
+  "black pepper whole",
+  "breakfast cereals for kids",
+  "post workout protein drink",
+  "tiffin snacks for school",
+  "chai time snacks",
+  "office lunch ideas",
+  "pregnancy nutrition foods",
+  "elderly friendly soft foods",
+  "food without onion garlic",
+  "jain diet snacks",
+  "vrat upvas snacks",
+  "navratra special flours",
+  "summer drinks nimbu pani",
+  "winter special dry fruits",
+  "ramadan sehri foods",
+  "christmas cake plum",
 ];
 
 const SHORT_PROMPTS = ALL_PROMPT_EXAMPLES.filter((p) => p.length <= MAX_PROMPT_LENGTH);
