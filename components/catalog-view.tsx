@@ -1598,15 +1598,18 @@ function AiSearchProgress() {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="flex min-h-[58vh] flex-col items-center justify-center gap-8 py-6">
-      <div className="flex items-center justify-center gap-2.5 text-[15px] text-(--color-fg-muted)">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
-        </span>
-        <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
-      </div>
-      <SearchCats />
+    <div className="flex min-h-[58vh] flex-col items-center justify-center py-6">
+      <SearchCats
+        center={
+          <div className="flex items-center justify-center gap-2.5 text-[15px] text-(--color-fg-muted)">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--color-accent) opacity-60 motion-reduce:animate-none" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-(--color-accent)" />
+            </span>
+            <span aria-live="polite">{AI_SEARCH_STAGES[stage]}</span>
+          </div>
+        }
+      />
     </div>
   );
 }
