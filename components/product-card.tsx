@@ -193,7 +193,7 @@ export const ProductCard = memo(function ProductCard({
       {/* image — verdict label as floating chip on top-left, score on top-right */}
       <Link
         href={href}
-        className="relative block aspect-[4/3] overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
+         className="relative block aspect-[3/4] overflow-hidden rounded-2xl photo-frame transition-transform duration-200 ease-out group-hover:-translate-y-0.5"
         onClick={() => {
           saveCatalogReturnUrl(`/search${hrefQuery}`);
           trackSearchInteraction(product.id, "click");
@@ -205,7 +205,7 @@ export const ProductCard = memo(function ProductCard({
             alt={displayName}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+              className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-(--color-fg-dim)">

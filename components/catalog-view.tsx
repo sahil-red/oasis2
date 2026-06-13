@@ -778,6 +778,14 @@ export function CatalogView({
     writeStoredGoal(g);
     setShowGoalHint(false);
     setGoal(g);
+    // Exit AI mode so goal-based ranking takes effect immediately
+    if (aiModeRef.current) {
+      setAiMode(false);
+      setAiSummary(null);
+      setAiWarning(null);
+      setAiRefinements([]);
+      setAiParsed(null);
+    }
   }, []);
 
   const pickDiet = useCallback((d: DietMode) => {
