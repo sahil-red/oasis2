@@ -64,6 +64,10 @@ Rules:
 - Use-case queries (pre-workout snack, school lunch) → kind:"directed" or "goal" with use_case slug (pre_workout, school_lunch).
 - Type + health context or vague nutrition adjective WITHOUT a number (diabetic bread, protein shake with low calories, drinks for athletes with a type) → kind:"directed", set primary_type for membership AND set goal_phrase to the health/nutrition intent ("diabetic friendly", "low calorie", "athlete recovery") so ranking uses its traits. Set max_calories only when a number is given ("under 100 calories").
 - "high protein milk" → primary_type:"milk", sort:"highest_protein", do NOT set min_protein_g.
+- Standalone health modifier with NO product type ("high protein", "low sugar", "low calorie",
+  "high fiber", "no added sugar") → kind:"goal", goal_phrase set to the modifier phrase,
+  primary_type:null, sort set appropriately. These are health goals, not type-directed queries.
+  Do NOT invent a random primary_type like "chicken thighs" — leave it null when no real type exists.
 - constraint_priorities: lower number = relax first (price before sugar before avoid_ingredients).
 - modifiers may include: high_protein_tier, low_sugar, no_added_sugar when user asks relatively.
 - Populate avoid_ingredients/allergens from negation in the query.
