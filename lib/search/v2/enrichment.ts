@@ -21,6 +21,11 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+/** Clamp only when value exists — preserves null vs zero distinction for missing data. */
+function clampIfSet(v: number | null, min: number, max: number): number | null {
+  return v != null ? clamp(v, min, max) : null;
+}
+
 /** Parse "500 g" / "1 L" / "200ml" / "1kg" into a normalized value+unit (deterministic). */
 function parseNetWeight(net_weight: string | null | undefined): { value: number | null; unit: string | null } {
   if (!net_weight) return { value: null, unit: null };
@@ -125,12 +130,6 @@ function baseRowFromProduct(
     semantic.traits["no_artificial_sweetener"] = isArtificialSweetener(p.ingredients_raw) ? 0 : 1;
     semantic.trait_source["no_artificial_sweetener"] = "math";
     semantic.trait_confidence["no_artificial_sweetener"] = data_quality_score;
-
-    // processing_level as MATH trait: derived from NOVA class of ingredients
-    // (LLM version is capped by validateEnrichment above; MATH version replaces it)
-    semantic.traits["processing_level"] = 0;
-    semantic.trait_source["processing_level"] = "math";
-    semantic.trait_confidence["processing_level"] = data_quality_score;
   }
 
   const _servingSize = num(p.nutrition?.extra?.serving_size_value as number);
@@ -162,12 +161,12 @@ function baseRowFromProduct(
     has_added_sugar: llm?.has_added_sugar ?? null,
     allergens: llm?.allergens ?? [],
     claims: llm?.claims ?? [],
-    sugar_g: clamp(num(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g) ?? 0, 0, 100),
-    protein_g: clamp(num(p.nutrition?.protein_g_100g) ?? 0, 0, 100),
-    fat_g: clamp(num(p.nutrition?.fat_g_100g) ?? 0, 0, 100),
-    saturated_fat_g: clamp(num(p.nutrition?.saturated_fat_g_100g) ?? 0, 0, 100),
+    sugar_g: clampIfSet(num(p.nutrition?.sugar_g_100g ?? p.nutrition?.added_sugar_g_100g), 0, 100),
+    protein_g: clampIfSet(num(p.nutrition?.protein_g_100g), 0, 100),
+    fat_g: clampIfSet(num(p.nutrition?.fat_g_100g), 0, 100),
+    saturated_fat_g: clampIfSet(num(p.nutrition?.saturated_fat_g_100g), 0, 100),
     sodium_mg: num(p.nutrition?.sodium_mg_100g),
-    energy_kcal: clamp(num(p.nutrition?.energy_kcal_100g) ?? 0, 0, 900),
+    energy_kcal: clampIfSet(num(p.nutrition?.energy_kcal_100g), 0, 900),
     calcium_mg: num(p.nutrition?.calcium_mg_100g),
     iron_mg: num(p.nutrition?.iron_mg_100g),
     fiber_g: num(p.nutrition?.fiber_g_100g),
@@ -185,7 +184,17 @@ function baseRowFromProduct(
     trait_confidence: semantic?.trait_confidence ?? {},
     trait_reasons: semantic?.trait_reasons ?? {},
     scout_score: p.core_scores?.score ?? null,
-    nova_group: null,
+    nova_group: (() => {
+      // Compute NOVA group from ingredient text: count E-numbers/additives
+      const ing = p.ingredients_raw ?? "";
+      if (!ing.trim()) return null;
+      const eCount = (ing.match(/\b(?:e|ins)\s*\d{3,4}[a-z]?\b/gi) || []).length;
+      const segCount = ing.split(/[,;]/).length; // rough ingredient count
+      if (eCount > 0) return 4;                 // additives → ultra-processed
+      if (segCount <= 2) return 1;               // 1-2 ingredients → unprocessed
+      if (segCount <= 5) return 2;               // 3-5 ingredients → processed culinary
+      return 3;                                   // 6+ ingredients → processed food
+    })(),
     data_quality_score,
     data_completeness,
     facet_confidence: { ...facet_confidence, ...(llm?.facet_confidence ?? {}) },
