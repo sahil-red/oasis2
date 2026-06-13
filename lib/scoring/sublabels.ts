@@ -4,6 +4,7 @@ import type { IngredientIntelligenceRow } from "@/lib/scoring/ingredient-llm";
 import type { PerServeNutrition } from "@/lib/scoring/serving";
 import type { RoleCohort } from "@/lib/scoring/role-cohort";
 import type { VerdictId } from "@/lib/scoring/verdict";
+import { isArtificialSweetener } from "@/lib/search/ai-retrieval";
 
 export type SublabelId =
   | "clean_protein"
@@ -119,7 +120,7 @@ export const SUBLABEL_DISPLAY: Record<SublabelId, string> = {
 };
 
 const REFINED_FIRST = /\b(maida|refined wheat flour|sugar|corn syrup|glucose syrup|invert syrup|liquid glucose)\b/i;
-const HIDDEN_SWEETENER = /\b(acesulfame|sucralose|aspartame|saccharin)\b/i;
+// Deleted HIDDEN_SWEETENER regex — replaced by isArtificialSweetener() from ingredient-known dictionary
 const WHOLE_GRAIN = /\b(whole wheat|whole grain|ragi|bajra|jowar|millet|oats|atta)\b/i;
 
 export type SublabelContext = {
@@ -336,7 +337,11 @@ function matches(id: SublabelId, ctx: SublabelContext): boolean {
     case "mostly_nova_4":
       return nova4Share(rows) > 0.6;
     case "hidden_sweetener":
-      return HIDDEN_SWEETENER.test(ing) && /\b(natural|no added sugar)\b/i.test(ing);
+      // Uses ingredient-known dictionary to match ALL artificial sweeteners
+      // (aspartame, sucralose, acesulfame, saccharin, steviol glycosides, etc.).
+      // Still gated behind the "misleading claim" check — only flags products
+      // that use sweeteners while labeling "natural" or "no added sugar".
+      return isArtificialSweetener(ing) && /\b(natural|no added sugar)\b/i.test(ing);
     default:
       return false;
   }

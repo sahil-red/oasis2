@@ -3,6 +3,7 @@ import { blockedForAdultHealthGoal } from "@/lib/search/audience-gate";
 import { relevanceScore } from "@/lib/search/semantic-rank";
 import type { ProductListItem } from "@/lib/products/queries";
 import type { ProductNutrition } from "@/lib/supabase/types";
+import { getIngredientNamesForAvoid } from "@/lib/scoring/ingredient-known";
 import type { ParsedProductQuery } from "@/lib/search/query-parse";
 
 function nutritionValue(
@@ -26,36 +27,72 @@ function nutritionValue(
  * Uses category-aware regex so forms like "Hydrogenated Vegetable Oils (Rapeseed and Palm)"
  * are caught by avoidTerm="palm oil", even though the literal string "palm oil" is absent.
  */
+/** Shared sweetener detection — used by ingredientPresent *and* the sublabel engine.
+ *  Checks whether the ingredient text CONTAINS any known artificial/intense sweetener
+ *  or sugar alcohol, pulling names from the ingredient-known dictionary.
+ *  Does NOT match natural sugars (sugar, jaggery, honey). */
+export function isArtificialSweetener(ingredientsText: string): boolean {
+  // §A — Descriptive phrases that manufacturers use instead of specific sweetener names
+  if (/\bnon[-\s]?caloric\s+sweeteners?\b|\bzero[-\s]?calorie\s+sweeteners?\b|\bintense\s+sweeteners?\b|\bartificial\s+sweeteners?\b/i.test(ingredientsText)) {
+    return true;
+  }
+
+  // §B — Dictionary-driven: all ingredient-known entries with role="sweetener" below quality ceiling
+  const names = getIngredientNamesForAvoid("artificial sweetener");
+  if (names?.length) {
+    return names.some((n) => boundedMatch(ingredientsText, n));
+  }
+
+  // §C — Fallback: bounded regex of the most common synthetic sweeteners + E-numbers
+  return /\b(?:aspartame|sucralose|acesulfame(?:\s+k| potassium)?|saccharin|neotame|steviol(?:\s+glycosides?)?)\b|\b(?:e|ins)\s*95[015]\b/i.test(ingredientsText);
+}
+
+/** Word-boundary, case-insensitive match. Safer than includes() — prevents
+ *  "strawberry" matching "berry" or "aspartame lite" matching "aspartame". */
+function boundedMatch(haystack: string, needle: string): boolean {
+  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${esc}\\b`, "i").test(haystack);
+}
+
+/** Check if `avoidTerm` (from LLM intent) appears in the ingredient text.
+ *  Uses the ingredient-known dictionary for category expansion —
+ *  "artificial sweetener" auto-expands to aspartame, sucralose, etc. */
 export function ingredientPresent(ingredientsText: string, avoidTerm: string): boolean {
   const a = avoidTerm.toLowerCase().trim();
   const t = ingredientsText.toLowerCase();
 
-  // Palm oil family — catches all label forms found on Indian packaged food:
-  //   "Palm Oil", "Palmolein", "Palm Stearin", "Palm Kernel Oil",
-  //   "Hydrogenated Vegetable Oils (Rapeseed and Palm)", "PALMOLEO FRACTION",
-  //   "Vegetable Oil (Palm)", "Palm Fat", "Refined Palmolein"
+  // §1 — Sweetener category: uses the shared isArtificialSweetener which
+  // combines dictionary-driven names with descriptive phrase matching
+  if (a.includes("sweetener")) {
+    return isArtificialSweetener(t);
+  }
+
+  // §2 — Data-driven role expansion: check if the avoid term maps to a
+  // known ingredient category (preservative, emulsifier, color, etc.)
+  // and expand to all matching ingredient names from ingredient-known.
+  const roleNames = getIngredientNamesForAvoid(a);
+  if (roleNames?.length) {
+    return roleNames.some((n) => boundedMatch(t, n));
+  }
+
+  // §3 — Palm oil family (regex handles broader label forms)
   if (a.includes("palm")) {
     return /\bpalm\b(?:\s*(?:oil|kernel|stearin|fat|olein|hard))?|\bpalmolein\b|\bpalmoleo\b/i.test(t);
   }
 
-  // Maida / refined wheat flour family
+  // §4 — Maida / refined wheat flour
   if (a.includes("maida") || a.includes("refined wheat") || a.includes("refined flour") || a.includes("all purpose")) {
     return /\bmaida\b|\brefined\s+wheat\s+flour\b|\ball[\s-]+purpose\s+flour\b|\bwheat\s+flour\s*\(\s*refined\b/i.test(t);
   }
 
-  // MSG family
+  // §5 — MSG family
   if (a.includes("msg") || a.includes("monosodium") || a.includes("ajinomoto")) {
     return /\bmonosodium\s+glutamate\b|\bmsg\b|\bajinomoto\b|\b(?:e|ins)\s*621\b/i.test(t);
   }
 
-  // Aspartame
-  if (a.includes("aspartame")) {
-    return /\baspartame\b|\b(?:e|ins)\s*951\b/i.test(t);
-  }
-
-  // Default: word-boundary match (safer than includes for short terms)
+  // §6 — Default word-boundary match
   if (a.length >= 4) {
-    return new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t);
+    return boundedMatch(t, a);
   }
   return t.includes(a);
 }

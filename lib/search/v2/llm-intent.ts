@@ -107,6 +107,10 @@ Rules:
   "gluten free" → constraints.gluten_free:true (dietary boolean, not allergen).
   "no maida" / "without preservatives" / "no artificial colours" → avoid_ingredients.
   "no palm oil" (ingredient avoidance, not dietary boolean) → avoid_ingredients: ["palm oil"].
+  "no artificial sweetener" / "no sweeteners" / "sugar free" (by ingredient) → avoid_ingredients: ["artificial sweetener"].
+  "no preservatives" → avoid_ingredients: ["preservative"].
+  "no artificial colors" / "no artificial colour" → avoid_ingredients: ["artificial color"].
+  These umbrella terms are auto-expanded against the ingredient-known dictionary.
 - "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
 - "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".
 - trait_weights is REQUIRED for EVERY query. Map HEALTH/NUTRITION intent to trait weights.

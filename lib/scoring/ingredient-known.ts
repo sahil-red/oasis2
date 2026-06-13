@@ -136,6 +136,64 @@ export function getKnownIngredient(normalizedName: string): KnownIngredient | nu
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Ingredient role → name expansion (used by ingredientPresent for avoid filters)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Maps an avoid-term umbrella category to ingredient role + filters.
+ *  When the LLM sets avoid_ingredients:["artificial sweetener"], ingredientPresent
+ *  expands it to every known ingredient name with role="sweetener" that passes
+ *  the nova / quality filters (excludes natural sugars at nova 1-2 with high quality).
+ *  Add a line here to support a new "no X" category — no regex needed. */
+export const INGREDIENT_ROLE_EXPANSION: Record<string, { role: string; minNova?: number; maxQuality?: number }> = {
+  "artificial sweetener": { role: "sweetener", minNova: 3 },           // nova ≥3 → artificial/intense sweeteners + sugar alcohols
+  "sweetener":            { role: "sweetener", minNova: 3 },
+  "preservative":         { role: "preservative" },
+  "artificial color":     { role: "color" },
+  "colour":               { role: "color" },
+  "emulsifier":           { role: "emulsifier" },
+  "maida":                { role: "starch", maxQuality: 20 },
+  "refined flour":        { role: "starch", maxQuality: 20 },
+  "msg":                  { role: "flavor" },
+  "monosodium glutamate": { role: "flavor" },
+};
+
+// Computed at module load — list of ingredient names (normalized + aliases)
+// for each role above, used by ingredientPresent's data-driven matcher.
+let _roleNames: Map<string, { names: Set<string>; minNova?: number; maxQuality?: number }> | null = null;
+
+function loadRoleNames(): Map<string, { names: Set<string>; minNova?: number; maxQuality?: number }> {
+  if (_roleNames) return _roleNames;
+  _roleNames = new Map();
+
+  for (const [avoidTerm, spec] of Object.entries(INGREDIENT_ROLE_EXPANSION)) {
+    const names = new Set<string>();
+    // Collect from known-ingredients dictionary
+    for (const [normName, entry] of Object.entries(KNOWN_INGREDIENTS)) {
+      if (entry.role !== spec.role) continue;
+      if (spec.minNova != null && entry.nova_class < spec.minNova) continue;
+      if (spec.maxQuality != null && entry.intrinsic_quality > spec.maxQuality) continue;
+      names.add(normName);
+      // include space-normalized variant for ingredients with spaces
+      const compact = normName.replace(/\s+/g, "");
+      if (compact !== normName) names.add(compact);
+    }
+    _roleNames.set(avoidTerm, { names, minNova: spec.minNova, maxQuality: spec.maxQuality });
+  }
+  return _roleNames;
+}
+
+/** Returns every known ingredient name (canonical + aliases) for a given
+ *  avoid term category. For example, "artificial sweetener" returns
+ *  [aspartame, sucralose, acesulfame potassium, saccharin, ...].
+ *  Computed once at module load, zero per-query cost beyond the regex. */
+export function getIngredientNamesForAvoid(avoidTerm: string): string[] | null {
+  const roleMap = loadRoleNames();
+  const entry = roleMap.get(avoidTerm.toLowerCase().trim());
+  if (!entry) return null;
+  return [...entry.names];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Post-LLM validation rules (applied AFTER LLM rates, before DB store)
 // ─────────────────────────────────────────────────────────────────────────────
 
