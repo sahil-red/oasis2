@@ -7,6 +7,104 @@
 
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { ConstraintPriority, SearchIntentV2 } from "@/lib/search/v2/types";
+import { SEED_GOAL_TRAIT_MAP } from "@/lib/search/v2/goal-graph";
+
+// Precomputed trait weights for all seed goal phrases, display names, and IDs.
+// Saves 400ms embedding call per query when a goal phrase matches a known seed.
+const TRAIT_WEIGHT_CACHE = new Map<string, Record<string, number>>();
+for (const seed of SEED_GOAL_TRAIT_MAP) {
+  TRAIT_WEIGHT_CACHE.set(seed.goal_phrase.toLowerCase(), seed.trait_weights);
+  TRAIT_WEIGHT_CACHE.set(seed.display_name.toLowerCase(), seed.trait_weights);
+  TRAIT_WEIGHT_CACHE.set(seed.goal_id, seed.trait_weights);
+}
+// Also map GOAL_PHRASES output labels to seed trait weights.
+// The classifier's detectGoal() returns canonical labels like "diabetic friendly",
+// "weight loss", etc. — these need to map back to the seed goal trait weights.
+// Seed phrases: "diabetes friendly" → classifier returns "diabetic friendly"
+// Seed phrases: "muscle gain bulking" → classifier returns "muscle gain"
+// Seed phrases: "weight loss" → classifier returns "weight loss"
+// Use goal_id as the bridge since detectGoal output labels often match goal_ids.
+for (const seed of SEED_GOAL_TRAIT_MAP) {
+  // Add classifier's canonical output labels that match this seed
+  const phrase = seed.goal_phrase.toLowerCase();
+  if (phrase.includes("diabetes") || phrase.includes("diabetic")) {
+    TRAIT_WEIGHT_CACHE.set("diabetic friendly", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("diabetes friendly", seed.trait_weights);
+  }
+  if (phrase.includes("muscle") || phrase.includes("bulk")) {
+    TRAIT_WEIGHT_CACHE.set("muscle gain", seed.trait_weights);
+  }
+  if (phrase.includes("weight loss") || phrase.includes("fat loss")) {
+    TRAIT_WEIGHT_CACHE.set("fat loss", seed.trait_weights);
+  }
+  if (phrase.includes("gym") || phrase.includes("fitness") || phrase.includes("workout")) {
+    TRAIT_WEIGHT_CACHE.set("workout", seed.trait_weights);
+  }
+  if (phrase.includes("kids") || phrase.includes("tiffin") || phrase.includes("school")) {
+    TRAIT_WEIGHT_CACHE.set("kids", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("tiffin", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("school lunch", seed.trait_weights);
+  }
+  if (phrase.includes("pcos")) {
+    TRAIT_WEIGHT_CACHE.set("pcos friendly", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("pcos", seed.trait_weights);
+  }
+  if (phrase.includes("running") || phrase.includes("endurance") || phrase.includes("athlete")) {
+    TRAIT_WEIGHT_CACHE.set("running", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("endurance", seed.trait_weights);
+  }
+  if (seed.goal_id === "energy_boost") {
+    TRAIT_WEIGHT_CACHE.set("energy", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("energy boost", seed.trait_weights);
+  }
+  if (seed.goal_id === "immunity") {
+    TRAIT_WEIGHT_CACHE.set("immunity", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("immunity boosting", seed.trait_weights);
+  }
+  if (seed.goal_id === "pregnancy") {
+    TRAIT_WEIGHT_CACHE.set("pregnancy", seed.trait_weights);
+  }
+  if (seed.goal_id === "bone_health") {
+    TRAIT_WEIGHT_CACHE.set("bone health", seed.trait_weights);
+  }
+  if (seed.goal_id === "anemia") {
+    TRAIT_WEIGHT_CACHE.set("anemia", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("iron deficiency", seed.trait_weights);
+  }
+  if (seed.goal_id === "bp_hypertension") {
+    TRAIT_WEIGHT_CACHE.set("blood pressure", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("hypertension", seed.trait_weights);
+  }
+  if (seed.goal_id === "vegan_plant") {
+    TRAIT_WEIGHT_CACHE.set("vegan", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("plant based", seed.trait_weights);
+  }
+  if (seed.goal_id === "hydration") {
+    TRAIT_WEIGHT_CACHE.set("hydration", seed.trait_weights);
+  }
+  if (seed.goal_id === "skin_hair") {
+    TRAIT_WEIGHT_CACHE.set("skin & hair", seed.trait_weights);
+  }
+  if (seed.goal_id === "keto_low_carb" || seed.goal_id === "keto") {
+    TRAIT_WEIGHT_CACHE.set("keto", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("low carb", seed.trait_weights);
+  }
+  if (seed.goal_id === "heart_health") {
+    TRAIT_WEIGHT_CACHE.set("heart healthy", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("low cholesterol", seed.trait_weights);
+  }
+  if (seed.goal_id === "gut_digestion") {
+    TRAIT_WEIGHT_CACHE.set("gut health", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("digestion", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("probiotic", seed.trait_weights);
+  }
+  // "high protein" maps to the muscle_gain seed (protein-dominant weights)
+  if (seed.goal_id === "muscle_gain") {
+    TRAIT_WEIGHT_CACHE.set("high protein", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("protein rich", seed.trait_weights);
+    TRAIT_WEIGHT_CACHE.set("protein budget", seed.trait_weights);
+  }
+}
 
 // ── Normalization ──
 
@@ -309,6 +407,11 @@ function buildConstraintPriorities(
   let p = 1;
   if (allergens.length) out.push({ field: "allergens_excluded", priority: p++ });
   if (avoidIngredients.length) out.push({ field: "avoid_ingredients", priority: p++ });
+  // Numeric constraints — relax price before macros before protein
+  out.push({ field: "max_price", priority: p++ });
+  out.push({ field: "max_sugar_g", priority: p++ });
+  out.push({ field: "max_fat_g", priority: p++ });
+  out.push({ field: "min_protein_g", priority: p++ });
   return out;
 }
 
@@ -384,7 +487,7 @@ function buildIntent(p: PartialIntent): SearchIntentV2 {
     confidence: Math.max(0, Math.min(1, p.confidence)),
     intent_source: "python-classifier",
     raw_query: "",
-    trait_weights: {},
+    trait_weights: TRAIT_WEIGHT_CACHE.get(p.goal_phrase?.toLowerCase() ?? "") ?? {},
   };
 }
 
