@@ -526,10 +526,28 @@ export function classifyIntent(
   }
 
   const brand = idx.findBrand(tokens, queryLower);
-  const ptype = idx.findPrimaryType(tokens, queryLower);
+  let ptype = idx.findPrimaryType(tokens, queryLower);
   const goalPhrase = detectGoal(queryLower);
   const modifiers = detectModifiers(queryLower);
   const sort = detectSort(queryLower);
+
+  // Suppress type when it conflicts with the dietary goal.
+  // "low sugar" + type="sugar" → ptype=null (not "sugar" products!)
+  // "low fat" + type="fat" → ptype=null
+  if (ptype && goalPhrase) {
+    const domain = normalize(ptype);
+    const goal = goalPhrase.toLowerCase();
+    if ((domain.includes("sugar") || domain.includes("jaggery") || domain.includes("khand")) &&
+        (goal.includes("low sugar") || goal.includes("sugar free") || goal.includes("no added sugar") || goal.includes("zero sugar"))) {
+      ptype = null;
+    }
+    if (domain.includes("fat") && (goal.includes("low fat") || goal.includes("fat free"))) {
+      ptype = null;
+    }
+    if (domain.includes("calorie") && goal.includes("low calorie")) {
+      ptype = null;
+    }
+  }
 
   const first = tokens[0] ?? "";
   const isVague = VAGUE_PREFIXES.has(first) && !ptype && !brand;

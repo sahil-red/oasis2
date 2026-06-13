@@ -870,5 +870,37 @@
     "expected_type": null,
     "expected_goal": "bone health",
     "notes": "Bare health goal"
+  },
+  {
+    "query": "low sugar",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low sugar",
+    "notes": "Bare modifier \u2014 should NOT match type sugar"
+  },
+  {
+    "query": "low fat",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "low fat",
+    "notes": "Bare modifier \u2014 should NOT match type fat"
+  },
+  {
+    "query": "zero sugar",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": "sugar free",
+    "notes": "Bare modifier \u2014 should NOT match sugar types"
+  },
+  {
+    "query": "fat free",
+    "expected_kind": "directed",
+    "expected_brand": null,
+    "expected_type": null,
+    "expected_goal": null,
+    "notes": "No explicit goal phrase but dietary intent"
   }
 ]
