@@ -315,6 +315,7 @@ export default async function ProductPage({
               <PdpMacroStrip
                 nutrition={displayNutrition ?? product.nutrition}
                 netWeight={product.net_weight}
+                roleCohort={score?.role_cohort}
               />
             </div>
 
@@ -365,6 +366,7 @@ export default async function ProductPage({
                 name={product.name}
                 category={product.category}
                 subcategory={product.subcategory}
+                roleCohort={score?.role_cohort}
               />
             ) : null}
             <PdpLabelInsights deepseek={deepseekLabel} />

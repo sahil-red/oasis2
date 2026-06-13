@@ -28,6 +28,11 @@
       "floor": 75, "ceiling": 95,
       "nutrients": { "protein_g_100g": 0.45, "fat_g_100g": -0.25, "fiber_g_100g": 0.15, "sodium_mg_100g": -0.15 }
     },
+    "Dry Fruits & Nuts::All": {
+      "floor": 55, "ceiling": 88,
+      "nutrients": { "protein_g_100g": 0.35, "fiber_g_100g": 0.30, "added_sugar_g_100g": -0.35, "sodium_mg_100g": -0.15, "saturated_fat_g_100g": -0.10 },
+      "source": "scout-v9-nuts"
+    },
     "Dairy & Eggs::Milk": {
       "floor": 60, "ceiling": 90,
       "nutrients": { "protein_g_100g": 0.40, "saturated_fat_g_100g": -0.30, "added_sugar_g_100g": -0.30 }

@@ -4,6 +4,7 @@
  * One source of truth for both the scannable "judged" summary and the full table.
  */
 import type { ResolvedNutritionRow } from "@/lib/nutrition/nutrition-display";
+import type { RoleCohort } from "@/lib/scoring/role-cohort";
 
 export type NutrientVerdict = {
   kind: "positive" | "limit";
@@ -18,8 +19,22 @@ export const NUTRIENT_VERDICT_COLOR: Record<NutrientVerdict["kind"], string> = {
   limit: "var(--score-bad)",
 };
 
-/** Judge a single resolved row by its per-100g value. null = no notable signal. */
-export function judgeNutrientRow(row: ResolvedNutritionRow): NutrientVerdict | null {
+/** Judge a single resolved row by its per-100g value. null = no notable signal.
+ *  `roleCohort` suppresses misleading positives on adjuncts (see below). */
+export function judgeNutrientRow(
+  row: ResolvedNutritionRow,
+  roleCohort?: RoleCohort | null,
+): NutrientVerdict | null {
+  const verdict = rawJudgeNutrientRow(row);
+  // Adjuncts — oils, spices, masalas, condiments — are eaten in 2–5g amounts, so
+  // a per-100g "good protein" / "low sugar" reads as a health claim it hasn't
+  // earned (MSG: "good protein"; olive oil: "low sugar"). Drop the POSITIVES; keep
+  // the limit warnings — a high-sodium soy sauce should still flag.
+  if (roleCohort === "adjunct" && verdict?.kind === "positive") return null;
+  return verdict;
+}
+
+function rawJudgeNutrientRow(row: ResolvedNutritionRow): NutrientVerdict | null {
   const v = row.per100;
   if (v == null) return null;
 
@@ -66,7 +81,7 @@ export type JudgedNutrient = {
 };
 
 /** Notable nutrients only, concerns first (worst-first), then the positives. */
-export function judgeNutrition(rows: ResolvedNutritionRow[]): {
+export function judgeNutrition(rows: ResolvedNutritionRow[], roleCohort?: RoleCohort | null): {
   watch: JudgedNutrient[];
   good: JudgedNutrient[];
   headline: string;
@@ -74,7 +89,7 @@ export function judgeNutrition(rows: ResolvedNutritionRow[]): {
   const watch: JudgedNutrient[] = [];
   const good: JudgedNutrient[] = [];
   for (const row of rows) {
-    const verdict = judgeNutrientRow(row);
+    const verdict = judgeNutrientRow(row, roleCohort);
     if (!verdict || row.per100 == null) continue;
     const entry: JudgedNutrient = {
       id: row.id,

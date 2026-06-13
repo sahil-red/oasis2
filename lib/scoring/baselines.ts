@@ -95,6 +95,32 @@ export function resolveBaselineKey(
   const sub = (subcategory ?? "").toLowerCase();
   const map = FILE.baselines;
 
+  // ── Curated routing by Blinkit/Zepto subcategory ──────────────────────────
+  // The generic _default band was swallowing ~72% of the catalog: paneer scored
+  // as an "occasional treat", whole walnuts/cashews capped at 62, oils & ghee
+  // wildly inconsistent (a ghee with missing sat-fat outscored a real one by 30
+  // points). These subcategories map cleanly onto curated bands that already
+  // exist. Routing on SUBCATEGORY (not name) is what keeps cheese BALLS, paneer
+  // PAKODA and almond COOKIES — which live in snack/biscuit subcats — off the
+  // dairy/nut bands.
+  if (/paneer\s*&\s*cream/i.test(sub)) {
+    if (/\btofu\b/i.test(name)) return "Paneer & Tofu::Tofu";
+    if (/paneer|chhena|chenna|malai/i.test(name)) return "Paneer & Tofu::Fresh Paneer";
+  }
+  if (/^cheese$/i.test(sub) && /dairy/i.test(cat)) return "Cheese & Butter::Cheese";
+  if (/^ghee$/i.test(sub)) return "Oils & Ghee::Desi Ghee";
+  if (/^oils?$|edible oils?|cooking oils?/i.test(sub)) {
+    return /\b(cold[- ]?press|wood[- ]?press|kachi ?ghani|kachhi ?ghani|virgin|first press|flax)\b/i.test(name)
+      ? "Oils & Ghee::Cold-Pressed Oils"
+      : "Oils & Ghee::Refined Oils";
+  }
+  if (
+    /dry fruits?\s*&\s*nuts|dates?\s*&\s*seeds|nuts\s*munchies/i.test(sub) &&
+    !/\b(brittle|laddoo|ladoo|chikki|barfi|burfi|halwa|katli|candied|chocolate|cookie|biscuit|namkeen|bhujia|fried|roasted masala)\b/i.test(name)
+  ) {
+    return "Dry Fruits & Nuts::All";
+  }
+
   if (cat === "Dairy, Bread & Eggs") {
     if (/egg|anda|omelette/i.test(name) || /egg/i.test(sub)) return "Dairy & Eggs::Eggs";
     if (isFreshMilk(name) || /milk/i.test(sub)) return "Dairy & Eggs::Milk";
@@ -264,7 +290,9 @@ function isSnacksCategory(category: string | null): boolean {
 
 function isSweetCategory(category: string | null): boolean {
   if (!category) return false;
-  return /\b(Sweet Tooth|Chocolates|Candies|Sweets|Bakery|Dessert)\b/i.test(category);
+  // "Sweet Cravings" is Zepto's live category for chocolates/candy/mithai — it
+  // was missing here, so 85% dark bars fell to _default and read as "skip".
+  return /\b(Sweet Tooth|Sweet Cravings|Chocolates|Candies|Sweets|Bakery|Dessert)\b/i.test(category);
 }
 
 /** Map per-100g nutrition + category baseline → 0–60 nutrition subscore. */
@@ -339,8 +367,16 @@ export function scoreNutrition(
     sub = sub - 8;
   }
 
-  // Fried snacks / chips — energy-dense; not the same cap as fresh milk.
-  if (typeof kcal === "number" && kcal >= 450 && baselineKey !== "Dairy & Eggs::Milk") {
+  // Fried snacks / chips — energy-dense; not the same cap as fresh milk. But whole
+  // nuts/seeds and high-cacao chocolate are calorie-dense from intrinsically
+  // healthy fats — exempt them, else the cap pins walnuts/almonds at 32 forever.
+  if (
+    typeof kcal === "number" &&
+    kcal >= 450 &&
+    baselineKey !== "Dairy & Eggs::Milk" &&
+    baselineKey !== "Dry Fruits & Nuts::All" &&
+    !cocoaRich
+  ) {
     sub = Math.min(sub, 32);
   }
 
@@ -353,7 +389,7 @@ export function scoreNutrition(
 
   // Unsweetened dark chocolate / high-cocoa bars: tighten the floor so they
   // don't get crushed by raw saturated-fat math. Sugar/sodium caps still apply.
-  if (cocoaRich && (sugar ?? 99) <= 8 && (nutrition.added_sugar_g_100g ?? 99) <= 3) {
+  if (cocoaRich && (sugar ?? 99) <= 14 && (nutrition.added_sugar_g_100g ?? 99) <= 6) {
     sub = Math.max(sub, 42);
   }
 

@@ -6,6 +6,7 @@ import {
   NUTRIENT_VERDICT_COLOR,
   type JudgedNutrient,
 } from "@/lib/nutrition/nutrient-judgment";
+import type { RoleCohort } from "@/lib/scoring/role-cohort";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 function JudgedRow({ n }: { n: JudgedNutrient }) {
@@ -35,6 +36,7 @@ export function PdpNutritionGlance({
   name,
   category,
   subcategory,
+  roleCohort,
 }: {
   nutrition: ProductNutrition;
   netWeight?: string | null;
@@ -42,11 +44,12 @@ export function PdpNutritionGlance({
   name?: string;
   category?: string | null;
   subcategory?: string | null;
+  roleCohort?: RoleCohort | null;
 }) {
   const { rows, hasServe, serveG, packLabel } = resolveNutritionDisplay(nutrition, netWeight);
   if (!rows.length) return null;
 
-  const { watch, good, headline } = judgeNutrition(rows);
+  const { watch, good, headline } = judgeNutrition(rows, roleCohort);
   const judged = [...watch, ...good];
 
   const ctx: NutritionContext | null = name ? { name, category, subcategory } : null;

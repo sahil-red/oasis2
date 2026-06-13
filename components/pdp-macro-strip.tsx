@@ -1,5 +1,6 @@
 import { judgeNutrientRow, NUTRIENT_VERDICT_COLOR } from "@/lib/nutrition/nutrient-judgment";
 import { formatNutrientValue, resolveNutritionDisplay } from "@/lib/nutrition/nutrition-display";
+import type { RoleCohort } from "@/lib/scoring/role-cohort";
 import type { ProductNutrition } from "@/lib/supabase/types";
 
 const MACROS: { id: string; label: string; unit: string }[] = [
@@ -18,9 +19,11 @@ const MACROS: { id: string; label: string; unit: string }[] = [
 export function PdpMacroStrip({
   nutrition,
   netWeight,
+  roleCohort,
 }: {
   nutrition: ProductNutrition | null;
   netWeight?: string | null;
+  roleCohort?: RoleCohort | null;
 }) {
   if (!nutrition) return null;
   const { rows } = resolveNutritionDisplay(nutrition, netWeight);
@@ -28,7 +31,7 @@ export function PdpMacroStrip({
 
   const cells = MACROS.map((m) => {
     const row = byId.get(m.id);
-    const verdict = row ? judgeNutrientRow(row) : null;
+    const verdict = row ? judgeNutrientRow(row, roleCohort) : null;
     return {
       ...m,
       value: row?.per100 ?? null,
