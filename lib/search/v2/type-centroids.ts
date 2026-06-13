@@ -29,11 +29,35 @@ const TTL_MS = 15 * 60_000;
 type TypeMatch = { primary_type: string; distance: number };
 const cache = new Map<string, { at: number; matches: TypeMatch[] }>();
 
+// All known primary_types from type_centroids — cached for word-level fallback
+// when a specific type has too few products to have a centroid.
+let allKnownTypesCache: { at: number; types: string[] } | null = null;
+
+async function getAllKnownTypes(): Promise<string[]> {
+  if (allKnownTypesCache && Date.now() - allKnownTypesCache.at < TTL_MS) {
+    return allKnownTypesCache.types;
+  }
+  try {
+    const supabase = adminClient();
+    // Use the facets RPC to get ALL types — bypasses PostgREST's 1000-row
+    // default limit on the free tier (type_centroids has 1086 rows).
+    const { data } = await supabase.rpc("search_v2_facets");
+    const obj = (data ?? {}) as { primary_types?: string[] };
+    const types = (obj.primary_types ?? []).map((t) => t.toLowerCase());
+    allKnownTypesCache = { at: Date.now(), types };
+    return types;
+  } catch {
+    return allKnownTypesCache?.types ?? [];
+  }
+}
+
 async function fetchMatches(wanted: string): Promise<TypeMatch[]> {
   const key = wanted.trim().toLowerCase();
   if (!key) return [];
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.matches;
+  // Return cached result only if it has enough matches — if ≤1 match, the
+  // word-level fallback hasn't been applied, so fall through to recompute.
+  if (hit && Date.now() - hit.at < TTL_MS && hit.matches.length > 1) return hit.matches;
 
   // Offline / env-less contexts (regression harness, evals) degrade to "no
   // matches" — exact + lexical type matching still work without centroids.
@@ -75,6 +99,25 @@ async function fetchMatches(wanted: string): Promise<TypeMatch[]> {
   } catch {
     matches = [];
   }
+
+  // Word-level fallback: when a type has few products, the centroid has
+  // weak neighbor matches. Extend by substring-matching against all known types.
+  // "greek yogurt" (1 product) → add "yogurt", "frozen yogurt", etc.
+  if (key.length >= 3) {
+    const words = key.split(/\s+/).filter((w) => w.length >= 3);
+    if (words.length) {
+      const allTypes = await getAllKnownTypes();
+      const fallback = allTypes
+        .filter((t) => t !== key && words.some((w) => t.includes(w)))
+        .slice(0, FETCH_LIMIT)
+        .map((t) => ({ primary_type: t, distance: 0.04 }));
+      const existing = new Set(matches.map((m) => m.primary_type));
+      for (const f of fallback) {
+        if (!existing.has(f.primary_type)) matches.push(f);
+      }
+    }
+  }
+
   cache.set(key, { at: Date.now(), matches });
   return matches;
 }
