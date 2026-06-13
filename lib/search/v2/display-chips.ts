@@ -35,7 +35,7 @@ const TRAIT_LABELS: Record<string, string> = {
   diabetic_friendly: "Diabetes-Friendly",
   gym_friendly: "Gym-Friendly Protein",
   elderly_friendly: "Gentle Nutrition",
-  no_artificial_sweetener: "No Artificial Sweeteners",
+  no_artificial_sweetener: "No Artificial Sweetener",
 };
 
 const DIETARY_BADGES: Array<{
