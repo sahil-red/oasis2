@@ -186,6 +186,18 @@ export async function runSearchV2(
     if (relaxation_steps.length >= 4) break;
   }
 
+  // When relaxation exhausts all options and the pool is still empty, try one
+  // last re-fetch without the type filter. Unknown types ("skyr") have no type
+  // equivalents to expand to, so the ANN leg is the only remaining signal.
+  if (candidates.length === 0 && intent.primary_type) {
+    const noTypeIntent = { ...intent, primary_type: null };
+    candidates = await getCandidates(noTypeIntent, goalWeights?.weights ?? null, minDataQuality);
+    if (candidates.length > 0) {
+      relaxed = true;
+      relaxation_steps.push(`No exact match for "${intent.primary_type}" — showing related products`);
+    }
+  }
+
   // Compute type-match tiers for explicit primary_type queries — used by the
   // sort comparator so exact type matches (milk) dominate lexical hallucination
   // matches (whey mentioning "milk" in ingredients scan_doc).
