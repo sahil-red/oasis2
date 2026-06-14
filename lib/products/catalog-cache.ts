@@ -143,6 +143,6 @@ export async function getCachedCatalogSearch(
         slugs: params.slugs ? params.slugs.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
       }),
       ["catalog-search", cacheKey],
-      { revalidate: 60, tags: ["catalog-search"] },
+      { revalidate: 600, tags: ["catalog-search"] },
   )();
 }
