@@ -84,15 +84,20 @@ function buildFastPathIntent(
   // Fast-path eligibility runs on residual (constraint words stripped), but
   // type/brand discovery uses the FULL query so tokens consumed by numeric
   // extraction ("high protein" in "high protein low sugar") are still available.
-  if (!fastPathEligible(residual, meta)) return null;
+  // When residual is empty (all tokens were constraint phrases), check the
+  // full query — "sugar free" should still match the Sugar Free brand.
+  const effective = residual || query.toLowerCase().trim();
+  if (!fastPathEligible(effective, meta)) return null;
 
   // §3.1 — Use full query for type/brand discovery. The residual had constraint
   // words stripped, but those words include valid types ("protein", "sugar").
   // Also strip suffix-style constraint phrases (sugar-free, fat-free).
-  const fullText = query.toLowerCase().trim()
+  // Fall back to original query when everything was stripped (bare "sugar free").
+  const stripped = query.toLowerCase().trim()
     .replace(/\b(sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+  const fullText = stripped || query.toLowerCase().trim();
 
   // §3.2 — Strip negation-prefixed tokens ("no dairy", "bina cheeni", "without oil")
   // before matching so we don't set primary_type to the negated token.
