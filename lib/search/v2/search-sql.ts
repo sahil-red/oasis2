@@ -3,6 +3,7 @@
  * 3-leg (ANN + typed + brand) approach with inline filtering and ranking.
  */
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
+import { getIngredientNamesForAvoid } from "@/lib/scoring/ingredient-known";
 
 export function buildSearchSql(
   queryEmbedding: number[],
@@ -18,6 +19,18 @@ export function buildSearchSql(
     ? "%" + intent.brand.toLowerCase().replace(/[^a-z0-9]+/g, "%") + "%"
     : null;
   const avoid = c.avoid_ingredients ?? [];
+  // Expand umbrella terms to specific ingredient names.
+  // "artificial sweetener" → [aspartame, sucralose, acesulfame potassium, ...]
+  const expandedAvoid: string[] = [];
+  for (const term of avoid) {
+    const names = getIngredientNamesForAvoid(term);
+    if (names?.length) {
+      expandedAvoid.push(...names);
+    } else {
+      // Not a known umbrella term — pass through as-is (literal ingredient name)
+      expandedAvoid.push(term);
+    }
+  }
 
   const params: unknown[] = [vecStr];
   const p = (v: unknown) => { params.push(v); return params.length; };
@@ -42,7 +55,7 @@ export function buildSearchSql(
   if (c.gluten_free) extraConditions += " AND psi.is_gluten_free = TRUE";
   if (c.palm_oil_free) extraConditions += " AND psi.is_palm_oil_free = TRUE";
   if (noAddedSugar) extraConditions += " AND psi.has_added_sugar = FALSE";
-  if (avoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?) ing WHERE psi.search_doc ILIKE '%' || ing || '%')", avoid);
+  if (expandedAvoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?::text[]) ing WHERE psi.search_doc ILIKE '%' || ing || '%')", expandedAvoid);
 
   const sortClause = intent.sort === "cheapest"
     ? "COALESCE(-psi.price_inr, -1e9)"
@@ -55,7 +68,7 @@ export function buildSearchSql(
     // Health-first blend with Scout tier floor.
     // Healthy products surface first on generic queries ("chips").
     // Products below Scout 40 get a heavy penalty, below 65 get a light penalty.
-    : `(0.45 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.35 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.20 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN COALESCE(psi.scout_score, 0) < 40 THEN 0.30 WHEN COALESCE(psi.scout_score, 0) < 65 THEN 0.10 ELSE 0.00 END)`;
+    : `(0.45 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.35 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.20 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 40 THEN 0.30 WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 65 THEN 0.10 ELSE 0.00 END)`;
 
   const sql = `SELECT psi.product_id, psi.name, psi.brand, psi.primary_type, psi.price_inr, psi.scout_score, psi.sugar_g, psi.protein_g, psi.fat_g, psi.fiber_g, psi.is_vegan, psi.is_gluten_free, psi.is_palm_oil_free, psi.has_added_sugar, psi.data_quality_score, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} AND ($${tIdx}::text[] IS NULL OR psi.primary_type = ANY($${tIdx}::text[]))${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
 

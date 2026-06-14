@@ -93,7 +93,7 @@ function buildFastPathIntent(
   // words stripped, but those words include valid types ("protein", "sugar").
   // Also strip constraint phrases so fast-path doesn't match them as types/brands.
   // Fall back to original query when everything was stripped (bare "sugar free").
-  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar)|without\s+(?:sugar|added\s+sugar)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest)\b/gi;
+  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar|dairy|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|without\s+(?:sugar|added\s+sugar|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest)\b/gi;
   const stripped = query.toLowerCase().trim()
     .replace(CONSTRAINT_STRIP, " ")
     .replace(/\s+/g, " ")
@@ -112,7 +112,7 @@ function buildFastPathIntent(
     }
     safeTokens.push(rawTokens[i]!);
   }
-  const tokens = safeTokens.filter(Boolean);
+  const tokens = safeTokens.filter((t) => t && t !== "&" && t.length >= 1);
   const normTokens = tokens.map((t) => norm(t));
 
   let brand: string | null = null;
@@ -127,7 +127,7 @@ function buildFastPathIntent(
   if (tokens.length >= 2) {
     if (meta.brands.has(fullNorm)) {
       brand = residual;
-      kind = "brand";
+      kind = meta.primaryTypes.has(fullNorm) ? "directed" : "brand";
     } else if (meta.primaryTypes.has(fullNorm)) {
       primary_type = residual;
       kind = "directed";
@@ -143,13 +143,13 @@ function buildFastPathIntent(
       const pair = normTokens[i]! + " " + normTokens[i + 1]!;
       if (!brand && meta.brands.has(pair)) {
         brand = tokens.slice(i, i + 2).join(" ");
-        kind = "brand";
+        kind = primary_type ? "directed" : "brand";
         pairConsumedStart = i;
         pairConsumedEnd = i + 1;
       }
       if (!primary_type && meta.primaryTypes.has(pair)) {
         primary_type = tokens.slice(i, i + 2).join(" ");
-        kind = "directed";
+        kind = brand ? "directed" : "directed";
         pairConsumedStart = i;
         pairConsumedEnd = i + 1;
       }
@@ -168,7 +168,9 @@ function buildFastPathIntent(
         if (!brand) kind = "directed";
       } else if (!brand && meta.brands.has(t)) {
         brand = tokens[i]!;
-        kind = "brand";
+        // If we also found a primary_type, this is a directed search ("amul milk"),
+        // not a pure brand search ("amul").
+        kind = primary_type ? "directed" : "brand";
       }
     }
   }
@@ -177,6 +179,10 @@ function buildFastPathIntent(
   // an individual known type token exists at an EARLIER position, prefer the
   // individual token. "navratri fasting snacks sendha namak": "snacks" (idx 2)
   // < "sendha namak" pair (idx 3-4) → primary_type="snacks", not a salt product.
+
+  // When both brand and type are present, this is a directed search ("amul milk"),
+  // not a pure brand query.
+  if (brand && primary_type) kind = "directed";
   if (primary_type && pairConsumedStart > 0) {
     for (let i = 0; i < pairConsumedStart; i++) {
       if (meta.primaryTypes.has(normTokens[i]!)) {

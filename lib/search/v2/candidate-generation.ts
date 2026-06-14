@@ -68,19 +68,25 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   const c = intent.constraints;
   if (c.max_price != null && row.price_inr != null && row.price_inr > c.max_price) return false;
   if (c.max_sugar_g != null) {
-    const s = row.total_sugar_g ?? row.sugar_g;
+    const ts = row.total_sugar_g != null && row.total_sugar_g > 0 ? row.total_sugar_g : null;
+    const s = ts ?? row.sugar_g;
     if (s != null && s > c.max_sugar_g) return false;
   }
   if (c.max_fat_g != null) {
-    const f = row.total_fat_g ?? row.fat_g;
+    const tf = row.total_fat_g != null && row.total_fat_g > 0 ? row.total_fat_g : null;
+    const f = tf ?? row.fat_g;
     if (f != null && f > c.max_fat_g) return false;
   }
   if (c.max_calories != null) {
-    const cal = row.total_calories ?? row.energy_kcal;
+    const tc = row.total_calories != null && row.total_calories > 0 ? row.total_calories : null;
+    const cal = tc ?? row.energy_kcal;
     if (cal != null && cal > c.max_calories) return false;
   }
   if (c.min_protein_g != null) {
-    const p = row.total_protein_g ?? row.protein_g;
+    // total_protein_g (per-pack) may be 0 for products where only protein_g (per-100g) is set.
+    // Treat 0 as unset for total_ columns — fall through to the per-100g column.
+    const tp = row.total_protein_g != null && row.total_protein_g > 0 ? row.total_protein_g : null;
+    const p = tp ?? row.protein_g;
     if (p != null && p < c.min_protein_g) return false;
   }
   // Relative asks ("high protein", "low sugar") are RANKING signals, never gates.

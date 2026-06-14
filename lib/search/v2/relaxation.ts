@@ -43,6 +43,13 @@ export function relaxIntentDeterministic(
       case "min_protein_g":
         delete constraints.min_protein_g;
         break;
+      case "max_calories":
+        delete constraints.max_calories;
+        break;
+      // These cases exist for documentation clarity — NON_RELAXABLE_FIELDS
+      // filters them out at line 13, so they're unreachable by design.
+      // Kept here so future readers understand these fields exist in the
+      // constraints object and are intentionally never auto-relaxed.
       case "vegan":
         delete constraints.vegan;
         break;
