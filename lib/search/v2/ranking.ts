@@ -197,15 +197,19 @@ export function rankCandidates(
 
     let final_score: number;
     if (!hasGoalOrConstraints) {
+      // Health-first blend with Scout tier floor.
+      // Generic queries ("chips") show healthiest options first.
+      // Products below Scout 40 get -0.30 penalty, below 65 get -0.10.
       final_score = clamp01(
-        relevance_score * 0.55 + health_score * 0.35 + popularity_score * 0.1,
+        health_score * 0.45 + relevance_score * 0.35 + popularity_score * 0.20 -
+        (row.scout_score != null && row.scout_score < 40 ? 0.30 :
+         row.scout_score != null && row.scout_score < 65 ? 0.10 : 0),
       );
     } else {
+      // Constrained queries: user specified a filter — rank valid products by health.
       final_score = clamp01(
-        relevance_score * 0.4 +
-          health_score * 0.3 +
-          trait_match_score * 0.2 +
-          popularity_score * 0.1,
+        health_score * 0.50 + relevance_score * 0.30 +
+          trait_match_score * 0.15 + popularity_score * 0.05,
       );
     }
 
