@@ -7,7 +7,7 @@ export default function ProductLoading() {
       <SiteNav />
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-6">
         <div className="h-4 w-24 animate-pulse rounded bg-(--color-bg-soft)" />
-        <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
+        <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           {/* Gallery */}
           <div className="space-y-5">
             <div className="aspect-square animate-pulse rounded-2xl bg-(--color-bg-soft)" />
