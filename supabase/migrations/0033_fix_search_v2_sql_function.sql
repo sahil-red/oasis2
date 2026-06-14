@@ -64,12 +64,13 @@ BEGIN
       AND (p_brand_pattern IS NULL OR psi.brand ILIKE p_brand_pattern)
       -- Numeric constraints
       AND (p_max_price IS NULL OR psi.price_inr <= p_max_price)
-      AND (p_max_sugar_g IS NULL OR COALESCE(psi.total_sugar_g, psi.sugar_g) <= p_max_sugar_g)
-      AND (p_max_fat_g IS NULL OR COALESCE(psi.total_fat_g, psi.fat_g) <= p_max_fat_g)
-      AND (p_max_calories IS NULL OR COALESCE(psi.total_calories, psi.energy_kcal) <= p_max_calories)
-      AND (p_min_protein_g IS NULL OR COALESCE(psi.total_protein_g, psi.protein_g) >= p_min_protein_g)
+      AND (p_max_sugar_g IS NULL OR COALESCE(NULLIF(psi.total_sugar_g, 0), psi.sugar_g) <= p_max_sugar_g)
+      AND (p_max_fat_g IS NULL OR COALESCE(NULLIF(psi.total_fat_g, 0), psi.fat_g) <= p_max_fat_g)
+      AND (p_max_calories IS NULL OR COALESCE(NULLIF(psi.total_calories, 0), psi.energy_kcal) <= p_max_calories)
+      AND (p_min_protein_g IS NULL OR COALESCE(NULLIF(psi.total_protein_g, 0), psi.protein_g) >= p_min_protein_g)
       -- Boolean flags
       AND (p_vegan IS NULL OR psi.is_vegan = TRUE)
+      AND (p_vegetarian IS NULL OR psi.is_veg = TRUE)
       AND (p_gluten_free IS NULL OR psi.is_gluten_free = TRUE)
       AND (p_palm_oil_free IS NULL OR psi.is_palm_oil_free = TRUE)
       AND (p_no_added_sugar IS NULL OR p_no_added_sugar = FALSE OR psi.has_added_sugar = FALSE)

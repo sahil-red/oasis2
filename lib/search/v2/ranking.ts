@@ -64,15 +64,33 @@ function constraintSatisfaction(row: ProductSearchIndexRow, intent: SearchIntent
   }
   if (c.max_sugar_g != null) {
     total++;
-    if (row.sugar_g == null || row.sugar_g <= c.max_sugar_g) met++;
+    const s = row.total_sugar_g != null && row.total_sugar_g > 0 ? row.total_sugar_g : row.sugar_g;
+    if (s == null || s <= c.max_sugar_g) met++;
+  }
+  if (c.max_fat_g != null) {
+    total++;
+    const f = row.total_fat_g != null && row.total_fat_g > 0 ? row.total_fat_g : row.fat_g;
+    if (f == null || f <= c.max_fat_g) met++;
+  }
+  if (c.max_calories != null) {
+    total++;
+    const cal = row.total_calories != null && row.total_calories > 0 ? row.total_calories : row.energy_kcal;
+    if (cal == null || cal <= c.max_calories) met++;
+  }
+  if (c.min_protein_g != null) {
+    total++;
+    const p = row.total_protein_g != null && row.total_protein_g > 0 ? row.total_protein_g : null;
+    const pro = p ?? row.protein_g;
+    if (pro == null || pro >= c.min_protein_g) met++;
   }
   return total > 0 ? met / total : 0.5;
 }
 
 /** Physics validity for per-100g macros — a percentage cannot exceed 100.
- *  Invalid extraction artifacts (e.g. "500g protein") must not win sorts. */
+ *  Invalid extraction artifacts (e.g. "500g protein" for per-100g) must not win sorts.
+ *  Per-pack total_ columns can legitimately exceed 100g (e.g. 500g protein tub). */
 function validGrams(v: number | null | undefined): number | null {
-  return v != null && Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
+  return v != null && Number.isFinite(v) && v >= 0 ? v : null;
 }
 
 /** Min-max normalize values that may be null — nulls land mid-scale so unknown

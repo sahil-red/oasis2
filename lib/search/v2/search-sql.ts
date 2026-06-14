@@ -46,10 +46,10 @@ export function buildSearchSql(
 
   if (brandPatt) add("AND psi.brand ILIKE ?", brandPatt);
   if (c.max_price != null) add("AND psi.price_inr <= ?", c.max_price);
-  if (c.max_sugar_g != null) add("AND COALESCE(psi.total_sugar_g, psi.sugar_g) <= ?", c.max_sugar_g);
-  if (c.max_fat_g != null) add("AND COALESCE(psi.total_fat_g, psi.fat_g) <= ?", c.max_fat_g);
-  if (c.max_calories != null) add("AND COALESCE(psi.total_calories, psi.energy_kcal) <= ?", c.max_calories);
-  if (c.min_protein_g != null) add("AND COALESCE(psi.total_protein_g, psi.protein_g) >= ?", c.min_protein_g);
+  if (c.max_sugar_g != null) add("AND COALESCE(NULLIF(psi.total_sugar_g, 0), psi.sugar_g) <= ?", c.max_sugar_g);
+  if (c.max_fat_g != null) add("AND COALESCE(NULLIF(psi.total_fat_g, 0), psi.fat_g) <= ?", c.max_fat_g);
+  if (c.max_calories != null) add("AND COALESCE(NULLIF(psi.total_calories, 0), psi.energy_kcal) <= ?", c.max_calories);
+  if (c.min_protein_g != null) add("AND COALESCE(NULLIF(psi.total_protein_g, 0), psi.protein_g) >= ?", c.min_protein_g);
   if (c.vegan) extraConditions += " AND psi.is_vegan = TRUE";
   if (c.vegetarian) extraConditions += " AND psi.is_veg = TRUE";
   if (c.gluten_free) extraConditions += " AND psi.is_gluten_free = TRUE";
@@ -60,11 +60,11 @@ export function buildSearchSql(
   const sortClause = intent.sort === "cheapest"
     ? "COALESCE(-psi.price_inr, -1e9)"
     : intent.sort === "highest_protein"
-    ? "COALESCE(psi.total_protein_g, psi.protein_g, -1)"
+    ? "COALESCE(NULLIF(psi.total_protein_g, 0), psi.protein_g, -1)"
     : intent.sort === "lowest_sugar"
-    ? "-COALESCE(COALESCE(psi.total_sugar_g, psi.sugar_g), 1e9)"
+    ? "-COALESCE(COALESCE(NULLIF(psi.total_sugar_g, 0), psi.sugar_g), 1e9)"
     : intent.sort === "healthiest"
-    ? "COALESCE(psi.scout_score, 0)"
+    ? "COALESCE(psi.scout_score, 50)"
     // Health-first blend with Scout tier floor.
     // Healthy products surface first on generic queries ("chips").
     // Products below Scout 40 get a heavy penalty, below 65 get a light penalty.
