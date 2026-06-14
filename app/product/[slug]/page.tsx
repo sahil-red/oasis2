@@ -25,6 +25,7 @@ import { SiteNav } from "@/components/site-nav";
 import { resolveProductVerdict } from "@/lib/scoring/verdict-resolve";
 import { mergePdpSublabelIds } from "@/lib/scoring/sublabels";
 import { CatalogBackLink } from "@/components/catalog-back-link";
+import { Reveal } from "@/components/reveal";
 import { PdpSourceDataPanel } from "@/components/pdp-source-data-panel";
 import { buildProductProvenance } from "@/lib/products/data-provenance";
 import { reconcileDisplayIngredients } from "@/lib/ocr/deepseek-ingredients";
@@ -338,7 +339,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
+        <Reveal className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">
@@ -371,12 +372,12 @@ export default async function ProductPage({
             ) : null}
             <PdpLabelInsights deepseek={deepseekLabel} />
           </aside>
-        </div>
+        </Reveal>
 
         {/* Better alternatives — full-width, below the deep-dive, above discovery.
             Action ("swap to something stronger") outranks browse, so it leads. */}
         {swaps.length > 0 ? (
-          <div className="mt-12">
+          <Reveal className="mt-12">
             <SwapPanel
               current={product}
               suggestions={swaps}
@@ -387,11 +388,11 @@ export default async function ProductPage({
               layout="grid"
               gridColumns={4}
             />
-          </div>
+          </Reveal>
         ) : null}
 
         {similarProducts.length > 0 ? (
-          <div className="mt-12">
+          <Reveal className="mt-12">
             <SwapPanel
               current={product}
               suggestions={similarProducts}
@@ -402,7 +403,7 @@ export default async function ProductPage({
               layout="grid"
               gridColumns={4}
             />
-          </div>
+          </Reveal>
         ) : null}
 
         {attrEntries.length > 0 || provenance || score?.cohort_size ? (

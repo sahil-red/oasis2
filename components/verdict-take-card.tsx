@@ -65,7 +65,7 @@ export function VerdictTakeCard({
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex items-center gap-2">
             <span
-              className="rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
+              className="stamp-in rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
               style={{
                 backgroundColor: c.bg,
                 color: c.fg,

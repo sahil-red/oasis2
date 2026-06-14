@@ -96,7 +96,7 @@ export function CompareView() {
     return (
       <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) px-6 py-16 text-center">
         <ArrowLeftRight className="mx-auto h-9 w-9 text-(--color-fg-dim)" strokeWidth={1.5} />
-        <p className="mt-4 text-lg font-medium text-(--color-fg)">
+        <p className="mt-4 font-display text-[1.6rem] leading-tight text-(--color-fg)">
           {products.length === 1 ? "Add one more product" : "Nothing to compare yet"}
         </p>
         <p className="mx-auto mt-2 max-w-sm text-sm text-(--color-fg-muted)">
@@ -105,7 +105,7 @@ export function CompareView() {
         </p>
         <Link
           href="/search"
-          className="mt-8 inline-flex rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) hover:opacity-90"
+          className="u-press mt-8 inline-flex rounded-full bg-(--color-fg) px-5 py-2.5 text-sm font-medium text-(--color-bg) transition hover:opacity-90"
         >
           Browse catalog
         </Link>

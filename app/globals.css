@@ -326,9 +326,54 @@ html.dark .panel-soft {
   animation: pop-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Verdict "stamp" — the Staple/Skip pill settles in like an editorial rubber
+   stamp on load. One-shot, ~260ms, decisive but not bouncy. */
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(1.18) rotate(-3deg); }
+  60% { opacity: 1; transform: scale(0.97) rotate(0.5deg); }
+  100% { opacity: 1; transform: none; }
+}
+.stamp-in {
+  animation: stamp-in 0.26s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* Count pop — a basket quantity gives a little squash when it changes, so adding
+   an item registers physically. Replays on each change via a React key. */
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+.count-pop {
+  animation: count-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Scan sweep — a single faint accent line passes top→bottom over a product image
+   on load, echoing Scout "reading the label". Thin, one-shot, purely decorative. */
+@keyframes scan-sweep {
+  0% { transform: translateY(-100%); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+.scan-line {
+  background: linear-gradient(
+    to bottom,
+    transparent 44%,
+    color-mix(in srgb, var(--color-accent) 22%, transparent) 50%,
+    transparent 56%
+  );
+  animation: scan-sweep 1s ease-in-out 0.2s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .grid-rise > *,
-  .pop-in {
+  .pop-in,
+  .stamp-in,
+  .count-pop {
     animation: none;
+  }
+  .scan-line {
+    display: none;
   }
 }

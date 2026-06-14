@@ -1046,16 +1046,24 @@ export function CatalogView({
 
   if (loadError && !items.length && !meta) {
     return (
-      <div className="py-16 text-center">
-        <p className="text-sm text-(--color-bad)">Could not load catalog ({loadError}).</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
-        >
-          Try again
-        </button>
-      </div>
+      <EmptyState
+        title="Couldn't load the catalog"
+        className="py-16"
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="u-press rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
+          >
+            Try again
+          </button>
+        }
+      >
+        <p>
+          Something hiccuped on our end — give it another go.{" "}
+          <span className="text-(--color-fg-dim)">({loadError})</span>
+        </p>
+      </EmptyState>
     );
   }
 
@@ -1345,9 +1353,14 @@ export function CatalogView({
       ) : loading && items.length === 0 ? (
         <div className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="animate-pulse space-y-2">
-              <div className="aspect-square rounded-xl bg-(--color-bg-soft)" />
-              <div className="h-4 w-3/4 rounded bg-(--color-bg-soft)" />
+            <div key={i} className="flex h-full animate-pulse flex-col">
+              <div className="aspect-[3/4] rounded-2xl bg-(--color-bg-soft)" />
+              <div className="mt-3 space-y-2 px-1">
+                <div className="h-2 w-1/3 rounded bg-(--color-bg-soft)" />
+                <div className="h-3.5 w-5/6 rounded bg-(--color-bg-soft)" />
+                <div className="h-3.5 w-2/3 rounded bg-(--color-bg-soft)" />
+                <div className="mt-1 h-4 w-1/4 rounded bg-(--color-bg-soft)" />
+              </div>
             </div>
           ))}
         </div>

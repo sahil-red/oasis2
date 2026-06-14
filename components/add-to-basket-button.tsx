@@ -53,11 +53,14 @@ export function AddToBasketButton({
                 e.stopPropagation();
                 decrementBasket(slug);
               }}
-              className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) hover:opacity-90"
+              className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) transition hover:opacity-90 active:scale-90"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
-            <span className="min-w-[1.25rem] text-center text-xs font-semibold tabular-nums text-(--color-fg)">
+            <span
+              key={qty}
+              className="count-pop min-w-[1.25rem] text-center text-xs font-semibold tabular-nums text-(--color-fg)"
+            >
               {qty}
             </span>
           </>
@@ -71,7 +74,7 @@ export function AddToBasketButton({
             addToBasket(slug, name);
             if (productId) trackSearchInteraction(productId, "save");
           }}
-          className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) shadow-sm hover:opacity-90"
+          className="grid h-8 w-8 place-items-center rounded-full bg-(--color-fg) text-(--color-bg) shadow-sm transition hover:opacity-90 active:scale-90"
         >
           <Plus className="h-4 w-4" strokeWidth={2.25} />
         </button>
@@ -88,7 +91,7 @@ export function AddToBasketButton({
       }}
       className={
         className ??
-        "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-(--color-panel) px-3 py-2 text-sm font-medium text-(--color-fg) hover:border-(--color-fg)"
+        "inline-flex items-center gap-1.5 rounded-lg border border-(--color-line) bg-(--color-panel) px-3 py-2 text-sm font-medium text-(--color-fg) transition hover:border-(--color-fg) active:scale-[0.97]"
       }
     >
       <Plus className="h-4 w-4" />

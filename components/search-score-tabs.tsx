@@ -28,10 +28,10 @@ export function SearchScoreStack({
       aria-label={`Scout score ${Math.round(health)}`}
     >
       <div
-        className="rounded-[10px] px-2 py-1 shadow-md"
+        className="flex h-12 min-w-12 items-center justify-center rounded-[10px] px-2.5 shadow-lg"
         style={{ backgroundColor: style.fill }}
       >
-        <span className="font-display text-[17px] font-bold leading-none tabular-nums text-white">
+        <span className="font-display text-[22px] font-bold leading-none tabular-nums text-white">
           {Math.round(health)}
         </span>
       </div>

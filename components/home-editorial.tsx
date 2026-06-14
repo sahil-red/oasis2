@@ -58,7 +58,7 @@ function HomeDodgeCard({ product }: { product: LandingDodgeProduct }) {
       href={`/product/${product.slug}`}
       className="group flex h-full flex-col"
     >
-      <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame shadow-[0_1px_2px_rgba(60,40,20,0.05)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_34px_-20px_rgba(60,40,20,0.34)]"
+      <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame shadow-[0_1px_2px_rgba(60,40,20,0.05)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_34px_-20px_rgba(60,40,20,0.34)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4)] dark:group-hover:shadow-[0_16px_34px_-18px_rgba(0,0,0,0.6)]"
         style={{ borderTop: "2px solid var(--score-bad)" }}
       >
         {thumb ? (

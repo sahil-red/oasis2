@@ -5,12 +5,10 @@ function BrandRow({
   brand,
   rank,
   stat,
-  variant,
 }: {
   brand: BrandStat;
   rank: number;
   stat: string;
-  variant: "good" | "weak";
 }) {
   const pct = Math.min(100, brand.avgScore);
   const barColor = colorForScore(brand.avgScore);
@@ -56,7 +54,6 @@ export function InsightsBrandBoard({
               key={b.brand}
               brand={b}
               rank={i + 1}
-              variant="good"
               stat={`${b.count} items · ${b.avgSugar != null ? `~${b.avgSugar.toFixed(0)}g sugar avg` : "label data"}`}
             />
           ))}
@@ -73,7 +70,6 @@ export function InsightsBrandBoard({
               key={b.brand}
               brand={b}
               rank={i + 1}
-              variant="weak"
               stat={`${b.count} items · worth checking alternatives`}
             />
           ))}
