@@ -1,10 +1,11 @@
 """
 Search V2 SQL endpoint — Python FastAPI on Vercel serverless.
 
-Replaces candidate-generation.ts, db-candidates.ts, ranking.ts, relaxation.ts,
-and verification.ts with a single PostgreSQL function call.
+Calls search_v2_sql() PostgreSQL function via PostgREST for single-query
+candidate retrieval with type/brand/nutrition/dietary/avoid_ingredient filtering
+and health-first ranking (0.45 health + 0.35 relevance).
 
-Deploy: Add to vercel.json → functions.api/search/py.py
+Deploy: vercel.json routes api/search/py.py → Vercel Python runtime.
 """
 import json, os, time, hashlib, hmac, re
 from http.server import BaseHTTPRequestHandler
@@ -281,65 +282,8 @@ def _parse_llm_json(content: str, query: str) -> dict:
         return {"kind": "ambiguous", "source": "degraded"}
 
 
-# ── Search SQL ──
-SEARCH_SQL = """
-WITH ann_leg AS (
-  SELECT product_id, 1.0 - (embedding <=> $1::vector(1024)) AS relevance
-  FROM product_search_index
-  WHERE data_quality_score >= $13
-  ORDER BY embedding <=> $1::vector(1024)
-  LIMIT 200
-),
-typed_leg AS (
-  SELECT product_id, 1.0 AS relevance
-  FROM product_search_index
-  WHERE primary_type = ANY($2) AND data_quality_score >= $13
-  LIMIT 100
-),
-brand_leg AS (
-  SELECT product_id, 1.0 AS relevance
-  FROM product_search_index
-  WHERE $3 IS NOT NULL AND brand ILIKE $3 AND data_quality_score >= $13
-  LIMIT 100
-),
-deduped AS (
-  SELECT DISTINCT ON (product_id) product_id, relevance
-  FROM (
-    SELECT * FROM brand_leg
-    UNION ALL SELECT * FROM typed_leg
-    UNION ALL SELECT * FROM ann_leg
-  ) _
-  ORDER BY product_id, relevance DESC
-),
-filtered AS (
-  SELECT psi.*, dc.relevance, psi.scout_score / 100.0 AS health
-  FROM deduped dc
-  JOIN product_search_index psi ON psi.product_id = dc.product_id
-  WHERE
-    ($4::numeric IS NULL OR psi.price_inr <= $4)
-    AND ($5::numeric IS NULL OR COALESCE(psi.total_sugar_g, psi.sugar_g) <= $5)
-    AND ($6::numeric IS NULL OR COALESCE(psi.total_fat_g, psi.fat_g) <= $6)
-    AND ($7::numeric IS NULL OR COALESCE(psi.total_calories, psi.energy_kcal) <= $7)
-    AND ($8::numeric IS NULL OR COALESCE(psi.total_protein_g, psi.protein_g) >= $8)
-    AND ($9::boolean IS NULL OR psi.is_vegan = TRUE)
-    AND ($10::boolean IS NULL OR psi.is_gluten_free = TRUE)
-    AND ($11::boolean IS NULL OR psi.is_palm_oil_free = TRUE)
-    AND ($12::boolean IS FALSE OR psi.has_added_sugar = FALSE)
-),
-ranked AS (
-  SELECT *, CASE $14
-    WHEN 'cheapest' THEN coalesce(-price_inr, -1e9)
-    WHEN 'highest_protein' THEN coalesce(protein_g, -1)
-    WHEN 'lowest_sugar' THEN -coalesce(coalesce(total_sugar_g, sugar_g), 1e9)
-    WHEN 'healthiest' THEN coalesce(scout_score, 0)
-    ELSE (0.55 * relevance + 0.35 * health)
-  END AS rank_score
-  FROM filtered
-)
-SELECT * FROM ranked ORDER BY rank_score DESC LIMIT $15;
-"""
 
-INTENT_PROMPT = """You parse Indian grocery search queries into strict JSON. Return one JSON object, no markdown.
+# ── LLM Intent ── = """You parse Indian grocery search queries into strict JSON. Return one JSON object, no markdown.
 Schema: {"kind":"directed"|"goal"|"brand"|"ambiguous","brand":string|null,"primary_type":string|null,"goal_phrase":string|null,"sort":"best_match"|"cheapest"|"healthiest"|"highest_protein","constraints":{"max_price":number,"max_sugar_g":number,"max_fat_g":number,"max_calories":number,"min_protein_g":number,"vegan":boolean,"vegetarian":boolean,"gluten_free":boolean,"palm_oil_free":boolean,"avoid_ingredients":["..."],"allergens_excluded":["..."]},"intent_confidence":number}
 
 Rules:
