@@ -165,10 +165,13 @@ export async function semanticTypeMatches(wanted: string): Promise<Set<string>> 
       if (dist <= EQUIVALENT_MAX) out.add(type);
     }
     // Category sibling expansion: when centroids are sparse, add same-category
-    // types from the taxonomy. "snacks" in "munchies" → chips, namkeen, etc.
-    if (out.size <= 5 && _categoryTypeMap) {
+    // types from the taxonomy. Only expand for narrow categories (≤30 types) —
+    // broad categories like "Dairy, Bread & Eggs" (111 types) would add bagels
+    // to milk results, which is noise, not signal.
+    const centroidOnlyCount = out.size;
+    if (centroidOnlyCount <= 3 && _categoryTypeMap) {
       const siblings = _categoryTypeMap.get(key);
-      if (siblings) {
+      if (siblings && siblings.length <= 30) {
         for (const s of siblings) {
           if (s !== key && out.size < 24) out.add(s);
         }
