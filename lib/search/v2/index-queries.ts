@@ -363,7 +363,10 @@ async function loadTypeCentroids(): Promise<Map<string, number[]>> {
       .range(page * PAGE, (page + 1) * PAGE - 1);
     if (error || !data?.length) break;
     for (const r of data) {
-      if (r.centroid) centroids.set((r.primary_type as string).toLowerCase(), r.centroid as number[]);
+      if (r.centroid) {
+        const vec = typeof r.centroid === "string" ? (JSON.parse(r.centroid) as number[]) : (r.centroid as number[]);
+        centroids.set((r.primary_type as string).toLowerCase(), vec);
+      }
     }
   }
   return centroids;
