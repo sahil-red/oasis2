@@ -2,6 +2,8 @@ import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates, typeMatchTier } from "@/lib/search/v2/candidate-generation";
 import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
+import { fetchCandidatesWithSql, isSqlSearchEnabled } from "@/lib/search/v2/candidates-sql";
+import { validateIntent } from "@/lib/search/v2/intent-validate";
 import { embedText } from "@/lib/search/v2/embeddings";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
 import { attachExplainability } from "@/lib/search/v2/explain";
@@ -52,18 +54,27 @@ export async function runSearchV2(
   setCategoryTypeMap(snapshot.categoryTypeMap);
   setTypeNormalize(snapshot.typeNormalize);
 
-  // Fetch candidates either from the in-memory index or, in pgvector mode, from the DB
-  // (filtered vector-KNN) — then the same in-memory refine runs over the bounded pool.
+  // Fetch candidates either via SQL (single query, faster) or via the
+  // 3-leg approach (ANN + typed + brand). Both paths feed into generateCandidates
+  // for dietary/allergen/flavour filtering.
   const getCandidates = async (
     intentArg: SearchIntentV2,
     gw: GoalTraitWeights | null,
     minQ: number,
   ) => {
-    const pool =
-      snapshot.source === "pgvector"
-        ? await fetchCandidatePool(intentArg, minQ)
-        : snapshot.index;
-    return generateCandidates(pool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
+    if (snapshot.source === "pgvector") {
+      // SQL path: single-query retrieval with type/brand/nutrition/dietary filtering
+      if (isSqlSearchEnabled()) {
+        const sqlPool = await fetchCandidatesWithSql(intentArg, limit, minQ);
+        if (sqlPool.length > 0) {
+          return generateCandidates(sqlPool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
+        }
+      }
+      // Fall back to 3-leg approach
+      const pool = await fetchCandidatePool(intentArg, minQ);
+      return generateCandidates(pool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
+    }
+    return generateCandidates(snapshot.index, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
   };
 
   // Speculative embed: the query vector only needs rawQuery, not the parsed
@@ -81,6 +92,9 @@ export async function runSearchV2(
   });
   let intent = resolved.intent;
   llm_calls += resolved.llm_calls;
+
+  // Validate + normalize LLM intent against catalog data
+  intent = validateIntent(intent, catalogMeta);
 
   // §6b Restore 5g sugar hard-cap for diabetic/pcos — the V2 LLM uses trait ranking
   // (diabetic_friendly) which is a SORT, not a GATE. Products above 5g/100g sugar

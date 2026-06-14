@@ -7,7 +7,7 @@ import type { SearchIntentV2 } from "@/lib/search/v2/types";
 export function buildSearchSql(
   queryEmbedding: number[],
   intent: SearchIntentV2,
-  typeEquivalents: string[],
+  typeEquivalents: string[] | null,
   limit = 200,
   minQuality = 0.5,
 ): { sql: string; params: unknown[] } {
