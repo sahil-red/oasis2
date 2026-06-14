@@ -45,6 +45,14 @@ export function setCategoryTypeMap(map: Map<string, string[]> | null): void {
   _categoryTypeMap = map;
 }
 
+/** Auto-detected type normalisation — sparse → dominant twin lookup.
+ *  "milk shake" → "milkshake". Loaded at snapshot time. */
+let _typeNormalize: Map<string, string> | null = null;
+
+export function setTypeNormalize(map: Map<string, string> | null): void {
+  _typeNormalize = map;
+}
+
 type TypeMatch = { primary_type: string; distance: number };
 const cache = new Map<string, { at: number; matches: TypeMatch[] }>();
 
@@ -154,36 +162,43 @@ export async function semanticTypeMatches(wanted: string): Promise<Set<string>> 
   const key = wanted.trim().toLowerCase();
   const out = new Set<string>(key ? [key] : []);
 
+  // Normalize sparse types to dominant twins for centroid lookup.
+  // "milk shake" (1 product) uses the "milkshake" (81) centroid, but
+  // BOTH original types appear in results — products of both are shown.
+  const lookupKey = _typeNormalize?.get(key) ?? key;
+
   // In-memory path: compute cosine distance against all pre-loaded centroids.
   // ~2ms for 1,086 comparisons vs. 8s for the Supabase RPC.
-  if (_typeCentroids?.has(key)) {
-    const wantedVec = _typeCentroids.get(key)!;
+  if (_typeCentroids?.has(lookupKey)) {
+    const wantedVec = _typeCentroids.get(lookupKey)!;
     for (const [type, vec] of _typeCentroids) {
-      if (type === key) continue;
+      if (type === lookupKey) continue;
       const sim = cosineSimilarity(wantedVec, vec);
       const dist = 1 - sim;
       if (dist <= EQUIVALENT_MAX) out.add(type);
     }
     // Category sibling expansion: when centroids are sparse, add same-category
-    // types from the taxonomy. Only expand for narrow categories (≤30 types) —
-    // broad categories like "Dairy, Bread & Eggs" (111 types) would add bagels
-    // to milk results, which is noise, not signal.
+    // types from the taxonomy. Only expand for narrow categories (≤30 types).
     const centroidOnlyCount = out.size;
     if (centroidOnlyCount <= 3 && _categoryTypeMap) {
-      const siblings = _categoryTypeMap.get(key);
+      const siblings = _categoryTypeMap.get(lookupKey);
       if (siblings && siblings.length <= 30) {
         for (const s of siblings) {
-          if (s !== key && out.size < 24) out.add(s);
+          if (s !== lookupKey && out.size < 24) out.add(s);
         }
       }
     }
+    // Always include the original key itself (may differ from lookupKey)
+    out.add(key);
     return out;
   }
 
-  // Fallback: RPC path (for types not in centroids, or pre-snapshot load)
-  for (const m of await fetchMatches(key)) {
+  // Fallback: RPC path (for types not in centroids, or pre-snapshot load).
+  // Also normalize the lookup key for the RPC.
+  for (const m of await fetchMatches(lookupKey)) {
     if (m.distance <= EQUIVALENT_MAX) out.add(m.primary_type);
   }
+  out.add(key);
   return out;
 }
 

@@ -22,6 +22,9 @@ export type SearchIndexSnapshot = {
   /** Category→primary_type siblings — built from product_search_index at
    *  snapshot load. Expands type matching for weak centroids (snacks→chips). */
   categoryTypeMap: Map<string, string[]> | null;
+  /** Auto-detected type normalization — sparse types mapped to dominant twins.
+   *  "milk shake" (1) → "milkshake" (81). For lookup only, both types show. */
+  typeNormalize: Map<string, string> | null;
   /** Lazy-loaded — populated on first access, not during snapshot init */
   _goalMapLoaded: boolean;
   _profilesLoaded: boolean;
@@ -408,6 +411,48 @@ async function loadCategoryTypeMap(): Promise<Map<string, string[]>> {
   return typeToSiblings;
 }
 
+/** Auto-detect type normalisation: sparse types (< 10 products) that have a
+ *  dominant twin (same name after stripping spaces/underscores/dashes) get
+ *  mapped to the richer type. "milk shake" (1 product) → "milkshake" (81).
+ *  Used for type expansion lookups only — products of both types still appear. */
+async function loadTypeNormalize(): Promise<Map<string, string>> {
+  const supabase = adminClient();
+  const counts = new Map<string, number>();
+  const PAGE = 2000;
+  for (let page = 0; page < 50; page++) {
+    const { data, error } = await supabase
+      .from("product_search_index")
+      .select("primary_type")
+      .not("primary_type", "is", null)
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (error || !data?.length) break;
+    for (const r of data) {
+      const pt = (r.primary_type as string).toLowerCase().trim();
+      if (!pt) continue;
+      counts.set(pt, (counts.get(pt) ?? 0) + 1);
+    }
+  }
+
+  const norm = new Map<string, string>();
+  const canon = (t: string) => t.replace(/[_\-\s]+/g, "");
+  for (const [type, count] of counts) {
+    if (count >= 10) continue; // only normalize sparse types
+    const key = canon(type);
+    // Find a dominant type with the same canonical form and > count
+    let best: string | null = null;
+    let bestCount = count;
+    for (const [other, oc] of counts) {
+      if (other === type) continue;
+      if (canon(other) === key && oc > bestCount) {
+        best = other;
+        bestCount = oc;
+      }
+    }
+    if (best) norm.set(type, best);
+  }
+  return norm;
+}
+
 export async function getSearchIndexSnapshot(forceRefresh = false): Promise<SearchIndexSnapshot> {
   if (!forceRefresh && cachedSnapshot && Date.now() - cachedSnapshot.at < SNAPSHOT_TTL_MS) {
     return cachedSnapshot.data;
@@ -415,11 +460,12 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
 
   // Only load facets + dietary + type centroids eagerly — goalMap + profiles
   // are lazy-loaded on first access since they're only needed for goal queries (~10%).
-  const [catalogMeta, dietary_prevalence, typeCentroids, categoryTypeMap] = await Promise.all([
+  const [catalogMeta, dietary_prevalence, typeCentroids, categoryTypeMap, typeNormalize] = await Promise.all([
     loadFacets(),
     loadDietaryPrevalence(),
     loadTypeCentroids(),
     loadCategoryTypeMap(),
+    loadTypeNormalize(),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],
@@ -430,6 +476,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     dietary_prevalence,
     typeCentroids,
     categoryTypeMap,
+    typeNormalize,
     _goalMapLoaded: false,
     _profilesLoaded: false,
   };
