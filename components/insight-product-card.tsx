@@ -30,7 +30,7 @@ export function InsightProductCard({
     <Link
       href={`/product/${product.slug}`}
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm transition hover:shadow-md",
+        "u-lift group flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm",
         accentBorder,
       )}
     >
@@ -99,7 +99,7 @@ export function InsightFeaturedCard({
   return (
     <Link
       href={`/product/${product.slug}`}
-      className="group grid overflow-hidden rounded-2xl border border-(--color-warn)/30 bg-(--color-panel) shadow-sm transition hover:shadow-md md:grid-cols-[minmax(0,220px)_1fr]"
+      className="u-lift group grid overflow-hidden rounded-2xl border border-(--color-warn)/30 bg-(--color-panel) shadow-sm md:grid-cols-[minmax(0,220px)_1fr]"
     >
       <div className="relative aspect-square bg-(--color-panel) md:aspect-auto md:min-h-[220px]">
         {product.image_urls[0] ? (

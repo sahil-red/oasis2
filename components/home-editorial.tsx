@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { Reveal } from "@/components/reveal";
 import type {
   LandingBestInClassCategory,
   LandingDodgeProduct,
@@ -16,7 +17,7 @@ export function HomeReckoning({ products }: { products: LandingDodgeProduct[] })
   if (picks.length < 2) return null;
   return (
     <section className="border-b border-(--color-line)">
-      <div className="mx-auto max-w-7xl px-6 py-16 md:py-24">
+      <Reveal className="mx-auto max-w-7xl px-6 py-16 md:py-24">
         <div className="mb-9 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-bad)">
@@ -43,7 +44,7 @@ export function HomeReckoning({ products }: { products: LandingDodgeProduct[] })
             <HomeDodgeCard key={p.slug} product={p} />
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -57,7 +58,7 @@ function HomeDodgeCard({ product }: { product: LandingDodgeProduct }) {
       href={`/product/${product.slug}`}
       className="group flex h-full flex-col"
     >
-      <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
+      <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame shadow-[0_1px_2px_rgba(60,40,20,0.05)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_34px_-20px_rgba(60,40,20,0.34)]"
         style={{ borderTop: "2px solid var(--score-bad)" }}
       >
         {thumb ? (
@@ -117,7 +118,7 @@ export function HomeCategoryGrid({ categories }: { categories: LandingBestInClas
   if (cats.length < 3) return null;
   return (
     <section>
-      <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+      <Reveal className="mx-auto max-w-6xl px-6 py-16 md:py-20">
         <div className="mb-8">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
             Start somewhere
@@ -131,7 +132,7 @@ export function HomeCategoryGrid({ categories }: { categories: LandingBestInClas
             <Link
               key={c.label}
               href={c.href}
-              className="group rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 transition hover:border-(--color-fg-muted) hover:-translate-y-0.5"
+              className="u-lift group rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 hover:border-(--color-fg-muted)"
             >
               <p className="text-[15px] font-medium text-(--color-fg) group-hover:text-(--color-accent)">
                 {c.label}
@@ -146,7 +147,7 @@ export function HomeCategoryGrid({ categories }: { categories: LandingBestInClas
             </Link>
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

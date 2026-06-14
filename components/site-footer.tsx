@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Sprig } from "@/components/scout-motifs";
 import { SuggestProductType } from "@/components/suggest-product-type";
 
 export function SiteFooter() {
@@ -6,6 +7,7 @@ export function SiteFooter() {
     <footer className="mt-24 border-t border-(--color-line)">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 py-14 md:flex-row md:items-start md:justify-between">
         <div className="max-w-md">
+          <Sprig className="mb-3 h-9 w-[22px] text-(--color-fg-dim) opacity-50" />
           <Link href="/" className="font-display text-2xl text-(--color-fg)">
             Scout
           </Link>

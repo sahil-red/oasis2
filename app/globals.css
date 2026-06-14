@@ -210,3 +210,125 @@ html.dark .score-band-chip[data-band="bad"] {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ───────────────────────── Shared design language ─────────────────────────
+   Subtle, theme-aware primitives used across home / catalog / insights / cart so
+   the whole product feels like one crafted thing. No new colours, no heavy deps. */
+
+/* Warm paper grain — a near-invisible film grain over the cream, for tactility.
+   One tiny tiled SVG, GPU-composited, pointer-events-none. Barely there by design. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html.dark body::before {
+  opacity: 0.05;
+  mix-blend-mode: screen;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* (grain is static regardless; reveal/anim live below) */
+}
+
+/* Calm scroll reveal — gentle fade-up the first time an element enters view. */
+.reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Micro-interaction grammar — one consistent hover / press / link language. */
+.u-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.u-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -16px rgba(60, 40, 20, 0.32);
+}
+html.dark .u-lift:hover {
+  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.55);
+}
+.u-press:active {
+  transform: translateY(1px);
+}
+.u-underline {
+  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-size: 0% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.25s ease;
+}
+.u-underline:hover {
+  background-size: 100% 1.5px;
+}
+
+/* Horizontal scroll rows fade at their edges instead of hard-cutting. */
+.edge-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22px, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22px, #000 calc(100% - 22px), transparent);
+}
+
+/* Soft elevated panel — the standard card surface where a little depth helps. */
+.panel-soft {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.04), 0 8px 24px -18px rgba(60, 40, 20, 0.18);
+}
+html.dark .panel-soft {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -18px rgba(0, 0, 0, 0.5);
+}
+
+/* Staggered grid entrance — result cards rise in sequence the first time they
+   mount, so a fresh search lands as a gentle cascade rather than a hard pop.
+   Capped at the first dozen (the above-the-fold cells); later cards just fade in. */
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.grid-rise > * {
+  animation: card-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.grid-rise > *:nth-child(2) { animation-delay: 0.03s; }
+.grid-rise > *:nth-child(3) { animation-delay: 0.06s; }
+.grid-rise > *:nth-child(4) { animation-delay: 0.09s; }
+.grid-rise > *:nth-child(5) { animation-delay: 0.12s; }
+.grid-rise > *:nth-child(6) { animation-delay: 0.15s; }
+.grid-rise > *:nth-child(7) { animation-delay: 0.18s; }
+.grid-rise > *:nth-child(8) { animation-delay: 0.21s; }
+.grid-rise > *:nth-child(9) { animation-delay: 0.24s; }
+.grid-rise > *:nth-child(10) { animation-delay: 0.27s; }
+.grid-rise > *:nth-child(11) { animation-delay: 0.30s; }
+.grid-rise > *:nth-child(12) { animation-delay: 0.33s; }
+
+/* Small popover / panel entrance — fade + settle from just above its origin. */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.pop-in {
+  animation: pop-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid-rise > *,
+  .pop-in {
+    animation: none;
+  }
+}

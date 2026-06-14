@@ -50,7 +50,7 @@ export function InsightsProductCarousel({
         disabled={!canPrev}
         onClick={() => scroll(-1)}
         className={cn(
-          "absolute left-0 top-[42%] z-10 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) disabled:pointer-events-none disabled:opacity-30 sm:-translate-x-2",
+          "u-press absolute left-0 top-[42%] z-10 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) hover:text-(--color-accent) hover:shadow-lg disabled:pointer-events-none disabled:opacity-0 sm:-translate-x-2",
         )}
       >
         <ChevronLeft className="h-5 w-5" />
@@ -61,7 +61,7 @@ export function InsightsProductCarousel({
         disabled={!canNext}
         onClick={() => scroll(1)}
         className={cn(
-          "absolute right-0 top-[42%] z-10 grid h-10 w-10 translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) disabled:pointer-events-none disabled:opacity-30 sm:translate-x-2",
+          "u-press absolute right-0 top-[42%] z-10 grid h-10 w-10 translate-x-1/2 place-items-center rounded-full border border-(--color-line) bg-(--color-panel) shadow-md transition hover:border-(--color-accent) hover:text-(--color-accent) hover:shadow-lg disabled:pointer-events-none disabled:opacity-0 sm:translate-x-2",
         )}
       >
         <ChevronRight className="h-5 w-5" />
@@ -72,7 +72,7 @@ export function InsightsProductCarousel({
         role="region"
         aria-label={ariaLabel}
         onScroll={syncArrows}
-        className="flex gap-4 overflow-x-auto scroll-smooth px-1 pb-2 pt-1 scrollbar-none snap-x snap-mandatory"
+        className="edge-fade-x flex gap-4 overflow-x-auto scroll-smooth px-1 pb-2 pt-1 scrollbar-none snap-x snap-mandatory"
       >
         {children}
       </div>

@@ -14,6 +14,8 @@ import { computeGoalFit, goalFitInputs } from "@/lib/goals/fit";
 import { dietFromParam, type DietMode } from "@/lib/diet/types";
 import { writeDietMode } from "@/lib/diet/storage";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
+import { EmptyState } from "@/components/empty-state";
+import { Reveal } from "@/components/reveal";
 import { useAuth } from "@/lib/auth/context";
 import {
   catalogContextQuery,
@@ -1160,7 +1162,7 @@ export function CatalogView({
 
           {/* Prompt chips — recent asks first, then rotating examples. Hidden when results show. */}
           {!aiMode && (
-            <div className="mt-3 -mx-1 overflow-x-auto px-1 pb-0.5 scrollbar-none">
+            <div className="edge-fade-x mt-3 -mx-1 overflow-x-auto px-1 pb-0.5 scrollbar-none">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 {recentSearches.length > 0 ? (
                   <span className="flex-shrink-0 text-[10px] uppercase tracking-wide text-(--color-fg-dim)">
@@ -1214,7 +1216,7 @@ export function CatalogView({
         ) : null}
 
         {refineOpen && (
-          <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-2xl border border-(--color-line) bg-(--color-panel) shadow-[0_16px_48px_-16px_rgba(60,40,20,0.3)] ring-1 ring-black/[0.02] sm:w-80">
+          <div className="pop-in absolute right-0 top-full z-40 mt-2 w-72 origin-top-right rounded-2xl border border-(--color-line) bg-(--color-panel) shadow-[0_16px_48px_-16px_rgba(60,40,20,0.3)] ring-1 ring-black/[0.02] sm:w-80">
             <div className="space-y-3 px-4 py-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-(--color-line) pb-3">
                 <GoalModePicker value={goal} onChange={pickGoal} compact />
@@ -1350,9 +1352,23 @@ export function CatalogView({
           ))}
         </div>
       ) : (aiMode ? displayedItems.length : total) === 0 ? (
-        <div className="mx-auto max-w-lg py-14 text-center">
-          <p className="font-display text-2xl text-(--color-fg)">No products match</p>
-          <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-(--color-fg-muted)">
+        <EmptyState
+          title="No products match"
+          className="py-14"
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                if (aiMode) setAiPrompt("");
+                clearAll();
+              }}
+              className="u-press rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
+            >
+              {aiMode ? "Start over" : "Clear all filters"}
+            </button>
+          }
+        >
+          <p>
             {aiMode
               ? activeFilterCount > 0
                 ? "Your filters narrowed the results to zero. Remove one to widen the net:"
@@ -1373,19 +1389,7 @@ export function CatalogView({
               {activeState.onlyScored ? <FilterChip label="Scored only" onClear={() => patch({ onlyScored: false })} /> : null}
             </div>
           ) : null}
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => {
-                if (aiMode) setAiPrompt("");
-                clearAll();
-              }}
-              className="rounded-full border border-(--color-line) px-5 py-2 text-sm font-medium text-(--color-fg-muted) transition hover:border-(--color-fg) hover:text-(--color-fg)"
-            >
-              {aiMode ? "Start over" : "Clear all filters"}
-            </button>
-          </div>
-        </div>
+        </EmptyState>
       ) : (
         <div className="flex flex-col gap-5 md:flex-row md:gap-3">
           {/* ── LEFT PANEL: context, subcategory chips, save/search ── */}
@@ -1493,7 +1497,7 @@ export function CatalogView({
               </div>
             ) : null}
             <div
-              className={`relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
+              className={`grid-rise relative grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-x-5 ${
                 refreshing ? "opacity-80" : "opacity-100"
               } transition-opacity duration-100`}
             >
@@ -1684,7 +1688,7 @@ function ScoutLanding({
 
       {/* Best in class by category */}
       {bestInClass.length > 0 && (
-        <section>
+        <Reveal as="section">
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-fg-dim)">Best in class</p>
@@ -1729,12 +1733,12 @@ function ScoutLanding({
               </div>
             ))}
           </div>
-        </section>
+        </Reveal>
       )}
 
       {/* The Dodge List — marketing vs reality */}
       {dodgeList.length > 0 && (
-        <section>
+        <Reveal as="section">
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-bad)">Scout warning</p>
@@ -1748,7 +1752,7 @@ function ScoutLanding({
                 key={p.slug}
                 href={`/product/${p.slug}${hrefQuery}`}
                 onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
-                className="group rounded-xl border border-(--color-bad)/20 bg-(--color-panel) p-3 transition hover:border-(--color-bad)/40"
+                className="u-lift group rounded-xl border border-(--color-bad)/20 bg-(--color-panel) p-3 hover:border-(--color-bad)/40"
               >
                 <div className="flex items-start gap-2.5">
                   <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
@@ -1773,11 +1777,11 @@ function ScoutLanding({
               </Link>
             ))}
           </div>
-        </section>
+        </Reveal>
       )}
 
       {worthItList.length > 0 ? (
-        <section>
+        <Reveal as="section">
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-(--color-good)">Scout verified</p>
@@ -1798,7 +1802,7 @@ function ScoutLanding({
                 key={p.slug}
                 href={`/product/${p.slug}${hrefQuery}`}
                 onClick={() => saveCatalogReturnUrl(`/search${hrefQuery}`)}
-                className="group rounded-xl border border-(--color-good)/20 bg-(--color-panel) p-3 transition hover:border-(--color-good)/40"
+                className="u-lift group rounded-xl border border-(--color-good)/20 bg-(--color-panel) p-3 hover:border-(--color-good)/40"
               >
                 <div className="flex items-start gap-2.5">
                   <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-(--color-bg-soft)">
@@ -1835,7 +1839,7 @@ function ScoutLanding({
               </Link>
             ))}
           </div>
-        </section>
+        </Reveal>
       ) : null}
 
       {stats ? (

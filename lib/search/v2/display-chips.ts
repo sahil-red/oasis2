@@ -48,12 +48,55 @@ const DIETARY_BADGES: Array<{
   { key: "is_jain", label: "Jain" },
 ];
 
+/** Traits that are NEVER relevant on certain categories — absolute suppression. */
+const TRAIT_IRRELEVANT: Record<string, string[]> = {
+  // Low fat makes no sense on inherently fatty foods
+  "low_fat": ["cheese", "ghee", "butter", "oil", "nuts", "seeds", "cream", "paneer", "chocolate bar", "dark chocolate", "milk chocolate", "peanut butter", "cashew", "almonds", "pista", "walnut", "mayonnaise"],
+  // Low calorie is meaningless for high-energy-density foods
+  "low_calorie_density": ["oil", "ghee", "butter", "nuts", "seeds", "chocolate", "jaggery", "honey", "sugar"],
+  // High protein is irrelevant for drinks and flavoring items
+  "protein_density": ["water", "soft drink", "tea", "coffee", "fruit juice", "soda", "energy drink", "sparkling water", "salt", "sugar", "jaggery", "honey", "oil", "ghee", "butter"],
+  // No Artificial Sweetener is a false virtue signal on inherently sweetener-free categories
+  "no_artificial_sweetener": ["biscuit", "chips", "crisps", "namkeen", "bread", "atta", "flour", "rice", "dal", "eggs", "milk", "curd", "paneer", "cheese", "ghee", "butter", "oil", "salt", "sugar", "jaggery", "honey", "spice", "nuts", "seeds", "oat", "muesli", "pasta", "noodle", "coffee", "tea", "chocolate bar", "dark chocolate", "milk chocolate"],
+  // Vegan is not a choice on inherently plant-based categories
+  "is_vegan": ["fruit juice", "water", "tea", "coffee", "rice", "dal", "spice", "salt", "sugar", "jaggery", "oil", "atta", "flour", "soda", "soft drink"],
+  // Gluten Free is not a choice on naturally GF categories
+  "is_gluten_free": ["rice", "dal", "milk", "eggs", "curd", "paneer", "fruit juice", "water", "sugar", "salt", "honey", "oil", "ghee", "spice", "tea", "coffee", "jaggery"],
+  // Minimally Processed — suppress on obviously unprocessed categories
+  "processing_level": ["salt", "sugar", "jaggery", "honey", "oil", "ghee", "water", "spice", "rice", "dal", "atta", "flour", "milk", "eggs", "nuts", "seeds", "tea", "coffee"],
+  // Clean Label — suppress on single-ingredient whole foods  
+  "clean_label": ["salt", "sugar", "oil", "ghee", "water", "honey", "milk", "eggs", "rice", "dal", "atta", "flour", "tea", "coffee"],
+  // Whole Food — suppress on obviously processed categories
+  "whole_food": ["soft drink", "soda", "energy drink", "chips", "crisps", "namkeen", "chocolate", "candy", "ice cream", "biscuit", "cookie", "cake", "pastry"],
+};
+
+/** Suppress dietary badges on inherently-compatible categories. */
+const DIETARY_IRRELEVANT: Record<string, string[]> = {
+  is_vegan: ["fruit juice", "water", "tea", "coffee", "rice", "dal", "spice", "salt", "sugar", "jaggery", "oil", "atta", "flour", "soda", "soft drink"],
+  is_gluten_free: ["rice", "dal", "milk", "eggs", "curd", "paneer", "fruit juice", "water", "sugar", "salt", "honey", "oil", "ghee", "spice", "tea", "coffee"],
+};
+
 const SUPPRESSED_TRAITS: Partial<Record<string, TraitId[]>> = {
   water: ["hydration"],
   rice: ["whole_food"],
   salt: ["low_sodium"],
   honey: ["low_sugar", "whole_food"],
 };
+
+/** Check if a trait is irrelevant for this product category. */
+function traitIrrelevant(traitId: TraitId | string, primaryType: string): boolean {
+  const pt = (primaryType ?? "").toLowerCase();
+  const blocked = TRAIT_IRRELEVANT[traitId];
+  if (!blocked) return false;
+  return blocked.some(b => pt === b || pt.includes(b) || b.includes(pt));
+}
+
+function dietaryIrrelevant(badgeKey: string, primaryType: string): boolean {
+  const pt = (primaryType ?? "").toLowerCase();
+  const blocked = DIETARY_IRRELEVANT[badgeKey];
+  if (!blocked) return false;
+  return blocked.some(b => pt === b || pt.includes(b) || b.includes(pt));
+}
 
 function isChippableClaim(claim: string, primaryType: string | null): boolean {
   const s = claim.trim();
@@ -102,10 +145,11 @@ export function getDisplayChips(
   const product: ChipEntry[] = [];
   const ai: ChipEntry[] = [];
 
-  // 1. Differentiating traits (score ≥ 0.6)
+  // 1. Differentiating traits (effective ≥ 0.6 + not irrelevant + not suppressed)
   for (const [traitId, rawValue] of Object.entries(row.traits)) {
     const tid = traitId as TraitId;
     if (suppressed.includes(tid)) continue;
+    if (traitIrrelevant(traitId, type)) continue;
     const effective = effectiveTraitScore(tid, rawValue, row, calibrateTraitConfidence);
     if (effective < 0.6) continue;
     product.push({
@@ -123,9 +167,10 @@ export function getDisplayChips(
     product.push({ label: formatted, priority: 70, group: "product" });
   }
 
-  // 3. Dietary badges with prevalence suppression (skip if cohort < 5 — unreliable)
+  // 3. Dietary badges with prevalence + irrelevance suppression
   for (const badge of DIETARY_BADGES) {
     if (!row[badge.key]) continue;
+    if (dietaryIrrelevant(badge.key, type)) continue;
     if (!cohortTooSmall) {
       const prevalencePct = typePrev[badge.key] ?? 0;
       if (prevalencePct >= 0.8) continue;

@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { HomeRailCard } from "@/components/home-rail-card";
 import { HomeReckoning, HomeCategoryGrid } from "@/components/home-editorial";
 import { RingGlyph } from "@/components/ring-motif";
+import { CountUp, Reveal } from "@/components/reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { SEARCH_PROMPTS } from "@/components/search-prompts";
@@ -68,7 +69,7 @@ export default async function Home() {
           {/* The one action */}
           <form
             action="/search"
-            className="mt-9 flex w-full max-w-xl items-center gap-2 rounded-2xl border border-(--color-line-strong) bg-(--color-panel) p-2 shadow-sm transition focus-within:border-(--color-fg-muted)"
+            className="mt-9 flex w-full max-w-xl items-center gap-2 rounded-2xl border border-(--color-line-strong) bg-(--color-panel) p-2 shadow-sm transition focus-within:border-(--color-fg-muted) focus-within:shadow-md focus-within:ring-4 focus-within:ring-(--color-accent)/10"
           >
             <input
               name="prompt"
@@ -106,7 +107,7 @@ export default async function Home() {
           {shelves.totalScored > 0 && (
             <p className="mt-10 text-[12px] tracking-wide text-(--color-fg-dim)">
               <span className="font-medium text-(--color-fg-muted) tabular-nums">
-                {shelves.totalScored.toLocaleString()}
+                <CountUp value={shelves.totalScored} />
               </span>{" "}
               <Link href="/search" className="underline-offset-4 transition hover:text-(--color-fg) hover:underline">
                 products scored across India&apos;s quick-commerce shelves
@@ -121,7 +122,7 @@ export default async function Home() {
         <section className="relative overflow-hidden border-b border-(--color-line) bg-(--color-bg-soft)">
           {/* score-ring motif behind the big stat — a ring around a number */}
           <RingGlyph className="absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-[58%] opacity-60 md:h-[440px] md:w-[440px]" />
-          <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center md:py-28">
+          <Reveal className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center md:py-28">
             <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-(--color-fg-dim)">
               What we found
             </p>
@@ -138,7 +139,7 @@ export default async function Home() {
               {proof.cta}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
-          </div>
+          </Reveal>
         </section>
       )}
 
@@ -178,7 +179,7 @@ function Rail({
   if (!items.length) return null;
   return (
     <section>
-      <div className="mx-auto max-w-7xl px-6 py-16 md:py-24">
+      <Reveal className="mx-auto max-w-7xl px-6 py-16 md:py-24">
         <div className="mb-9 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
@@ -209,7 +210,7 @@ function Rail({
             <HomeRailCard key={p.id} product={p} />
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

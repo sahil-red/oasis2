@@ -27,6 +27,8 @@ import {
 } from "@/lib/products/catalog-cache";
 import { marketingCallout } from "@/lib/products/insight-copy";
 import { buildInsights } from "@/lib/products/insights";
+import { CountUp, Reveal } from "@/components/reveal";
+import { SketchUnderline } from "@/components/scout-motifs";
 
 export const revalidate = 600;
 
@@ -62,27 +64,28 @@ export default async function InsightsPage() {
       <div className="border-b border-(--color-line)">
         <div className="mx-auto max-w-7xl px-5 py-12 md:px-6 md:py-16">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-(--color-fg-dim)">
-            {stats.totalScored.toLocaleString()} products analysed
+            <CountUp value={stats.totalScored} className="tabular-nums" /> products analysed
           </p>
-          <h1 className="mt-3 font-display text-4xl leading-tight md:text-5xl">
+          <h1 className="relative mt-3 inline-block font-display text-4xl leading-tight md:text-5xl">
             What we found
+            <SketchUnderline className="absolute -bottom-2.5 left-0 h-2.5 w-[62%] text-(--color-accent)" />
           </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-(--color-fg-muted)">
+          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-(--color-fg-muted)">
             Patterns across the full catalog — staples, traps, and aisles that actually deliver.
           </p>
-          <div className="mt-5 flex flex-wrap gap-4 text-sm text-(--color-fg-muted)">
-            <span>Avg score <strong className="text-(--color-fg)">{ins.avgScore}/100</strong></span>
-            <span>·</span>
-            <span><strong className="text-(--color-good)">{stats.dailyStapleCount.toLocaleString()}</strong> daily staple{stats.dailyStapleCount === 1 ? "" : "s"}</span>
-            <span>·</span>
-            <span><strong className="text-(--color-bad)">{stats.skipCount.toLocaleString()}</strong> skip-worthy</span>
-            <span>·</span>
-            <span><strong className="text-(--color-fg)">{ins.categoryStats.length}</strong> categories</span>
+          <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm text-(--color-fg-muted)">
+            <span>Avg score <strong className="text-(--color-fg) tabular-nums">{ins.avgScore}/100</strong></span>
+            <span className="text-(--color-line-strong)">·</span>
+            <span><strong className="text-(--color-good) tabular-nums"><CountUp value={stats.dailyStapleCount} /></strong> daily staple{stats.dailyStapleCount === 1 ? "" : "s"}</span>
+            <span className="text-(--color-line-strong)">·</span>
+            <span><strong className="text-(--color-bad) tabular-nums"><CountUp value={stats.skipCount} /></strong> skip-worthy</span>
+            <span className="text-(--color-line-strong)">·</span>
+            <span><strong className="text-(--color-fg) tabular-nums">{ins.categoryStats.length}</strong> categories</span>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-16 px-5 pb-24 pt-12 md:px-6">
+      <div className="mx-auto max-w-7xl space-y-20 px-5 pb-24 pt-14 md:space-y-24 md:px-6">
         <Section
           icon={<Leaf className="h-5 w-5" />}
           tone="good"
@@ -487,7 +490,7 @@ function Section({
   const linkWarn = hrefStyle === "warn";
 
   return (
-    <section>
+    <Reveal as="section" className="scroll-mt-24">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <span
@@ -529,7 +532,7 @@ function Section({
         ) : null}
       </div>
       <div className="px-2 sm:px-6">{children}</div>
-    </section>
+    </Reveal>
   );
 }
 
@@ -544,21 +547,21 @@ function SublabelBar({
 }) {
   const color = tone === "good" ? "var(--color-good)" : "var(--color-bad)";
   return (
-    <li className="flex items-center gap-3">
-      <span className="w-36 shrink-0 truncate text-[13px] capitalize text-(--color-fg-muted)">
+    <li className="group flex items-center gap-3">
+      <span className="w-32 shrink-0 truncate text-[13px] capitalize text-(--color-fg-muted) sm:w-36">
         {label}
       </span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--color-line)">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--color-line)/60">
         <div
-          className="h-full rounded-full"
+          className="h-full rounded-full transition-[width] duration-500"
           style={{
-            width: `${Math.min(pct, 100)}%`,
+            width: `${Math.max(2, Math.min(pct, 100))}%`,
             backgroundColor: color,
             opacity: 0.85,
           }}
         />
       </div>
-      <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-(--color-fg-dim)">
+      <span className="w-9 shrink-0 text-right text-[11px] font-medium tabular-nums" style={{ color }}>
         {pct}%
       </span>
     </li>
@@ -601,6 +604,12 @@ function CategoryRow({
               ? ` · ${stat.skipCount} skip`
               : ""}
         </p>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-(--color-line)/60">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.max(2, Math.min(score, 100))}%`, backgroundColor: color, opacity: 0.8 }}
+          />
+        </div>
       </div>
       <span
         className="shrink-0 rounded-full px-2.5 py-0.5 text-sm font-bold tabular-nums"

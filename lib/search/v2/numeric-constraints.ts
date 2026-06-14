@@ -60,19 +60,25 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{1,3})\s*g\s*sugar/) ??
     firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(?:under|below|less than)\s*(\d{1,3})\s*g\s*sugar/);
-  // "zero / no / no-added sugar" all express the NO-ADDED-SUGAR intent. Flag it,
-  // but DON'T hard-gate total sugar — a 1g cap filtered out naturally-sweet items
+  // "zero / no / no-added / sugar-free sugar" all express the NO-ADDED-SUGAR intent.
+  // Flag it, but DON'T hard-gate total sugar — a 1g cap filtered out naturally-sweet items
   // (coconut water, plain yoghurt, fruit). Ranking handles "added sugar" softly.
-  if (/zero sugar|no sugar|no added sugar/.test(text)) out.no_added_sugar = true;
+  if (/zero sugar|no sugar|no added sugar|sugar[\s-]free/.test(text)) {
+    out.no_added_sugar = true;
+    text = text.replace(/\b(zero sugar|no sugar|no added sugar|sugar[\s-]free)\b/g, " ");
+  }
   if (out.max_sugar_g == null && sugarLimit) out.max_sugar_g = sugarLimit;
-  if (out.max_sugar_g == null && /low sugar|less sugar/.test(text)) {
+  if (out.max_sugar_g == null && /low sugar|less sugar|lower sugar/.test(text)) {
     out.low_sugar_tier = true;
+    text = text.replace(/\b(low sugar|less sugar|lower sugar)\b/g, " ");
   }
 
   const fatLimit = firstNumber(text, /(?:fat)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(\d{1,3})\s*g\s*fat/) ??
     firstNumber(text, /(?:less than|under|below)\s*(\d{1,3})\s*g\s*fat/);
   if (fatLimit) out.max_fat_g = fatLimit;
+  // "fat free" / "no fat" — strip from residual so fast-path doesn't match fat products
+  text = text.replace(/\b(fat[\s-]free|no fat|lower fat|less fat)\b/gi, " ");
 
   const proteinMin = firstNumber(text, /(?:protein)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(?:more than|at least|min)\s*(\d{1,3})\s*g\s*protein/) ??
@@ -122,6 +128,8 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     .replace(/\b(under|below|over|above|less than|more than|max|min)\b/gi, " ")
     .replace(/\b\d+(\.\d+)?\s*(g|gm|kg|ml|l|kcal|cal|%)\b/gi, " ")
     .replace(/(?:₹|rs\.?|inr)\s*\d+/gi, " ")
+    // Strip constraint phrases so fast-path doesn't match them as types or brands
+    .replace(/\b(dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|sugar[\s-]free|fat[\s-]free|no fat|less fat|lower fat|no sugar|zero sugar)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
