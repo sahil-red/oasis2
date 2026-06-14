@@ -3,16 +3,12 @@
  * connection and returns ProductSearchIndexRow[] compatible with the
  * existing pipeline (generateCandidates → ranking → verification).
  *
- * Enabled via USE_SQL_SEARCH=true env var or default when SUPABASE_DB_URL is set.
+ * Falls back to empty result when SUPABASE_DB_URL is unset (local dev).
  */
 import { embedText } from "@/lib/search/v2/embeddings";
 import { buildSearchSql } from "@/lib/search/v2/search-sql";
 import type { ProductSearchIndexRow, SearchIntentV2 } from "@/lib/search/v2/types";
 import { semanticTypeMatches, setTypeCentroids, setCategoryTypeMap, setTypeNormalize } from "@/lib/search/v2/type-centroids";
-
-export function isSqlSearchEnabled(): boolean {
-  return process.env.USE_SQL_SEARCH === "true" || Boolean(process.env.SUPABASE_DB_URL?.trim());
-}
 
 export async function fetchCandidatesWithSql(
   intent: SearchIntentV2,

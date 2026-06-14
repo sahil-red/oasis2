@@ -2,7 +2,7 @@ import { resolveSearchIntent } from "@/lib/search/intent";
 import type { AiSearchPreferences } from "@/lib/search/ai-usage";
 import { generateCandidates, typeMatchTier } from "@/lib/search/v2/candidate-generation";
 import { fetchCandidatePool } from "@/lib/search/v2/db-candidates";
-import { fetchCandidatesWithSql, isSqlSearchEnabled } from "@/lib/search/v2/candidates-sql";
+import { fetchCandidatesWithSql } from "@/lib/search/v2/candidates-sql";
 import { validateIntent } from "@/lib/search/v2/intent-validate";
 import { embedText } from "@/lib/search/v2/embeddings";
 import { resolveComparisonReference, type ComparisonContext } from "@/lib/search/v2/comparison";
@@ -63,12 +63,9 @@ export async function runSearchV2(
     minQ: number,
   ) => {
     if (snapshot.source === "pgvector") {
-      // SQL path: single-query retrieval with type/brand/nutrition/dietary filtering
-      if (isSqlSearchEnabled()) {
-        const sqlPool = await fetchCandidatesWithSql(intentArg, limit, minQ);
-        if (sqlPool.length > 0) {
-          return generateCandidates(sqlPool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
-        }
+      const sqlPool = await fetchCandidatesWithSql(intentArg, limit, minQ);
+      if (sqlPool.length > 0) {
+        return generateCandidates(sqlPool, intentArg, await ensureProfiles(snapshot), gw, minQ, limit);
       }
       // Fall back to 3-leg approach
       const pool = await fetchCandidatePool(intentArg, minQ);
