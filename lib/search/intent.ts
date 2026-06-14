@@ -93,7 +93,7 @@ function buildFastPathIntent(
   // words stripped, but those words include valid types ("protein", "sugar").
   // Also strip constraint phrases so fast-path doesn't match them as types/brands.
   // Fall back to original query when everything was stripped (bare "sugar free").
-  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest)\b/gi;
+  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar)|without\s+(?:sugar|added\s+sugar)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest)\b/gi;
   const stripped = query.toLowerCase().trim()
     .replace(CONSTRAINT_STRIP, " ")
     .replace(/\s+/g, " ")

@@ -110,6 +110,11 @@ Rules:
   "no artificial sweetener" / "no sweeteners" / "sugar free" (by ingredient) → avoid_ingredients: ["artificial sweetener"].
   "no preservatives" → avoid_ingredients: ["preservative"].
   "no artificial colors" / "no artificial colour" → avoid_ingredients: ["artificial color"].
+  CRITICAL — sugar distinction:
+  "no sugar" / "zero sugar" / "sugar free" → max_sugar_g: 0 (hard filter: no sugar of any kind).
+  "no added sugar" / "without added sugar" / "no refined sugar" → modifiers:["no_added_sugar"],
+    do NOT set max_sugar_g or avoid_ingredients. Products with natural sugar (fruit, honey, milk)
+    are still acceptable to the user — they just don't want refined/added sugar.
   These umbrella terms are auto-expanded against the ingredient-known dictionary.
 - "healthier than maggi" → comparison_ref:"maggi", comparison_mode:"healthier_than", sort:"healthiest".
 - "cheaper than amul butter" → comparison_ref:"amul butter", comparison_mode:"cheaper_than", sort:"cheapest".

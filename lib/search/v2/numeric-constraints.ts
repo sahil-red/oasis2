@@ -60,12 +60,12 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{1,3})\s*g\s*sugar/) ??
     firstNumber(text, /(?:sugar)\D{0,12}(\d{1,3})\s*g/) ??
     firstNumber(text, /(?:under|below|less than)\s*(\d{1,3})\s*g\s*sugar/);
-  // "zero / no / no-added / sugar-free sugar" all express the NO-ADDED-SUGAR intent.
+  // "zero / no / no-added / without / sugar-free sugar" all express the NO-ADDED-SUGAR intent.
   // Flag it, but DON'T hard-gate total sugar — a 1g cap filtered out naturally-sweet items
   // (coconut water, plain yoghurt, fruit). Ranking handles "added sugar" softly.
-  if (/zero sugar|no sugar|no added sugar|sugar[\s-]free/.test(text)) {
+  if (/zero sugar|no sugar|no added sugar|without sugar|without added sugar|sugar[\s-]free/.test(text)) {
     out.no_added_sugar = true;
-    text = text.replace(/\b(zero sugar|no sugar|no added sugar|sugar[\s-]free)\b/g, " ");
+    text = text.replace(/\b(zero sugar|no sugar|no added sugar|without sugar|without added sugar|sugar[\s-]free)\b/g, " ");
   }
   if (out.max_sugar_g == null && sugarLimit) out.max_sugar_g = sugarLimit;
   if (out.max_sugar_g == null && /low sugar|less sugar|lower sugar/.test(text)) {
@@ -129,7 +129,7 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     .replace(/\b\d+(\.\d+)?\s*(g|gm|kg|ml|l|kcal|cal|%)\b/gi, " ")
     .replace(/(?:₹|rs\.?|inr)\s*\d+/gi, " ")
     // Strip constraint phrases so fast-path doesn't match them as types or brands
-    .replace(/\b(dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|sugar[\s-]free|fat[\s-]free|no fat|less fat|lower fat|no sugar|zero sugar)\b/gi, " ")
+    .replace(/\b(dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|sugar[\s-]free|fat[\s-]free|no fat|less fat|lower fat|no sugar|zero sugar|without sugar|without added sugar)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
