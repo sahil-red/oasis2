@@ -36,6 +36,15 @@ export function setTypeCentroids(centroids: Map<string, number[]> | null): void 
   _typeCentroids = centroids;
 }
 
+/** Category→primary_type sibling map — loaded at snapshot time from the
+ *  product_search_index taxonomy. Used to expand type matching when centroids
+ *  are sparse ("snacks" → chips, namkeen, protein bar in category "munchies"). */
+let _categoryTypeMap: Map<string, string[]> | null = null;
+
+export function setCategoryTypeMap(map: Map<string, string[]> | null): void {
+  _categoryTypeMap = map;
+}
+
 type TypeMatch = { primary_type: string; distance: number };
 const cache = new Map<string, { at: number; matches: TypeMatch[] }>();
 
@@ -154,6 +163,16 @@ export async function semanticTypeMatches(wanted: string): Promise<Set<string>> 
       const sim = cosineSimilarity(wantedVec, vec);
       const dist = 1 - sim;
       if (dist <= EQUIVALENT_MAX) out.add(type);
+    }
+    // Category sibling expansion: when centroids are sparse, add same-category
+    // types from the taxonomy. "snacks" in "munchies" → chips, namkeen, etc.
+    if (out.size <= 5 && _categoryTypeMap) {
+      const siblings = _categoryTypeMap.get(key);
+      if (siblings) {
+        for (const s of siblings) {
+          if (s !== key && out.size < 24) out.add(s);
+        }
+      }
     }
     return out;
   }

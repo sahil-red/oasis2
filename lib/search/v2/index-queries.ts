@@ -19,6 +19,9 @@ export type SearchIndexSnapshot = {
   /** Pre-loaded type centroids for in-memory cosine matching — avoids
    *  8s RPC calls to search_v2_type_matches. Populated during snapshot init. */
   typeCentroids: Map<string, number[]>;
+  /** Category→primary_type siblings — built from product_search_index at
+   *  snapshot load. Expands type matching for weak centroids (snacks→chips). */
+  categoryTypeMap: Map<string, string[]> | null;
   /** Lazy-loaded — populated on first access, not during snapshot init */
   _goalMapLoaded: boolean;
   _profilesLoaded: boolean;
@@ -363,6 +366,48 @@ async function loadTypeCentroids(): Promise<Map<string, number[]>> {
   return centroids;
 }
 
+/** Build category→primary_type sibling map from the search index.
+ *  Used to expand type matching when centroids are sparse —
+ *  "snacks" in category "munchies" also matches chips, namkeen, etc. */
+async function loadCategoryTypeMap(): Promise<Map<string, string[]>> {
+  const supabase = adminClient();
+  const catMap = new Map<string, string[]>();
+  const typeCatCount = new Map<string, Map<string, number>>(); // type → category → count
+  const PAGE = 2000;
+  for (let page = 0; page < 50; page++) {
+    const { data, error } = await supabase
+      .from("product_search_index")
+      .select("category, primary_type")
+      .not("primary_type", "is", null)
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (error || !data?.length) break;
+    for (const r of data) {
+      const cat = (r.category ?? "").trim();
+      const pt = (r.primary_type as string).toLowerCase().trim();
+      if (!cat || !pt) continue;
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      const siblings = catMap.get(cat)!;
+      if (!siblings.includes(pt)) siblings.push(pt);
+      // Track category counts per type
+      if (!typeCatCount.has(pt)) typeCatCount.set(pt, new Map());
+      const counts = typeCatCount.get(pt)!;
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+  }
+  // For each primary_type, pick its dominant category (most products) and return siblings
+  const typeToSiblings = new Map<string, string[]>();
+  for (const [pt, catCounts] of typeCatCount) {
+    let bestCat = "";
+    let bestCount = 0;
+    for (const [cat, count] of catCounts) {
+      if (count > bestCount) { bestCat = cat; bestCount = count; }
+    }
+    const siblings = (catMap.get(bestCat) ?? []).filter(s => s !== pt);
+    typeToSiblings.set(pt, siblings);
+  }
+  return typeToSiblings;
+}
+
 export async function getSearchIndexSnapshot(forceRefresh = false): Promise<SearchIndexSnapshot> {
   if (!forceRefresh && cachedSnapshot && Date.now() - cachedSnapshot.at < SNAPSHOT_TTL_MS) {
     return cachedSnapshot.data;
@@ -370,10 +415,11 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
 
   // Only load facets + dietary + type centroids eagerly — goalMap + profiles
   // are lazy-loaded on first access since they're only needed for goal queries (~10%).
-  const [catalogMeta, dietary_prevalence, typeCentroids] = await Promise.all([
+  const [catalogMeta, dietary_prevalence, typeCentroids, categoryTypeMap] = await Promise.all([
     loadFacets(),
     loadDietaryPrevalence(),
     loadTypeCentroids(),
+    loadCategoryTypeMap(),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],
@@ -383,6 +429,7 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
     source: "pgvector",
     dietary_prevalence,
     typeCentroids,
+    categoryTypeMap,
     _goalMapLoaded: false,
     _profilesLoaded: false,
   };
