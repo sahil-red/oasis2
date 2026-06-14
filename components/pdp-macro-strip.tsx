@@ -47,7 +47,7 @@ export function PdpMacroStrip({
       {cells.map((c) => (
         <div
           key={c.id}
-          className="rounded-2xl border border-(--color-line) bg-(--color-panel) px-2 py-3.5 text-center"
+          className="panel-soft rounded-2xl px-2 py-3.5 text-center"
         >
           <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-(--color-fg-dim)">
             {c.label}

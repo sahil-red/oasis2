@@ -196,9 +196,9 @@ function GoalFitRowCompact({
         >
           {label}
         </span>
-        <span className="h-1.5 min-w-0 overflow-hidden rounded-full bg-(--color-bg-soft)">
+        <span className="h-1.5 min-w-0 overflow-hidden rounded-full bg-(--color-line)/50">
           <span
-            className="block h-full rounded-full transition-[width]"
+            className="block h-full rounded-full transition-[width] duration-500"
             style={{
               width: `${Math.max(2, Math.min(100, fit))}%`,
               backgroundColor: surface.accentColor,

@@ -1101,7 +1101,7 @@ export function CatalogView({
                   }
                 }}
                 placeholder="e.g. paneer with low fat under ₹150"
-                className="w-full min-h-[48px] rounded-2xl border border-(--color-line-strong) bg-(--color-bg) pl-5 pr-10 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:ring-2 focus:ring-(--color-fg-muted)/20"
+                className="w-full min-h-[48px] rounded-2xl border border-(--color-line-strong) bg-(--color-bg) pl-5 pr-10 text-[15px] text-(--color-fg) outline-none ring-0 transition placeholder:text-(--color-fg-dim) focus:border-(--color-fg-muted) focus:shadow-md focus:ring-4 focus:ring-(--color-accent)/10"
               />
               {aiPrompt.trim() ? (
                 <button
