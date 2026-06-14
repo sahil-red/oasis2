@@ -122,7 +122,7 @@ function sortComparator(a: RankedCandidate, b: RankedCandidate, sort: SearchInte
       if (t !== 0) return t;
       // Absolute grams only. Tiers are within-cohort percentiles — comparing
       // them across types ranks a "high"-for-honey 2g above a "medium" 25g whey.
-      return (validGrams(b.row.protein_g) ?? -1) - (validGrams(a.row.protein_g) ?? -1);
+      return (validGrams(b.row.total_protein_g ?? b.row.protein_g) ?? -1) - (validGrams(a.row.total_protein_g ?? a.row.protein_g) ?? -1);
     }
     case "lowest_sugar": {
       const t = tieredSort(a, b);
@@ -158,10 +158,10 @@ export function rankCandidates(
   // normalized within this candidate set — the only cohort that matches the
   // user's actual comparison context. Build-time tiers never gate or rank here.
   const proteinNorm = intent.modifiers.includes("high_protein_tier")
-    ? normalizeNullable(candidates.map((r) => validGrams(r.protein_g)))
+    ? normalizeNullable(candidates.map((r) => validGrams(r.total_protein_g ?? r.protein_g)))
     : null;
   const sugarNorm = intent.modifiers.includes("low_sugar")
-    ? normalizeNullable(candidates.map((r) => validGrams(r.sugar_g)), true)
+    ? normalizeNullable(candidates.map((r) => validGrams(r.total_sugar_g ?? r.sugar_g)), true)
     : null;
 
   const rawTraitMatches = candidates.map((row, i) => {

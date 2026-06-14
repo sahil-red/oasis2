@@ -190,6 +190,9 @@ export async function semanticTypeMatches(wanted: string): Promise<Set<string>> 
     }
     // Always include the original key itself (may differ from lookupKey)
     out.add(key);
+    // Also include the normalized lookup key — e.g. "milk shake" (1 product)
+    // must also match "milkshake" (81 products) since they share the same centroid.
+    if (lookupKey !== key) out.add(lookupKey);
     return out;
   }
 
@@ -199,6 +202,7 @@ export async function semanticTypeMatches(wanted: string): Promise<Set<string>> 
     if (m.distance <= EQUIVALENT_MAX) out.add(m.primary_type);
   }
   out.add(key);
+  if (lookupKey !== key) out.add(lookupKey);
   return out;
 }
 

@@ -47,7 +47,7 @@ export function buildSearchSql(
   const sortClause = intent.sort === "cheapest"
     ? "COALESCE(-psi.price_inr, -1e9)"
     : intent.sort === "highest_protein"
-    ? "COALESCE(psi.protein_g, -1)"
+    ? "COALESCE(psi.total_protein_g, psi.protein_g, -1)"
     : intent.sort === "lowest_sugar"
     ? "-COALESCE(COALESCE(psi.total_sugar_g, psi.sugar_g), 1e9)"
     : intent.sort === "healthiest"
