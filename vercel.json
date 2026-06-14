@@ -1,9 +1,8 @@
 {
-  "regions": ["sin1"],
-  "crons": [
-    {
-      "path": "/api/cron/search-alerts",
-      "schedule": "0 6 * * *"
+  "functions": {
+    "api/search/py.py": {
+      "runtime": "python3.12",
+      "maxDuration": 40
     }
-  ]
+  }
 }
