@@ -22,7 +22,8 @@ const RISK_VAR: Record<IngredientRisk, string> = {
 
 function dotRiskForItem(item: IngredientDisplayItem): IngredientRisk {
   if (item.tierLabel === "Probiotic" || item.tierLabel.startsWith("Probiotic")) return "risk-free";
-  if (item.source === "rules" && item.risk === "risk-free") return "unknown";
+  // A rule-recognised safe ingredient (sugar, salt, flour, …) is benign, not
+  // "unrated" — only genuinely unrecognised entries fall through to unknown.
   return item.risk;
 }
 
@@ -190,19 +191,16 @@ export function IngredientPanel({
       {/* ── Ingredient read: an editorial verdict + a segmented safety meter ── */}
       <div className="panel-soft rounded-xl p-3.5">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-(--color-fg-dim)">
-            Ingredient read
+          <p
+            className="font-display text-[1.45rem] leading-tight"
+            style={{ color: concernCount ? worstColor : "var(--color-fg)" }}
+          >
+            {phrase}
           </p>
           <p className="shrink-0 text-[11px] text-(--color-fg-dim)">
             <span className="font-medium tabular-nums text-(--color-fg-muted)">{total}</span> ingredients
           </p>
         </div>
-        <p
-          className="mt-1.5 font-display text-[1.45rem] leading-tight"
-          style={{ color: concernCount ? worstColor : "var(--color-fg)" }}
-        >
-          {phrase}
-        </p>
 
         <div className="mt-3 flex h-2 w-full gap-0.5">
           {segments.map((s) => (

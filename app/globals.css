@@ -29,15 +29,18 @@
 
 html.dark {
   color-scheme: dark;
-  --color-bg: #0a0a0b;
-  --color-bg-soft: #141416;
-  --color-panel: #1c1c1e;
-  --color-panel-2: #242428;
-  --color-line: rgba(255, 255, 255, 0.1);
-  --color-line-strong: rgba(255, 255, 255, 0.18);
-  --color-fg: #f5f5f7;
-  --color-fg-muted: #a1a1a6;
-  --color-fg-dim: #86868b;
+  /* Warm "espresso paper" dark — brown-undertoned surfaces rather than neutral
+     iOS grey, so the dark theme reads as crafted and on-brand (a sibling to the
+     warm cream light mode) instead of generic black + grey. */
+  --color-bg: #12100d;
+  --color-bg-soft: #1a1613;
+  --color-panel: #201b16;
+  --color-panel-2: #292318;
+  --color-line: rgba(255, 242, 228, 0.1);
+  --color-line-strong: rgba(255, 242, 228, 0.18);
+  --color-fg: #f4f0e9;
+  --color-fg-muted: #afa597;
+  --color-fg-dim: #877d71;
   /* Brand-warm amber, not iOS blue — Scout's accent stays amber in the dark. */
   --color-accent: #f59e0b;
   --color-accent-soft: rgba(245, 158, 11, 0.16);
@@ -348,32 +351,11 @@ html.dark .panel-soft {
   animation: count-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Scan sweep — a single faint accent line passes top→bottom over a product image
-   on load, echoing Scout "reading the label". Thin, one-shot, purely decorative. */
-@keyframes scan-sweep {
-  0% { transform: translateY(-100%); opacity: 0; }
-  12% { opacity: 1; }
-  88% { opacity: 1; }
-  100% { transform: translateY(100%); opacity: 0; }
-}
-.scan-line {
-  background: linear-gradient(
-    to bottom,
-    transparent 44%,
-    color-mix(in srgb, var(--color-accent) 22%, transparent) 50%,
-    transparent 56%
-  );
-  animation: scan-sweep 1s ease-in-out 0.2s both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .grid-rise > *,
   .pop-in,
   .stamp-in,
   .count-pop {
     animation: none;
-  }
-  .scan-line {
-    display: none;
   }
 }

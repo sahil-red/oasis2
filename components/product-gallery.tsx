@@ -79,9 +79,6 @@ export function ProductGallery({
           />
         </button>
 
-        {/* one-time "Scout read this" scan line — decorative, never blocks input */}
-        <span aria-hidden className="scan-line pointer-events-none absolute inset-0" />
-
         {n > 1 ? (
           <>
             <button

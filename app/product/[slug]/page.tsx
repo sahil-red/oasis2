@@ -339,7 +339,7 @@ export default async function ProductPage({
           </div>
         </div>
 
-        <Reveal className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
+        <Reveal className="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start">
           <section className="min-w-0">
             <h2 className="font-display text-2xl">Ingredients</h2>
             <p className="mt-1.5 text-[13px] text-(--color-fg-muted)">

@@ -130,9 +130,15 @@ export function ScoreRing({ score, color }: { score: number; color: string }) {
   const circumference = 2 * Math.PI * r;
   const display = useCountUp(score);
   const filled = (Math.max(0, Math.min(100, display)) / 100) * circumference;
+  // A quiet halo rewards an excellent score — never gaudy, just a soft glow.
+  const excellent = score >= 76;
   return (
     <div className="relative h-16 w-16 shrink-0" role="img" aria-label={`Score ${score} out of 100`}>
-      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+      <svg
+        viewBox="0 0 64 64"
+        className="h-full w-full -rotate-90"
+        style={excellent ? { filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 40%, transparent))` } : undefined}
+      >
         <circle
           cx="32"
           cy="32"

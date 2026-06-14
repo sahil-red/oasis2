@@ -48,10 +48,12 @@ export function removeFromCompare(slug: string): void {
   writeCompare(readCompare().filter((e) => e.slug !== slug));
 }
 
+/** Returns true when the intended action succeeded; false only when an *add* was
+ *  blocked by a full tray. Removing is always a success. */
 export function toggleCompare(entry: Omit<CompareEntry, "addedAt">): boolean {
   if (isInCompare(entry.slug)) {
     removeFromCompare(entry.slug);
-    return false;
+    return true;
   }
   return addToCompare(entry);
 }
