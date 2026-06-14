@@ -64,7 +64,7 @@ export function PdpNutritionGlance({
   ].filter(Boolean);
 
   return (
-    <div className="rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5">
+    <div className="panel-soft rounded-2xl p-4 sm:p-5">
       <div>
         <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
           Nutrition

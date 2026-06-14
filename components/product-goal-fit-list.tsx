@@ -87,7 +87,7 @@ export function ProductGoalFitList({
 
   return (
     <section className={cn("mt-6", className)}>
-      <div className={cn("rounded-2xl border border-(--color-line) bg-(--color-panel) p-4 sm:p-5", cardClassName)}>
+      <div className={cn("panel-soft rounded-2xl p-4 sm:p-5", cardClassName)}>
         <div className={cn(strongGoals.length > 0 && "border-b border-(--color-line) pb-4")}>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
