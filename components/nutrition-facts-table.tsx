@@ -61,7 +61,7 @@ function NutritionRow({
   const tone = nutritionTone(row);
   const toneColor = tone ? TONE_COLOR[tone.kind] : undefined;
   return (
-    <tr className="border-b border-(--color-line)/50 last:border-0">
+    <tr className="border-b border-(--color-line)/50 transition-colors last:border-0 hover:bg-(--color-bg-soft)/40">
       <td
         className={cn(
           "py-2 pr-2 align-middle",

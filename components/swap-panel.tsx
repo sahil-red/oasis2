@@ -91,7 +91,7 @@ export function SwapPanel({
               <Link
                 href={`/product/${product.slug}`}
                 className={cn(
-                  "flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) transition hover:border-(--color-accent)",
+                  "u-lift flex gap-2 rounded-lg border border-(--color-line) bg-(--color-panel) hover:border-(--color-accent)",
                   grid
                     ? "h-full flex-col rounded-xl p-2.5"
                     : compact

@@ -309,7 +309,7 @@ function ProductHeader({ product }: { product: ProductListItem }) {
         <X className="h-3.5 w-3.5" />
       </button>
       <Link href={`/product/${product.slug}`} className="group block">
-        <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame">
+        <div className="relative aspect-square overflow-hidden rounded-2xl photo-frame shadow-[0_1px_2px_rgba(60,40,20,0.05)] transition duration-200 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_34px_-20px_rgba(60,40,20,0.34)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4)] dark:group-hover:shadow-[0_16px_34px_-18px_rgba(0,0,0,0.6)]">
           {thumb ? (
             <Image
               src={thumb}
