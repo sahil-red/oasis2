@@ -88,7 +88,11 @@ function buildFastPathIntent(
 
   // §3.1 — Use full query for type/brand discovery. The residual had constraint
   // words stripped, but those words include valid types ("protein", "sugar").
-  const fullText = query.toLowerCase().trim();
+  // Also strip suffix-style constraint phrases (sugar-free, fat-free).
+  const fullText = query.toLowerCase().trim()
+    .replace(/\b(sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // §3.2 — Strip negation-prefixed tokens ("no dairy", "bina cheeni", "without oil")
   // before matching so we don't set primary_type to the negated token.
