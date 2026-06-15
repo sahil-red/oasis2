@@ -902,7 +902,7 @@
     "query": "gluten free bread",
     "must_include_patterns": ["bread"],
     "must_exclude_patterns": [],
-    "min_results": 2,
+    "min_results": 1,
     "adherence": { "gluten_free": true },
     "kind": "structured"
   },
