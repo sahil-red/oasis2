@@ -94,8 +94,16 @@ async function main() {
         fields.is_gluten_free = false;
         stats.is_gluten_free++;
       }
-      if (!row.has_added_sugar && ing && ADDED_SUGAR_INGREDIENTS.test(ing)) {
+      // Reconcile has_added_sugar against measured sugar: a ~0g-sugar product
+      // cannot contain added sugar, so an ingredient-regex hit is a false positive
+      // (e.g. the word "sugar" inside a "no added sugar" claim). Set the flag only
+      // when sugar is actually present, and clear a stale TRUE on a 0-sugar product.
+      const sugarIsZero = row.sugar_g != null && row.sugar_g <= 0.5;
+      if (!row.has_added_sugar && ing && ADDED_SUGAR_INGREDIENTS.test(ing) && !sugarIsZero) {
         fields.has_added_sugar = true;
+        stats.has_added_sugar++;
+      } else if (row.has_added_sugar && sugarIsZero) {
+        fields.has_added_sugar = false;
         stats.has_added_sugar++;
       }
       if (row.is_palm_oil_free && ing && PALM_INGREDIENTS.test(ing)) {
