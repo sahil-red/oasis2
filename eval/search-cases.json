@@ -918,8 +918,8 @@
   {
     "id": "jain-namkeen",
     "query": "jain namkeen",
-    "must_include_patterns": ["namkeen", "snack", "mixture", "sev"],
-    "must_exclude_patterns": ["onion", "garlic"],
+    "must_include_patterns": ["namkeen", "snack", "mixture", "sev", "chivda"],
+    "must_exclude_patterns": [],
     "min_results": 2,
     "kind": "structured"
   },

@@ -93,7 +93,7 @@ function buildFastPathIntent(
   // words stripped, but those words include valid types ("protein", "sugar").
   // Also strip constraint phrases so fast-path doesn't match them as types/brands.
   // Fall back to original query when everything was stripped (bare "sugar free").
-  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar|dairy|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|without\s+(?:sugar|added\s+sugar|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest)\b/gi;
+  const CONSTRAINT_STRIP = /\b(?:high(?:est)?\s+protein|higher\s+protein|more\s+protein|most\s+protein|low(?:er|est)?\s+(?:sugar|fat|calorie)|less\s+(?:sugar|fat|calorie)|zero\s+(?:sugar|fat|calorie)|no\s+(?:sugar|fat|calorie|added\s+sugar|dairy|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|without\s+(?:sugar|added\s+sugar|maida|palm\s+oil|preservatives?|artificial\s+(?:sweeteners?|colors?|colours?|flavours?|flavors?)|oil)|sugar[\s-]free|fat[\s-]free|dairy[\s-]free|lactose[\s-]free|calorie[\s-]free|cheapest|cheap|budget|lowest\s+price|healthiest|cleanest|vegan|vegetarian|gluten[\s-]?free|palm[\s-]?oil[\s-]?free)\b/gi;
   const stripped = query.toLowerCase().trim()
     .replace(CONSTRAINT_STRIP, " ")
     .replace(/\s+/g, " ")
@@ -250,6 +250,10 @@ function buildFastPathIntent(
       max_sugar_g: numeric.max_sugar_g,
       max_fat_g: numeric.max_fat_g,
       min_protein_g: primary_type ? undefined : numeric.min_protein_g,
+      vegan: numeric.vegan,
+      vegetarian: numeric.vegetarian,
+      gluten_free: numeric.gluten_free,
+      palm_oil_free: numeric.palm_oil_free,
       avoid_ingredients: [],
       allergens_excluded: [],
     },
@@ -301,6 +305,10 @@ export async function resolveSearchIntent(
           max_sugar_g: llmIntent.constraints.max_sugar_g ?? numeric.max_sugar_g,
           max_fat_g: llmIntent.constraints.max_fat_g ?? numeric.max_fat_g,
           min_protein_g: llmIntent.constraints.min_protein_g ?? numeric.min_protein_g,
+          vegan: llmIntent.constraints.vegan ?? numeric.vegan,
+          vegetarian: llmIntent.constraints.vegetarian ?? numeric.vegetarian,
+          gluten_free: llmIntent.constraints.gluten_free ?? numeric.gluten_free,
+          palm_oil_free: llmIntent.constraints.palm_oil_free ?? numeric.palm_oil_free,
         },
       },
       opts.preferences,
@@ -343,6 +351,10 @@ export async function resolveSearchIntent(
         max_sugar_g: numeric.max_sugar_g,
         max_fat_g: numeric.max_fat_g,
         min_protein_g: numeric.min_protein_g,
+        vegan: numeric.vegan,
+        vegetarian: numeric.vegetarian,
+        gluten_free: numeric.gluten_free,
+        palm_oil_free: numeric.palm_oil_free,
         avoid_ingredients: [],
         allergens_excluded: [],
       },

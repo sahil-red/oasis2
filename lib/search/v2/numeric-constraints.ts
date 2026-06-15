@@ -14,6 +14,10 @@ export type NumericExtraction = {
   high_protein_tier: boolean;
   low_sugar_tier: boolean;
   no_added_sugar: boolean;
+  vegan?: boolean;
+  vegetarian?: boolean;
+  gluten_free?: boolean;
+  palm_oil_free?: boolean;
   sort: SearchIntentV2["sort"];
   comparison_ref?: string;
   comparison_mode?: SearchIntentV2["comparison_mode"];
@@ -85,6 +89,28 @@ export function extractNumericConstraints(rawQuery: string): NumericExtraction {
     firstNumber(text, /(\d{1,3})\s*g\s*protein/);
   if (proteinMin) out.min_protein_g = proteinMin;
 
+  // Dietary flags — explicit keywords → hard constraints. Strip from the text so
+  // the residual (used for fast-path type/brand matching) doesn't mismatch, e.g.
+  // "palm oil free biscuits" must not match "oil"/palmolein products.
+  if (/\bvegan\b/.test(text)) {
+    out.vegan = true;
+    text = text.replace(/\bvegan\b/g, " ");
+  }
+  if (/\bvegetarian\b/.test(text)) {
+    out.vegetarian = true;
+    text = text.replace(/\bvegetarian\b/g, " ");
+  }
+  if (/\bgluten[\s-]?free\b/.test(text)) {
+    out.gluten_free = true;
+    text = text.replace(/\bgluten[\s-]?free\b/g, " ");
+  }
+  if (/\bpalm[\s-]?oil[\s-]?free\b/.test(text) || /\b(?:no|without)\s+palm\s*oil\b/.test(text)) {
+    out.palm_oil_free = true;
+    text = text
+      .replace(/\bpalm[\s-]?oil[\s-]?free\b/g, " ")
+      .replace(/\b(?:no|without)\s+palm\s*oil\b/g, " ");
+  }
+
   // Explicit calorie ceiling ("under 100 calories", "150 kcal"). Vague "low calorie"
   // (no number) is intentionally left for the LLM → goal_phrase → low_calorie_density trait.
   const calLimit =
@@ -146,6 +172,10 @@ export function countActiveConstraints(n: NumericExtraction): number {
   if (n.high_protein_tier) c++;
   if (n.low_sugar_tier) c++;
   if (n.no_added_sugar) c++;
+  if (n.vegan) c++;
+  if (n.vegetarian) c++;
+  if (n.gluten_free) c++;
+  if (n.palm_oil_free) c++;
   return c;
 }
 
