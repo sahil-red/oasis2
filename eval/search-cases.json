@@ -763,5 +763,180 @@
       "paneer"
     ],
     "kind": "directed"
+  },
+  {
+    "id": "muesli-no-added-sugar",
+    "query": "muesli without added sugar",
+    "must_include_patterns": ["muesli"],
+    "must_exclude_patterns": [],
+    "min_results": 5,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "muesli-low-sugar",
+    "query": "muesli low sugar",
+    "must_include_patterns": ["muesli"],
+    "must_exclude_patterns": [],
+    "min_results": 6,
+    "kind": "structured"
+  },
+  {
+    "id": "oats-no-added-sugar",
+    "query": "oats no added sugar",
+    "must_include_patterns": ["oats", "oat"],
+    "must_exclude_patterns": [],
+    "min_results": 5,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "peanut-butter-no-added-sugar",
+    "query": "peanut butter no added sugar",
+    "must_include_patterns": ["peanut butter", "peanut"],
+    "must_exclude_patterns": [],
+    "min_results": 4,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "yogurt-without-sugar",
+    "query": "yogurt without sugar",
+    "must_include_patterns": ["yogurt", "yoghurt", "curd", "dahi"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "bina-cheeni-doodh",
+    "query": "bina cheeni doodh",
+    "must_include_patterns": ["milk", "doodh"],
+    "must_exclude_patterns": ["chocolate", "biscuit"],
+    "min_results": 2,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "zero-sugar-soda",
+    "query": "zero sugar soda",
+    "must_include_patterns": ["soda", "cola", "drink", "beverage", "soft drink"],
+    "must_exclude_patterns": [],
+    "min_results": 2,
+    "adherence": { "no_added_sugar": true },
+    "kind": "structured"
+  },
+  {
+    "id": "low-sugar-biscuits-soft",
+    "query": "low sugar biscuits",
+    "must_include_patterns": ["biscuit", "cookie"],
+    "must_exclude_patterns": ["chocolate spread", "masala", "noodle"],
+    "min_results": 5,
+    "kind": "structured"
+  },
+  {
+    "id": "diabetic-friendly-biscuits",
+    "query": "diabetic friendly biscuits",
+    "must_include_patterns": ["biscuit", "cookie", "cracker"],
+    "must_exclude_patterns": [],
+    "min_results": 2,
+    "adherence": { "max_sugar_g": 5 },
+    "kind": "structured"
+  },
+  {
+    "id": "biscuits-under-50",
+    "query": "biscuits under ₹50",
+    "must_include_patterns": ["biscuit", "cookie"],
+    "must_exclude_patterns": [],
+    "min_results": 4,
+    "adherence": { "max_price": 50 },
+    "kind": "structured"
+  },
+  {
+    "id": "cow-ghee-under-500",
+    "query": "cow ghee under ₹500",
+    "must_include_patterns": ["ghee"],
+    "must_exclude_patterns": ["laddu", "ladoo", "barfi", "mithai", "biscuit", "namkeen"],
+    "min_results": 4,
+    "adherence": { "max_price": 500 },
+    "kind": "structured"
+  },
+  {
+    "id": "high-protein-snacks-under-100",
+    "query": "high protein snacks under ₹100",
+    "must_include_patterns": ["snack", "namkeen", "chips", "bar", "chana", "makhana"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "adherence": { "max_price": 100 },
+    "kind": "structured"
+  },
+  {
+    "id": "malai-paneer-type-precision",
+    "query": "malai paneer",
+    "must_include_patterns": ["paneer"],
+    "must_exclude_patterns": ["masala", "biryani", "momo", "tikka masala", "burger", "patty"],
+    "min_results": 3,
+    "expected_top1_patterns": ["paneer"],
+    "kind": "structured"
+  },
+  {
+    "id": "vegan-chocolate",
+    "query": "vegan chocolate",
+    "must_include_patterns": ["chocolate"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "adherence": { "vegan": true },
+    "kind": "structured"
+  },
+  {
+    "id": "vegan-protein-bar",
+    "query": "vegan protein bar",
+    "must_include_patterns": ["protein bar", "bar"],
+    "must_exclude_patterns": [],
+    "min_results": 2,
+    "adherence": { "vegan": true },
+    "kind": "structured"
+  },
+  {
+    "id": "gluten-free-bread",
+    "query": "gluten free bread",
+    "must_include_patterns": ["bread"],
+    "must_exclude_patterns": [],
+    "min_results": 2,
+    "adherence": { "gluten_free": true },
+    "kind": "structured"
+  },
+  {
+    "id": "palm-oil-free-biscuits",
+    "query": "palm oil free biscuits",
+    "must_include_patterns": ["biscuit", "cookie"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "adherence": { "palm_oil_free": true },
+    "kind": "structured"
+  },
+  {
+    "id": "jain-namkeen",
+    "query": "jain namkeen",
+    "must_include_patterns": ["namkeen", "snack", "mixture", "sev"],
+    "must_exclude_patterns": ["onion", "garlic"],
+    "min_results": 2,
+    "kind": "structured"
+  },
+  {
+    "id": "high-protein-yogurt",
+    "query": "high protein yogurt",
+    "must_include_patterns": ["yogurt", "yoghurt", "curd", "dahi", "greek"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "kind": "structured"
+  },
+  {
+    "id": "healthier-than-maggi",
+    "query": "healthier than maggi",
+    "must_include_patterns": ["noodle", "pasta", "vermicelli", "atta"],
+    "must_exclude_patterns": [],
+    "min_results": 3,
+    "kind": "structured"
   }
 ]

@@ -27,7 +27,52 @@ type EvalCase = {
   kind?: string;
   min_results?: number;
   expected_top1_patterns?: string[];
+  /**
+   * Assert the returned items actually SATISFY the constraint — not just that
+   * their names match a pattern. Catches the two failure modes name-matching
+   * misses: silent over-filtering (paired with min_results) and wrong-inclusion
+   * (a result that violates the stated constraint). Checks the top `scope` items
+   * (default: all returned). A field is only enforced when the row has the value.
+   */
+  adherence?: {
+    scope?: number;
+    max_price?: number;
+    max_sugar_g?: number;
+    min_protein_g?: number;
+    no_added_sugar?: boolean;
+    vegan?: boolean;
+    gluten_free?: boolean;
+    palm_oil_free?: boolean;
+  };
 };
+
+function checkAdherence(
+  items: Awaited<ReturnType<typeof runSearchV2>>["items"],
+  adh: NonNullable<EvalCase["adherence"]>,
+): string[] {
+  const scope = adh.scope ?? items.length;
+  const violations: string[] = [];
+  for (const it of items.slice(0, scope)) {
+    const r = it.row;
+    const sugar = r.total_sugar_g ?? r.sugar_g;
+    const protein = r.total_protein_g ?? r.protein_g;
+    if (adh.max_price != null && r.price_inr != null && r.price_inr > adh.max_price)
+      violations.push(`${r.name}: ₹${r.price_inr} > ₹${adh.max_price}`);
+    if (adh.max_sugar_g != null && sugar != null && sugar > adh.max_sugar_g)
+      violations.push(`${r.name}: ${sugar}g sugar > ${adh.max_sugar_g}g`);
+    if (adh.min_protein_g != null && protein != null && protein < adh.min_protein_g)
+      violations.push(`${r.name}: ${protein}g protein < ${adh.min_protein_g}g`);
+    // "No added sugar" only counts as a violation when the flag is positive AND
+    // measured sugar isn't ~0 — a 0g-sugar product cannot contain added sugar,
+    // so an over-eager has_added_sugar flag must not be treated as a violation.
+    if (adh.no_added_sugar && r.has_added_sugar === true && (sugar == null || sugar > 0.5))
+      violations.push(`${r.name}: flagged added sugar (sugar=${sugar ?? "?"})`);
+    if (adh.vegan && r.is_vegan === false) violations.push(`${r.name}: not vegan`);
+    if (adh.gluten_free && r.is_gluten_free === false) violations.push(`${r.name}: not gluten-free`);
+    if (adh.palm_oil_free && r.is_palm_oil_free === false) violations.push(`${r.name}: has palm oil`);
+  }
+  return violations;
+}
 
 function loadCases(): EvalCase[] {
   const raw = readFileSync(join(process.cwd(), "eval/search-cases.json"), "utf8");
@@ -112,6 +157,8 @@ async function main() {
   let precisionTotal = 0;
   let top1Hits = 0;
   let top1Total = 0;
+  let adherenceTotal = 0;
+  let adherenceFailed = 0;
   const latencies: number[] = [];
   const llmCalls: number[] = [];
   const traitSamples: Array<{ trait: string; raw: number; hit: boolean }> = [];
@@ -182,6 +229,18 @@ async function main() {
       caseOk = false;
     }
 
+    if (c.adherence) {
+      adherenceTotal++;
+      const violations = checkAdherence(result.items, c.adherence);
+      if (violations.length) {
+        adherenceFailed++;
+        caseOk = false;
+        console.error(
+          `[ADHERE] ${c.id} "${c.query}" — ${violations.length} violation(s): ${violations.slice(0, 3).join("; ")}`,
+        );
+      }
+    }
+
     for (const item of result.items.slice(0, 3)) {
       for (const [trait, conf] of Object.entries(item.row.trait_confidence)) {
         if (item.row.trait_source[trait as keyof typeof item.row.trait_source] !== "llm") continue;
@@ -214,6 +273,11 @@ async function main() {
 
   console.log(`\n[search:eval] ${passed}/${cases.length} passed, ${leaks} forbidden leaks`);
   console.log(`[search:eval] precision@5=${precisionAt5.toFixed(3)} top1=${top1Acc.toFixed(3)}`);
+  if (adherenceTotal > 0) {
+    console.log(
+      `[search:eval] constraint adherence=${(((adherenceTotal - adherenceFailed) / adherenceTotal) * 100).toFixed(0)}% (${adherenceTotal - adherenceFailed}/${adherenceTotal} cases clean)`,
+    );
+  }
   console.log(`[search:eval] latency p50=${latencyP50.toFixed(0)}ms llm_calls/search=${avgLlm.toFixed(2)}`);
 
   if (leaks > 0) {
