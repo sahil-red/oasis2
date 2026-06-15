@@ -94,7 +94,13 @@ function passesNutrition(row: ProductSearchIndexRow, intent: SearchIntentV2): bo
   // Tiers are within-cohort percentiles — "low" tier can be 24g protein (tofu in
   // a paneer cohort) and "low" sugar can be 22g (within chocolate). Hard-gating
   // on them mislabels by construction; ranking.ts boosts by absolute grams instead.
-  if (intent.modifiers.includes("no_added_sugar") && row.has_added_sugar === true) return false;
+  // "No added sugar" excludes only CONFIDENT cases: flagged AND measuring real
+  // sugar. A ~0g-sugar product can't contain added sugar, so an over-eager flag
+  // never drops it; an unknown flag (null) is kept and ranked, not excluded.
+  if (intent.modifiers.includes("no_added_sugar") && row.has_added_sugar === true) {
+    const sugar = row.total_sugar_g ?? row.sugar_g;
+    if (sugar == null || sugar > 0.5) return false;
+  }
   return true;
 }
 

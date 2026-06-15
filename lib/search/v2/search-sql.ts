@@ -54,7 +54,13 @@ export function buildSearchSql(
   if (c.vegetarian) extraConditions += " AND psi.is_veg = TRUE";
   if (c.gluten_free) extraConditions += " AND psi.is_gluten_free = TRUE";
   if (c.palm_oil_free) extraConditions += " AND psi.is_palm_oil_free = TRUE";
-  if (noAddedSugar) extraConditions += " AND psi.has_added_sugar = FALSE";
+  // "No added sugar": exclude only products that CONFIDENTLY contain it — flagged
+  // AND measuring real sugar. A 0g-sugar product can't have added sugar (so an
+  // over-eager flag never excludes it), and an unknown flag (NULL) is included
+  // rather than dropped. This is the fix for "X without added sugar" returning ~0.
+  if (noAddedSugar)
+    extraConditions +=
+      " AND NOT (psi.has_added_sugar IS TRUE AND COALESCE(NULLIF(psi.total_sugar_g, 0), psi.sugar_g) > 0.5)";
   if (expandedAvoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?::text[]) ing WHERE psi.search_doc ILIKE ('% ' || ing || ' %') OR psi.search_doc ILIKE (ing || ' %') OR psi.search_doc ILIKE ('% ' || ing) OR psi.search_doc = ing)", expandedAvoid);
 
   const sortClause = intent.sort === "cheapest"

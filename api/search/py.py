@@ -355,6 +355,7 @@ async def resolve_and_search(query: str, limit: int = 48) -> dict:
             },
             json={
                 "p_query_embedding_json": vec_json,
+                "p_query_text": query,
                 "p_type_equivalents": types,
                 "p_brand_pattern": brand_pat,
                 "p_sort": intent.get("sort", "best_match"),
