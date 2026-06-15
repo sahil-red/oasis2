@@ -32,10 +32,12 @@ export async function fetchCandidatesWithSql(
   const dbUrl = process.env.SUPABASE_DB_URL?.trim();
   if (!dbUrl) return [];
 
-  const { default: postgres } = await import("postgres");
-  const db = postgres(dbUrl, { max: 1, idle_timeout: 5 });
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let db: any;
   try {
+    const { default: postgres } = await import("postgres");
+    db = postgres(dbUrl, { max: 1, idle_timeout: 5 });
+
     const rows = await db.unsafe(sql, params as any) as Array<{
       product_id: string; name: string; brand: string | null;
       primary_type: string | null; price_inr: number | null; scout_score: number | null;
@@ -76,6 +78,6 @@ export async function fetchCandidatesWithSql(
 
     return fullRows;
   } finally {
-    await db.end();
+    await db?.end();
   }
 }

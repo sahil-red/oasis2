@@ -52,7 +52,8 @@ function passesAllergens(row: ProductSearchIndexRow, excluded: string[]): boolea
   for (const a of excluded) {
     const needle = a.toLowerCase();
     if (allergens.includes(needle)) return false;
-    if (name.includes(needle)) return false;
+    // Word-boundary match on product name — "dairy" must not match "dairy-free"
+    if (new RegExp("\\b" + needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(name)) return false;
     if (ingredientPresent(doc, needle)) return false;
   }
   return true;

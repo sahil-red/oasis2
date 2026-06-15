@@ -166,7 +166,7 @@ export function rankCandidates(
     Boolean(goalWeights && Object.keys(goalWeights).length) ||
     Boolean(intent.use_case) ||
     intent.modifiers.length > 0 ||
-    Object.values(intent.constraints).some((v) => v != null && (Array.isArray(v) ? v.length : true));
+    Object.values(intent.constraints).some((v) => v !== null && v !== undefined && v !== false && (Array.isArray(v) ? v.length > 0 : true));
 
   const relevances = candidates.map((r) => relevanceById.get(r.product_id) ?? 0);
   const healths = candidates.map(healthScore);

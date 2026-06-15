@@ -55,7 +55,7 @@ export function buildSearchSql(
   if (c.gluten_free) extraConditions += " AND psi.is_gluten_free = TRUE";
   if (c.palm_oil_free) extraConditions += " AND psi.is_palm_oil_free = TRUE";
   if (noAddedSugar) extraConditions += " AND psi.has_added_sugar = FALSE";
-  if (expandedAvoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?::text[]) ing WHERE psi.search_doc ILIKE '%' || ing || '%')", expandedAvoid);
+  if (expandedAvoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?::text[]) ing WHERE psi.search_doc ILIKE ('% ' || ing || ' %') OR psi.search_doc ILIKE (ing || ' %') OR psi.search_doc ILIKE ('% ' || ing) OR psi.search_doc = ing)", expandedAvoid);
 
   const sortClause = intent.sort === "cheapest"
     ? "COALESCE(-psi.price_inr, -1e9)"

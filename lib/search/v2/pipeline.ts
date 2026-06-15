@@ -80,7 +80,9 @@ export async function runSearchV2(
   // later fetchCandidatePool call hits a warm entry instead of paying ~400ms
   // of Voyage latency serially after the LLM. Fire-and-forget (errors are
   // re-surfaced when fetchCandidatePool awaits the real call).
-  void embedText(rawQuery, "query").catch(() => {});
+  void embedText(rawQuery, "query").catch((err) => {
+    console.warn("[search:pipeline] speculative embed failed:", (err as Error)?.message ?? err);
+  });
 
   let llm_calls = 0;
   const resolved = await resolveSearchIntent(rawQuery, {
