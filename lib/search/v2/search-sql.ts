@@ -37,6 +37,13 @@ export function buildSearchSql(
 
   const tIdx = p(typeEquivalents);
   const mIdx = p(minQuality);
+  // Lexical leg: the raw query drives ts_rank_cd over search_tsv, fused into the
+  // best_match blend below so keyword/brand tokens disambiguate vector neighbours
+  // ("chocolate milk" → the drink, not chocolate bars). Only bind the param for
+  // best_match — explicit sorts don't reference it, and an unreferenced param
+  // trips Postgres' type inference (42P18).
+  const isBestMatch = !intent.sort || intent.sort === "best_match";
+  const qIdx = isBestMatch ? p(intent.raw_query ?? "") : 0;
 
   let extraConditions = "";
   const add = (sql: string, v: unknown) => {
@@ -74,7 +81,10 @@ export function buildSearchSql(
     // Health-first blend with Scout tier floor.
     // Healthy products surface first on generic queries ("chips").
     // Products below Scout 40 get a heavy penalty, below 65 get a light penalty.
-    : `(0.45 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.35 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.20 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 40 THEN 0.30 WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 65 THEN 0.10 ELSE 0.00 END)`;
+    // Health-first + hybrid relevance (semantic vector + lexical FTS) + popularity,
+    // with a Scout tier floor. FTS (ts_rank_cd, normalised 0–1) disambiguates vector
+    // neighbours. Weights are a starting point — tune against `pnpm search:eval`.
+    : `(0.40 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.28 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.22 * COALESCE(ts_rank_cd(psi.search_tsv, phraseto_tsquery('simple'::regconfig, $${qIdx}::text), 32), 0) + 0.10 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 40 THEN 0.30 WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 65 THEN 0.10 ELSE 0.00 END)`;
 
   const sql = `SELECT psi.product_id, psi.name, psi.brand, psi.primary_type, psi.price_inr, psi.scout_score, psi.sugar_g, psi.protein_g, psi.fat_g, psi.fiber_g, psi.is_vegan, psi.is_gluten_free, psi.is_palm_oil_free, psi.has_added_sugar, psi.data_quality_score, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} AND ($${tIdx}::text[] IS NULL OR psi.primary_type = ANY($${tIdx}::text[]))${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
 
