@@ -29,18 +29,20 @@
 
 html.dark {
   color-scheme: dark;
-  /* Warm "espresso paper" dark — brown-undertoned surfaces rather than neutral
-     iOS grey, so the dark theme reads as crafted and on-brand (a sibling to the
-     warm cream light mode) instead of generic black + grey. */
-  --color-bg: #12100d;
-  --color-bg-soft: #1a1613;
-  --color-panel: #201b16;
-  --color-panel-2: #292318;
-  --color-line: rgba(255, 242, 228, 0.1);
-  --color-line-strong: rgba(255, 242, 228, 0.18);
-  --color-fg: #f4f0e9;
-  --color-fg-muted: #afa597;
-  --color-fg-dim: #877d71;
+  /* Crisp cool-charcoal dark — neutral-cool surfaces with clear elevation steps,
+     so the UI reads as designed (à la Linear / Vercel) rather than muddy brown or
+     flat iOS grey. Brighter foreground + more defined hairlines give contrast;
+     the warm amber accent pops against the cool surfaces — that warm-on-cool
+     contrast is what gives the dark theme life. */
+  --color-bg: #0e1013;
+  --color-bg-soft: #15181d;
+  --color-panel: #1a1e25;
+  --color-panel-2: #232931;
+  --color-line: rgba(230, 237, 247, 0.1);
+  --color-line-strong: rgba(230, 237, 247, 0.19);
+  --color-fg: #eef1f6;
+  --color-fg-muted: #a7afbc;
+  --color-fg-dim: #717a87;
   /* Brand-warm amber, not iOS blue — Scout's accent stays amber in the dark. */
   --color-accent: #f59e0b;
   --color-accent-soft: rgba(245, 158, 11, 0.16);
