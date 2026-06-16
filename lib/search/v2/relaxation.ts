@@ -21,6 +21,23 @@ const NON_RELAXABLE_FIELDS = new Set([
 export function relaxIntentDeterministic(
   intent: SearchIntentV2,
 ): { intent: SearchIntentV2; explanation: string } | null {
+  // Widen the taxonomy facet FIRST. An empty pool is far more often a too-narrow
+  // or mis-resolved subcategory than a too-strict nutrition limit, and widening the
+  // facet is safe — it never serves a product that violates a real constraint.
+  // Cascade: subcategory → parent category → no facet (vector + primary_type only).
+  if (intent.facet_subcategories?.length) {
+    return {
+      intent: { ...intent, facet_subcategories: undefined },
+      explanation: `Broadened beyond ${intent.facet_subcategories.join(", ")} to the wider category`,
+    };
+  }
+  if (intent.facet_categories?.length) {
+    return {
+      intent: { ...intent, facet_categories: undefined },
+      explanation: `Broadened beyond ${intent.facet_categories.join(", ")}`,
+    };
+  }
+
   const priorities = [...intent.constraint_priorities]
     .filter((p) => !NON_RELAXABLE_FIELDS.has(p.field))
     .sort((a, b) => a.priority - b.priority);

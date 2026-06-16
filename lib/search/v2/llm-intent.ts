@@ -9,6 +9,15 @@ import {
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { ConstraintPriority, SearchIntentKind, SearchIntentV2, TraitId } from "@/lib/search/v2/types";
 import { TRAIT_IDS } from "@/lib/search/v2/types";
+import { CATEGORIES, TAXONOMY, SUBCATEGORIES, SUBCATEGORY_TO_CATEGORY } from "@/lib/search/v2/taxonomy.generated";
+
+// Compact taxonomy for the prompt + canonical-casing validation maps. The resolver
+// classifies the query into ONE clean subcategory; retrieval grounds on it.
+const TAXONOMY_PROMPT = Object.entries(TAXONOMY)
+  .map(([c, subs]) => `- ${c}: ${subs.join(", ")}`)
+  .join("\n");
+const SUB_CANON = new Map(SUBCATEGORIES.map((s) => [s.toLowerCase(), s]));
+const CAT_CANON = new Map(CATEGORIES.map((c) => [c.toLowerCase(), c]));
 
 /** Find matching catalog brands/types for the query — gives the LLM hints so it
  *  can pick canonical brand names ("cadbury bournvita" not "Bournvita") and
@@ -49,6 +58,8 @@ Schema:
   "goal_phrase": string|null,
   "brand": string|null,
   "primary_type": string|null,
+  "category": string|null,
+  "subcategory": string|null,
   "use_case": string|null,
   "required_flavours": string[],
   "modifiers": string[],
@@ -91,6 +102,13 @@ Rules:
 - "chocolate milk" → primary_type:"milk", required_flavours:["chocolate"]. "milk chocolate" →
   primary_type:"chocolate", required_flavours:["milk"]. Decide the head noun by product meaning;
   the qualifier is a flavour, never a brand.
+- category/subcategory (CRITICAL — this is the grounding retrieval filters on): classify the
+  query's product into EXACTLY ONE subcategory, and its parent category, from the TAXONOMY listed
+  at the end. Use the exact subcategory string. Decide by the product's TRUE type, not surface
+  tokens: "chocolate milk"→"Milk Drinks", "mango juice"→"Fruit Juices & Drinks", "muesli"→
+  "Muesli & Oats", "cow ghee"→"Ghee", "dark chocolate"→"Chocolates". Set BOTH null only for pure
+  goal/brand queries with no product type. If you know the category but not the exact subcategory,
+  set category and leave subcategory null.
 - Goal/vague queries (healthy drinks for running, tiffin not junk) → kind:"goal" with goal_phrase.
 - Use-case queries (pre-workout snack, school lunch) → kind:"directed" or "goal" with use_case slug (pre_workout, school_lunch).
 - Type + health context or vague nutrition adjective WITHOUT a number (diabetic bread, protein shake with low calories, drinks for athletes with a type) → kind:"directed", set primary_type for membership AND set goal_phrase to the health/nutrition intent ("diabetic friendly", "low calorie", "athlete recovery") so ranking uses its traits. Set max_calories only when a number is given ("under 100 calories").
@@ -122,7 +140,10 @@ Rules:
   Use only these trait IDs: ${TRAIT_IDS.join(", ")}. Sum must be 1.0.
   For neutral queries ("amul", "atta"), return {"whole_food": 1.0}.
   For junk food with asked-for improvement ("healthy chips"), distribute across traits.
-  NEVER return empty {} — this field is mandatory.`;
+  NEVER return empty {} — this field is mandatory.
+
+TAXONOMY — choose category + subcategory from this list ONLY (exact strings):
+${TAXONOMY_PROMPT}`;
 
 /** Groq API — faster, free-tier alternative to DeepSeek for simple queries. */
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
@@ -133,6 +154,8 @@ type LlmIntentJson = {
   goal_phrase?: string | null;
   brand?: string | null;
   primary_type?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
   use_case?: string | null;
   required_flavours?: string[];
   modifiers?: string[];
@@ -196,6 +219,18 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
       ? raw.kind
       : "directed";
 
+  // Validate the LLM facet against the controlled taxonomy (drop hallucinations,
+  // canonicalize casing). Directed queries ground at SUBCATEGORY when confident.
+  // Goal queries ("healthy drinks for running", "snacks for diabetics") span many
+  // subcategories within a product class, so ground them at the wider CATEGORY — the
+  // named class is still a real constraint ("drinks" must not surface sattu atta), but
+  // a single subcategory over-narrows them. Trait ranking orders within that category.
+  const isGoal = kind === "goal";
+  const sub = raw.subcategory ? SUB_CANON.get(raw.subcategory.toLowerCase().trim()) : undefined;
+  const catRaw = raw.category ? CAT_CANON.get(raw.category.toLowerCase().trim()) : undefined;
+  const facetCat = sub ? (SUBCATEGORY_TO_CATEGORY[sub] ?? catRaw) : catRaw;
+  const subOut = isGoal ? undefined : sub;
+
   return {
     kind,
     // Keep goal_phrase even for directed queries — "diabetic bread" / "protein shake
@@ -205,6 +240,8 @@ function normalizeLlmIntent(raw: LlmIntentJson, query: string): SearchIntentV2 {
     goal_id: null,
     brand: raw.brand?.trim() || null,
     primary_type: raw.primary_type?.trim().toLowerCase() || null,
+    facet_subcategories: subOut ? [subOut] : undefined,
+    facet_categories: facetCat ? [facetCat] : undefined,
     use_case: raw.use_case?.trim().toLowerCase().replace(/[\s-]+/g, "_") || null,
     required_flavours: (raw.required_flavours ?? []).map((f) => f.toLowerCase()),
     modifiers: raw.modifiers ?? [],

@@ -152,6 +152,11 @@ export type SearchIntentV2 = {
   goal_id: string | null;
   brand: string | null;
   primary_type: string | null;
+  /** Resolved Zepto taxonomy grounding — the CLEAN category signal retrieval is
+   *  constrained by (vs the fragmented 1,999-value primary_type). Subcategory when
+   *  confident; categories is the wider fallback used when subcategory is ambiguous. */
+  facet_subcategories?: string[];
+  facet_categories?: string[];
   /** LLM-extracted use case (e.g. pre_workout, school_lunch) — §14 */
   use_case: string | null;
   required_flavours: string[];

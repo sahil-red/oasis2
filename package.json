@@ -58,6 +58,7 @@
     "audit:ingredient-sku-coverage": "tsx scripts/audit-ingredient-sku-coverage.ts",
     "score:v9:diff": "tsx scripts/score-v9-diff.ts",
     "search:build-index": "tsx scripts/build-search-index.ts",
+    "search:build-taxonomy": "tsx scripts/build-taxonomy.ts",
     "search:eval": "tsx scripts/eval-search.ts",
     "search:seed-eval": "tsx scripts/seed-eval-from-history.ts",
     "search:ship-check": "tsx scripts/search-ship-check.ts",

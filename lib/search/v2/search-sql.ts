@@ -35,7 +35,6 @@ export function buildSearchSql(
   const params: unknown[] = [vecStr];
   const p = (v: unknown) => { params.push(v); return params.length; };
 
-  const tIdx = p(typeEquivalents);
   const mIdx = p(minQuality);
   // Lexical leg: the raw query drives ts_rank_cd over search_tsv, fused into the
   // best_match blend below so keyword/brand tokens disambiguate vector neighbours
@@ -70,6 +69,23 @@ export function buildSearchSql(
       " AND NOT (psi.has_added_sugar IS TRUE AND COALESCE(NULLIF(psi.total_sugar_g, 0), psi.sugar_g) > 0.5)";
   if (expandedAvoid.length > 0) add("AND NOT EXISTS (SELECT 1 FROM unnest(?::text[]) ing WHERE psi.search_doc ILIKE ('% ' || ing || ' %') OR psi.search_doc ILIKE (ing || ' %') OR psi.search_doc ILIKE ('% ' || ing) OR psi.search_doc = ing)", expandedAvoid);
 
+  // Taxonomy grounding — constrain to the CLEAN Zepto facet the resolver chose:
+  // subcategory when it was confident, widen to category when it wasn't, and fall
+  // back to the (fragmented) primary_type filter only when no facet was resolved.
+  // This is the precision lever — it cuts conflation leaks (chocolate milk → bars)
+  // the 1,999-value primary_type filter can't.
+  const facetSubs = intent.facet_subcategories ?? [];
+  const facetCats = intent.facet_categories ?? [];
+  let groundingClause: string;
+  if (facetSubs.length) {
+    groundingClause = `AND psi.subcategory = ANY($${p(facetSubs)}::text[])`;
+  } else if (facetCats.length) {
+    groundingClause = `AND psi.category = ANY($${p(facetCats)}::text[])`;
+  } else {
+    const ti = p(typeEquivalents);
+    groundingClause = `AND ($${ti}::text[] IS NULL OR psi.primary_type = ANY($${ti}::text[]))`;
+  }
+
   const sortClause = intent.sort === "cheapest"
     ? "COALESCE(-psi.price_inr, -1e9)"
     : intent.sort === "highest_protein"
@@ -86,7 +102,7 @@ export function buildSearchSql(
     // neighbours. Weights are a starting point — tune against `pnpm search:eval`.
     : `(0.40 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.28 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.22 * COALESCE(ts_rank_cd(psi.search_tsv, phraseto_tsquery('simple'::regconfig, $${qIdx}::text), 32), 0) + 0.10 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 40 THEN 0.30 WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 65 THEN 0.10 ELSE 0.00 END)`;
 
-  const sql = `SELECT psi.product_id, psi.name, psi.brand, psi.primary_type, psi.price_inr, psi.scout_score, psi.sugar_g, psi.protein_g, psi.fat_g, psi.fiber_g, psi.is_vegan, psi.is_gluten_free, psi.is_palm_oil_free, psi.has_added_sugar, psi.data_quality_score, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} AND ($${tIdx}::text[] IS NULL OR psi.primary_type = ANY($${tIdx}::text[]))${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
+  const sql = `SELECT psi.product_id, psi.name, psi.brand, psi.primary_type, psi.price_inr, psi.scout_score, psi.sugar_g, psi.protein_g, psi.fat_g, psi.fiber_g, psi.is_vegan, psi.is_gluten_free, psi.is_palm_oil_free, psi.has_added_sugar, psi.data_quality_score, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} ${groundingClause}${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
 
   return { sql, params };
 }

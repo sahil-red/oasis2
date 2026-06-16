@@ -16,6 +16,7 @@ import {
 } from "@/lib/search/v2/numeric-constraints";
 import type { IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
+import { TYPE_TO_FACET } from "@/lib/search/v2/taxonomy.generated";
 
 export type ResolveIntentResult = {
   intent: SearchIntentV2;
@@ -73,6 +74,26 @@ function applyPreferencesToIntent(
   };
 }
 
+// Concentration thresholds for non-LLM (fast-path / degraded) grounding. A type
+// grounds at SUBCATEGORY only when most of its products live in one subcategory
+// (pickle 0.98, milk 0.97); it grounds at the wider CATEGORY when it spans
+// subcategories but stays in one category (biscuit 0.43/cat 1.0, chocolate
+// 0.63/cat 0.99); and it grounds NOWHERE when it's an umbrella term spread across
+// categories (snacks 0.5/0.5) — there the dominant facet is noise, not signal.
+const SUB_GROUND_MIN = 0.7;
+const CAT_GROUND_MIN = 0.6;
+
+/** Resolve the grounding facet for a fast-path / degraded primary_type from the
+ *  type's measured concentration. Returns {} (no grounding) for umbrella types. */
+function facetForType(primaryType: string | null): { sub?: string[]; cat?: string[] } {
+  if (!primaryType) return {};
+  const f = TYPE_TO_FACET[primaryType.toLowerCase().replace(/['']/g, "").trim()];
+  if (!f) return {};
+  if (f.subConc >= SUB_GROUND_MIN) return { sub: [f.subcategory], cat: [f.category] };
+  if (f.catConc >= CAT_GROUND_MIN) return { cat: [f.category] };
+  return {};
+}
+
 function buildFastPathIntent(
   query: string,
   meta: IndexCatalogMeta,
@@ -88,6 +109,12 @@ function buildFastPathIntent(
   // full query — "sugar free" should still match the Sugar Free brand.
   const effective = residual || query.toLowerCase().trim();
   if (!fastPathEligible(effective, meta)) return null;
+
+  // Comparison queries ("healthier than maggi", "cheaper than X") need reference-
+  // product resolution + exclusion of the reference itself — the fast-path can't do
+  // that, and would wrongly match the reference ("maggi") as a brand and return it.
+  // Defer to the LLM, which resolves the product class to search and the comparison.
+  if (numeric.comparison_mode) return null;
 
   // §3.1 — Use full query for type/brand discovery. The residual had constraint
   // words stripped, but those words include valid types ("protein", "sugar").
@@ -115,6 +142,17 @@ function buildFastPathIntent(
   const tokens = safeTokens.filter((t) => t && t !== "&" && t.length >= 1);
   const normTokens = tokens.map((t) => norm(t));
 
+  // Compound queries whose tokens span multiple categories have an AMBIGUOUS head
+  // the token-matcher can't resolve ("chocolate milk": chocolate→Sweet Cravings,
+  // milk→Dairy). Route those to the LLM, which reads the head noun + the taxonomy.
+  // Single-category compounds (cow ghee) stay on the fast-path.
+  const tokCats = new Set<string>();
+  for (const t of normTokens) {
+    const f = TYPE_TO_FACET[t];
+    if (f) tokCats.add(f.category);
+  }
+  if (tokCats.size >= 2) return null;
+
   let brand: string | null = null;
   let primary_type: string | null = null;
   const required_flavours: string[] = [];
@@ -124,13 +162,20 @@ function buildFastPathIntent(
   // tokenizing. Handles multi-word brands like "karachi bakery" where individual
   // tokens don't match the stored brand name.
   const fullNorm = norm(fullText);
+  // When the ENTIRE residual is one known brand or type, every token is consumed by
+  // that single entity — the individual-token scan below must not re-match a token as
+  // the other field. ("mango pickle" is the type; "mango" must NOT also become a brand
+  // because a dal brand "Mango" exists — that brand filter would exclude every pickle.)
+  let fullConsumed = false;
   if (tokens.length >= 2) {
     if (meta.brands.has(fullNorm)) {
       brand = residual;
       kind = meta.primaryTypes.has(fullNorm) ? "directed" : "brand";
+      fullConsumed = true;
     } else if (meta.primaryTypes.has(fullNorm)) {
       primary_type = residual;
       kind = "directed";
+      fullConsumed = true;
     }
   }
 
@@ -159,7 +204,7 @@ function buildFastPathIntent(
   // Scan individual tokens for remaining brand/type.
   // For "slurrp farm millet snacks": brand="slurrp farm" found by pair check,
   // then "millet" found as primary_type here.
-  if (!brand || !primary_type) {
+  if ((!brand || !primary_type) && !fullConsumed) {
     for (let i = 0; i < tokens.length; i++) {
       if (i >= pairConsumedStart && i <= pairConsumedEnd) continue;
       const t = normTokens[i]!;
@@ -231,10 +276,24 @@ function buildFastPathIntent(
   }
   }
 
+  // Brand/flavour disambiguation (uniform, covers every resolution path above): a
+  // resolved "brand" that is ALSO a known flavour ("mango", "strawberry") sitting
+  // alongside a product type is really a flavour modifier — a coincidentally same-
+  // named brand must not hijack the query and filter out every genuine match.
+  if (brand && primary_type && meta.flavours.has(norm(brand))) {
+    if (!required_flavours.some((f) => norm(f) === norm(brand!))) required_flavours.push(brand);
+    brand = null;
+    kind = "directed";
+  }
+
   const modifiers: string[] = [];
   if (numeric.high_protein_tier && primary_type) modifiers.push("high_protein_tier");
   if (numeric.low_sugar_tier && primary_type) modifiers.push("low_sugar");
   if (numeric.no_added_sugar) modifiers.push("no_added_sugar");
+
+  // Ground the fast-path on the CLEAN Zepto facet (concentration-gated, not the
+  // fragmented primary_type). Ambiguous compounds were already routed to the LLM above.
+  const facet = facetForType(primary_type);
 
   return {
     kind,
@@ -242,6 +301,8 @@ function buildFastPathIntent(
     goal_id: null,
     brand,
     primary_type,
+    facet_subcategories: facet.sub,
+    facet_categories: facet.cat,
     use_case: null,
     required_flavours,
     modifiers,
@@ -337,12 +398,15 @@ export async function resolveSearchIntent(
     }
 
     // §9 degradation: exact index token match only — no substring rules
+    const degradedFacet = facetForType(primary_type);
     const degraded: SearchIntentV2 = {
       kind: brand ? "brand" : "directed",
       goal_phrase: null,
       goal_id: null,
       brand,
       primary_type,
+      facet_subcategories: degradedFacet.sub,
+      facet_categories: degradedFacet.cat,
       use_case: null,
       required_flavours: [],
       modifiers: numeric.high_protein_tier ? ["high_protein_tier"] : [],

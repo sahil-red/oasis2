@@ -212,6 +212,25 @@ export async function generateCandidates(
     }
   }
 
+  // Taxonomy grounding — the CLEAN Zepto facet is the category gate, applied at the
+  // SAME chokepoint both retrieval backends funnel through, so the in-memory eval
+  // path and the prod pgvector/SQL path agree (buildSearchSql applies the identical
+  // gate server-side as a perf/recall pre-filter). Subcategory when the resolver was
+  // confident, else the wider category. This works WITH the primary_type tier filter
+  // below — the facet gates the category (anti-conflation), the type filter adds
+  // precision within it. The relaxation ladder widens subcategory→category→none if
+  // the intersection empties the pool. Goal queries carry no facet — they're grounded
+  // by trait-relevant category-profile selection above instead.
+  const facetSubs = intent.facet_subcategories ?? [];
+  const facetCats = intent.facet_categories ?? [];
+  if (facetSubs.length) {
+    const set = new Set(facetSubs.map((s) => s.toLowerCase()));
+    pool = pool.filter((row) => set.has((row.subcategory ?? "").toLowerCase()));
+  } else if (facetCats.length) {
+    const set = new Set(facetCats.map((c) => c.toLowerCase()));
+    pool = pool.filter((row) => set.has((row.category ?? "").toLowerCase()));
+  }
+
   // Data-driven type equivalents (cached centroid lookup) — replaces the dead
   // per-row type-embedding comparison and its wasted per-search Voyage call.
   const typeEquivalents = intent.primary_type
@@ -243,6 +262,13 @@ export async function generateCandidates(
     if (brandFiltered.length > 0) pool = brandFiltered;
     else pool = [];
   } else if (intent.primary_type) {
+    // Apply the precise primary_type tier filter IN ADDITION to the facet gate above.
+    // Both matter: the facet (clean subcategory/category) prevents cross-category
+    // conflation, while the type filter keeps precision WITHIN the facet ("mango
+    // lassi" → lassi, not every Milk Drink; "vegan protein bar" → bars, not powders).
+    // If type ∩ facet empties the pool, the relaxation ladder widens the facet
+    // (subcategory→category→none) and re-runs, so an over-narrow LLM subcategory
+    // (bars mis-filed under "Plant & Vegan Protein") still recovers the real matches.
     const wanted = intent.primary_type.toLowerCase();
     const typeFiltered = pool.filter((row) => typeMatchTier(row, wanted, typeEquivalents) < 99);
     pool = typeFiltered;
