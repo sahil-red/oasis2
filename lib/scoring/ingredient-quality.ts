@@ -7,6 +7,7 @@ import {
   resolveIngredientIntelligenceRow,
 } from "@/lib/scoring/intelligence-row-resolve";
 import { uniqueIngredientsFromList } from "@/lib/scoring/normalize-ingredient-name";
+import { resolveKnownCanonical } from "@/lib/scoring/ingredient-known";
 import { scoreAdditives, type MatchedAdditive } from "@/lib/scoring/rules";
 
 const TIER_PENALTY: Record<string, number> = {
@@ -37,17 +38,6 @@ export function scoreIngredientQuality(
   const rules = scoreAdditives(ingredients_raw);
   const names = uniqueIngredientsFromList(ingredients_raw);
 
-  if (!rows.length || rows.length < Math.min(2, names.length)) {
-    return {
-      score: rules.score,
-      hazardous: rules.hazardous,
-      weighted_nova: null,
-      nova4_share: 0,
-      matches: rules.matches,
-      source: "rules_fallback",
-    };
-  }
-
   const byName = new Map(rows.map((r) => [r.normalized_name, r]));
   for (const r of rows) {
     for (const code of insCodesFromText(r.normalized_name)) {
@@ -57,14 +47,21 @@ export function scoreIngredientQuality(
     }
   }
 
+  // Canonical-first resolution: a name mapping to a curated canonical uses ONE
+  // authoritative rating (synonyms converge — "soya chunks" = "soy flour" = "soy"),
+  // otherwise fall back to the per-string LLM intelligence row. This is what makes
+  // two same-nutrition products score the same instead of diverging on phrasing.
   const paired = names
     .map((name) => {
+      const known = resolveKnownCanonical(name);
+      if (known) return { name, row: { ...known, synonyms: known.synonyms ?? [] } as IngredientIntelligenceRow };
       const row = resolveIngredientIntelligenceRow(name, byName, expandAndNormalize);
       return row ? { name, row } : null;
     })
     .filter((p): p is { name: string; row: IngredientIntelligenceRow } => p != null);
 
-  if (!paired.length) {
+  // Trust intelligence only with reasonable coverage; else use the additive-rules scan.
+  if (!names.length || paired.length < Math.min(2, names.length)) {
     return {
       score: rules.score,
       hazardous: rules.hazardous,

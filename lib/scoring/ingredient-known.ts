@@ -134,6 +134,19 @@ export const KNOWN_INGREDIENTS: Record<string, KnownIngredient> = {
   "peanut butter": { normalized_name: "peanut butter", display_name: "Peanut Butter", nova_class: 2, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 78 },
   eggs: { normalized_name: "eggs", display_name: "Eggs", nova_class: 1, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 92 },
 
+  // ──────────── SOY & PLANT PROTEINS ────────────
+  // One canonical identity for the whole soy-food family. Soya chunks/flour/granules/
+  // protein are all the same wholesome plant protein — they must score identically
+  // regardless of how the label phrases it. (Soybean OIL and soy LECITHIN are distinct
+  // roles and keep their own entries above.)
+  soy: { normalized_name: "soy", display_name: "Soy", nova_class: 2, role: "base_food", concern_tier: "innocuous", concern_reasons: ["Complete plant protein"], intrinsic_quality: 85, synonyms: ["soya", "soybean", "soybeans", "soy bean", "soya bean", "soy beans", "soya beans", "defatted soy", "defatted soya", "defatted soy flour", "defatted soya flour", "soy flour", "soya flour", "soy chunks", "soya chunks", "soy chunk", "soya chunk", "soy nuggets", "soya nuggets", "soya bari", "soy granules", "soya granules", "soy grit", "soya grit", "soy grits", "soya grits", "soy flakes", "soya flakes", "textured soy protein", "textured soya protein", "textured vegetable protein", "tvp", "soy protein", "soya protein", "soy protein isolate", "soya protein isolate", "isolated soy protein", "isolated soya protein", "soy protein concentrate", "soya protein concentrate", "soy concentrate", "hydrolysed soy protein", "hydrolysed soya protein", "hydrolyzed soy protein", "edible soya", "edible soybean", "soya extract", "soy bean extract"] },
+  "pea protein": { normalized_name: "pea protein", display_name: "Pea Protein", nova_class: 3, role: "base_food", concern_tier: "innocuous", concern_reasons: ["Plant protein"], intrinsic_quality: 80, synonyms: ["pea protein isolate", "pea protein concentrate", "isolated pea protein", "yellow pea protein"] },
+  "whey protein": { normalized_name: "whey protein", display_name: "Whey Protein", nova_class: 3, role: "base_food", concern_tier: "innocuous", concern_reasons: ["Dairy protein"], intrinsic_quality: 75, synonyms: ["whey protein concentrate", "whey protein isolate", "whey protein hydrolysate", "isolated whey protein", "whey concentrate", "whey isolate"] },
+  whey: { normalized_name: "whey", display_name: "Whey", nova_class: 2, role: "base_food", concern_tier: "innocuous", concern_reasons: [], intrinsic_quality: 65, synonyms: ["whey solids", "demineralised whey", "sweet whey", "whey powder"] },
+
+  // ──────────── GENERIC REFINED OIL (unspecified "edible vegetable oil") ────────────
+  "vegetable oil": { normalized_name: "vegetable oil", display_name: "Refined Vegetable Oil", nova_class: 2, role: "fat", concern_tier: "watchful", concern_reasons: ["Unspecified refined oil; often palm or a blend high in saturated fat"], intrinsic_quality: 40, synonyms: ["edible vegetable oil", "refined vegetable oil", "edible oil", "refined oil", "vegetable fat", "edible vegetable fat", "edible refined oil"] },
+
   // ──────────── E-number aliases (bare numbers resolve to named entries) ────────────
   // Sweeteners
   "950": { normalized_name: "950", display_name: "Acesulfame Potassium (E950)", nova_class: 4, role: "sweetener", concern_tier: "watchful", concern_reasons: ["Synthetic sweetener; often paired with aspartame"], intrinsic_quality: 35 },
@@ -159,12 +172,61 @@ export const KNOWN_INGREDIENTS: Record<string, KnownIngredient> = {
   "621": { normalized_name: "621", display_name: "MSG / Monosodium Glutamate (E621)", nova_class: 4, role: "flavor", concern_tier: "watchful", concern_reasons: ["Linked to headache in sensitive individuals"], intrinsic_quality: 40 },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Canonical synonym resolution — the consistency lever
+// ─────────────────────────────────────────────────────────────────────────────
+// Index every known ingredient by its canonical name AND each synonym, so a raw
+// label string ("soya chunks", "defatted soy flour", "soybean") resolves to ONE
+// authoritative rating instead of letting each phrasing get an independent (and
+// divergent) LLM score. This is what makes two soya-chunk products with the same
+// nutrition score the same. Built once at module load.
+const SYNONYM_INDEX: Map<string, KnownIngredient> = (() => {
+  const m = new Map<string, KnownIngredient>();
+  for (const entry of Object.values(KNOWN_INGREDIENTS)) {
+    m.set(entry.normalized_name, entry);
+    for (const s of entry.synonyms ?? []) {
+      const k = s.toLowerCase().trim();
+      if (k && !m.has(k)) m.set(k, entry);
+    }
+  }
+  return m;
+})();
+
+// Leading qualifiers that NEVER change an ingredient's scoring identity. Kept
+// deliberately conservative — words that DO matter (refined, whole, defatted,
+// hydrogenated) are excluded so e.g. "refined wheat flour" never collapses into
+// "wheat flour". Those distinctions live as explicit entries/synonyms instead.
+const STRIP_QUALIFIER = /^(?:edible|raw|organic|natural|pure|fresh|premium|imported|sortex|cleaned|good\s+quality)\s+/;
+
+/** Resolve a raw/normalized ingredient name to its authoritative canonical entry
+ *  via the synonym index (synonym-aware, percentage/parenthetical-tolerant). */
+export function resolveKnownCanonical(name: string): KnownIngredient | null {
+  let n = name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ") // drop "(100%)" / "(e322)" / "(defatted)"
+    .replace(/\s*\d+(?:\.\d+)?\s*%/g, " ") // drop percentages
+    .replace(/[.,;:*&\[\]{}()'"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!n) return null;
+  const direct = SYNONYM_INDEX.get(n);
+  if (direct) return direct;
+  let prev = "";
+  while (n !== prev && STRIP_QUALIFIER.test(n)) {
+    prev = n;
+    n = n.replace(STRIP_QUALIFIER, "").trim();
+    const hit = SYNONYM_INDEX.get(n);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /**
- * Look up a known ingredient by normalized name.
- * Returns the curated row or null if not in the dictionary.
+ * Look up a known ingredient by name (synonym-aware).
+ * Returns the curated canonical row or null if not in the dictionary.
  */
 export function getKnownIngredient(normalizedName: string): KnownIngredient | null {
-  return KNOWN_INGREDIENTS[normalizedName.toLowerCase().trim()] ?? null;
+  return resolveKnownCanonical(normalizedName);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,8 +339,8 @@ export function validateLmRating(
 ): LmValidationResult {
   const n = name.toLowerCase().trim();
 
-  // 1. Check known-ingredients override first
-  const known = KNOWN_INGREDIENTS[n];
+  // 1. Check known-ingredients override first (synonym-aware: "soya chunks" → soy)
+  const known = resolveKnownCanonical(n);
   if (known) {
     return {
       nova_class: known.nova_class,
