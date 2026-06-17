@@ -1,4 +1,5 @@
 import { adminClient } from "@/lib/supabase/admin";
+import { getSearchPool } from "@/lib/search/v2/db-pool";
 import { buildIndexCatalogMeta, type IndexCatalogMeta } from "@/lib/search/v2/index-meta";
 import { embedText } from "@/lib/search/v2/embeddings";
 import { SEED_GOAL_TRAIT_MAP } from "@/lib/search/v2/goal-graph";
@@ -286,62 +287,28 @@ async function loadIndexFromDb(): Promise<ProductSearchIndexRow[] | null> {
  *  Avoids loading the full index (which is never populated in the snapshot). */
 async function loadDietaryPrevalence(): Promise<DietaryPrevalenceMap> {
   try {
-    const supabase = adminClient();
-    const { data, error } = await supabase.rpc("search_v2_dietary_prevalence");
-    if (!error && data) {
-      const out: DietaryPrevalenceMap = {};
-      for (const row of data as Array<{
-        primary_type: string;
-        total: number;
-        vegan: number;
-        gf: number;
-        pof: number;
-        jain: number;
-      }>) {
-        const t = row.primary_type || "unknown";
-        out[t] = {
-          total: row.total,
-          is_vegan: row.total > 0 ? row.vegan / row.total : 0,
-          is_gluten_free: row.total > 0 ? row.gf / row.total : 0,
-          is_palm_oil_free: row.total > 0 ? row.pof / row.total : 0,
-          is_jain: row.total > 0 ? row.jain / row.total : 0,
-        };
-      }
-      return out;
-    }
-    // Fallback: direct query if RPC doesn't exist yet
-    const { data: fallback } = await supabase
-      .from("product_search_index")
-      .select("primary_type, is_vegan, is_gluten_free, is_palm_oil_free, is_jain");
-    if (!fallback) return {};
-    const byType = new Map<string, { total: number; vegan: number; gf: number; pof: number; jain: number }>();
-    for (const r of fallback as Array<{
-      primary_type: string | null;
-      is_vegan: boolean | null;
-      is_gluten_free: boolean | null;
-      is_palm_oil_free: boolean | null;
-      is_jain: boolean | null;
-    }>) {
-      const t = r.primary_type || "unknown";
-      let bucket = byType.get(t);
-      if (!bucket) {
-        bucket = { total: 0, vegan: 0, gf: 0, pof: 0, jain: 0 };
-        byType.set(t, bucket);
-      }
-      bucket.total++;
-      if (r.is_vegan) bucket.vegan++;
-      if (r.is_gluten_free) bucket.gf++;
-      if (r.is_palm_oil_free) bucket.pof++;
-      if (r.is_jain) bucket.jain++;
-    }
+    const db = await getSearchPool();
+    if (!db) return {};
+    // One GROUP BY with FILTER aggregates (was an RPC / unpaginated 1k-capped select).
+    const rows = (await db`
+      SELECT coalesce(nullif(trim(primary_type), ''), 'unknown') AS pt,
+             count(*)::int AS total,
+             count(*) FILTER (WHERE is_vegan)::int AS vegan,
+             count(*) FILTER (WHERE is_gluten_free)::int AS gf,
+             count(*) FILTER (WHERE is_palm_oil_free)::int AS pof,
+             count(*) FILTER (WHERE is_jain)::int AS jain
+      FROM product_search_index
+      GROUP BY coalesce(nullif(trim(primary_type), ''), 'unknown')`) as Array<{
+      pt: string; total: number; vegan: number; gf: number; pof: number; jain: number;
+    }>;
     const out: DietaryPrevalenceMap = {};
-    for (const [type, bucket] of byType) {
-      out[type] = {
-        total: bucket.total,
-        is_vegan: bucket.total > 0 ? bucket.vegan / bucket.total : 0,
-        is_gluten_free: bucket.total > 0 ? bucket.gf / bucket.total : 0,
-        is_palm_oil_free: bucket.total > 0 ? bucket.pof / bucket.total : 0,
-        is_jain: bucket.total > 0 ? bucket.jain / bucket.total : 0,
+    for (const r of rows) {
+      out[r.pt] = {
+        total: r.total,
+        is_vegan: r.total > 0 ? r.vegan / r.total : 0,
+        is_gluten_free: r.total > 0 ? r.gf / r.total : 0,
+        is_palm_oil_free: r.total > 0 ? r.pof / r.total : 0,
+        is_jain: r.total > 0 ? r.jain / r.total : 0,
       };
     }
     return out;
@@ -357,20 +324,18 @@ export function clearSearchIndexSnapshotCache(): void {
 /** Load all type centroids from the DB — ~1,086 rows, ~5 MB in memory.
  *  Enables in-memory cosine matching instead of the 8s RPC call. */
 async function loadTypeCentroids(): Promise<Map<string, number[]>> {
-  const supabase = adminClient();
   const centroids = new Map<string, number[]>();
-  const PAGE = 1000;
-  for (let page = 0; page < 5; page++) {
-    const { data, error } = await supabase
-      .from("type_centroids")
-      .select("primary_type, centroid")
-      .range(page * PAGE, (page + 1) * PAGE - 1);
-    if (error || !data?.length) break;
-    for (const r of data) {
-      if (r.centroid) {
-        const vec = typeof r.centroid === "string" ? (JSON.parse(r.centroid) as number[]) : (r.centroid as number[]);
-        centroids.set((r.primary_type as string).toLowerCase(), vec);
-      }
+  const db = await getSearchPool();
+  if (!db) return centroids;
+  // One round-trip over the native protocol (was 5 paginated PostgREST pages).
+  const rows = (await db`SELECT primary_type, centroid FROM type_centroids`) as Array<{
+    primary_type: string;
+    centroid: unknown;
+  }>;
+  for (const r of rows) {
+    if (r.centroid) {
+      const vec = typeof r.centroid === "string" ? (JSON.parse(r.centroid) as number[]) : (r.centroid as number[]);
+      centroids.set(r.primary_type.toLowerCase(), vec);
     }
   }
   return centroids;
@@ -380,29 +345,24 @@ async function loadTypeCentroids(): Promise<Map<string, number[]>> {
  *  Used to expand type matching when centroids are sparse —
  *  "snacks" in category "munchies" also matches chips, namkeen, etc. */
 async function loadCategoryTypeMap(): Promise<Map<string, string[]>> {
-  const supabase = adminClient();
   const catMap = new Map<string, string[]>();
   const typeCatCount = new Map<string, Map<string, number>>(); // type → category → count
-  const PAGE = 2000;
-  for (let page = 0; page < 50; page++) {
-    const { data, error } = await supabase
-      .from("product_search_index")
-      .select("category, primary_type")
-      .not("primary_type", "is", null)
-      .range(page * PAGE, (page + 1) * PAGE - 1);
-    if (error || !data?.length) break;
-    for (const r of data) {
-      const cat = (r.category ?? "").trim();
-      const pt = (r.primary_type as string).toLowerCase().trim();
-      if (!cat || !pt) continue;
-      if (!catMap.has(cat)) catMap.set(cat, []);
-      const siblings = catMap.get(cat)!;
-      if (!siblings.includes(pt)) siblings.push(pt);
-      // Track category counts per type
-      if (!typeCatCount.has(pt)) typeCatCount.set(pt, new Map());
-      const counts = typeCatCount.get(pt)!;
-      counts.set(cat, (counts.get(cat) ?? 0) + 1);
-    }
+  const db = await getSearchPool();
+  if (!db) return new Map();
+  // One GROUP BY (was up to 11 paginated full-table scans).
+  const rows = (await db`
+    SELECT trim(category) AS cat, lower(trim(primary_type)) AS pt, count(*)::int AS n
+    FROM product_search_index
+    WHERE primary_type IS NOT NULL AND trim(primary_type) <> '' AND category IS NOT NULL AND trim(category) <> ''
+    GROUP BY trim(category), lower(trim(primary_type))`) as Array<{ cat: string; pt: string; n: number }>;
+  for (const r of rows) {
+    const cat = r.cat;
+    const pt = r.pt;
+    if (!catMap.has(cat)) catMap.set(cat, []);
+    const siblings = catMap.get(cat)!;
+    if (!siblings.includes(pt)) siblings.push(pt);
+    if (!typeCatCount.has(pt)) typeCatCount.set(pt, new Map());
+    typeCatCount.get(pt)!.set(cat, r.n);
   }
   // For each primary_type, pick its dominant category (most products) and return siblings
   const typeToSiblings = new Map<string, string[]>();
@@ -423,22 +383,15 @@ async function loadCategoryTypeMap(): Promise<Map<string, string[]>> {
  *  mapped to the richer type. "milk shake" (1 product) → "milkshake" (81).
  *  Used for type expansion lookups only — products of both types still appear. */
 async function loadTypeNormalize(): Promise<Map<string, string>> {
-  const supabase = adminClient();
   const counts = new Map<string, number>();
-  const PAGE = 2000;
-  for (let page = 0; page < 50; page++) {
-    const { data, error } = await supabase
-      .from("product_search_index")
-      .select("primary_type")
-      .not("primary_type", "is", null)
-      .range(page * PAGE, (page + 1) * PAGE - 1);
-    if (error || !data?.length) break;
-    for (const r of data) {
-      const pt = (r.primary_type as string).toLowerCase().trim();
-      if (!pt) continue;
-      counts.set(pt, (counts.get(pt) ?? 0) + 1);
-    }
-  }
+  const db = await getSearchPool();
+  if (!db) return new Map();
+  const rows = (await db`
+    SELECT lower(trim(primary_type)) AS pt, count(*)::int AS n
+    FROM product_search_index
+    WHERE primary_type IS NOT NULL AND trim(primary_type) <> ''
+    GROUP BY lower(trim(primary_type))`) as Array<{ pt: string; n: number }>;
+  for (const r of rows) counts.set(r.pt, r.n);
 
   const norm = new Map<string, string>();
   const canon = (t: string) => t.replace(/[_\-\s]+/g, "");
@@ -467,12 +420,18 @@ export async function getSearchIndexSnapshot(forceRefresh = false): Promise<Sear
 
   // Only load facets + dietary + type centroids eagerly — goalMap + profiles
   // are lazy-loaded on first access since they're only needed for goal queries (~10%).
+  const _time = async <T>(label: string, p: Promise<T>): Promise<T> => {
+    const t = Date.now();
+    const r = await p;
+    if (process.env.SEARCH_TIMING === "1") console.log(`[timing] snapshot ${label}: ${Date.now() - t}ms`);
+    return r;
+  };
   const [catalogMeta, dietary_prevalence, typeCentroids, categoryTypeMap, typeNormalize] = await Promise.all([
-    loadFacets(),
-    loadDietaryPrevalence(),
-    loadTypeCentroids(),
-    loadCategoryTypeMap(),
-    loadTypeNormalize(),
+    _time("loadFacets", loadFacets()),
+    _time("loadDietaryPrevalence", loadDietaryPrevalence()),
+    _time("loadTypeCentroids", loadTypeCentroids()),
+    _time("loadCategoryTypeMap", loadCategoryTypeMap()),
+    _time("loadTypeNormalize", loadTypeNormalize()),
   ]);
   const snap: SearchIndexSnapshot = {
     index: [],

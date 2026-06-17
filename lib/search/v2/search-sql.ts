@@ -4,6 +4,7 @@
  */
 import type { SearchIntentV2 } from "@/lib/search/v2/types";
 import { getIngredientNamesForAvoid } from "@/lib/scoring/ingredient-known";
+import { INDEX_COLUMNS } from "@/lib/search/v2/index-queries";
 
 export function buildSearchSql(
   queryEmbedding: number[],
@@ -102,7 +103,11 @@ export function buildSearchSql(
     // neighbours. Weights are a starting point — tune against `pnpm search:eval`.
     : `(0.40 * COALESCE(psi.scout_score / 100.0, 0.45) + 0.28 * (1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0)) + 0.22 * COALESCE(ts_rank_cd(psi.search_tsv, phraseto_tsquery('simple'::regconfig, $${qIdx}::text), 32), 0) + 0.10 * (LN(2 + psi.click_count * 0.5 + psi.save_count * 0.8) / 5.0) - CASE WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 40 THEN 0.30 WHEN psi.scout_score IS NOT NULL AND psi.scout_score < 65 THEN 0.10 ELSE 0.00 END)`;
 
-  const sql = `SELECT psi.product_id, psi.name, psi.brand, psi.primary_type, psi.price_inr, psi.scout_score, psi.sugar_g, psi.protein_g, psi.fat_g, psi.fiber_g, psi.is_vegan, psi.is_gluten_free, psi.is_palm_oil_free, psi.has_added_sugar, psi.data_quality_score, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} ${groundingClause}${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
+  // Return ALL display/pipeline columns (INDEX_COLUMNS — no embedding vectors) in this
+  // single query, so the caller needs no second round-trip. The two 1024-dim vectors
+  // (~50KB/row) are deliberately excluded — they were the bulk of the old egress.
+  const selectCols = INDEX_COLUMNS.split(",").map((s) => "psi." + s.trim()).join(", ");
+  const sql = `SELECT ${selectCols}, 1.0 - COALESCE((psi.embedding <=> $1::vector(1024)), 1.0) AS relevance_score, COALESCE(psi.scout_score / 100.0, 0.45) AS health_score FROM product_search_index psi WHERE psi.embedding IS NOT NULL AND psi.data_quality_score >= $${mIdx} ${groundingClause}${extraConditions} ORDER BY ${sortClause} DESC LIMIT ${limit}`;
 
   return { sql, params };
 }
