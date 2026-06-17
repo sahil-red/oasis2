@@ -8,6 +8,7 @@ import { CompareButton } from "@/components/compare-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
 import { SearchScoreStack } from "@/components/search-score-tabs";
 import { ScoreBadge } from "@/components/score-display";
+import { tierFromScore, tierLabel, tierColor, rankShort } from "@/lib/utils";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
 import {
   fetchCanonicalVariants,
@@ -148,6 +149,12 @@ export const ProductCard = memo(function ProductCard({
       : [];
   const chipLabels = deepseekChipLabels.length ? deepseekChipLabels : scoreChipLabels;
   const vc = verdict ? VERDICT_COLORS[verdict] : null;
+  // Part B: unified health tier (from the consistent absolute score) + compact
+  // category rank — replace the verdict pill + bare number on the card.
+  const absForTier = core?.absolute_score ?? core?.score ?? null;
+  const tier = absForTier != null ? tierFromScore(absForTier) : null;
+  const tierC = tier ? tierColor(tier) : null;
+  const rankBadge = rankShort(core?.category_rank, core?.category_size);
   const aiMatchScore = "ai_match_score" in product ? product.ai_match_score : undefined;
   const aiHealthScore =
     "ai_health_score" in product && typeof product.ai_health_score === "number"
@@ -213,8 +220,19 @@ export const ProductCard = memo(function ProductCard({
           </div>
         )}
 
-        {/* verdict pill, top-left */}
-        {verdict && vc ? (
+        {/* health tier pill, top-left (one consistent label, from absolute score) */}
+        {tier && tierC ? (
+          <span
+            className="absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight backdrop-blur-sm"
+            style={{
+              backgroundColor: `color-mix(in srgb, ${tierC} 16%, white)`,
+              color: `color-mix(in srgb, ${tierC} 72%, black)`,
+              borderColor: `color-mix(in srgb, ${tierC} 35%, transparent)`,
+            }}
+          >
+            {tierLabel(tier)}
+          </span>
+        ) : verdict && vc ? (
           <span
             className="absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
             style={{
@@ -239,10 +257,17 @@ export const ProductCard = memo(function ProductCard({
           <div className="absolute right-2 top-2">
             <ScoreBadge score={goalFit} grade={"B" as const} verdict={null} />
           </div>
-        ) : core ? (
-          <div className="absolute right-2 top-2">
-            <ScoreBadge score={core.score} grade={core.grade} verdict={verdict} />
-          </div>
+        ) : core && rankBadge ? (
+          <span
+            className="absolute right-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight backdrop-blur-sm"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--color-bg) 82%, transparent)",
+              color: tierC ?? "var(--color-fg-muted)",
+              borderColor: "var(--color-border)",
+            }}
+          >
+            {rankBadge}
+          </span>
         ) : null}
       </Link>
 

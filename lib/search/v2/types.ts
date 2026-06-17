@@ -89,6 +89,12 @@ export type ProductSearchIndexRow = {
   trait_confidence: TraitConfidenceMap;
   trait_reasons: TraitReasonMap;
   scout_score: number | null;
+  /** Part B: consistent absolute health score + clean-taxonomy category rank, for the
+   *  tier + "Top X% in category" card display. Populated by sync-category-rank.ts. */
+  absolute_score?: number | null;
+  category_rank?: number | null;
+  category_size?: number | null;
+  category_label?: string | null;
   nova_group: number | null;
   data_quality_score: number;
   data_completeness: number;

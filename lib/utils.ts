@@ -111,6 +111,14 @@ export function rankPhrase(rank: number | null, size: number | null, label?: str
   return `#${rank} of ${size} ${cat}`;
 }
 
+/** Compact rank for dense grid cards: "Best" / "Top 9%" / "#15". */
+export function rankShort(rank: number | null | undefined, size: number | null | undefined): string | null {
+  if (!rank || !size || size < 6) return null;
+  if (rank === 1) return "Best";
+  const pct = Math.round((rank / size) * 100);
+  return pct <= 33 ? `Top ${Math.max(1, pct)}%` : `#${rank}`;
+}
+
 // ────────────────────────────────────────────────────────────
 // Additive tier (Yuka-inspired)
 // ────────────────────────────────────────────────────────────

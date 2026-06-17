@@ -141,7 +141,10 @@ function rankedToAiItem(
           verdict_sublabels: [],
           relative_score: null,
           cohort_size: null,
-          absolute_score: row.scout_score ?? null,
+          absolute_score: row.absolute_score ?? null,
+          category_rank: row.category_rank ?? null,
+          category_size: row.category_size ?? null,
+          category_label: row.category_label ?? null,
         }
       : null,
     ai_match_score: Math.round(c.final_score * 100),
