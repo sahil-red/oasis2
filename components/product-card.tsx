@@ -6,7 +6,6 @@ import Link from "next/link";
 import { AddToBasketButton } from "@/components/add-to-basket-button";
 import { CompareButton } from "@/components/compare-button";
 import { saveCatalogReturnUrl } from "@/components/catalog-back-link";
-import { SearchScoreStack } from "@/components/search-score-tabs";
 import { ScoreBadge } from "@/components/score-display";
 import { tierFromScore, tierLabel, tierColor, rankShort } from "@/lib/utils";
 import { catalogCardDisplayName } from "@/lib/products/card-display-name";
@@ -155,11 +154,6 @@ export const ProductCard = memo(function ProductCard({
   const tier = absForTier != null ? tierFromScore(absForTier) : null;
   const tierC = tier ? tierColor(tier) : null;
   const rankBadge = rankShort(core?.category_rank, core?.category_size);
-  const aiMatchScore = "ai_match_score" in product ? product.ai_match_score : undefined;
-  const aiHealthScore =
-    "ai_health_score" in product && typeof product.ai_health_score === "number"
-      ? product.ai_health_score
-      : goalFit ?? core?.score;
   const aiReasons =
     "ai_match_reasons" in product && Array.isArray(product.ai_match_reasons)
       ? product.ai_match_reasons
@@ -245,19 +239,14 @@ export const ProductCard = memo(function ProductCard({
           </span>
         ) : null}
 
-        {/* score badge, top-right (subtle, not screaming) */}
-        {aiMatchScore != null ? (
-          <SearchScoreStack
-            className="absolute right-2 top-2"
-            matchScore={aiMatchScore}
-            healthScore={aiHealthScore}
-            verdict={verdict}
-          />
-        ) : goalFit != null ? (
+        {/* category rank chip, top-right — the "what to buy" signal (number demoted).
+            Goal mode keeps its goal-fit badge; everything else (search + catalog) shows
+            the clean-taxonomy rank instead of a raw health number. */}
+        {goalFit != null ? (
           <div className="absolute right-2 top-2">
             <ScoreBadge score={goalFit} grade={"B" as const} verdict={null} />
           </div>
-        ) : core && rankBadge ? (
+        ) : rankBadge ? (
           <span
             className="absolute right-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight backdrop-blur-sm"
             style={{
