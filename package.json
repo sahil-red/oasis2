@@ -28,6 +28,7 @@
     "score": "tsx scripts/05-compute-scores.ts",
     "score:sync": "tsx scripts/sync-scout-score.ts",
     "score:consistency": "tsx scripts/eval-score-consistency.ts",
+    "score:rank": "tsx scripts/sync-category-rank.ts",
     "opinions": "tsx scripts/generate-opinions.ts",
     "nutrition:fix": "tsx scripts/fix-nutrition-outliers.ts",
     "nutrition:purge-scores": "tsx scripts/purge-untrustworthy-scores.ts",

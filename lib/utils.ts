@@ -68,6 +68,49 @@ export function labelForBand(band: ScoreBand): string {
 }
 
 // ────────────────────────────────────────────────────────────
+// Unified health tier (Part B) — ONE label system, replacing the
+// grade (A–F) + band (4) + verdict (4) trio. Derived from the ABSOLUTE
+// health score (consistent + category-baselined), NOT the v9 blend, so
+// same-nutrition products always read the same tier. Cutoffs are set from
+// the absolute distribution (p25≈26, p50≈41, p75≈58, p90≈68).
+// ────────────────────────────────────────────────────────────
+
+export type ScoreTier = "excellent" | "good" | "fair" | "poor";
+
+export function tierFromScore(absolute: number): ScoreTier {
+  if (absolute >= 65) return "excellent";
+  if (absolute >= 50) return "good";
+  if (absolute >= 32) return "fair";
+  return "poor";
+}
+
+const TIER_META: Record<ScoreTier, { label: string; color: string }> = {
+  excellent: { label: "Excellent", color: "var(--score-excellent)" },
+  good: { label: "Good", color: "var(--score-good)" },
+  fair: { label: "Fair", color: "var(--score-poor)" },
+  poor: { label: "Poor", color: "var(--score-bad)" },
+};
+
+export function tierLabel(tier: ScoreTier): string {
+  return TIER_META[tier].label;
+}
+
+export function tierColor(tier: ScoreTier): string {
+  return TIER_META[tier].color;
+}
+
+/** "Top 8%" / "Best in category" / "#3 of 41" — the category-relative rank shown
+ *  alongside the tier. Returns null when the cohort is too small to be meaningful. */
+export function rankPhrase(rank: number | null, size: number | null): string | null {
+  if (!rank || !size || size < 6) return null;
+  if (rank === 1) return "Best in category";
+  const pct = Math.round((rank / size) * 100);
+  if (pct <= 10) return `Top ${Math.max(1, pct)}% in category`;
+  if (pct <= 50) return `Top ${pct}% in category`;
+  return `#${rank} of ${size} in category`;
+}
+
+// ────────────────────────────────────────────────────────────
 // Additive tier (Yuka-inspired)
 // ────────────────────────────────────────────────────────────
 
