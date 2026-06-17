@@ -99,15 +99,16 @@ export function tierColor(tier: ScoreTier): string {
   return TIER_META[tier].color;
 }
 
-/** "Top 8%" / "Best in category" / "#3 of 41" — the category-relative rank shown
- *  alongside the tier. Returns null when the cohort is too small to be meaningful. */
-export function rankPhrase(rank: number | null, size: number | null): string | null {
+/** "Best of 22 soya chunks" / "Top 9% of 22 soya chunks" / "#15 of 22 soya chunks" —
+ *  the category-relative rank shown alongside the tier. Returns null when the cohort
+ *  is too small to be meaningful. */
+export function rankPhrase(rank: number | null, size: number | null, label?: string | null): string | null {
   if (!rank || !size || size < 6) return null;
-  if (rank === 1) return "Best in category";
+  const cat = label ? label.toLowerCase() : "category";
+  if (rank === 1) return `Best of ${size} ${cat}`;
   const pct = Math.round((rank / size) * 100);
-  if (pct <= 10) return `Top ${Math.max(1, pct)}% in category`;
-  if (pct <= 50) return `Top ${pct}% in category`;
-  return `#${rank} of ${size} in category`;
+  if (pct <= 33) return `Top ${Math.max(1, pct)}% of ${size} ${cat}`;
+  return `#${rank} of ${size} ${cat}`;
 }
 
 // ────────────────────────────────────────────────────────────

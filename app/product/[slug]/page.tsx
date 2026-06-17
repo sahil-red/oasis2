@@ -282,14 +282,12 @@ export default async function ProductPage({
             {verdict && score?.opinion ? (
               <div className="mt-5">
                 <ScoutVerdictCard
-                  verdict={verdict}
                   score={score?.score}
+                  absoluteScore={score?.absolute_score}
+                  categoryRank={score?.category_rank}
+                  categorySize={score?.category_size}
+                  categoryLabel={score?.category_label}
                   opinion={score.opinion}
-                  relativeScore={score?.relative_score}
-                  cohortSize={score?.cohort_size}
-                  cohortId={score?.cohort_id ?? null}
-                  subcategory={product.subcategory}
-                  productId={product.id}
                 />
               </div>
             ) : verdict ? (
@@ -297,15 +295,14 @@ export default async function ProductPage({
                 <VerdictTakeCard
                   verdict={verdict}
                   score={score?.score}
+                  absoluteScore={score?.absolute_score}
+                  categoryRank={score?.category_rank}
+                  categorySize={score?.category_size}
+                  categoryLabel={score?.category_label}
                   sublabelIds={pdpSublabels}
                   deepseekChips={deepseekDisplay?.chips}
                   deepseekWhy={deepseekDisplay?.why}
                   explanation={scoreWhy}
-                  cohortSize={score?.cohort_size}
-                  relativeScore={score?.relative_score}
-                  cohortId={score?.cohort_id ?? null}
-                  subcategory={product.subcategory}
-                  productId={product.id}
                 />
               </div>
             ) : null}

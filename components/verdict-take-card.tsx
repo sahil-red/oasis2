@@ -2,47 +2,45 @@ import type { ScoreExplanation } from "@/lib/products/score-explain";
 import type { VerdictId } from "@/lib/scoring/verdict";
 import { ScoreRing } from "@/components/verdict-chips";
 import { buildAutoSentence } from "@/lib/scoring/auto-sentence";
-import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
 import { VERDICT_COLORS } from "@/lib/scoring/verdict-display";
 import { takeLines, bucketTake, actionableWatchLine } from "@/components/product-take-panel";
+import { tierFromScore, tierLabel, tierColor, rankPhrase } from "@/lib/utils";
 
-const VERDICT_SHORT: Record<VerdictId, string> = {
-  daily_staple: "Staple",
-  good_choice: "Good",
-  occasional_treat: "Treat",
-  skip: "Skip",
-};
-
+/**
+ * PDP score hero (common path — no LLM opinion). New paradigm (Part B): one health
+ * TIER (from the consistent absolute score) + the category-relative RANK on the clean
+ * taxonomy + the concrete good/watch reasons. Replaces the verdict pill + bare ring +
+ * the noisy "Better than X%" relative percentile.
+ */
 export function VerdictTakeCard({
   verdict,
   score,
+  absoluteScore,
+  categoryRank,
+  categorySize,
+  categoryLabel,
   sublabelIds,
   deepseekChips,
   deepseekWhy,
   explanation,
-  relativeScore,
-  cohortSize,
-  cohortId,
-  subcategory,
-  productId,
   className,
 }: {
   verdict: VerdictId;
   score?: number | null;
+  absoluteScore?: number | null;
+  categoryRank?: number | null;
+  categorySize?: number | null;
+  categoryLabel?: string | null;
   sublabelIds?: string[] | null;
   deepseekChips?: string[] | null;
   deepseekWhy?: string | null;
   explanation?: ScoreExplanation | null;
-  relativeScore?: number | null;
-  cohortSize?: number | null;
-  cohortId?: string | null;
-  subcategory?: string | null;
-  productId?: string;
   className?: string;
 }) {
-  const c = VERDICT_COLORS[verdict];
-  const showCohort =
-    cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
+  const abs = absoluteScore ?? score ?? null;
+  const tier = abs != null ? tierFromScore(abs) : null;
+  const tc = tier ? tierColor(tier) : VERDICT_COLORS[verdict].fg;
+  const rank = rankPhrase(categoryRank ?? null, categorySize ?? null, categoryLabel ?? null);
 
   const autoSentence = buildAutoSentence(verdict, sublabelIds, deepseekChips);
   const lines = takeLines(explanation, deepseekWhy);
@@ -52,31 +50,37 @@ export function VerdictTakeCard({
     ...watch.map((line) => ({ line: actionableWatchLine(line), tone: "watch" as const })),
   ].slice(0, 4);
 
-  // Nothing to show if no sentence and no take items
   if (!autoSentence && !items.length) return null;
+
+  const bg = `color-mix(in srgb, ${tc} 9%, var(--color-bg))`;
+  const border = `color-mix(in srgb, ${tc} 28%, transparent)`;
 
   return (
     <section
       className={`rounded-2xl border p-4 sm:p-5 ${className ?? ""}`}
-      style={{ backgroundColor: c.bg, borderColor: c.border }}
+      style={{ backgroundColor: bg, borderColor: border }}
     >
       <div className="flex items-start gap-4">
-        {score != null ? <ScoreRing score={score} color={c.fg} /> : null}
+        {abs != null ? <ScoreRing score={abs} color={tc} /> : null}
         <div className="min-w-0 flex-1 pt-0.5">
-          <div className="flex items-center gap-2">
-            <span
-              className="stamp-in rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
-              style={{
-                backgroundColor: c.bg,
-                color: c.fg,
-                borderColor: c.border,
-              }}
-            >
-              {VERDICT_SHORT[verdict]}
-            </span>
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-              Quick take
-            </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {tier ? (
+              <span
+                className="stamp-in rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight"
+                style={{ backgroundColor: `color-mix(in srgb, ${tc} 16%, transparent)`, color: tc }}
+              >
+                {tierLabel(tier)}
+              </span>
+            ) : null}
+            {rank ? (
+              <span className="text-[11px] font-medium tracking-tight text-(--color-fg-muted)">
+                {rank}
+              </span>
+            ) : (
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+                Quick take
+              </p>
+            )}
           </div>
 
           <h3 className="font-display mt-2 text-balance text-2xl leading-snug text-(--color-fg)">
@@ -85,36 +89,17 @@ export function VerdictTakeCard({
 
           {items.length > 0 ? (
             <ul className="mt-2.5 space-y-1 text-[14px] leading-relaxed text-(--color-fg-muted)">
-              {items.map((item) => {
-                const dotColor = c.chipFg;
-                return (
-                  <li key={`${item.tone}-${item.line}`} className="flex gap-2 rounded-lg px-1 py-0.5">
-                    <span
-                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: dotColor }}
-                      aria-hidden
-                    />
-                    <span>{item.line}</span>
-                  </li>
-                );
-              })}
+              {items.map((item) => (
+                <li key={`${item.tone}-${item.line}`} className="flex gap-2 rounded-lg px-1 py-0.5">
+                  <span
+                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.tone === "good" ? tc : "var(--color-fg-dim)" }}
+                    aria-hidden
+                  />
+                  <span>{item.line}</span>
+                </li>
+              ))}
             </ul>
-          ) : null}
-
-          {showCohort ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <BestInCohortChip
-                cohortId={cohortId}
-                subcategoryLabel={subcategory ?? ""}
-                productId={productId}
-                borderColor={c.chipBorder}
-                fgColor={c.chipFg}
-                labelOverride={`Better than ${relativeScore}%`}
-              />
-              <span className="text-[11px] leading-snug text-(--color-fg-muted)">
-                of {cohortSize} {subcategory ? subcategory.toLowerCase() : "similar products"} in this aisle
-              </span>
-            </div>
           ) : null}
         </div>
       </div>

@@ -184,7 +184,7 @@ function slimListItemForCatalog(row: ProductListItem): ProductListItem {
 
 /** Lighter join for grids — omits heavy subscores/concerns JSON. */
 const LIST_SCORE_FIELDS =
-  "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size, absolute_score";
+  "score, grade, band, verdict, verdict_sublabels, relative_score, cohort_size, absolute_score, category_rank, category_size, category_label";
 
 /** PDP join — includes V9 verdict + cohort fields for chips and percentile line. */
 const DETAIL_SCORE_FIELDS = `${LIST_SCORE_FIELDS}, absolute_score, role_cohort, serving_g_effective, cohort_id, opinion`;
@@ -220,6 +220,9 @@ export type ProductListItem = Pick<
     | "concerns"
     | "computed_at"
     | "absolute_score"
+    | "category_rank"
+    | "category_size"
+    | "category_label"
   > | null;
   /** Present when catalog filters need label-resolution metadata. */
   ocr_payload?: Record<string, unknown> | null;
@@ -270,6 +273,9 @@ export type CatalogGridItem = Pick<
     | "relative_score"
     | "cohort_size"
     | "absolute_score"
+    | "category_rank"
+    | "category_size"
+    | "category_label"
   > | null;
   deepseek_chips?: string[];
   deepseek_why?: string | null;
@@ -312,6 +318,10 @@ function toGridItem(row: ProductListItem): CatalogGridItem {
           verdict_sublabels: row.core_scores.verdict_sublabels ?? [],
           relative_score: row.core_scores.relative_score ?? null,
           cohort_size: row.core_scores.cohort_size ?? null,
+          absolute_score: row.core_scores.absolute_score ?? null,
+          category_rank: row.core_scores.category_rank ?? null,
+          category_size: row.core_scores.category_size ?? null,
+          category_label: row.core_scores.category_label ?? null,
         }
       : null,
     deepseek_chips: deepseek?.chipLabels ?? [],

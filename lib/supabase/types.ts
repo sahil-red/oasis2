@@ -154,6 +154,12 @@ export interface CoreScore {
   cohort_size?: number | null;
   /** v10 LLM editorial verdict — prose only, cached per rule_version. */
   opinion?: ProductOpinionRow | null;
+  /** Part B: rank within the product's real peer group on the clean Zepto taxonomy
+   *  (l3 when the cohort is big enough, else subcategory), by absolute_score. Drives
+   *  the "Top X% in category" signal — replaces the noisy v9 relative percentile. */
+  category_rank?: number | null;
+  category_size?: number | null;
+  category_label?: string | null;
 }
 
 export interface ProductOpinionRow {

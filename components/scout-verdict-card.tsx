@@ -1,65 +1,63 @@
 import type { ProductOpinionRow } from "@/lib/supabase/types";
-import type { VerdictId } from "@/lib/scoring/verdict";
 import { ScoreRing } from "@/components/verdict-chips";
-import { BestInCohortChip } from "@/components/best-in-cohort-tooltip";
-import { VERDICT_COLORS, verdictTitle } from "@/lib/scoring/verdict-display";
+import { tierFromScore, tierLabel, tierColor, rankPhrase } from "@/lib/utils";
 
-const VERDICT_SHORT: Record<VerdictId, string> = {
-  daily_staple: "Staple",
-  good_choice: "Good",
-  occasional_treat: "Treat",
-  skip: "Skip",
-};
-
+/**
+ * PDP score hero — the new paradigm (Part B): one health TIER (from the consistent
+ * absolute score) + the category-relative RANK on the clean taxonomy + the editorial
+ * "why". Replaces the bare blended number + the noisy v9 relative percentile. The
+ * number lives only as a supporting tier-colored ring.
+ */
 export function ScoutVerdictCard({
-  verdict,
   score,
+  absoluteScore,
+  categoryRank,
+  categorySize,
+  categoryLabel,
   opinion,
-  relativeScore,
-  cohortSize,
-  cohortId,
-  subcategory,
-  productId,
   className,
 }: {
-  verdict: VerdictId;
   score?: number | null;
+  absoluteScore?: number | null;
+  categoryRank?: number | null;
+  categorySize?: number | null;
+  categoryLabel?: string | null;
   opinion: ProductOpinionRow | null | undefined;
-  relativeScore?: number | null;
-  cohortSize?: number | null;
-  cohortId?: string | null;
-  subcategory?: string | null;
-  productId?: string;
   className?: string;
 }) {
-  const c = VERDICT_COLORS[verdict];
-  const showCohort =
-    cohortSize != null && cohortSize >= 8 && relativeScore != null && cohortId && productId;
+  const abs = absoluteScore ?? score ?? null;
+  if (abs == null || !opinion?.headline || !opinion?.why) return null;
 
-  if (!opinion?.headline || !opinion?.why) return null;
+  const tier = tierFromScore(abs);
+  const tc = tierColor(tier);
+  const rank = rankPhrase(categoryRank ?? null, categorySize ?? null, categoryLabel ?? null);
+  const bg = `color-mix(in srgb, ${tc} 9%, var(--color-bg))`;
+  const border = `color-mix(in srgb, ${tc} 28%, transparent)`;
 
   return (
     <section
       className={`rounded-2xl border p-4 sm:p-5 ${className ?? ""}`}
-      style={{ backgroundColor: c.bg, borderColor: c.border }}
+      style={{ backgroundColor: bg, borderColor: border }}
     >
       <div className="flex items-start gap-4">
-        {score != null ? <ScoreRing score={score} color={c.fg} /> : null}
+        <ScoreRing score={abs} color={tc} />
         <div className="min-w-0 flex-1 pt-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span
-              className="stamp-in rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-tight"
-              style={{
-                backgroundColor: c.bg,
-                color: c.fg,
-                borderColor: c.border,
-              }}
+              className="stamp-in rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight"
+              style={{ backgroundColor: `color-mix(in srgb, ${tc} 16%, transparent)`, color: tc }}
             >
-              {VERDICT_SHORT[verdict]}
+              {tierLabel(tier)}
             </span>
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
-              Scout&apos;s take
-            </p>
+            {rank ? (
+              <span className="text-[11px] font-medium tracking-tight text-(--color-fg-muted)">
+                {rank}
+              </span>
+            ) : (
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-(--color-fg-dim)">
+                Scout&apos;s take
+              </p>
+            )}
           </div>
 
           <h3 className="font-display mt-2 text-balance text-2xl leading-snug text-(--color-fg)">
@@ -71,25 +69,7 @@ export function ScoutVerdictCard({
           </p>
 
           {opinion.caveat ? (
-            <p className="mt-2.5 text-[12px] italic text-(--color-fg-dim)">
-              {opinion.caveat}
-            </p>
-          ) : null}
-
-          {showCohort ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <BestInCohortChip
-                cohortId={cohortId}
-                subcategoryLabel={subcategory ?? ""}
-                productId={productId}
-                borderColor={c.chipBorder}
-                fgColor={c.chipFg}
-                labelOverride={`Better than ${relativeScore}%`}
-              />
-              <span className="text-[11px] leading-snug text-(--color-fg-muted)">
-                of {cohortSize} {subcategory ? subcategory.toLowerCase() : "similar products"} in this aisle
-              </span>
-            </div>
+            <p className="mt-2.5 text-[12px] italic text-(--color-fg-dim)">{opinion.caveat}</p>
           ) : null}
         </div>
       </div>
